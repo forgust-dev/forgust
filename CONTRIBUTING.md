@@ -42,8 +42,10 @@ And when you changed:
 - **CI behaviour:** a case in [`ci-conformance/cases/`](ci-conformance/README.md), and
   a note in the pull request for the CI compatibility guide.
 
-Keep each pull request to one change, with tests. Commit messages start with the
-area, then say what changed: `CI: one run at a time on the runner`.
+Keep each pull request to one change, with tests. Commit messages follow
+[Conventional Commits](https://www.conventionalcommits.org/): a type, then what the
+change does, in lower case (`fix: keep reviewed requests apart in your work`,
+`feat: …`, `perf: …`, `refactor: …`, `docs: …`, `chore: …`).
 
 ## Sign your commits (DCO)
 
