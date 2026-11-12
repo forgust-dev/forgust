@@ -38,7 +38,8 @@ And when you changed:
 - **the API:** `cargo run -p forgust-server -- openapi > web/openapi.json`, then
   `(cd web && npm run gen:api)`; a unit test fails while they are stale;
 - **the UI:** the Playwright tests (`cd web && npm run e2e`), at desktop width and
-  390 px;
+  390 px; if a page in the README changed, its screenshots too
+  (`node deploy/screenshots.mjs`, see the script for the demo it needs);
 - **CI behaviour:** a case in [`ci-conformance/cases/`](ci-conformance/README.md), and
   a note in the pull request for the CI compatibility guide.
 
