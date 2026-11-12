@@ -1,4 +1,4 @@
-import { test, expect, P, csrfHeaders, isMobile } from "./fixtures";
+import { test, expect, P, ADMIN, apiCall, csrfHeaders, isMobile } from "./fixtures";
 
 const MR = `${P}/-/merge_requests`;
 
@@ -82,6 +82,35 @@ test("your work lists your merge requests; projects moved to their own page", as
   await expect(page.getByRole("heading", { name: "Checkout with discounts" })).toBeVisible();
   await page.goto("/dashboard/projects");
   await expect(page.getByRole("heading", { name: "Your projects" })).toBeVisible();
+});
+
+test("your work keeps review requests you already reviewed apart from those waiting", async ({ page }) => {
+  const call = await apiCall(page);
+  const project = await call("get", `/resolve?path=${P.slice(1)}`);
+  const me = await call("get", `/users/${ADMIN}`);
+  const mr2 = `/projects/${project.id}/merge_requests/2`;
+  const section = (name: string) => page.locator("section", { has: page.getByRole("heading", { name }) });
+  const reviewRequests = async () => {
+    await page.goto("/");
+    await page.getByRole("navigation", { name: "Your work" }).getByRole("button", { name: /Review requests/ }).click();
+  };
+  // !2 is shared: whatever happens, leave no reviewer and no open thread behind
+  let note: { id: number } | null = null;
+  try {
+    // asked afresh: the request waits for the admin
+    await call("put", mr2, { reviewer_ids: [] });
+    await call("put", mr2, { reviewer_ids: [me.id] });
+    await reviewRequests();
+    await expect(section("Waiting for your review").getByRole("link", { name: "Checkout page" })).toBeVisible();
+    // a comment marks it reviewed: it moves to its own section, out of the count
+    note = await call("post", `${mr2}/notes`, { body: "Looked at it." });
+    await reviewRequests();
+    await expect(section("Reviewed by you").getByRole("link", { name: "Checkout page" })).toBeVisible();
+    await expect(section("Waiting for your review").getByRole("link", { name: "Checkout page" })).toHaveCount(0);
+  } finally {
+    if (note) await call("delete", `${mr2}/notes/${note.id}`);
+    await call("put", mr2, { reviewer_ids: [] });
+  }
 });
 
 test("references in a comment preview link to what they name", async ({ page }) => {

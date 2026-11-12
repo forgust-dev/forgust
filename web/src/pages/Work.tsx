@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AtSign, Check, CircleDot, Eye, GitMerge, UserCheck } from "lucide-react";
@@ -110,7 +110,38 @@ function Todos() {
   );
 }
 
-function MrRows({ list, empty, review }: { list: S["WorkMr"][]; empty: string; review?: boolean }) {
+/** A review request still waiting for you (no state yet counts as waiting): the
+ * tab's count and the first section use this one rule. */
+const isWaiting = (m: S["WorkMr"]) => !m.review_state || m.review_state === "unreviewed";
+
+function ListSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="stack" style={{ gap: 8 }}>
+      <h2 className="section-title">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+/** Review requests, those still waiting for you first. */
+function ReviewRequests({ list }: { list: S["WorkMr"][] }) {
+  if (list.length === 0) return <Empty>No review requests. When someone asks you to review a merge request, it shows up here.</Empty>;
+  const reviewed = list.filter((m) => !isWaiting(m));
+  return (
+    <div className="stack" style={{ gap: 18 }}>
+      <ListSection title="Waiting for your review">
+        <MrRows list={list.filter(isWaiting)} review empty="Nothing is waiting for your review." />
+      </ListSection>
+      {reviewed.length > 0 && (
+        <ListSection title="Reviewed by you">
+          <MrRows list={reviewed} review />
+        </ListSection>
+      )}
+    </div>
+  );
+}
+
+function MrRows({ list, empty, review }: { list: S["WorkMr"][]; empty?: string; review?: boolean }) {
   if (list.length === 0) return <Empty>{empty}</Empty>;
   return (
     <div className="list rows">
@@ -131,7 +162,7 @@ function MrRows({ list, empty, review }: { list: S["WorkMr"][]; empty: string; r
                 {m.project_path}!{m.iid}
               </span>
               <span>by {m.author_username ? <UserLink username={m.author_username} /> : "ghost"}</span>
-              {review && m.review_state && <span className={m.review_state === "unreviewed" ? "accent-text" : ""}>{REVIEW_TEXT[m.review_state] ?? m.review_state}</span>}
+              {review && m.review_state && <span className={isWaiting(m) ? "accent-text" : ""}>{REVIEW_TEXT[m.review_state] ?? m.review_state}</span>}
             </div>
           </div>
           <span className="row-time" title={new Date(m.updated_at).toLocaleString()}>
@@ -148,7 +179,6 @@ export function Work() {
   const w = useWork();
   const [tab, setTab] = useState<Tab>("todos");
   const d = w.data;
-  const waiting = d?.review_requests.filter((m) => m.review_state === "unreviewed").length;
   return (
     <div className="page stack list-page">
       <ListHead title="Your work" sub="What is waiting for you, across your projects." />
@@ -158,7 +188,7 @@ export function Work() {
         onChange={setTab}
         options={[
           { value: "todos", label: "To-do", count: d?.todos_pending },
-          { value: "reviews", label: "Review requests", count: waiting },
+          { value: "reviews", label: "Review requests", count: d?.review_requests.filter(isWaiting).length },
           { value: "mrs", label: "Merge requests", count: d ? d.assigned_merge_requests.length + d.your_merge_requests.length : undefined },
           { value: "issues", label: "Issues", count: d?.assigned_issues.length },
         ]}
@@ -169,17 +199,15 @@ export function Work() {
         <Q q={w}>
           {(d) =>
             tab === "reviews" ? (
-              <MrRows list={d.review_requests} review empty="No review requests. When someone asks you to review a merge request, it shows up here." />
+              <ReviewRequests list={d.review_requests} />
             ) : tab === "mrs" ? (
               <div className="stack" style={{ gap: 18 }}>
-                <section className="stack" style={{ gap: 8 }}>
-                  <h2 className="section-title">Assigned to you</h2>
+                <ListSection title="Assigned to you">
                   <MrRows list={d.assigned_merge_requests} empty="No open merge request is assigned to you." />
-                </section>
-                <section className="stack" style={{ gap: 8 }}>
-                  <h2 className="section-title">Opened by you</h2>
+                </ListSection>
+                <ListSection title="Opened by you">
                   <MrRows list={d.your_merge_requests} empty="You have no open merge request." />
-                </section>
+                </ListSection>
               </div>
             ) : d.assigned_issues.length === 0 ? (
               <Empty>No open issue is assigned to you.</Empty>
