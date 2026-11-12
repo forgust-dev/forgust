@@ -4,6 +4,10 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # pinned to the commit of its `1.99` branch, which picks the Rust version:
+    # moved by hand with the toolchain
+    ignore:
+      - dependency-name: "dtolnay/rust-toolchain"
     cooldown:
       default-days: 3
     commit-message:
