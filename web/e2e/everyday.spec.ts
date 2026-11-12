@@ -1,4 +1,4 @@
-import { test, expect, P, ADMIN, apiCall, csrfHeaders, isMobile } from "./fixtures";
+import { test, expect, P, ADMIN, apiCall, csrfHeaders, freshProject, isMobile } from "./fixtures";
 
 const MR = `${P}/-/merge_requests`;
 
@@ -124,15 +124,22 @@ test("references in a comment preview link to what they name", async ({ page }) 
 });
 
 test("a user's page shows the contribution calendar and recent activity", async ({ page }) => {
-  await page.goto("/root");
-  const cal = page.getByRole("grid", { name: "Contributions per day" });
-  await expect(cal).toBeVisible();
-  await expect(page.locator(".contrib-caption")).toContainText(/[1-9]\d* contributions? in the last year/);
-  await expect(cal.locator(".contrib-cell.l0, .contrib-cell.l1, .contrib-cell.l2, .contrib-cell.l3, .contrib-cell.l4").first()).toBeVisible();
-  await expect(page.locator(".contrib-cell:not(.l0):not(.future)").first()).toBeAttached();
-  const activity = page.locator(".activity-list");
-  await expect(activity).toContainText("opened");
-  await expect(activity.getByRole("link", { name: /Checkout with discounts/ }).first()).toBeVisible();
+  // an event of its own, newest in the list whatever ran before
+  const { project, api, remove } = await freshProject(page, "activity", { "README.md": "# Activity\n" });
+  const title = `Activity check ${Date.now() % 1_000_000}`;
+  await api("post", `/projects/${project.id}/issues`, { title });
+  try {
+    await page.goto(`/${ADMIN}`);
+    const cal = page.getByRole("grid", { name: "Contributions per day" });
+    await expect(cal).toBeVisible();
+    await expect(page.locator(".contrib-caption")).toContainText(/[1-9]\d* contributions? in the last year/);
+    await expect(cal.locator(".contrib-cell.l0, .contrib-cell.l1, .contrib-cell.l2, .contrib-cell.l3, .contrib-cell.l4").first()).toBeVisible();
+    await expect(page.locator(".contrib-cell:not(.l0):not(.future)").first()).toBeAttached();
+    const row = page.locator(".activity-list li", { has: page.getByRole("link", { name: title }) });
+    await expect(row).toContainText("opened");
+  } finally {
+    await remove();
+  }
 });
 
 test("set auto-merge while the pipeline runs, then cancel it", async ({ page }) => {
