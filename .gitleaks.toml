@@ -1,0 +1,14 @@
+# gitleaks: values that look like secrets here but are not. The default rules
+# still apply everywhere, these files included.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Test fixtures, and the throwaway token the nightly GitLab CE job creates"
+regexTarget = "match"
+regexes = [
+  # .github/workflows/conformance.yml: set on a GitLab container that lives for one job
+  '''glpat-conformance-0+''',
+  # tests/m6_everyday.rs: a test user's password
+  '''alice-owns-this-1''',
+]

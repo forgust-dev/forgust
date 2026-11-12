@@ -418,7 +418,10 @@ async fn real_scanners_find_a_sql_injection_a_secret_and_a_vulnerable_dependency
         "import sqlite3\n\n\ndef find(name):\n    db = sqlite3.connect('app.db')\n    cur = db.cursor()\n    cur.execute(\"SELECT * FROM users WHERE name = '%s'\" % name)\n    return cur.fetchall()\n",
     )
     .unwrap();
-    std::fs::write(work.join("settings.py"), "GITLAB_TOKEN = \"glpat-x7Qk2mVb9LpR4tYw8NzA\"\n").unwrap();
+    // a fake token for the secrets scanner to find, in two pieces here so that
+    // scanners reading this repository do not report it
+    let fake_token = ["glpat-", "x7Qk2mVb9LpR4tYw8NzA"].concat();
+    std::fs::write(work.join("settings.py"), format!("GITLAB_TOKEN = \"{fake_token}\"\n")).unwrap();
     std::fs::write(work.join("package.json"), r#"{ "name": "app", "version": "1.0.0", "dependencies": { "lodash": "4.17.15" } }"#).unwrap();
     std::fs::write(
         work.join("package-lock.json"),
@@ -519,7 +522,7 @@ async fn real_scanners_find_a_sql_injection_a_secret_and_a_vulnerable_dependency
     );
     assert!(has("secret_detection", &|x| x["file"] == "settings.py"), "the token: {found}");
     assert!(has("dependency_scanning", &|x| x["package_name"] == "lodash" && x["fixed_version"].is_string()), "lodash: {found}");
-    assert!(!found.to_string().contains("glpat-x7Qk2mVb9LpR4tYw8NzA"), "the secret itself is not stored");
+    assert!(!found.to_string().contains(&fake_token), "the secret itself is not stored");
 }
 
 struct Container(String);
