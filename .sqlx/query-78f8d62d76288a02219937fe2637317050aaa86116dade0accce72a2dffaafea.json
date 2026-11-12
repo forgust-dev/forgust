@@ -1,0 +1,88 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, match_host, host_type, username, password_enc, created_at FROM renovate_host_rules\n         WHERE project_id IS NOT DISTINCT FROM $1 ORDER BY id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "renovate_host_rules",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "match_host",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "renovate_host_rules",
+            "name": "match_host"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "host_type",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "renovate_host_rules",
+            "name": "host_type"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "username",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "renovate_host_rules",
+            "name": "username"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "password_enc",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "renovate_host_rules",
+            "name": "password_enc"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "renovate_host_rules",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "78f8d62d76288a02219937fe2637317050aaa86116dade0accce72a2dffaafea"
+}

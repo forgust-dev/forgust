@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT iid FROM merge_requests WHERE project_id = $1 AND source_branch = $2 AND target_branch = $3 AND state = 'opened'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "iid",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "iid"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b3bba7df3968053a6bace6b44ea0efa4acf223ebf1126a7cb1602e08cb0aed39"
+}

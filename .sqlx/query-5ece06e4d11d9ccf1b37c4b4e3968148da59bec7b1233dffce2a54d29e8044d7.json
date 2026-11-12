@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM merge_train_cars WHERE merge_request_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5ece06e4d11d9ccf1b37c4b4e3968148da59bec7b1233dffce2a54d29e8044d7"
+}

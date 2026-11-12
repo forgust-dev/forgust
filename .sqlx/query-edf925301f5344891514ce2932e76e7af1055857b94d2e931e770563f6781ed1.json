@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO notification_settings (user_id, project_id, level) VALUES ($1, $2, $3)\n                 ON CONFLICT (user_id, project_id) DO UPDATE SET level = $3, updated_at = now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "edf925301f5344891514ce2932e76e7af1055857b94d2e931e770563f6781ed1"
+}

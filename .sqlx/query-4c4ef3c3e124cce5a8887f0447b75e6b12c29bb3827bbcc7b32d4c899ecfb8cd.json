@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO ci_pipelines (project_id, iid, ref, tag, sha, before_sha, source, protected, merge_request_id, schedule_id,\n                                   user_id, yaml_errors, variables_enc, commit_title, status, auto_cancel, auto_cancel_on_job_failure,\n                                   upstream_build_id)\n         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14,\n                 CASE WHEN $12::text IS NULL THEN 'created' ELSE 'failed' END, $15, $16, $17)\n         RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text",
+        "Bool",
+        "Text",
+        "Text",
+        "Text",
+        "Bool",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4c4ef3c3e124cce5a8887f0447b75e6b12c29bb3827bbcc7b32d4c899ecfb8cd"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE ci_job_artifacts SET expire_at = NULL WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "40ecca048018fc19cdce1982d8efb77c6987a3ced2c56cbe2b048e7d42aa3db9"
+}

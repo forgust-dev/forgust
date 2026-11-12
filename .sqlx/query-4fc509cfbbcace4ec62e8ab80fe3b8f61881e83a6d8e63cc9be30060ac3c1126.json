@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH upd AS (\n             UPDATE ci_variables SET value_enc = $4, variable_type = $5, protected = $6, masked = $7, raw = $8, description = $9\n             WHERE key = $3 AND environment_scope = '*'\n               AND (($1::bigint IS NOT NULL AND project_id = $1) OR ($2::bigint IS NOT NULL AND group_id = $2))\n             RETURNING id)\n         INSERT INTO ci_variables (project_id, group_id, key, value_enc, variable_type, protected, masked, raw, description)\n         SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9 WHERE NOT EXISTS (SELECT 1 FROM upd)\n         RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_variables",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text",
+        "Text",
+        "Text",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4fc509cfbbcace4ec62e8ab80fe3b8f61881e83a6d8e63cc9be30060ac3c1126"
+}

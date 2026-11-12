@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM renovate_host_rules WHERE id = $1 AND project_id IS NOT DISTINCT FROM $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "02fb03c7902b95a4bee322f7041ead8307575eeefba98bd855e32a1426c33c85"
+}

@@ -1,0 +1,10 @@
+optional:
+  script: x
+  when: manual
+blocking:
+  script: x
+  rules:
+    - when: manual
+cleanup:
+  script: x
+  when: always

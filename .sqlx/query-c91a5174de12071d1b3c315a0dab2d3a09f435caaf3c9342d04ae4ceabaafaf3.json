@@ -1,0 +1,100 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT commit_message_regex, commit_message_negative_regex, author_email_regex, branch_name_regex, max_file_size_mb,\n                prevent_secrets, reject_unsigned_commits\n           FROM push_rules WHERE project_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "commit_message_regex",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "push_rules",
+            "name": "commit_message_regex"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "commit_message_negative_regex",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "push_rules",
+            "name": "commit_message_negative_regex"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "author_email_regex",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "push_rules",
+            "name": "author_email_regex"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "branch_name_regex",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "push_rules",
+            "name": "branch_name_regex"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "max_file_size_mb",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "push_rules",
+            "name": "max_file_size_mb"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "prevent_secrets",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "push_rules",
+            "name": "prevent_secrets"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "reject_unsigned_commits",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "push_rules",
+            "name": "reject_unsigned_commits"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "c91a5174de12071d1b3c315a0dab2d3a09f435caaf3c9342d04ae4ceabaafaf3"
+}

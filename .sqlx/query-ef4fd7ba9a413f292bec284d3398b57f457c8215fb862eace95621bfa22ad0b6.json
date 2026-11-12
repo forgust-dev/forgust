@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT u AS \"u!\" FROM (\n               SELECT author_id AS u FROM issues WHERE id = $1\n               UNION SELECT author_id FROM issue_notes WHERE issue_id = $1 AND NOT system\n               UNION SELECT user_id FROM issue_assignees WHERE issue_id = $1\n           ) x WHERE u IS NOT NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "u!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ef4fd7ba9a413f292bec284d3398b57f457c8215fb862eace95621bfa22ad0b6"
+}

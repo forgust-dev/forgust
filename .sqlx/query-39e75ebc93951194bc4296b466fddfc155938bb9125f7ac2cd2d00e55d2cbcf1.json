@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO ci_job_trace_chunks (build_id, chunk_index, data) VALUES ($1, $2, $3)\n             ON CONFLICT (build_id, chunk_index) DO UPDATE SET data = ci_job_trace_chunks.data || $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int4",
+        "Bytea"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "39e75ebc93951194bc4296b466fddfc155938bb9125f7ac2cd2d00e55d2cbcf1"
+}

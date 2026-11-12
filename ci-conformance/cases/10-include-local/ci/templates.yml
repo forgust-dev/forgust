@@ -1,0 +1,6 @@
+.base:
+  image: node:20
+  before_script: [npm ci]
+lint:
+  extends: .base
+  script: [npm run lint]

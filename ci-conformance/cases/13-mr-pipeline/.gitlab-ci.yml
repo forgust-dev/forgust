@@ -1,0 +1,6 @@
+branch_job:
+  script: x
+mr_job:
+  script: x
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"

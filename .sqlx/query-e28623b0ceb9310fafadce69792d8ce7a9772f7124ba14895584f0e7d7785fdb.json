@@ -1,0 +1,148 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT ON (merge_request_id) merge_request_id, id, version, base_sha, start_sha, head_sha, commits_count, files_count, additions, deletions, created_at\n         FROM merge_request_diffs WHERE merge_request_id = ANY($1) ORDER BY merge_request_id, version DESC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "merge_request_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "merge_request_diffs",
+            "name": "merge_request_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "merge_request_diffs",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "version",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "merge_request_diffs",
+            "name": "version"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "base_sha",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "merge_request_diffs",
+            "name": "base_sha"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "start_sha",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "merge_request_diffs",
+            "name": "start_sha"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "head_sha",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "merge_request_diffs",
+            "name": "head_sha"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "commits_count",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "merge_request_diffs",
+            "name": "commits_count"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "files_count",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "merge_request_diffs",
+            "name": "files_count"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "additions",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "merge_request_diffs",
+            "name": "additions"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "deletions",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "merge_request_diffs",
+            "name": "deletions"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "merge_request_diffs",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8Array"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "e28623b0ceb9310fafadce69792d8ce7a9772f7124ba14895584f0e7d7785fdb"
+}

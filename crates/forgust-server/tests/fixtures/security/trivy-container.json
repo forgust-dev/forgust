@@ -1,0 +1,19 @@
+{
+  "version": "15.0.7",
+  "vulnerabilities": [
+    {
+      "id": "c0ffee00c0ffee00c0ffee00c0ffee00",
+      "name": "CVE-2023-5363",
+      "description": "openssl: Incorrect cipher key and IV length processing",
+      "severity": "High",
+      "solution": "Upgrade libssl3 to 3.1.4-r0",
+      "location": {
+        "dependency": { "package": { "name": "libssl3" }, "version": "3.1.2-r0" },
+        "operating_system": "alpine 3.18.3",
+        "image": "registry.example.com/acme/shop:1.4.2"
+      },
+      "identifiers": [{ "type": "cve", "name": "CVE-2023-5363", "value": "CVE-2023-5363", "url": "https://avd.aquasec.com/nvd/cve-2023-5363" }]
+    }
+  ],
+  "scan": { "scanner": { "id": "trivy", "name": "Trivy" }, "type": "container_scanning", "status": "success" }
+}

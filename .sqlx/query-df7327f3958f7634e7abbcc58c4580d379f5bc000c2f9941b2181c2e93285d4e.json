@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH t AS (SELECT id FROM personal_access_tokens WHERE token_hash = $1),\n                _u AS (UPDATE personal_access_tokens p SET mcp_used_at = now() FROM t\n                        WHERE p.id = t.id AND (p.mcp_used_at IS NULL OR p.mcp_used_at < now() - interval '1 minute'))\n           SELECT id AS \"id!\" FROM t",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "personal_access_tokens",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "df7327f3958f7634e7abbcc58c4580d379f5bc000c2f9941b2181c2e93285d4e"
+}

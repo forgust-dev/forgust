@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO ci_pending_jobs (build_id, project_id, tags, protected, traversal_ids, instance_runners_enabled, instance_only)\n         SELECT b.id, b.project_id, b.tags, pl.protected, n.traversal_ids, coalesce(s.instance_runners_enabled, true) OR is_system_source(pl.source),\n                is_system_source(pl.source)\n         FROM ci_builds b JOIN ci_pipelines pl ON pl.id = b.pipeline_id JOIN projects p ON p.id = b.project_id\n         JOIN namespaces n ON n.id = p.namespace_id LEFT JOIN ci_project_settings s ON s.project_id = p.id\n         WHERE b.id = $1\n         ON CONFLICT (build_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "635f1684e4d98db4a87efcf08dd2222994fab61e7dcd174e487748989687c39a"
+}

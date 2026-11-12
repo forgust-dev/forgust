@@ -1,0 +1,88 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT d.project_id, d.build_id, p.iid AS pipeline_iid, d.publish, a.blob_key, d.created_at\n             FROM pages_deployments d\n             JOIN ci_job_artifacts a ON a.id = d.artifact_id\n             JOIN ci_builds b ON b.id = d.build_id\n             JOIN ci_pipelines p ON p.id = b.pipeline_id\n            WHERE d.project_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "pages_deployments",
+            "name": "project_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "build_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "pages_deployments",
+            "name": "build_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "pipeline_iid",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "iid"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "publish",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "pages_deployments",
+            "name": "publish"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "blob_key",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_job_artifacts",
+            "name": "blob_key"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "pages_deployments",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "0cda87dcf51caaf85adcb048e718c344a53f5b1142bcfd2a7cdf9900eef906c6"
+}

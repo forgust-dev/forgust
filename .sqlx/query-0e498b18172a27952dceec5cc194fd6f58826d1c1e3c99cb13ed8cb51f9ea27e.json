@@ -1,0 +1,124 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH lfs AS (SELECT lp.project_id, sum(o.size) AS b FROM lfs_objects_projects lp JOIN lfs_objects o ON o.oid = lp.oid GROUP BY 1),\n                art AS (SELECT project_id, sum(size) AS b FROM ci_job_artifacts GROUP BY 1),\n                reg AS (SELECT d.project_id, sum(b.size) AS b\n                          FROM (SELECT DISTINCT r.project_id, l.digest FROM registry_repository_blobs l\n                                  JOIN registry_repositories r ON r.id = l.repository_id) d\n                          JOIN registry_blobs b ON b.digest = d.digest GROUP BY 1),\n                up AS (SELECT project_id, sum(size) AS b FROM uploads GROUP BY 1)\n           SELECT p.id, r.path AS \"full_path!\", p.name, p.visibility, p.repository_bytes AS repository,\n                  (p.repository_bytes + coalesce(lfs.b, 0) + coalesce(art.b, 0) + coalesce(reg.b, 0) + coalesce(up.b, 0))::bigint AS \"total!\",\n                  (SELECT count(*) FROM merge_requests m WHERE m.project_id = p.id AND m.state = 'opened') AS \"open_merge_requests!\",\n                  (SELECT count(*) FROM ci_pipelines c WHERE c.project_id = p.id AND c.created_at > now() - interval '30 days') AS \"pipelines_30_days!\",\n                  p.created_at, p.last_activity_at\n             FROM projects p\n             JOIN routes r ON r.source_type = 'project' AND r.source_id = p.id\n             LEFT JOIN lfs ON lfs.project_id = p.id LEFT JOIN art ON art.project_id = p.id\n             LEFT JOIN reg ON reg.project_id = p.id LEFT JOIN up ON up.project_id = p.id\n            WHERE $1 = '' OR r.path ILIKE '%' || $1 || '%' OR p.name ILIKE '%' || $1 || '%'\n            ORDER BY CASE WHEN $2 = 'size' THEN (p.repository_bytes + coalesce(lfs.b, 0) + coalesce(art.b, 0) + coalesce(reg.b, 0) + coalesce(up.b, 0)) END DESC NULLS LAST,\n                     CASE WHEN $2 = 'name' THEN r.path END,\n                     p.last_activity_at DESC\n            LIMIT $3 OFFSET $4",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "projects",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "full_path!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "routes",
+            "name": "path"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "projects",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "visibility",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "projects",
+            "name": "visibility"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "repository",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "projects",
+            "name": "repository_bytes"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "total!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "open_merge_requests!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "pipelines_30_days!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "projects",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "last_activity_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "projects",
+            "name": "last_activity_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      null,
+      false,
+      false
+    ]
+  },
+  "hash": "0e498b18172a27952dceec5cc194fd6f58826d1c1e3c99cb13ed8cb51f9ea27e"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO registry_blobs (digest, size) VALUES ($1, $2) ON CONFLICT (digest) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "48eeea20a68f53cc9f9ab949545fd3e30eb05df792adbc067de02c7337951646"
+}

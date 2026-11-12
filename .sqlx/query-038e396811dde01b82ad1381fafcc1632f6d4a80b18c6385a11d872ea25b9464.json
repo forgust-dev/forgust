@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE deployments SET status = $2,\n                finished_at = CASE WHEN $2 IN ('success', 'failed', 'canceled', 'skipped') THEN now() ELSE NULL END\n          WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "038e396811dde01b82ad1381fafcc1632f6d4a80b18c6385a11d872ea25b9464"
+}

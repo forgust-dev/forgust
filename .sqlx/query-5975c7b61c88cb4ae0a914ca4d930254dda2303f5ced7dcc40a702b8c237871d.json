@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH lv AS (SELECT p.id, p.quota_level AS old, nullif(p.quota_bytes, 0) AS quota,\n                              CASE WHEN nullif(p.quota_bytes, 0) IS NULL THEN 0 ELSE project_storage_bytes(p.id) END AS used\n                         FROM projects p WHERE coalesce(p.quota_bytes, 0) > 0 OR p.quota_level <> 0),\n                l2 AS (SELECT lv.*, CASE WHEN quota IS NULL THEN 0 WHEN used >= quota THEN 100\n                                         WHEN used * 5 >= quota * 4 THEN 80 ELSE 0 END::smallint AS level FROM lv)\n           UPDATE projects p SET quota_level = l2.level FROM l2 WHERE p.id = l2.id AND p.quota_level <> l2.level\n           RETURNING p.id, l2.level AS \"level!\", l2.old AS \"old!\", l2.used AS \"used!\", l2.quota",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "projects",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "level!",
+        "type_info": "Int2",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "old!",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "projects",
+            "name": "quota_level"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "used!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "quota",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      null,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "5975c7b61c88cb4ae0a914ca4d930254dda2303f5ced7dcc40a702b8c237871d"
+}

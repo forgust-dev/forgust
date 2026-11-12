@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO registry_manifests (repository_id, digest, media_type, payload, blob_digests, manifest_digests, total_size, subject)\n         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)\n         ON CONFLICT (repository_id, digest) DO UPDATE SET media_type = EXCLUDED.media_type\n         RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "registry_manifests",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Text",
+        "Bytea",
+        "TextArray",
+        "TextArray",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a2407bc21684f91d36ddc2b2d827f9d25a5ca34a06f686c5d9a9e34aa8436d4c"
+}

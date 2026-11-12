@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH gone AS (DELETE FROM oauth_codes WHERE code_hash = $1 OR expires_at < now() RETURNING *)\n         SELECT client_id, user_id, redirect_uri, code_challenge, scopes FROM gone WHERE code_hash = $1 AND expires_at >= now()",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "client_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "oauth_codes",
+            "name": "client_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "oauth_codes",
+            "name": "user_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "redirect_uri",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "oauth_codes",
+            "name": "redirect_uri"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "code_challenge",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "oauth_codes",
+            "name": "code_challenge"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "scopes",
+        "type_info": "TextArray",
+        "origin": {
+          "Table": {
+            "table": "oauth_codes",
+            "name": "scopes"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "0ed517b4a10a28ffec2e1d2f1e4b67e3d2e243a808cda1ead84139c8e4360edd"
+}

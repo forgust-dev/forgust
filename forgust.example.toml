@@ -1,0 +1,105 @@
+# Forgust configuration. Every key can also be set with an environment variable:
+# FORGUST_<SECTION>__<KEY>, e.g. FORGUST_DATABASE__URL.
+
+[server]
+listen = "0.0.0.0:8080"
+external_url = "http://localhost:8080"
+ssh_listen = "0.0.0.0:2222"
+ssh_external = "localhost:2222"
+data_dir = "./data"
+static_dir = "./web/dist"
+roles = ["api", "worker", "storage"]
+# identity of commits Forgust makes (merge, squash, rebase)
+commit_name = "Forgust"
+commit_email = "noreply@forgust.local"
+# proxies whose X-Forwarded-For is believed (client IP for rate limits and audit);
+# add your load balancer's network when it is not on this host (else every client
+# looks like the proxy and shares one budget of failed sign-ins)
+trusted_proxies = ["127.0.0.0/8", "::1/128"]
+
+[database]
+url = "postgres://forgust:forgust@localhost:5432/forgust"
+max_connections = 20
+
+[blobs]
+backend = "local"          # or "s3"
+# s3_bucket = "forgust"
+# s3_endpoint = "http://minio:9000"
+
+[security]
+# base64 of 32 random bytes; generated into <data_dir>/secret.key when empty
+secret_key = ""
+cookie_secure = false   # cookies are Secure anyway when external_url is https
+# Markdown images from other sites load through /-/image/ (viewers' addresses
+# stay private, and the page's CSP allows images from this server only)
+image_proxy = true
+
+[telemetry]
+log_format = "text"        # or "json"
+otlp_endpoint = ""         # e.g. "http://otel-collector:4317"
+metrics = true
+# set it to require "Authorization: Bearer <token>" on /metrics (else anyone who
+# can reach the server reads it)
+metrics_token = ""
+
+[features]
+ci_job_token_git_http = true
+webhooks_allow_local = false   # true lets webhooks reach private/loopback addresses (SSRF risk)
+image_proxy_allow_local = false # true lets any Markdown image reach them through the proxy (tests only)
+imports_allow_local = false    # true lets imports reach a forge on a private address (an in-house GitLab)
+
+[storage]
+max_git_processes = 0      # git processes at once (clones, archives, blame...); 0: 4 per core, at least 16
+
+[limits]
+anonymous_heavy_reads_per_minute = 60   # blame, history and archives per anonymous client
+
+[ci]
+long_poll_secs = 20                  # jobs/request waits this long for work before 204
+trace_update_interval_secs = 3       # runner log updates (1 s while a cancel is pending)
+max_artifact_bytes = 1073741824
+max_artifact_bytes_per_project = 21474836480   # 20 GiB of artifacts per project (0: no limit)
+default_artifact_expire_in = "30 days"
+stuck_timeout_secs = 3600            # fail running jobs whose runner is silent this long
+max_trace_bytes = 104857600          # a job whose log grows past this fails
+
+[registry]
+# the container registry at /v2/ on external_url's host (ADR-0022); Docker talks
+# plain HTTP only to localhost, so serve Forgust over TLS
+enabled = true
+max_blob_bytes = 10737418240   # largest image layer
+token_ttl_secs = 900
+
+[renovate]
+# built-in Renovate (ADR-0023): projects turn on "Dependency updates" and Forgust
+# runs Renovate as a CI job on these runners, with a bot of the project
+enabled = true
+image = "renovate/renovate:44.226.3"
+tags = []                 # runner tags for the job (instance runners only)
+max_concurrent = 2        # runs at once on the instance
+timeout_secs = 3600
+# onboarding_config = '{"extends": ["config:recommended"]}'
+# github_com_token = "ghp_..."   # changelogs from github.com; a token with NO scopes
+# [renovate.extra_env]     # shown in the job's variables: no secrets
+# RENOVATE_PR_HOURLY_LIMIT = "4"
+
+[email]
+# smtps://user:pass@smtp.example.com:465 (TLS) or smtp://user:pass@smtp.example.com:587?tls=required
+# (STARTTLS). A bare smtp://host:port sends in plain text: only for a local relay or
+# mailpit (smtp://127.0.0.1:1026 with compose.dev.yml). Empty disables email.
+smtp_url = ""
+from = "Forgust <noreply@example.com>"
+
+[backup]
+# The database password goes to these as PGPASSWORD (never on the command line).
+# Through docker, pass it on: pg_dump = "docker exec -i -e PGPASSWORD db pg_dump"
+pg_dump = "pg_dump"
+pg_restore = "pg_restore"
+
+# [oidc.dex]
+# display_name = "Company SSO"
+# issuer = "https://sso.example.com"
+# client_id = "forgust"
+# client_secret = "..."
+# auto_create = true
+# link_existing_by_email = false   # only safe when admins manage accounts and sign-up is off

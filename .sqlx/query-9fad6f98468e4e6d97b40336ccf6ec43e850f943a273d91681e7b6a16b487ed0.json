@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id FROM projects WHERE repository_bytes_at IS NULL OR repository_bytes_at < now() - interval '1 day'\n          ORDER BY repository_bytes_at NULLS FIRST LIMIT $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "projects",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9fad6f98468e4e6d97b40336ccf6ec43e850f943a273d91681e7b6a16b487ed0"
+}

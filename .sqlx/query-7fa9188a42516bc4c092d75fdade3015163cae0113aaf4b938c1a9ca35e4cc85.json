@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT o.size FROM lfs_objects o JOIN lfs_objects_projects l ON l.oid = o.oid\n         WHERE l.project_id = $1 AND o.oid = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "size",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "lfs_objects",
+            "name": "size"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7fa9188a42516bc4c092d75fdade3015163cae0113aaf4b938c1a9ca35e4cc85"
+}

@@ -1,0 +1,221 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.id, c.project_id, c.target_branch, c.merge_request_id, m.iid, m.title, c.user_id, c.base_sha, c.head_sha,\n                  c.train_sha, c.pipeline_id, p.status AS \"pipeline_status?\", c.squash, c.rebase, c.remove_source_branch, c.created_at, c.updated_at\n             FROM merge_train_cars c JOIN merge_requests m ON m.id = c.merge_request_id\n             LEFT JOIN ci_pipelines p ON p.id = c.pipeline_id\n            WHERE c.project_id = $1 AND ($2::text IS NULL OR c.target_branch = $2) ORDER BY c.target_branch, c.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "merge_train_cars",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "project_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "merge_train_cars",
+            "name": "project_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "target_branch",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "merge_train_cars",
+            "name": "target_branch"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "merge_request_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "merge_train_cars",
+            "name": "merge_request_id"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "iid",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "iid"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "user_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "merge_train_cars",
+            "name": "user_id"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "base_sha",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "merge_train_cars",
+            "name": "base_sha"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "head_sha",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "merge_train_cars",
+            "name": "head_sha"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "train_sha",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "merge_train_cars",
+            "name": "train_sha"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "pipeline_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "merge_train_cars",
+            "name": "pipeline_id"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "pipeline_status?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "squash",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "merge_train_cars",
+            "name": "squash"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "rebase",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "merge_train_cars",
+            "name": "rebase"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "remove_source_branch",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "merge_train_cars",
+            "name": "remove_source_branch"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "merge_train_cars",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 16,
+        "name": "updated_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "merge_train_cars",
+            "name": "updated_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "79dac2b5d61a2ba7fc3a63942045a1e1b5f7521952c0f1ba4b3a8d873d6521e6"
+}

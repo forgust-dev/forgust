@@ -1,0 +1,6 @@
+{ "jobs": [
+  { "name": "build_a", "stage": "build", "when": "on_success", "allow_failure": false },
+  { "name": "build_b", "stage": "build", "when": "on_success", "allow_failure": false },
+  { "name": "test_a", "stage": "test", "when": "on_success", "allow_failure": false, "needs": ["build_a"] },
+  { "name": "test_all", "stage": "test", "when": "on_success", "allow_failure": false, "needs": [] }
+] }

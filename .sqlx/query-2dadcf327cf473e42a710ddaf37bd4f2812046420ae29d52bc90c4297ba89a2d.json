@@ -1,0 +1,145 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.project_id, r.path AS project_path, p.name AS project_name, m.iid, m.title, m.draft, m.source_branch,\n                  m.target_branch, u.username AS \"author_username?\", m.updated_at,\n                  (SELECT rv.state FROM merge_request_reviewers rv WHERE rv.merge_request_id = m.id AND rv.user_id = $1) AS review_state\n           FROM merge_requests m\n           JOIN projects p ON p.id = m.project_id\n           JOIN routes r ON r.source_type = 'project' AND r.source_id = p.id\n           JOIN listed_project_authorizations a ON a.project_id = p.id AND a.user_id = $1 AND a.access_level >= 20\n           LEFT JOIN users u ON u.id = m.author_id\n           WHERE m.state = 'opened' AND CASE $2\n                 WHEN 'review' THEN EXISTS (SELECT 1 FROM merge_request_reviewers rv WHERE rv.merge_request_id = m.id AND rv.user_id = $1)\n                 WHEN 'assigned' THEN EXISTS (SELECT 1 FROM merge_request_assignees x WHERE x.merge_request_id = m.id AND x.user_id = $1)\n                 ELSE m.author_id = $1 END\n           ORDER BY m.updated_at DESC LIMIT $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "project_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "project_path",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "routes",
+            "name": "path"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "project_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "projects",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "iid",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "iid"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "draft",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "draft"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "source_branch",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "source_branch"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "target_branch",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "target_branch"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "author_username?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "username"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "updated_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "updated_at"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "review_state",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "2dadcf327cf473e42a710ddaf37bd4f2812046420ae29d52bc90c4297ba89a2d"
+}

@@ -1,0 +1,136 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT project_id, ci_config_path, instance_runners_enabled, default_timeout_secs, default_git_depth,\n                only_merge_if_pipeline_succeeds, job_token_scope_enabled, auto_cancel_redundant, merge_trains_enabled,\n                block_new_security_findings\n         FROM ci_project_settings WHERE project_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_project_settings",
+            "name": "project_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "ci_config_path",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_project_settings",
+            "name": "ci_config_path"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "instance_runners_enabled",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "ci_project_settings",
+            "name": "instance_runners_enabled"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "default_timeout_secs",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "ci_project_settings",
+            "name": "default_timeout_secs"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "default_git_depth",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "ci_project_settings",
+            "name": "default_git_depth"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "only_merge_if_pipeline_succeeds",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "ci_project_settings",
+            "name": "only_merge_if_pipeline_succeeds"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "job_token_scope_enabled",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "ci_project_settings",
+            "name": "job_token_scope_enabled"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "auto_cancel_redundant",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "ci_project_settings",
+            "name": "auto_cancel_redundant"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "merge_trains_enabled",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "ci_project_settings",
+            "name": "merge_trains_enabled"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "block_new_security_findings",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "ci_project_settings",
+            "name": "block_new_security_findings"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "3342eeddca43ea04a68bbf3a2e797d950cfd81e7a7e9f2bab57fb67266e54723"
+}

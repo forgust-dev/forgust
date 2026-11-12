@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM merge_request_labels WHERE merge_request_id = $1 AND NOT (label_id = ANY($2))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6cca28bd9095ebcca1e57770cd799f50ec3cbc12ddf3eef2a66f3cece9601145"
+}

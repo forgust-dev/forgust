@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT variables_enc FROM ci_pipelines WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "variables_enc",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "variables_enc"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "b6c906622502fc69f6ab540e4832de2f40eb1f206b586e8388cdcba1a7382a28"
+}

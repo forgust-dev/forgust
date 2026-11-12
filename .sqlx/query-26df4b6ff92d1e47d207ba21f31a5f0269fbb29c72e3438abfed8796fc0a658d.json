@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE merge_requests SET stack_id = $2, stack_base_sha = $3 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "26df4b6ff92d1e47d207ba21f31a5f0269fbb29c72e3438abfed8796fc0a658d"
+}

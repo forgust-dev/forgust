@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (EXISTS (SELECT 1 FROM namespaces d JOIN namespace_authorizations a ON a.namespace_id = d.id\n                           WHERE d.traversal_ids @> ARRAY[$2::bigint] AND a.user_id = $1)\n                OR EXISTS (SELECT 1 FROM projects p JOIN namespaces d ON d.id = p.namespace_id\n                           JOIN project_authorizations a ON a.project_id = p.id\n                           WHERE d.traversal_ids @> ARRAY[$2::bigint] AND a.user_id = $1)) AS \"x!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "x!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "726b6decd9653f67605af4a03bebf9cd4048a910d99679598e2eb1a545491b06"
+}

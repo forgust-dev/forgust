@@ -1,0 +1,208 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT n.id, n.kind, n.name, n.path, r.path AS \"full_path!\", n.parent_id, n.traversal_ids, n.visibility,\n                  n.description, n.owner_id, n.max_visibility, n.require_two_factor, n.project_creation_level,\n                  n.subgroup_creation_level, n.created_at, n.avatar_at\n           FROM namespaces n JOIN routes r ON r.source_type = 'namespace' AND r.source_id = n.id\n           WHERE n.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "namespaces",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "kind",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "namespaces",
+            "name": "kind"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "namespaces",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "path",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "namespaces",
+            "name": "path"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "full_path!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "routes",
+            "name": "path"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "parent_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "namespaces",
+            "name": "parent_id"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "traversal_ids",
+        "type_info": "Int8Array",
+        "origin": {
+          "Table": {
+            "table": "namespaces",
+            "name": "traversal_ids"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "visibility",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "namespaces",
+            "name": "visibility"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "description",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "namespaces",
+            "name": "description"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "owner_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "namespaces",
+            "name": "owner_id"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "max_visibility",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "namespaces",
+            "name": "max_visibility"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "require_two_factor",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "namespaces",
+            "name": "require_two_factor"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "project_creation_level",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "namespaces",
+            "name": "project_creation_level"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "subgroup_creation_level",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "namespaces",
+            "name": "subgroup_creation_level"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "namespaces",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "avatar_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "namespaces",
+            "name": "avatar_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "5071be60ff260f8a402af4d1084393015e69739a3f82df0394dda3012b019d10"
+}

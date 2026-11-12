@@ -1,0 +1,10 @@
+variables:
+  DEPLOY_TARGET: staging
+deploy_staging:
+  script: x
+  rules:
+    - if: $DEPLOY_TARGET == "staging"
+deploy_prod:
+  script: x
+  rules:
+    - if: $DEPLOY_TARGET == "prod"

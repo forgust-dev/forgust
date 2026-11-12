@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO ci_builds (pipeline_id, project_id, name, stage, stage_idx, status, when_, allow_failure, needs, spec,\n                                retry_max, retry_when, attempt, tags, timeout_secs, user_id, resource_group)\n         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text",
+        "Text",
+        "Int4",
+        "Text",
+        "Text",
+        "Bool",
+        "TextArray",
+        "Jsonb",
+        "Int4",
+        "TextArray",
+        "Int4",
+        "TextArray",
+        "Int4",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b129abd62e441f5202ceb3abaf4ca8815480ce77c0a89dfdac134c20eddc9db0"
+}

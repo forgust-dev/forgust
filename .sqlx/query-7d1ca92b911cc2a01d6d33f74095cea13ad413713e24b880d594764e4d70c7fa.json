@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO ci_project_settings (project_id, ci_config_path, instance_runners_enabled, default_timeout_secs, default_git_depth,\n                                          only_merge_if_pipeline_succeeds, job_token_scope_enabled, auto_cancel_redundant,\n                                          merge_trains_enabled, block_new_security_findings)\n         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)\n         ON CONFLICT (project_id) DO UPDATE SET ci_config_path = $2, instance_runners_enabled = $3, default_timeout_secs = $4,\n             default_git_depth = $5, only_merge_if_pipeline_succeeds = $6, job_token_scope_enabled = $7, auto_cancel_redundant = $8,\n             merge_trains_enabled = $9, block_new_security_findings = $10",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Bool",
+        "Int4",
+        "Int4",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7d1ca92b911cc2a01d6d33f74095cea13ad413713e24b880d594764e4d70c7fa"
+}

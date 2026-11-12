@@ -1,0 +1,73 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT r.id, r.name, r.created_at,\n                  (SELECT count(*) FROM registry_tags t WHERE t.repository_id = r.id) AS \"tags_count!\",\n                  (SELECT COALESCE(sum(b.size), 0)::bigint FROM registry_blobs b\n                    WHERE b.digest IN (SELECT unnest(m.blob_digests) FROM registry_manifests m WHERE m.repository_id = r.id)) AS \"size!\",\n                  (SELECT max(t.updated_at) FROM registry_tags t WHERE t.repository_id = r.id) AS updated_at\n             FROM registry_repositories r WHERE r.project_id = $1 ORDER BY r.name",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "registry_repositories",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "registry_repositories",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "registry_repositories",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "tags_count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "size!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "3c5ea7eba5712cb858a8daab057a70950bb2650a36816add61e5307c9e4211a8"
+}

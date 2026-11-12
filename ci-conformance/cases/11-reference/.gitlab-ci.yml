@@ -1,0 +1,8 @@
+.setup:
+  script:
+    - apt-get update
+    - apt-get install -y make
+build:
+  script:
+    - !reference [.setup, script]
+    - make

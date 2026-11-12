@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT value_enc FROM instance_keys WHERE name = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "value_enc",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "instance_keys",
+            "name": "value_enc"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5f5f4e76b8e34e3ae58dbe6f7a87a1959fb32b8c79f694ce828d723e3d38b590"
+}

@@ -1,0 +1,161 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, project_id, group_id, key, value_enc, variable_type, protected, masked, raw, environment_scope, description,\n                created_at\n         FROM ci_variables\n         WHERE ($1::bigint IS NOT NULL AND project_id = $1) OR ($2::bigint IS NOT NULL AND group_id = $2)\n         ORDER BY key, environment_scope",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_variables",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "project_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_variables",
+            "name": "project_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "group_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_variables",
+            "name": "group_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "key",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_variables",
+            "name": "key"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "value_enc",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_variables",
+            "name": "value_enc"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "variable_type",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_variables",
+            "name": "variable_type"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "protected",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "ci_variables",
+            "name": "protected"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "masked",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "ci_variables",
+            "name": "masked"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "raw",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "ci_variables",
+            "name": "raw"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "environment_scope",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_variables",
+            "name": "environment_scope"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "description",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_variables",
+            "name": "description"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "ci_variables",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "6d376d43b0524b71f1861b0a05ff41fed18600b1ae217039aeb5b2dd2c8f4c86"
+}

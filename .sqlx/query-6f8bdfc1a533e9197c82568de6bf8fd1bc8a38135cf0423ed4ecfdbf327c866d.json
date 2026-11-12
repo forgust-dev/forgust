@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM registry_blobs b\n          WHERE b.created_at < now() - interval '1 day'\n            AND NOT EXISTS (SELECT 1 FROM registry_repository_blobs l WHERE l.digest = b.digest)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "6f8bdfc1a533e9197c82568de6bf8fd1bc8a38135cf0423ed4ecfdbf327c866d"
+}

@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT access_level FROM members WHERE source_type = $1 AND source_id = $2 AND user_id = $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "access_level",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "members",
+            "name": "access_level"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "75615a4236a7de0a1b30159d6aedb210af1700420b46a3b38d767bb37e890c56"
+}

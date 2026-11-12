@@ -1,0 +1,160 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT d.id, d.iid, d.environment_id, d.build_id, d.ref AS git_ref, d.tag, d.sha, d.status, d.user_id,\n                  u.username AS \"username?\", d.created_at, d.finished_at\n             FROM deployments d LEFT JOIN users u ON u.id = d.user_id WHERE d.build_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "deployments",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "iid",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "deployments",
+            "name": "iid"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "environment_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "deployments",
+            "name": "environment_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "build_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "deployments",
+            "name": "build_id"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "git_ref",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "deployments",
+            "name": "ref"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "tag",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "deployments",
+            "name": "tag"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "sha",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "deployments",
+            "name": "sha"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "status",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "deployments",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "user_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "deployments",
+            "name": "user_id"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "username?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "username"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "deployments",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "finished_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "deployments",
+            "name": "finished_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "082f94964f5bb78aa88a7f27b3347ac006f22335dcfdc73388d6e2c91a66e9c6"
+}

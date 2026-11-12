@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT l.path, u.username FROM lfs_locks l JOIN users u ON u.id = l.owner_id\n          WHERE l.project_id = $1 AND l.path = ANY($2) AND l.owner_id <> $3 ORDER BY l.path",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "path",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "lfs_locks",
+            "name": "path"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "username",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "username"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "TextArray",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "f320dce14dbd9ba94ff00829fbafce7c72cd5fd253ff4c4a1c324a85a1dee1ef"
+}

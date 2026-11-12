@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM registry_repository_blobs WHERE repository_id = $1 AND digest = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5b29c1a831102af2e241cba6760e099af9c0a15cc233e5bef1659739edba7bfd"
+}

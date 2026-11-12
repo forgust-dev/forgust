@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE ci_builds SET status = 'canceling', cancel_requested_at = now(), updated_at = now() WHERE id = $1 AND status = 'running'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2dccd5eb3c6a1f1b1a1163e9502d7d20d23d48db95657732987df1765943425f"
+}

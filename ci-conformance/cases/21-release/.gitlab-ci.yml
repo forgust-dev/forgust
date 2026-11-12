@@ -1,0 +1,7 @@
+release:
+  script: [echo releasing]
+  release:
+    tag_name: v$CI_PIPELINE_IID
+    description: Release $CI_PIPELINE_IID
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"

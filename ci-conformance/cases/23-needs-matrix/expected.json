@@ -1,0 +1,5 @@
+{ "jobs": [
+  { "name": "build: [amd64]", "stage": "build", "when": "on_success", "allow_failure": false },
+  { "name": "build: [arm64]", "stage": "build", "when": "on_success", "allow_failure": false },
+  { "name": "test-arm", "stage": "test", "when": "on_success", "allow_failure": false, "needs": ["build: [arm64]"] }
+] }

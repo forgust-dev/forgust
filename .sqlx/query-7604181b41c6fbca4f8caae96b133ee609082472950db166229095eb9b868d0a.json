@@ -1,0 +1,51 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (SELECT coalesce(sum(size), 0) FROM uploads WHERE project_id = $1)::bigint AS \"uploads_bytes!\",\n                  (SELECT count(*) FROM uploads WHERE project_id = $1) AS \"uploads_count!\",\n                  (SELECT coalesce(sum(size), 0) FROM ci_job_artifacts WHERE project_id = $1)::bigint AS \"artifacts_bytes!\",\n                  (SELECT coalesce(sum(o.size), 0) FROM lfs_objects_projects lp JOIN lfs_objects o ON o.oid = lp.oid\n                    WHERE lp.project_id = $1)::bigint AS \"lfs_bytes!\",\n                  (SELECT coalesce(sum(b.size), 0) FROM registry_blobs b\n                    WHERE b.digest IN (SELECT l.digest FROM registry_repository_blobs l\n                                         JOIN registry_repositories r ON r.id = l.repository_id WHERE r.project_id = $1))::bigint AS \"registry_bytes!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "uploads_bytes!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "uploads_count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "artifacts_bytes!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "lfs_bytes!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "registry_bytes!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "7604181b41c6fbca4f8caae96b133ee609082472950db166229095eb9b868d0a"
+}

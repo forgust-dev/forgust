@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT d::date AS \"day!\",\n                  count(p.id) FILTER (WHERE p.status = 'success') AS \"success!\",\n                  count(p.id) FILTER (WHERE p.status = 'failed') AS \"failed!\",\n                  count(p.id) FILTER (WHERE p.status NOT IN ('success', 'failed')) AS \"other!\"\n             FROM generate_series(current_date - 29, current_date, interval '1 day') d\n             LEFT JOIN ci_pipelines p ON p.created_at >= d AND p.created_at < d + interval '1 day'\n            GROUP BY d ORDER BY d",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "day!",
+        "type_info": "Date",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "success!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "failed!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "other!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "e19bdc7b00766a8b24c695876197f8970b04943bc12462e4d590ea090e0c88af"
+}

@@ -1,0 +1,196 @@
+{
+  "host": "dev workstation, 8 vCPU, 11 GB RAM, shared with other containers (informative only)",
+  "created_at": "1794074216",
+  "measurements": [
+    {
+      "name": "repo_home_tree",
+      "profile": "single",
+      "n": 200,
+      "p50_ms": 2.531401,
+      "p95_ms": 6.715755000000001,
+      "max_ms": 8.896980000000001,
+      "first_ms": 3.4761330000000004,
+      "target_p95_ms": 50.0
+    },
+    {
+      "name": "repo_home_readme",
+      "profile": "single",
+      "n": 200,
+      "p50_ms": 1.94428,
+      "p95_ms": 4.304575,
+      "max_ms": 7.469862,
+      "first_ms": 6.473031,
+      "target_p95_ms": 50.0
+    },
+    {
+      "name": "blob_highlighted",
+      "profile": "single",
+      "n": 200,
+      "p50_ms": 4.201746,
+      "p95_ms": 11.874881,
+      "max_ms": 17.320487999999997,
+      "first_ms": 10.770123,
+      "target_p95_ms": 50.0
+    },
+    {
+      "name": "commit_diff",
+      "profile": "single",
+      "n": 200,
+      "p50_ms": 1.500496,
+      "p95_ms": 4.78431,
+      "max_ms": 10.07296,
+      "first_ms": 1.735549,
+      "target_p95_ms": 100.0
+    },
+    {
+      "name": "blame",
+      "profile": "single",
+      "n": 200,
+      "p50_ms": 2.943969,
+      "p95_ms": 8.206128,
+      "max_ms": 11.735304000000001,
+      "first_ms": 2.859141,
+      "target_p95_ms": 100.0
+    },
+    {
+      "name": "commit_list",
+      "profile": "single",
+      "n": 200,
+      "p50_ms": 2.574914,
+      "p95_ms": 5.221888,
+      "max_ms": 13.466217,
+      "first_ms": 1.476748,
+      "target_p95_ms": 100.0
+    },
+    {
+      "name": "repo_home_tree",
+      "profile": "concurrent",
+      "n": 44313,
+      "p50_ms": 7.008465999999999,
+      "p95_ms": 9.123971999999998,
+      "max_ms": 28.483123,
+      "first_ms": null,
+      "target_p95_ms": 150.0
+    },
+    {
+      "name": "repo_home_readme",
+      "profile": "concurrent",
+      "n": 44450,
+      "p50_ms": 7.039272,
+      "p95_ms": 8.915346,
+      "max_ms": 17.325706999999998,
+      "first_ms": null,
+      "target_p95_ms": 150.0
+    },
+    {
+      "name": "blob_highlighted",
+      "profile": "concurrent",
+      "n": 13001,
+      "p50_ms": 24.24217,
+      "p95_ms": 32.768716000000005,
+      "max_ms": 52.839577,
+      "first_ms": null,
+      "target_p95_ms": 150.0
+    },
+    {
+      "name": "commit_diff",
+      "profile": "concurrent",
+      "n": 42074,
+      "p50_ms": 7.272798,
+      "p95_ms": 10.432337,
+      "max_ms": 21.989641000000002,
+      "first_ms": null,
+      "target_p95_ms": 250.0
+    },
+    {
+      "name": "blame",
+      "profile": "concurrent",
+      "n": 12490,
+      "p50_ms": 25.256117000000003,
+      "p95_ms": 34.542743,
+      "max_ms": 51.244634,
+      "first_ms": null,
+      "target_p95_ms": 300.0
+    },
+    {
+      "name": "commit_list",
+      "profile": "concurrent",
+      "n": 43657,
+      "p50_ms": 7.120817,
+      "p95_ms": 9.023308,
+      "max_ms": 132.485799,
+      "first_ms": null,
+      "target_p95_ms": 250.0
+    },
+    {
+      "name": "refs_1m_ls_refs_prefix",
+      "profile": "single",
+      "n": 20,
+      "p50_ms": 3.682093,
+      "p95_ms": 12.809964,
+      "max_ms": 20.266939,
+      "first_ms": null,
+      "target_p95_ms": 100.0
+    },
+    {
+      "name": "refs_1m_fetch_noop",
+      "profile": "single",
+      "n": 20,
+      "p50_ms": 77.65035400000001,
+      "p95_ms": 90.822617,
+      "max_ms": 92.832421,
+      "first_ms": null,
+      "target_p95_ms": 300.0
+    },
+    {
+      "name": "refs_1m_push_one",
+      "profile": "single",
+      "n": 20,
+      "p50_ms": 6962.070742,
+      "p95_ms": 7112.765558,
+      "max_ms": 7141.265766,
+      "first_ms": null,
+      "target_p95_ms": 300.0
+    },
+    {
+      "name": "mr_page",
+      "profile": "single",
+      "n": 200,
+      "p50_ms": 5.665313,
+      "p95_ms": 8.984462,
+      "max_ms": 13.635667,
+      "first_ms": 5.320368,
+      "target_p95_ms": 100.0
+    },
+    {
+      "name": "mr_diff_first_page",
+      "profile": "single",
+      "n": 200,
+      "p50_ms": 4.379307,
+      "p95_ms": 9.21241,
+      "max_ms": 10.490689,
+      "first_ms": 10.750304999999999,
+      "target_p95_ms": 150.0
+    },
+    {
+      "name": "mr_page",
+      "profile": "concurrent",
+      "n": 49080,
+      "p50_ms": 12.71753,
+      "p95_ms": 15.976847999999999,
+      "max_ms": 30.414761,
+      "first_ms": null,
+      "target_p95_ms": 250.0
+    },
+    {
+      "name": "mr_diff_first_page",
+      "profile": "concurrent",
+      "n": 65815,
+      "p50_ms": 9.501259,
+      "p95_ms": 12.077022999999999,
+      "max_ms": 25.244885,
+      "first_ms": null,
+      "target_p95_ms": 400.0
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n             (SELECT coalesce(sum(repository_bytes), 0) FROM projects)::bigint AS \"repos!\",\n             (SELECT coalesce(sum(size), 0) FROM lfs_objects)::bigint AS \"lfs!\",\n             (SELECT coalesce(sum(size), 0) FROM ci_job_artifacts WHERE file_type <> 'trace')::bigint AS \"artifacts!\",\n             (SELECT coalesce(sum(trace_size), 0) FROM ci_builds WHERE trace_archived)::bigint AS \"logs_archived!\",\n             (SELECT coalesce(sum(octet_length(data)), 0) FROM ci_job_trace_chunks)::bigint AS \"logs_live!\",\n             (SELECT coalesce(sum(size), 0) FROM registry_blobs)::bigint AS \"registry!\",\n             (SELECT coalesce(sum(size), 0) FROM uploads)::bigint AS \"uploads!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "repos!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "lfs!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "artifacts!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "logs_archived!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "logs_live!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "registry!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "uploads!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "f90392f50e63cb80e47c35c0b853f980bd641b04303e42b8f59e5bd7f5c6f227"
+}

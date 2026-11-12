@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE security_findings SET on_default = true,\n                state = CASE WHEN state = 'resolved' THEN 'detected' ELSE state END,\n                resolved_at = CASE WHEN state = 'resolved' THEN NULL ELSE resolved_at END\n          WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a477d270aaa55bb3602d8729d33e69d3f72be759761ec3303299a9d3da22f0c8"
+}

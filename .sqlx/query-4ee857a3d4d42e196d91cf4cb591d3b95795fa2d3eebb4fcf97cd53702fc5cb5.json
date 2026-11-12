@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH ev AS (\n               SELECT project_id, created_at AS at, true AS code FROM push_events WHERE user_id = $1 AND created_at >= $2\n               UNION ALL SELECT project_id, created_at, true FROM merge_requests WHERE author_id = $1 AND created_at >= $2\n               UNION ALL SELECT project_id, merged_at, true FROM merge_requests WHERE merged_by = $1 AND merged_at >= $2\n               UNION ALL SELECT project_id, created_at, false FROM issues WHERE author_id = $1 AND created_at >= $2\n               UNION ALL SELECT project_id, closed_at, false FROM issues WHERE closed_by = $1 AND closed_at >= $2\n               UNION ALL SELECT m.project_id, n.created_at, true FROM notes n JOIN merge_requests m ON m.id = n.merge_request_id\n                         WHERE n.author_id = $1 AND NOT n.system AND n.created_at >= $2\n               UNION ALL SELECT i.project_id, n.created_at, false FROM issue_notes n JOIN issues i ON i.id = n.issue_id\n                         WHERE n.author_id = $1 AND NOT n.system AND n.created_at >= $2\n               UNION ALL SELECT m.project_id, a.created_at, true FROM approvals a JOIN merge_requests m ON m.id = a.merge_request_id\n                         WHERE a.user_id = $1 AND a.created_at >= $2\n           )\n           SELECT (ev.at AT TIME ZONE $3)::date AS \"date!\", count(*) AS \"count!\"\n           FROM ev JOIN projects p ON p.id = ev.project_id\n           WHERE $5 OR p.visibility = 20 OR (p.visibility = 10 AND $6)\n              -- merge requests and pushes are code: a Guest member does not see them\n              OR EXISTS (SELECT 1 FROM listed_project_authorizations pa\n                         WHERE pa.project_id = p.id AND pa.user_id = $4 AND (NOT ev.code OR pa.access_level >= 20))\n           GROUP BY 1 ORDER BY 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "date!",
+        "type_info": "Date",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Timestamptz",
+        "Text",
+        "Int8",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "4ee857a3d4d42e196d91cf4cb591d3b95795fa2d3eebb4fcf97cd53702fc5cb5"
+}

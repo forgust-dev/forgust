@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT can_push FROM deploy_keys_projects WHERE deploy_key_id = $1 AND project_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "can_push",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "deploy_keys_projects",
+            "name": "can_push"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f1f004c835ac728dedd47cc6e60214994472c99285020da8e8c5e825b1673e55"
+}

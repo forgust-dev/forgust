@@ -1,0 +1,257 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.id, p.project_id, p.iid, p.ref AS git_ref, p.tag, p.sha, p.before_sha, p.source, p.status, p.protected,\n                    p.merge_request_id, p.schedule_id, p.user_id, u.username AS \"username?\", p.commit_title, p.yaml_errors, p.created_at,\n                    p.started_at, p.finished_at, p.updated_at\n             FROM ci_pipelines p LEFT JOIN users u ON u.id = p.user_id WHERE p.project_id = $1 AND p.iid = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "project_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "project_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "iid",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "iid"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "git_ref",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "ref"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "tag",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "tag"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "sha",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "sha"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "before_sha",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "before_sha"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "source",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "source"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "status",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "protected",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "protected"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "merge_request_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "merge_request_id"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "schedule_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "schedule_id"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "user_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "user_id"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "username?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "username"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "commit_title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "commit_title"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "yaml_errors",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "yaml_errors"
+          }
+        }
+      },
+      {
+        "ordinal": 16,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 17,
+        "name": "started_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "started_at"
+          }
+        }
+      },
+      {
+        "ordinal": 18,
+        "name": "finished_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "finished_at"
+          }
+        }
+      },
+      {
+        "ordinal": 19,
+        "name": "updated_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "updated_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "4b42f09137779c28b5a5a898c4c720dcab5c5c1ed868619da395d63d93e6477f"
+}

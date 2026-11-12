@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT r.path AS \"path!\" FROM members m\n             JOIN namespaces n ON n.id = m.source_id AND n.kind = 'group'\n             JOIN routes r ON r.source_type = 'namespace' AND r.source_id = n.id\n            WHERE m.source_type = 'namespace' AND m.user_id = $1 AND m.access_level >= 50\n              AND NOT EXISTS (SELECT 1 FROM members o WHERE o.source_type = 'namespace' AND o.source_id = ANY(n.traversal_ids)\n                                AND o.user_id <> $1 AND o.access_level >= 50)\n            ORDER BY 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "path!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "routes",
+            "name": "path"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "acf3104c1676ffc7757decc5ad8ddf269c0bf8c5a999e8c45a975129ff82be78"
+}

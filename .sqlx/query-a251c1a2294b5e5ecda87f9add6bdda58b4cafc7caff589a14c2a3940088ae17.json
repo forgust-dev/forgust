@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE instance_settings SET banner_text = $1, banner_tone = $2, banner_until = $3, updated_at = now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a251c1a2294b5e5ecda87f9add6bdda58b4cafc7caff589a14c2a3940088ae17"
+}

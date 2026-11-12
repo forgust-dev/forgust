@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT NOT coalesce((SELECT job_token_scope_enabled FROM ci_project_settings WHERE project_id = $1), true)\n             OR EXISTS (SELECT 1 FROM ci_job_token_allowlist WHERE project_id = $1 AND source_project_id = $2)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "?column?",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "48cf1b7a95fc7fcc3f7657041906583d039623cb09bde02990dfd876bea18345"
+}

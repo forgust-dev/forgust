@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE personal_access_tokens SET token_hash = $3, expires_at = $4 WHERE id = $1 AND user_id = $2 AND NOT revoked",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Bytea",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b726d48fc6556d5b7f3a81bab5393fdc146eb3e4ec455062e2af084691908889"
+}

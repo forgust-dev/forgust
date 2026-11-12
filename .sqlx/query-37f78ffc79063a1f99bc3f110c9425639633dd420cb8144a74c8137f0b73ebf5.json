@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT expire_at FROM ci_job_artifacts WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "expire_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "ci_job_artifacts",
+            "name": "expire_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "37f78ffc79063a1f99bc3f110c9425639633dd420cb8144a74c8137f0b73ebf5"
+}

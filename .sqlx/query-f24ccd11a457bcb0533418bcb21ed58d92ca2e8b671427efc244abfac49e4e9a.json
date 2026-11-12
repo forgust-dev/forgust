@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (SELECT 1 FROM ci_builds WHERE project_id = $1 AND resource_group = $2 AND id <> $3\n                          AND status IN ('pending', 'preparing', 'running', 'canceling')) AS \"x!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "x!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "f24ccd11a457bcb0533418bcb21ed58d92ca2e8b671427efc244abfac49e4e9a"
+}

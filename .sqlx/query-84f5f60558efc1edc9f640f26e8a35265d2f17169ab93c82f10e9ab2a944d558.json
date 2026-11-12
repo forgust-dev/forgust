@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT r.source_type, r.source_id, cur.path AS current\n         FROM redirect_routes r\n         JOIN routes cur ON cur.source_type = r.source_type AND cur.source_id = r.source_id\n         WHERE lower(r.path) = lower($1)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_type",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "redirect_routes",
+            "name": "source_type"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "source_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "redirect_routes",
+            "name": "source_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "current",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "routes",
+            "name": "path"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "84f5f60558efc1edc9f640f26e8a35265d2f17169ab93c82f10e9ab2a944d558"
+}

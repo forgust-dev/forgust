@@ -1,0 +1,15 @@
+stages: [build, test]
+build:
+  stage: build
+  script: [make]
+  parallel:
+    matrix:
+      - ARCH: [amd64, arm64]
+test-arm:
+  stage: test
+  script: [test]
+  needs:
+    - job: build
+      parallel:
+        matrix:
+          - ARCH: arm64

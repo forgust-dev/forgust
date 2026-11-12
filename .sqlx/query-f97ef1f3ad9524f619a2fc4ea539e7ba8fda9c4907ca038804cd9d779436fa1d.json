@@ -1,0 +1,124 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, project_id, name, push_access_level, merge_access_level, allow_force_push, allow_deploy_keys,\n                code_owner_approval_required, created_at\n         FROM protected_branches WHERE project_id = $1 ORDER BY name",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "protected_branches",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "project_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "protected_branches",
+            "name": "project_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "protected_branches",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "push_access_level",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "protected_branches",
+            "name": "push_access_level"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "merge_access_level",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "protected_branches",
+            "name": "merge_access_level"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "allow_force_push",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "protected_branches",
+            "name": "allow_force_push"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "allow_deploy_keys",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "protected_branches",
+            "name": "allow_deploy_keys"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "code_owner_approval_required",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "protected_branches",
+            "name": "code_owner_approval_required"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "protected_branches",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "f97ef1f3ad9524f619a2fc4ea539e7ba8fda9c4907ca038804cd9d779436fa1d"
+}

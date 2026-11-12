@@ -1,0 +1,7 @@
+build:
+  script: x
+release:
+  stage: deploy
+  script: x
+  rules:
+    - if: $CI_COMMIT_TAG

@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT project_id, target_branch FROM merge_train_cars WHERE pipeline_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "merge_train_cars",
+            "name": "project_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "target_branch",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "merge_train_cars",
+            "name": "target_branch"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "663daa1128be00fd60ba59907c29ed691b4ef053e8e7019ef6724578234bd956"
+}

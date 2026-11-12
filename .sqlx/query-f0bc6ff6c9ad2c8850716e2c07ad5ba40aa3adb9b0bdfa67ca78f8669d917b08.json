@@ -1,0 +1,365 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.id, m.project_id, m.iid, m.title, m.description, m.author_id, u.username AS \"author_username?\",\n                  m.source_branch, m.target_branch, m.state, m.draft, m.squash, m.merge_commit_sha, m.merged_by,\n                  m.merged_at, m.closed_at, m.created_at, m.updated_at, m.imported_author, m.stack_id, m.stack_base_sha,\n                  m.auto_merge_by, m.auto_merge_method, m.auto_merge_sha, m.auto_merge_remove_source, m.auto_merge_target, m.remove_source_branch,\n                  m.milestone_id, ms.title AS \"milestone_title?\"\n           FROM merge_requests m LEFT JOIN users u ON u.id = m.author_id LEFT JOIN milestones ms ON ms.id = m.milestone_id\n           WHERE m.project_id = $1 AND m.iid = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "project_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "project_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "iid",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "iid"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "description",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "description"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "author_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "author_id"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "author_username?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "username"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "source_branch",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "source_branch"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "target_branch",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "target_branch"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "state",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "state"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "draft",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "draft"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "squash",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "squash"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "merge_commit_sha",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "merge_commit_sha"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "merged_by",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "merged_by"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "merged_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "merged_at"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "closed_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "closed_at"
+          }
+        }
+      },
+      {
+        "ordinal": 16,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 17,
+        "name": "updated_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "updated_at"
+          }
+        }
+      },
+      {
+        "ordinal": 18,
+        "name": "imported_author",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "imported_author"
+          }
+        }
+      },
+      {
+        "ordinal": 19,
+        "name": "stack_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "stack_id"
+          }
+        }
+      },
+      {
+        "ordinal": 20,
+        "name": "stack_base_sha",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "stack_base_sha"
+          }
+        }
+      },
+      {
+        "ordinal": 21,
+        "name": "auto_merge_by",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "auto_merge_by"
+          }
+        }
+      },
+      {
+        "ordinal": 22,
+        "name": "auto_merge_method",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "auto_merge_method"
+          }
+        }
+      },
+      {
+        "ordinal": 23,
+        "name": "auto_merge_sha",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "auto_merge_sha"
+          }
+        }
+      },
+      {
+        "ordinal": 24,
+        "name": "auto_merge_remove_source",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "auto_merge_remove_source"
+          }
+        }
+      },
+      {
+        "ordinal": 25,
+        "name": "auto_merge_target",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "auto_merge_target"
+          }
+        }
+      },
+      {
+        "ordinal": 26,
+        "name": "remove_source_branch",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "remove_source_branch"
+          }
+        }
+      },
+      {
+        "ordinal": 27,
+        "name": "milestone_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "milestone_id"
+          }
+        }
+      },
+      {
+        "ordinal": 28,
+        "name": "milestone_title?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "milestones",
+            "name": "title"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "f0bc6ff6c9ad2c8850716e2c07ad5ba40aa3adb9b0bdfa67ca78f8669d917b08"
+}

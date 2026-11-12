@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT b.size FROM registry_blobs b JOIN registry_repository_blobs l ON l.digest = b.digest\n          WHERE l.repository_id = $1 AND b.digest = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "size",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "registry_blobs",
+            "name": "size"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "62267c18f74f29b81ae127afbdbc807ad90f8d9cdf6bb4f688944efe8da7a611"
+}

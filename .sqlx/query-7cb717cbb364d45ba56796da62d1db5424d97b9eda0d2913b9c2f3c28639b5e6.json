@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT data FROM ci_job_trace_chunks WHERE build_id = $1 AND chunk_index BETWEEN $2 AND $3 ORDER BY chunk_index",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "data",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "ci_job_trace_chunks",
+            "name": "data"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7cb717cbb364d45ba56796da62d1db5424d97b9eda0d2913b9c2f3c28639b5e6"
+}

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT coalesce(sum(project_storage_bytes(p.id)), 0)::bigint AS \"b!\"\n             FROM projects p JOIN namespaces n ON n.id = p.namespace_id\n            WHERE n.traversal_ids @> ARRAY[$1::bigint]",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "b!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "7c21a1dcfc771261f6df2b7e38c0b541e4e520d2a9f4d796a550f48714f64966"
+}

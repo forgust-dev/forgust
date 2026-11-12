@@ -1,0 +1,235 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT i.id, i.project_id, i.iid, i.title, i.description, i.author_id, u.username AS \"author_username?\",\n                  u.name AS \"author_name?\", i.imported_author, i.state, i.closed_by, i.closed_at, i.created_at, i.updated_at,\n                  (SELECT count(*) FROM issue_notes n WHERE n.issue_id = i.id AND NOT n.system) AS \"notes_count!\",\n                  i.milestone_id, ms.title AS \"milestone_title?\", i.due_date\n           FROM issues i LEFT JOIN users u ON u.id = i.author_id LEFT JOIN milestones ms ON ms.id = i.milestone_id\n           WHERE i.project_id = $1 AND ($2 = 'all' OR i.state = $2)\n             AND ($3 = '' OR i.title ILIKE '%' || $3 || '%' OR ('#' || i.iid::text) = $3 OR i.iid::text = $3)\n             AND ($4 = '' OR EXISTS (SELECT 1 FROM issue_labels il JOIN labels l ON l.id = il.label_id\n                                     WHERE il.issue_id = i.id AND l.name = $4))\n             AND ($7::bigint IS NULL OR EXISTS (SELECT 1 FROM issue_assignees a WHERE a.issue_id = i.id AND a.user_id = $7))\n             AND ($8::bigint IS NULL OR i.author_id = $8)\n             AND ($9::bigint IS NULL OR ($9 = 0 AND i.milestone_id IS NULL) OR i.milestone_id = $9)\n           ORDER BY i.updated_at DESC LIMIT $5 OFFSET $6",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "issues",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "project_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "issues",
+            "name": "project_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "iid",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "issues",
+            "name": "iid"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "issues",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "description",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "issues",
+            "name": "description"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "author_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "issues",
+            "name": "author_id"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "author_username?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "username"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "author_name?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "imported_author",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "issues",
+            "name": "imported_author"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "state",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "issues",
+            "name": "state"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "closed_by",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "issues",
+            "name": "closed_by"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "closed_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "issues",
+            "name": "closed_at"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "issues",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "updated_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "issues",
+            "name": "updated_at"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "notes_count!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 15,
+        "name": "milestone_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "issues",
+            "name": "milestone_id"
+          }
+        }
+      },
+      {
+        "ordinal": 16,
+        "name": "milestone_title?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "milestones",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 17,
+        "name": "due_date",
+        "type_info": "Date",
+        "origin": {
+          "Table": {
+            "table": "issues",
+            "name": "due_date"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Text",
+        "Text",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false,
+      null,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "de04ba29935387f8e187cb60589215621391b67e2b08aee5ef5ab59b2af7e056"
+}

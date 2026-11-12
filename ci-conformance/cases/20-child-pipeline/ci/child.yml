@@ -1,0 +1,2 @@
+unit:
+  script: [make unit]

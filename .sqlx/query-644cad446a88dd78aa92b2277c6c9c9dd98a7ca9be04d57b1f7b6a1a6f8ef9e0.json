@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO ci_job_artifacts (build_id, project_id, file_type, file_format, filename, size, blob_key, expire_at)\n         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)\n         ON CONFLICT (build_id, file_type) DO UPDATE SET file_format = $4, filename = $5, size = $6, blob_key = $7, expire_at = $8,\n             created_at = now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text",
+        "Text",
+        "Text",
+        "Int8",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "644cad446a88dd78aa92b2277c6c9c9dd98a7ca9be04d57b1f7b6a1a6f8ef9e0"
+}

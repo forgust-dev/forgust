@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO project_group_links (project_id, group_id, max_access_level, expires_at) VALUES ($1, $2, $3, $4)\n         ON CONFLICT (project_id, group_id) DO UPDATE SET max_access_level = EXCLUDED.max_access_level, expires_at = EXCLUDED.expires_at",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Int2",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "051fa51bb0bfb074d21b7fed38445e6931e2b8c2046cc6d383933499c849ace5"
+}

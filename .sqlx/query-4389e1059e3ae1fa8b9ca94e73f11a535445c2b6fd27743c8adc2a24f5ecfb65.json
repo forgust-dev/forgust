@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH o AS (INSERT INTO lfs_objects (oid, size) VALUES ($2, $3) ON CONFLICT (oid) DO NOTHING)\n         INSERT INTO lfs_objects_projects (project_id, oid)\n         SELECT $1, $2 ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4389e1059e3ae1fa8b9ca94e73f11a535445c2b6fd27743c8adc2a24f5ecfb65"
+}

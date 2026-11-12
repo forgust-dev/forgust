@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE security_findings SET state = 'dismissed', dismissal_reason = $2, dismissal_comment = $3, dismissed_by = $4, dismissed_at = now()\n                  WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0bb55f343c8dad2ea6dd7cb0f6f328f80b620693b68242d8c58dc6f416ba5339"
+}

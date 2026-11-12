@@ -1,0 +1,88 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT iu.source_user_id, iu.username, iu.name, iu.email, iu.user_id, u.username AS \"local_username?\"\n           FROM import_users iu LEFT JOIN users u ON u.id = iu.user_id\n           WHERE iu.import_id = $1 ORDER BY iu.username",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_user_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "import_users",
+            "name": "source_user_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "username",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "import_users",
+            "name": "username"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "import_users",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "email",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "import_users",
+            "name": "email"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "user_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "import_users",
+            "name": "user_id"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "local_username?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "username"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "cc97197efcd4ac9537241b800621bf61e46e28181fcf5ccf3d513c9bd4996bfb"
+}

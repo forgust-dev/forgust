@@ -1,0 +1,50 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT banner_text AS text, banner_tone AS tone, banner_until AS until FROM instance_settings",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "text",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "instance_settings",
+            "name": "banner_text"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "tone",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "instance_settings",
+            "name": "banner_tone"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "until",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "instance_settings",
+            "name": "banner_until"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "9bf50ff1291a4138311809136ec5c67fe3170f619912dbf42ae12e96e9b8b7eb"
+}

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM ci_job_artifacts WHERE id IN (\n             SELECT id FROM ci_job_artifacts WHERE expire_at < now() ORDER BY expire_at LIMIT $1 FOR UPDATE SKIP LOCKED)\n         RETURNING blob_key",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "blob_key",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_job_artifacts",
+            "name": "blob_key"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "04744da818f47313e115ec8f78749d049dc5547b88a1fdee0819a1766b448fbf"
+}

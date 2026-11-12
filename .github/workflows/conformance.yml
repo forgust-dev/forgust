@@ -1,0 +1,53 @@
+name: CI conformance (GitLab CE)
+
+# The conformance corpus against a real GitLab CE, nightly: confirms that the
+# expected results Forgust is tested against are GitLab's. Not on push: GitLab
+# takes minutes to start.
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: conformance
+  cancel-in-progress: false
+
+jobs:
+  gitlab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GITLAB_CT: forgust-conformance-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start GitLab CE
+        run: |
+          docker run -d --name "$GITLAB_CT" -p 8929:8929 --shm-size 256m \
+            -e GITLAB_ROOT_PASSWORD='conformance-Pass-123' \
+            -e GITLAB_OMNIBUS_CONFIG="external_url 'http://localhost:8929'; prometheus_monitoring['enable'] = false; registry['enable'] = false; gitlab_kas['enable'] = false; puma['worker_processes'] = 0; sidekiq['concurrency'] = 5" \
+            gitlab/gitlab-ce:19.5.3-ce.0
+          for i in $(seq 150); do
+            if curl -sf http://localhost:8929/-/readiness >/dev/null; then break; fi
+            if [ "$(docker inspect -f '{{.State.Running}}' "$GITLAB_CT")" != true ]; then
+              docker logs --tail 80 "$GITLAB_CT"; exit 1
+            fi
+            sleep 10
+          done
+          curl -sf http://localhost:8929/-/readiness
+      - name: API token
+        run: |
+          docker exec "$GITLAB_CT" gitlab-rails runner "t = User.find_by_username('root').personal_access_tokens.create!(scopes: [:api], name: 'conformance', expires_at: 2.days.from_now); t.set_token('glpat-conformance-0000000000'); t.save!"
+      - name: Compare the corpus
+        env:
+          GITLAB_URL: http://localhost:8929
+          GITLAB_TOKEN: glpat-conformance-0000000000
+        run: python3 ci-conformance/compare_gitlab.py
+      - name: GitLab log
+        if: failure()
+        run: docker logs --tail 200 "$GITLAB_CT" || true
+      - name: Remove GitLab
+        if: always()
+        run: docker rm -f "$GITLAB_CT" || true

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE import_projects SET status = $2, error = $3,\n                started_at = CASE WHEN $2 IN ('planning', 'running') THEN coalesce(started_at, now()) ELSE started_at END,\n                finished_at = CASE WHEN $2 IN ('planned', 'finished', 'failed', 'skipped', 'canceled') THEN now() ELSE NULL END,\n                stage = CASE WHEN $2 IN ('planned', 'finished', 'failed', 'skipped', 'canceled') THEN NULL ELSE stage END\n         WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "474a7930bc0a62e8c7a071a979b0940e5098e49d8174c73005116f68431b8e0f"
+}

@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT k AS \"key!\",\n                  CASE WHEN EXISTS (SELECT 1 FROM blob_deletions d WHERE d.blob_key = k) THEN 'queued'\n                       WHEN k LIKE 'lfs/%' AND NOT EXISTS (SELECT 1 FROM lfs_objects_projects l WHERE l.oid = split_part(k, '/', 4)) THEN 'unused'\n                       ELSE 'ok' END AS \"status!\"\n             FROM unnest($1::text[]) AS k\n            WHERE EXISTS (SELECT 1 FROM blob_deletions d WHERE d.blob_key = k)\n               OR (k LIKE 'ci/%' AND EXISTS (SELECT 1 FROM ci_job_artifacts a WHERE a.blob_key = k))\n               OR (k LIKE 'uploads/%' AND EXISTS (SELECT 1 FROM uploads u WHERE u.blob_key = k))\n               OR (k LIKE 'lfs/%' AND EXISTS (SELECT 1 FROM lfs_objects o WHERE o.oid = split_part(k, '/', 4)))\n               OR (k LIKE 'registry/blobs/%'\n                   AND EXISTS (SELECT 1 FROM registry_blobs b WHERE b.digest = split_part(k, '/', 3) || ':' || split_part(k, '/', 4)))\n               OR (k LIKE 'registry/uploads/%' AND EXISTS (SELECT 1 FROM registry_uploads r WHERE r.id::text = split_part(k, '/', 3)))\n               OR (k ~ '^avatars/user/[0-9]+\\.png$'\n                   AND EXISTS (SELECT 1 FROM users x WHERE x.id = substring(k FROM '([0-9]+)')::bigint AND x.avatar_at IS NOT NULL))\n               OR (k ~ '^avatars/project/[0-9]+\\.png$'\n                   AND EXISTS (SELECT 1 FROM projects x WHERE x.id = substring(k FROM '([0-9]+)')::bigint AND x.avatar_at IS NOT NULL))\n               OR (k ~ '^avatars/group/[0-9]+\\.png$'\n                   AND EXISTS (SELECT 1 FROM namespaces x WHERE x.id = substring(k FROM '([0-9]+)')::bigint AND x.avatar_at IS NOT NULL))",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "key!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "status!",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "a1ae46ea5cb85786bb258a84049723c932c2f048ff3714dde88a47bf4edc8504"
+}

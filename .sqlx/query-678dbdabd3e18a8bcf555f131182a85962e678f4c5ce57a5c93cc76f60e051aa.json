@@ -1,0 +1,56 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n             (SELECT count(*) FROM ci_builds WHERE created_at > now() - interval '30 days') AS \"jobs_30!\",\n             (SELECT count(*) FROM ci_pending_jobs) AS \"queued!\",\n             (SELECT count(*) FROM ci_builds WHERE status IN ('running', 'canceling')) AS \"running!\",\n             (SELECT count(*) FROM ci_runners) AS \"runners!\",\n             (SELECT count(*) FROM ci_runners WHERE contacted_at > now() - interval '1 hour') AS \"online!\",\n             (SELECT count(*) FROM ci_runners WHERE paused) AS \"paused!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "jobs_30!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "queued!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "running!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "runners!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "online!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "paused!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "678dbdabd3e18a8bcf555f131182a85962e678f4c5ce57a5c93cc76f60e051aa"
+}

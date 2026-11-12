@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE ci_builds SET downstream_pipeline_id = $2 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5eb9b7956426e3f76b1ee2982351c6b4b8689e040f47c899f3dedfdcc45bbcfd"
+}

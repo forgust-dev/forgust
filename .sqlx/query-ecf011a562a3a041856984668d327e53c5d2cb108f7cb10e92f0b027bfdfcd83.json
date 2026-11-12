@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE security_scanning_settings SET last_pipeline_id = COALESCE($2, last_pipeline_id), next_run_at = $3,\n                history_scanned = history_scanned OR $2 IS NOT NULL, updated_at = now()\n          WHERE project_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ecf011a562a3a041856984668d327e53c5d2cb108f7cb10e92f0b027bfdfcd83"
+}

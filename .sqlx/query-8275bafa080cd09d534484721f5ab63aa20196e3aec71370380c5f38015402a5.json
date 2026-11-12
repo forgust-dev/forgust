@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE environments SET state = 'available', external_url = COALESCE($2, external_url), stop_build_id = $3,\n                auto_stop_at = $4, updated_at = now() WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Int8",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8275bafa080cd09d534484721f5ab63aa20196e3aec71370380c5f38015402a5"
+}

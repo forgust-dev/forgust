@@ -1,0 +1,100 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT project_id, enabled, interval_hours, onboarding, bot_user_id, next_run_at, last_pipeline_id\n           FROM renovate_settings WHERE project_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "renovate_settings",
+            "name": "project_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "enabled",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "renovate_settings",
+            "name": "enabled"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "interval_hours",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "renovate_settings",
+            "name": "interval_hours"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "onboarding",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "renovate_settings",
+            "name": "onboarding"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "bot_user_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "renovate_settings",
+            "name": "bot_user_id"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "next_run_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "renovate_settings",
+            "name": "next_run_at"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "last_pipeline_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "renovate_settings",
+            "name": "last_pipeline_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "dfc32e493a489379b62df24eef9bdd7dc40117b90be11db0195230578d328f6f"
+}

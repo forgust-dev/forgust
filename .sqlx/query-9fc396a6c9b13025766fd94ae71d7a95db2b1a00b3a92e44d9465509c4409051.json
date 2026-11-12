@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO pages_deployments (project_id, build_id, artifact_id, publish, artifact_expire_at) VALUES ($1, $2, $3, $4, $5)\n         ON CONFLICT (project_id) DO UPDATE SET build_id = $2, artifact_id = $3, publish = $4, artifact_expire_at = $5, created_at = now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Int8",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9fc396a6c9b13025766fd94ae71d7a95db2b1a00b3a92e44d9465509c4409051"
+}

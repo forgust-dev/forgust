@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.id FROM ci_pipelines p\n          WHERE p.project_id = $1 AND NOT p.tag AND NOT is_system_source(p.source)\n            AND ($2::text IS NULL OR p.sha = $2)\n            AND ($3::text IS NULL OR (p.ref = $3 AND p.source <> 'merge_request_event' AND p.status IN ('success', 'failed')))\n            AND EXISTS (SELECT 1 FROM ci_build_test_reports t WHERE t.pipeline_id = p.id)\n          ORDER BY p.id DESC LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "436fa267608740069ce2ac4e9cf33d151a5d93695f52a739eb26d57db4d0e0c3"
+}

@@ -1,0 +1,45 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, auto_cancel FROM ci_pipelines\n          WHERE project_id = $1 AND ref = $2 AND NOT tag AND id < $3 AND sha <> $4 AND source = $5\n            AND merge_request_id IS NOT DISTINCT FROM $6\n            AND status IN ('created', 'waiting_for_resource', 'preparing', 'pending', 'running')\n          ORDER BY id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "auto_cancel",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "auto_cancel"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Int8",
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "7ab628f865b43c13ad3547101cb5632d15dbd7d2566c15ee298a1bf71c72da80"
+}

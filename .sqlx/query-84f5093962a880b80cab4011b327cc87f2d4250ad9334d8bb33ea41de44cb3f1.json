@@ -1,0 +1,93 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.id, r.path AS \"full_path!\", p.name, p.description, p.visibility, p.last_activity_at\n             FROM projects p JOIN routes r ON r.source_type = 'project' AND r.source_id = p.id\n            WHERE (p.name ILIKE '%' || $3 || '%' ESCAPE '\\' OR r.path ILIKE '%' || $3 || '%' ESCAPE '\\')\n              AND ($2 OR p.visibility = 20 OR (p.visibility = 10 AND $6)\n                   OR EXISTS (SELECT 1 FROM listed_project_authorizations a WHERE a.project_id = p.id AND a.user_id = $1))\n            ORDER BY p.last_activity_at DESC, p.id DESC LIMIT $4 OFFSET $5",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "projects",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "full_path!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "routes",
+            "name": "path"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "projects",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "projects",
+            "name": "description"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "visibility",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "projects",
+            "name": "visibility"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "last_activity_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "projects",
+            "name": "last_activity_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Bool",
+        "Text",
+        "Int8",
+        "Int8",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "84f5093962a880b80cab4011b327cc87f2d4250ad9334d8bb33ea41de44cb3f1"
+}

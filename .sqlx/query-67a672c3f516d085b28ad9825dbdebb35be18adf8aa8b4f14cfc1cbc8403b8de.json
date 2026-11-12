@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT build_id, artifact_id, artifact_expire_at FROM pages_deployments WHERE project_id = $1 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "build_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "pages_deployments",
+            "name": "build_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "artifact_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "pages_deployments",
+            "name": "artifact_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "artifact_expire_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "pages_deployments",
+            "name": "artifact_expire_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "67a672c3f516d085b28ad9825dbdebb35be18adf8aa8b4f14cfc1cbc8403b8de"
+}

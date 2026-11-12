@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT users_affected_by_namespace($1) AS \"ids!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ids!",
+        "type_info": "Int8Array",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "8cdd17bc7985cb45ef8165e864a61ae8e5da76fdd3b0fe44cb4b2a1030d5f81d"
+}

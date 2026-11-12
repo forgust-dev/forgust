@@ -1,0 +1,143 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT i.id, i.user_id, i.source, i.base_url, i.target_namespace_id, r.path AS \"target_path!\", i.status, i.options,\n                  i.created_at, i.finished_at, (i.token_enc IS NOT NULL) AS \"has_token!\"\n           FROM imports i JOIN routes r ON r.source_type = 'namespace' AND r.source_id = i.target_namespace_id\n           WHERE i.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "imports",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "imports",
+            "name": "user_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "source",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "imports",
+            "name": "source"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "base_url",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "imports",
+            "name": "base_url"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "target_namespace_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "imports",
+            "name": "target_namespace_id"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "target_path!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "routes",
+            "name": "path"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "status",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "imports",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "options",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "imports",
+            "name": "options"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "imports",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "finished_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "imports",
+            "name": "finished_at"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "has_token!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "13a152808e0c06941d3f6b123c721ba41e51c3e9d37acfcfbbd9c4a71866255a"
+}

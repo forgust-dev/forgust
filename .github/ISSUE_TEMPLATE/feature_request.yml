@@ -1,0 +1,20 @@
+name: Feature request
+description: Something Forgust does not do yet
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check [what is not there yet](../blob/main/README.md#status) first, and search the open issues: the feature may already be planned.
+  - type: textarea
+    id: need
+    attributes:
+      label: What you need
+      description: The problem you want solved, and how your team works around it today.
+    validations:
+      required: true
+  - type: textarea
+    id: gitlab
+    attributes:
+      label: How GitLab or other forges do it
+      description: Links to their docs help, especially for GitLab-compatible APIs and CI keywords.

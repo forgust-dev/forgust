@@ -1,0 +1,33 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO issue_notes (issue_id, author_id, imported_author, body, system, created_at, updated_at)\n         VALUES ($1, $2, $3, $4, $5, coalesce($6, now()), coalesce($6, now())) RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "issue_notes",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text",
+        "Text",
+        "Bool",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "0e284b6e47b89db05d8e6ffc51b05f2f41cbe663227608cc0ee8e8d3a628f117"
+}

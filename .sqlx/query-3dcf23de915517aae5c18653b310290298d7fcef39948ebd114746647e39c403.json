@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO security_scanning_group_defaults (namespace_id, enabled) VALUES ($1, $2)\n         ON CONFLICT (namespace_id) DO UPDATE SET enabled = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3dcf23de915517aae5c18653b310290298d7fcef39948ebd114746647e39c403"
+}

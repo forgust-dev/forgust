@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT f.id FROM security_finding_sightings s JOIN security_findings f ON f.id = s.finding_id\n          WHERE s.pipeline_id = $1 AND f.report_type = ANY($2)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "security_findings",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2214ef68a93f1d408a5f9954cbbdd719519efd9b22293c0be102ddef30ac7a2e"
+}

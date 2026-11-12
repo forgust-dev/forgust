@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO deployments (project_id, iid, environment_id, build_id, ref, tag, sha, user_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)\n         ON CONFLICT (build_id) WHERE build_id IS NOT NULL DO UPDATE SET status = 'created' RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "deployments",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Text",
+        "Bool",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5e4c42367b88eaff1ef49c249417fcd8520516591004ebf364f244448c3f15ce"
+}

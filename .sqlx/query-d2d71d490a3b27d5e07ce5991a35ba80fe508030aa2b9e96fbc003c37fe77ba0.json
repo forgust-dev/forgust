@@ -1,0 +1,376 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, pipeline_id, project_id, name, stage, stage_idx, status, when_, allow_failure, needs, spec, retry_max,\n                    retry_when, attempt, retried, tags, timeout_secs, user_id, runner_id, runner_manager_id, failure_reason,\n                    exit_code, trace_size, trace_archived, created_at, queued_at, started_at, finished_at, contacted_at,\n                    cancel_requested_at\n             FROM ci_builds WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "pipeline_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "pipeline_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "project_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "project_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "stage",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "stage"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "stage_idx",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "stage_idx"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "status",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "when_",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "when_"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "allow_failure",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "allow_failure"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "needs",
+        "type_info": "TextArray",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "needs"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "spec",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "spec"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "retry_max",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "retry_max"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "retry_when",
+        "type_info": "TextArray",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "retry_when"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "attempt",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "attempt"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "retried",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "retried"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "tags",
+        "type_info": "TextArray",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "tags"
+          }
+        }
+      },
+      {
+        "ordinal": 16,
+        "name": "timeout_secs",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "timeout_secs"
+          }
+        }
+      },
+      {
+        "ordinal": 17,
+        "name": "user_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "user_id"
+          }
+        }
+      },
+      {
+        "ordinal": 18,
+        "name": "runner_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "runner_id"
+          }
+        }
+      },
+      {
+        "ordinal": 19,
+        "name": "runner_manager_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "runner_manager_id"
+          }
+        }
+      },
+      {
+        "ordinal": 20,
+        "name": "failure_reason",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "failure_reason"
+          }
+        }
+      },
+      {
+        "ordinal": 21,
+        "name": "exit_code",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "exit_code"
+          }
+        }
+      },
+      {
+        "ordinal": 22,
+        "name": "trace_size",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "trace_size"
+          }
+        }
+      },
+      {
+        "ordinal": 23,
+        "name": "trace_archived",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "trace_archived"
+          }
+        }
+      },
+      {
+        "ordinal": 24,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 25,
+        "name": "queued_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "queued_at"
+          }
+        }
+      },
+      {
+        "ordinal": 26,
+        "name": "started_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "started_at"
+          }
+        }
+      },
+      {
+        "ordinal": 27,
+        "name": "finished_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "finished_at"
+          }
+        }
+      },
+      {
+        "ordinal": 28,
+        "name": "contacted_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "contacted_at"
+          }
+        }
+      },
+      {
+        "ordinal": 29,
+        "name": "cancel_requested_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "cancel_requested_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "d2d71d490a3b27d5e07ce5991a35ba80fe508030aa2b9e96fbc003c37fe77ba0"
+}

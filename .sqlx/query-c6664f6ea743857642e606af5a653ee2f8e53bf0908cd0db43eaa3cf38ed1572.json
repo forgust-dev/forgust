@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE environments SET state = $2, auto_stop_at = CASE WHEN $2 = 'stopped' THEN NULL ELSE auto_stop_at END, updated_at = now()\n          WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c6664f6ea743857642e606af5a653ee2f8e53bf0908cd0db43eaa3cf38ed1572"
+}

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id FROM ci_builds WHERE NOT trace_archived AND status IN ('success', 'failed', 'canceled')\n           AND finished_at < now() - interval '30 seconds'\n         ORDER BY finished_at LIMIT $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5ee1ac3421480b0354af13b446b3d1796f0b4ced17016d4b0f36f6dbc984fad9"
+}

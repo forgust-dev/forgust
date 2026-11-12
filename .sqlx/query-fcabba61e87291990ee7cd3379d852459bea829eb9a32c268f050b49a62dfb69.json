@@ -1,0 +1,99 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT n.id, r.path AS \"full_path!\", n.name, n.visibility,\n                  (SELECT count(*) FROM projects p JOIN namespaces pn ON pn.id = p.namespace_id WHERE n.id = ANY(pn.traversal_ids)) AS \"projects!\",\n                  (SELECT count(*) FROM members m WHERE m.source_type = 'namespace' AND m.source_id = n.id) AS \"members!\",\n                  (SELECT count(*) FROM namespaces c WHERE c.parent_id = n.id) AS \"subgroups!\",\n                  n.created_at\n             FROM namespaces n JOIN routes r ON r.source_type = 'namespace' AND r.source_id = n.id\n            WHERE n.kind = 'group' AND ($1 = '' OR r.path ILIKE '%' || $1 || '%' OR n.name ILIKE '%' || $1 || '%')\n            ORDER BY r.path LIMIT $2 OFFSET $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "namespaces",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "full_path!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "routes",
+            "name": "path"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "namespaces",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "visibility",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "namespaces",
+            "name": "visibility"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "projects!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "members!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "subgroups!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "namespaces",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      null,
+      false
+    ]
+  },
+  "hash": "fcabba61e87291990ee7cd3379d852459bea829eb9a32c268f050b49a62dfb69"
+}

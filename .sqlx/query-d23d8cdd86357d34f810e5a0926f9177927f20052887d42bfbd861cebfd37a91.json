@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO deploy_keys_projects (deploy_key_id, project_id, can_push) VALUES ($1, $2, $3)\n         ON CONFLICT (deploy_key_id, project_id) DO UPDATE SET can_push = EXCLUDED.can_push",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d23d8cdd86357d34f810e5a0926f9177927f20052887d42bfbd861cebfd37a91"
+}

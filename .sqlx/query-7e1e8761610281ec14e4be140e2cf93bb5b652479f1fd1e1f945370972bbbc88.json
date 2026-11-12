@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE ci_runners SET token_hash = $2, token_last4 = $3 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Bytea",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7e1e8761610281ec14e4be140e2cf93bb5b652479f1fd1e1f945370972bbbc88"
+}

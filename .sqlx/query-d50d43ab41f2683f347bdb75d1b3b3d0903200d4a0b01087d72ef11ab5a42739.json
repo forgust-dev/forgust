@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM environments WHERE project_id = $1 AND id = $2 AND state = 'stopped'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d50d43ab41f2683f347bdb75d1b3b3d0903200d4a0b01087d72ef11ab5a42739"
+}

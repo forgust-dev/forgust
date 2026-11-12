@@ -1,0 +1,12 @@
+spec:
+  inputs:
+    job-prefix:
+      description: Names the job
+    stage:
+      default: test
+      options: [build, test]
+---
+"$[[ inputs.job-prefix ]]-build":
+  stage: $[[ inputs.stage ]]
+  script:
+    - echo building $[[ inputs.job-prefix ]]

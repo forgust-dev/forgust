@@ -1,0 +1,36 @@
+{
+  "version": "15.1.4",
+  "vulnerabilities": [
+    {
+      "id": "4e9f5a2c6f0d4f6c9a1d0e0b2a6a6c1f",
+      "category": "sast",
+      "name": "Improper Neutralization of Special Elements used in an SQL Command ('SQL Injection')",
+      "description": "SQL Injection is a critical vulnerability that can lead to data or system compromise.",
+      "cve": "semgrep_id:bandit.B608:12:12",
+      "severity": "High",
+      "scanner": { "id": "semgrep", "name": "Semgrep" },
+      "location": { "file": "app/db.py", "start_line": 12, "end_line": 12 },
+      "identifiers": [
+        { "type": "semgrep_id", "name": "bandit.B608", "value": "bandit.B608", "url": "https://semgrep.dev/r/gitlab.bandit.B608" },
+        { "type": "cwe", "name": "CWE-89", "value": "89", "url": "https://cwe.mitre.org/data/definitions/89.html" },
+        { "type": "owasp", "name": "A03:2021 - Injection", "value": "A03:2021" }
+      ]
+    },
+    {
+      "id": "0b2a6a6c1f4e9f5a2c6f0d4f6c9a1d0e",
+      "name": "Use of a broken or risky cryptographic algorithm",
+      "description": "MD5 is not collision resistant.",
+      "severity": "Medium",
+      "location": { "file": "./app/hash.py", "start_line": 3 },
+      "identifiers": [{ "type": "semgrep_id", "name": "bandit.B303-1", "value": "bandit.B303-1" }, { "type": "cwe", "name": "CWE-327", "value": "327" }]
+    }
+  ],
+  "scan": {
+    "analyzer": { "id": "semgrep", "name": "Semgrep", "version": "5.21.0", "vendor": { "name": "GitLab" } },
+    "scanner": { "id": "semgrep", "name": "Semgrep", "version": "1.86.0", "vendor": { "name": "GitLab" } },
+    "type": "sast",
+    "start_time": "2026-11-10T10:00:00",
+    "end_time": "2026-11-10T10:00:30",
+    "status": "success"
+  }
+}

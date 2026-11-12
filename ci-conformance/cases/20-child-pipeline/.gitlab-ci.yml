@@ -1,0 +1,9 @@
+stages: [build, downstream]
+build:
+  stage: build
+  script: [make]
+child:
+  stage: downstream
+  trigger:
+    include: ci/child.yml
+    strategy: depend

@@ -1,0 +1,11 @@
+always:
+  script: x
+main_only:
+  script: x
+  only: [main]
+release_only:
+  script: x
+  only: [/^release-.*$/]
+not_on_main:
+  script: x
+  except: [main]

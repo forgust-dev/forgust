@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO todos (user_id, project_id, target_type, target_iid, action, author_id, body)\n         SELECT $1, $2, $3, $4, $5, $6, $7\n         WHERE NOT EXISTS (SELECT 1 FROM todos WHERE user_id = $1 AND project_id = $2 AND target_type = $3\n                           AND target_iid = $4 AND action = $5 AND state = 'pending')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text",
+        "Int8",
+        "Text",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "62a90104b65cd5b6dfb9efb5b8ebdaeba107e189649b6c51eff6fabc0705ca6e"
+}

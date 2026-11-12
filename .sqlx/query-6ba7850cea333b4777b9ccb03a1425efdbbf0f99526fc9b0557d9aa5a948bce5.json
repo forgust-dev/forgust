@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE deploy_tokens SET revoked = true WHERE id = $1 AND project_id IS NOT DISTINCT FROM $2 AND namespace_id IS NOT DISTINCT FROM $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6ba7850cea333b4777b9ccb03a1425efdbbf0f99526fc9b0557d9aa5a948bce5"
+}

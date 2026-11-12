@@ -1,0 +1,17 @@
+/target
+/data
+/web/node_modules
+/web/dist
+/bench/results
+.env
+forgust.toml
+/data-server.log
+/web/tsconfig.tsbuildinfo
+/web/e2e/.auth/
+/web/test-results/
+/web/playwright-report/
+
+# local API token (never commit)
+.token
+/deploy/.seed/
+__pycache__/

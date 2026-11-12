@@ -1,0 +1,88 @@
+[package]
+name = "forgust-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "forgust"
+path = "src/main.rs"
+
+[dependencies]
+forgust-db.workspace = true
+forgust-storage.workspace = true
+forgust-ci-config.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+async-trait.workspace = true
+bytes.workspace = true
+futures.workspace = true
+ipnet.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tokio-stream.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+tracing.workspace = true
+sqlx.workspace = true
+rand.workspace = true
+sha2.workspace = true
+hex.workspace = true
+base64.workspace = true
+moka.workspace = true
+axum = { version = "0.8", features = ["macros", "multipart"] }
+axum-extra = { version = "0.10", features = ["cookie", "typed-header"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "fs", "compression-gzip", "cors", "request-id", "set-header", "timeout"] }
+hyper = { version = "1", features = ["client", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
+clap = { version = "4", features = ["derive", "env"] }
+figment = { version = "0.10", features = ["toml", "env"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+opentelemetry = "0.30"
+opentelemetry_sdk = { version = "0.30", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.30", features = ["grpc-tonic", "trace"] }
+tracing-opentelemetry = "0.31"
+metrics = "0.24"
+metrics-exporter-prometheus = { version = "0.17", default-features = false }
+utoipa = { version = "5", features = ["chrono"] }
+time = "0.3"
+graphile_worker = "0.14"
+object_store = { version = "0.14", features = ["aws"] }
+argon2 = "0.5"
+totp-rs = { version = "5", features = ["otpauth", "gen_secret"] }
+openidconnect = { version = "4", default-features = false, features = ["reqwest", "rustls-tls"] }
+aes-gcm = "0.10"
+russh = "0.65"
+# OpenPGP signatures on commits; no bzip2: signatures are not compressed
+pgp = { version = "0.21", default-features = false }
+# ES256 keys and signatures for CI `id_tokens` (constant-time; already in the tree via rustls)
+ring = "0.17"
+async-compression = { version = "0.4", features = ["tokio", "gzip", "deflate"] }
+syntect = { version = "5", default-features = false, features = ["parsing", "default-syntaxes", "default-themes", "html", "dump-load", "regex-fancy"] }
+comrak = "0.39"
+ammonia = "4"
+mime_guess = "2"
+quick-xml = "0.42"
+globset = "0.4"
+croner = "4"
+chrono-tz = "0.10"
+regex = "1"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
+percent-encoding = "2"
+url = "2"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
+hmac = "0.12"
+lettre = { version = "0.11", default-features = false, features = ["builder", "smtp-transport", "tokio1", "tokio1-rustls", "ring", "webpki-roots"] }
+
+[dev-dependencies]
+tempfile = "3"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream", "multipart"] }

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE personal_access_tokens SET last_used_at = now()\n         WHERE id = $1 AND (last_used_at IS NULL OR last_used_at < now() - interval '1 minute')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ab412012a872d539c9ffa132935ab2e2c9a25d9e2b8ebdc6735ac49b13b9227b"
+}

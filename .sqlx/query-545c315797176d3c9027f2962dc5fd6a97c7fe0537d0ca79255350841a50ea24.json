@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM webhooks WHERE id = $1 AND project_id IS NOT DISTINCT FROM $2 AND namespace_id IS NOT DISTINCT FROM $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "545c315797176d3c9027f2962dc5fd6a97c7fe0537d0ca79255350841a50ea24"
+}

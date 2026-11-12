@@ -1,0 +1,112 @@
+# A complete Forgust instance to try every feature:
+#   FORGUST_HOST=192.0.2.10 docker compose up -d --build   # your machine's address
+#   FORGUST_HOST=192.0.2.10 python3 deploy/seed.py         # first admin, a runner, users, projects, MRs, CI...
+#
+# FORGUST_HOST is the address browsers, git clients and CI jobs use to reach this
+# machine (not localhost: job containers must reach it too). It is required.
+#
+#   http://$FORGUST_HOST:8080   Forgust (web, API, git over HTTP, container registry)
+#   ssh://$FORGUST_HOST:2222    git over SSH
+#   http://$FORGUST_HOST:8027   mailpit: every email Forgust sends
+#   http://$FORGUST_HOST:9020   maxio (S3): blobs (LFS, artifacts, uploads, registry)
+#   webhooks go to http://hooks:8000 (docker compose logs -f hooks)
+name: forgust
+
+services:
+  forgust:
+    image: forgust:local
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+      s3: { condition: service_healthy }
+    ports:
+      - "8080:8080"
+      - "2222:2222"
+    environment:
+      FORGUST_SERVER__EXTERNAL_URL: http://${FORGUST_HOST:?set FORGUST_HOST to this machine's address}:8080
+      FORGUST_SERVER__SSH_EXTERNAL: ${FORGUST_HOST:?set FORGUST_HOST to this machine's address}:2222
+      FORGUST_DATABASE__URL: postgres://forgust:forgust@db:5432/forgust
+      FORGUST_BLOBS__BACKEND: s3
+      FORGUST_BLOBS__S3_BUCKET: forgust
+      # LFS and download links are presigned for this endpoint, so git clients and
+      # browsers must reach it as well as the server: the published port on the host
+      FORGUST_BLOBS__S3_ENDPOINT: http://${FORGUST_HOST:?set FORGUST_HOST to this machine's address}:9020
+      FORGUST_BLOBS__S3_ACCESS_KEY_ID: forgust
+      FORGUST_BLOBS__S3_SECRET_ACCESS_KEY: forgust-secret
+      FORGUST_BLOBS__S3_ALLOW_HTTP: "true"
+      FORGUST_EMAIL__SMTP_URL: smtp://mail:1025
+      FORGUST_EMAIL__FROM: Forgust <forgust@example.com>
+      # the webhook receiver and an in-house GitLab live on private addresses
+      FORGUST_FEATURES__WEBHOOKS_ALLOW_LOCAL: "true"
+      FORGUST_FEATURES__IMPORTS_ALLOW_LOCAL: "true"
+      FORGUST_TELEMETRY__LOG_FORMAT: text
+    volumes:
+      - forgust-data:/var/lib/forgust
+
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: forgust
+      POSTGRES_PASSWORD: forgust
+      POSTGRES_DB: forgust
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U forgust"]
+      interval: 5s
+      retries: 10
+    volumes:
+      - db-data:/var/lib/postgresql/data
+
+  s3:
+    image: ghcr.io/coollabsio/maxio:0.4.2@sha256:2e7fc2a32d66fb31c44ce366e8a289218d3c38fcbe25bd6fa575b4df7c0e0272
+    restart: unless-stopped
+    ports:
+      - "9020:9000"
+    environment:
+      MAXIO_ACCESS_KEY: forgust
+      MAXIO_SECRET_KEY: forgust-secret
+      MAXIO_DEFAULT_BUCKETS: forgust
+    volumes:
+      - s3-data:/data
+
+  mail:
+    image: axllent/mailpit:v1.33.0@sha256:9b3a463be15354c0f0eba91697d80e3e0d8a5623ef0e627cacc836bc17fd5231
+    restart: unless-stopped
+    ports:
+      - "8027:8025"
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+
+  # CI: a stock gitlab-runner (docker executor), registered by deploy/seed.py
+  runner:
+    image: gitlab/gitlab-runner:v19.5.3
+    restart: unless-stopped
+    depends_on: [forgust]
+    volumes:
+      - runner-config:/etc/gitlab-runner
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  # answers every webhook with 200 and logs it
+  hooks:
+    image: python:3.13-alpine
+    restart: unless-stopped
+    command:
+      - python3
+      - -u
+      - -c
+      - |
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+        class H(BaseHTTPRequestHandler):
+            def do_POST(self):
+                body = self.rfile.read(int(self.headers.get("content-length", 0)))
+                print(self.headers.get("X-Gitlab-Event"), self.path, body[:300].decode(errors="replace"))
+                self.send_response(200); self.end_headers(); self.wfile.write(b"ok")
+        HTTPServer(("0.0.0.0", 8000), H).serve_forever()
+
+volumes:
+  forgust-data:
+  db-data:
+  s3-data:
+  runner-config:

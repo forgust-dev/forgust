@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, name, approvals_required, min_access_level FROM approval_rules WHERE project_id = $1 ORDER BY name",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "approval_rules",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "approval_rules",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "approvals_required",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "approval_rules",
+            "name": "approvals_required"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "min_access_level",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "approval_rules",
+            "name": "min_access_level"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "3f7ccfd8a2c43f609bac4dbf79a335336202968678b8e7cde0dd8f9f9acb4dac"
+}

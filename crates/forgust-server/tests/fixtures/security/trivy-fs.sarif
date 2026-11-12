@@ -1,0 +1,45 @@
+{
+  "version": "2.1.0",
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "fullName": "Trivy Vulnerability Scanner",
+          "informationUri": "https://github.com/aquasecurity/trivy",
+          "name": "Trivy",
+          "rules": [
+            {
+              "id": "CVE-2020-8203",
+              "name": "LanguageSpecificPackageVulnerability",
+              "shortDescription": { "text": "nodejs-lodash: prototype pollution in zipObjectDeep function" },
+              "fullDescription": { "text": "Prototype pollution attack when using _.zipObjectDeep in lodash before 4.17.20." },
+              "defaultConfiguration": { "level": "error" },
+              "helpUri": "https://avd.aquasec.com/nvd/cve-2020-8203",
+              "help": { "text": "Vulnerability CVE-2020-8203\nSeverity: HIGH\nPackage: lodash\nFixed Version: 4.17.19" },
+              "properties": { "precision": "very-high", "security-severity": "7.4", "tags": ["vulnerability", "security", "HIGH"] }
+            }
+          ],
+          "version": "0.57.1"
+        }
+      },
+      "results": [
+        {
+          "ruleId": "CVE-2020-8203",
+          "ruleIndex": 0,
+          "level": "error",
+          "message": { "text": "Package: lodash\nInstalled Version: 4.17.15\nVulnerability CVE-2020-8203\nSeverity: HIGH\nFixed Version: 4.17.19\nLink: [CVE-2020-8203](https://avd.aquasec.com/nvd/cve-2020-8203)" },
+          "locations": [
+            {
+              "physicalLocation": { "artifactLocation": { "uri": "package-lock.json", "uriBaseId": "ROOTPATH" }, "region": { "startLine": 1, "startColumn": 1, "endLine": 1, "endColumn": 1 } },
+              "message": { "text": "package-lock.json: lodash@4.17.15" }
+            }
+          ]
+        }
+      ],
+      "columnKind": "utf16CodeUnits",
+      "originalUriBaseIds": { "ROOTPATH": { "uri": "file:///builds/acme/shop/" } },
+      "properties": { "imageName": "registry.example.com/acme/shop:1.4.2" }
+    }
+  ]
+}

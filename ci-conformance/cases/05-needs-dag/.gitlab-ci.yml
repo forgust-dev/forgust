@@ -1,0 +1,15 @@
+stages: [build, test]
+build_a:
+  stage: build
+  script: a
+build_b:
+  stage: build
+  script: b
+test_a:
+  stage: test
+  needs: [build_a]
+  script: ta
+test_all:
+  stage: test
+  needs: []
+  script: lint

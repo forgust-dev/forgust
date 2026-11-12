@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE milestones SET title = $2, description = $3, start_date = $4, due_date = $5, state = $6, updated_at = now()\n         WHERE id = $1 AND NOT EXISTS (SELECT 1 FROM milestones o WHERE o.project_id = milestones.project_id AND o.title = $2 AND o.id <> $1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Text",
+        "Date",
+        "Date",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "83266e6fcb1a1ce3979c65807fee4d139a9cb303fdec93d25b93bbb535b56c42"
+}

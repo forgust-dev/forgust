@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO oauth_refresh_tokens (token_hash, client_id, user_id, scopes, access_token_id, expires_at) VALUES ($1, $2, $3, $4, $5, $6)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Bytea",
+        "Text",
+        "Int8",
+        "TextArray",
+        "Int8",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "85809ff83b432dee5c682e7ed08f7eca9febe3dbd2778f2b865deca09943d54b"
+}

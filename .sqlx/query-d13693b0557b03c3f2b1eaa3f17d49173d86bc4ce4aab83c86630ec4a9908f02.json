@@ -1,0 +1,33 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT q.build_id FROM ci_pending_jobs q\n         WHERE CASE $1\n                 WHEN 'instance' THEN q.instance_runners_enabled\n                 WHEN 'group' THEN $2::bigint = ANY (q.traversal_ids) AND NOT q.instance_only\n                 ELSE q.project_id = $3::bigint AND NOT q.instance_only\n               END\n           AND (NOT $4 OR q.protected)\n           AND q.tags <@ $5\n           AND ($6 OR cardinality(q.tags) > 0)\n         ORDER BY q.build_id\n         LIMIT 1\n         FOR UPDATE SKIP LOCKED",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "build_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_pending_jobs",
+            "name": "build_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Int8",
+        "Bool",
+        "TextArray",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d13693b0557b03c3f2b1eaa3f17d49173d86bc4ce4aab83c86630ec4a9908f02"
+}

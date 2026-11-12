@@ -1,0 +1,80 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH lfs AS (SELECT lp.project_id, sum(o.size) AS b FROM lfs_objects_projects lp JOIN lfs_objects o ON o.oid = lp.oid GROUP BY 1),\n                art AS (SELECT project_id, sum(size) AS b FROM ci_job_artifacts GROUP BY 1),\n                reg AS (SELECT d.project_id, sum(b.size) AS b\n                          FROM (SELECT DISTINCT r.project_id, l.digest FROM registry_repository_blobs l\n                                  JOIN registry_repositories r ON r.id = l.repository_id) d\n                          JOIN registry_blobs b ON b.digest = d.digest GROUP BY 1),\n                up AS (SELECT project_id, sum(size) AS b FROM uploads GROUP BY 1),\n                per AS (SELECT p.id, n.traversal_ids[1] AS root,\n                               p.repository_bytes + coalesce(lfs.b, 0) + coalesce(art.b, 0) + coalesce(reg.b, 0) + coalesce(up.b, 0) AS b\n                          FROM projects p JOIN namespaces n ON n.id = p.namespace_id\n                          LEFT JOIN lfs ON lfs.project_id = p.id LEFT JOIN art ON art.project_id = p.id\n                          LEFT JOIN reg ON reg.project_id = p.id LEFT JOIN up ON up.project_id = p.id)\n           SELECT root AS \"namespace_id!\", r.path AS \"full_path!\", n.kind AS \"kind!\", count(*) AS \"projects!\",\n                  coalesce(sum(per.b), 0)::bigint AS \"total!\",\n                  nullif(coalesce(n.quota_bytes, (SELECT namespace_quota_bytes FROM instance_settings)), 0) AS quota, n.quota_bytes AS own_quota\n             FROM per JOIN namespaces n ON n.id = per.root\n             JOIN routes r ON r.source_type = 'namespace' AND r.source_id = per.root\n            GROUP BY root, r.path, n.kind, n.quota_bytes ORDER BY 5 DESC, 2 LIMIT $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "namespace_id!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "full_path!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "routes",
+            "name": "path"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "kind!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "namespaces",
+            "name": "kind"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "projects!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "total!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "quota",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "own_quota",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "namespaces",
+            "name": "quota_bytes"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      false,
+      null,
+      null,
+      null,
+      true
+    ]
+  },
+  "hash": "a10ca45a562cda95dd44a00ad67992d5bd39533328acdb18c545c91f8033e701"
+}

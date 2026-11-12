@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, parts FROM registry_uploads WHERE updated_at < now() - interval '1 day' LIMIT 500",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "registry_uploads",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "parts",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "registry_uploads",
+            "name": "parts"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "1bf9cd268dbf4538274e5d033cfe8c2c07102c48fff28e4444e819060a5ff41b"
+}

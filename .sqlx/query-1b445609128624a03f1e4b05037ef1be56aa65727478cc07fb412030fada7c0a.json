@@ -1,0 +1,172 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT u.id, u.username, u.name, u.email, u.user_type, u.is_admin, u.is_external, u.state,\n                  u.totp_enabled AS two_factor_enabled, (u.email_verified_at IS NOT NULL) AS \"email_verified!\",\n                  u.created_at, u.last_sign_in_at,\n                  (SELECT count(*) FROM sessions s WHERE s.user_id = u.id AND s.expires_at > now()) AS \"sessions!\",\n                  (SELECT count(*) FROM personal_access_tokens t WHERE t.user_id = u.id AND NOT t.revoked\n                     AND (t.expires_at IS NULL OR t.expires_at > now())) AS \"tokens!\"\n             FROM users u\n            WHERE ($1 = '' OR u.username ILIKE '%' || $1 || '%' OR u.name ILIKE '%' || $1 || '%' OR u.email ILIKE '%' || $1 || '%')\n              AND CASE $2\n                    WHEN 'bots' THEN u.user_type <> 'human'\n                    WHEN 'admins' THEN u.user_type = 'human' AND u.is_admin\n                    WHEN 'blocked' THEN u.user_type = 'human' AND u.state = 'blocked'\n                    WHEN 'external' THEN u.user_type = 'human' AND u.is_external\n                    WHEN 'unconfirmed' THEN u.user_type = 'human' AND u.email_verified_at IS NULL\n                    WHEN 'two_factor_off' THEN u.user_type = 'human' AND NOT u.totp_enabled\n                    ELSE u.user_type = 'human' END\n            ORDER BY u.username LIMIT $3 OFFSET $4",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "username",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "username"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "email",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "email"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "user_type",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "user_type"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "is_admin",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "is_admin"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "is_external",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "is_external"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "state",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "state"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "two_factor_enabled",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "totp_enabled"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "email_verified!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "last_sign_in_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "last_sign_in_at"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "sessions!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 13,
+        "name": "tokens!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      false,
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "1b445609128624a03f1e4b05037ef1be56aa65727478cc07fb412030fada7c0a"
+}

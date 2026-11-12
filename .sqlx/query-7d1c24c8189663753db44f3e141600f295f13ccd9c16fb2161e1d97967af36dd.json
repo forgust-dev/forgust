@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT report_type AS \"t!\" FROM security_scans WHERE pipeline_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "t!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "security_scans",
+            "name": "report_type"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7d1c24c8189663753db44f3e141600f295f13ccd9c16fb2161e1d97967af36dd"
+}

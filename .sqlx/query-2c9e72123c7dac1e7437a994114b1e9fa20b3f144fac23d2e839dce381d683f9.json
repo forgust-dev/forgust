@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO import_users (import_id, source_user_id, username, name, email, user_id)\n           VALUES ($1, $2, $3, $4, $5,\n                   (SELECT id FROM users WHERE $5::text IS NOT NULL AND lower(email) = lower($5) AND state = 'active' LIMIT 1))\n           ON CONFLICT (import_id, source_user_id) DO UPDATE\n               SET username = EXCLUDED.username, name = EXCLUDED.name,\n                   email = coalesce(EXCLUDED.email, import_users.email),\n                   user_id = coalesce(EXCLUDED.user_id, import_users.user_id)\n           RETURNING user_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "import_users",
+            "name": "user_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "2c9e72123c7dac1e7437a994114b1e9fa20b3f144fac23d2e839dce381d683f9"
+}

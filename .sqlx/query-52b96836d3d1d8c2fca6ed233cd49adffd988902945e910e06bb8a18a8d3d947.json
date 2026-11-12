@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT s.report_type AS \"t!\" FROM security_scans s\n             JOIN ci_builds b ON b.id = s.build_id\n            WHERE s.pipeline_id = $1 AND NOT b.retried\n            GROUP BY s.report_type\n           HAVING bool_and(s.error IS NULL AND b.status = 'success')",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "t!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "security_scans",
+            "name": "report_type"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "52b96836d3d1d8c2fca6ed233cd49adffd988902945e910e06bb8a18a8d3d947"
+}

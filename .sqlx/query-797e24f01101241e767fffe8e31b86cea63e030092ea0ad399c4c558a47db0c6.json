@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE import_projects SET progress = jsonb_set(progress, ARRAY[$2], jsonb_build_object('done', $3::bigint, 'total', $4::bigint))\n         WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "797e24f01101241e767fffe8e31b86cea63e030092ea0ad399c4c558a47db0c6"
+}

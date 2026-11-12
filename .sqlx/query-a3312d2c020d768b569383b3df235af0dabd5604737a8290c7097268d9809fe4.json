@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE todos SET state = 'done', updated_at = now() WHERE user_id = $1 AND state = 'pending' AND ($2::bigint IS NULL OR id = $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a3312d2c020d768b569383b3df235af0dabd5604737a8290c7097268d9809fe4"
+}

@@ -1,0 +1,4 @@
+{ "jobs": [
+  { "name": "build", "stage": "build", "when": "on_success", "allow_failure": false },
+  { "name": "child", "stage": "downstream", "when": "on_success", "allow_failure": false }
+] }

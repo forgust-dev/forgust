@@ -1,0 +1,176 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT t.id, t.project_id, r.path AS project_path, p.name AS project_name, t.target_type, t.target_iid,\n                  coalesce(m.title, i.title, '') AS \"target_title!\", coalesce(m.state, i.state, '') AS \"target_state!\",\n                  t.action, u.username AS \"author_username?\", u.name AS \"author_name?\", t.body, t.state, t.created_at\n           FROM todos t\n           JOIN projects p ON p.id = t.project_id\n           JOIN routes r ON r.source_type = 'project' AND r.source_id = p.id\n           JOIN listed_project_authorizations a ON a.project_id = p.id AND a.user_id = t.user_id\n           LEFT JOIN merge_requests m ON t.target_type = 'merge_request' AND m.project_id = t.project_id AND m.iid = t.target_iid\n           LEFT JOIN issues i ON t.target_type = 'issue' AND i.project_id = t.project_id AND i.iid = t.target_iid\n           LEFT JOIN users u ON u.id = t.author_id\n           WHERE t.user_id = $1 AND t.state = $2\n             -- merge requests are code: Reporters and above (a Guest, or someone demoted, sees none)\n             AND (t.target_type <> 'merge_request' OR a.access_level >= 20)\n           ORDER BY t.created_at DESC, t.id DESC LIMIT $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "todos",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "project_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "todos",
+            "name": "project_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "project_path",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "routes",
+            "name": "path"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "project_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "projects",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "target_type",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "todos",
+            "name": "target_type"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "target_iid",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "todos",
+            "name": "target_iid"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "target_title!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "target_state!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
+        "name": "action",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "todos",
+            "name": "action"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "author_username?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "username"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "author_name?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "body",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "todos",
+            "name": "body"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "state",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "todos",
+            "name": "state"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "todos",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "56057aa817e796036112e0f986f377da50eaff83bf1504dff3e86e5083ef1dac"
+}

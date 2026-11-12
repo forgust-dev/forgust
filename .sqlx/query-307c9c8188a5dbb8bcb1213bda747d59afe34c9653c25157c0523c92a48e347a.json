@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE namespaces SET quota_bytes = $2, updated_at = now() WHERE id = $1 AND parent_id IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "307c9c8188a5dbb8bcb1213bda747d59afe34c9653c25157c0523c92a48e347a"
+}

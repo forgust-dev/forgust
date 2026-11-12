@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM redirect_routes WHERE source_type = $1 AND source_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fa2c162f3094e2eecfed8d935b0f4fde9d89a55264c81b3eaff4605b0075d754"
+}

@@ -1,0 +1,7 @@
+workflow:
+  rules:
+    - if: $CI_COMMIT_BRANCH =~ /^wip\//
+      when: never
+    - when: always
+job:
+  script: echo

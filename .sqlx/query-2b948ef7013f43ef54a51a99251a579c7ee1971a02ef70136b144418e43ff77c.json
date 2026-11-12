@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) FILTER (WHERE m.state = 'opened') AS \"opened!\",\n                  count(*) FILTER (WHERE m.state = 'merged') AS \"merged!\",\n                  count(*) FILTER (WHERE m.state = 'closed') AS \"closed!\"\n           FROM merge_requests m\n           WHERE m.project_id = $1\n             AND ($2 = '' OR m.title ILIKE '%' || $2 || '%' OR m.source_branch ILIKE '%' || $2 || '%'\n                  OR m.iid::text = $2 OR ('!' || m.iid::text) = $2)\n             AND ($3::bigint IS NULL OR m.author_id = $3)\n             AND ($4::bigint IS NULL OR EXISTS (SELECT 1 FROM merge_request_assignees a WHERE a.merge_request_id = m.id AND a.user_id = $4))\n             AND ($5::bigint IS NULL OR EXISTS (SELECT 1 FROM merge_request_reviewers r WHERE r.merge_request_id = m.id AND r.user_id = $5))\n             AND ($6::bigint IS NULL OR ($6 = 0 AND m.milestone_id IS NULL) OR m.milestone_id = $6)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "opened!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "merged!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "closed!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Int8",
+        "Int8",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "2b948ef7013f43ef54a51a99251a579c7ee1971a02ef70136b144418e43ff77c"
+}

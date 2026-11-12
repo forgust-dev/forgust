@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM ci_pending_jobs WHERE build_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b990beef193ad7c081ec9a0cbcbb9ebf5e94a049abfa6ceaf58dcf93098399ad"
+}

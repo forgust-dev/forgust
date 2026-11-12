@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM issue_labels WHERE issue_id = $1 AND NOT (label_id = ANY($2))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6fb7bcdd4827d9b1b2e513e40ca60a4e96f3c9ee78b71cb89dcb4ff58b3d4e05"
+}

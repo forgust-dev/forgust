@@ -1,0 +1,166 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.id, m.project_id, m.iid, m.title, m.description, m.state, m.start_date, m.due_date, m.created_at, m.updated_at,\n                  (SELECT count(*) FROM issues i WHERE i.milestone_id = m.id AND i.state = 'opened') AS \"open_issues!\",\n                  (SELECT count(*) FROM issues i WHERE i.milestone_id = m.id AND i.state = 'closed') AS \"closed_issues!\",\n                  (SELECT count(*) FROM merge_requests r WHERE r.milestone_id = m.id AND r.state = 'opened') AS \"open_merge_requests!\",\n                  (SELECT count(*) FROM merge_requests r WHERE r.milestone_id = m.id AND r.state = 'merged') AS \"merged_merge_requests!\"\n           FROM milestones m\n           WHERE m.project_id = $1 AND ($2 = 'all' OR m.state = $2)\n             AND ($3 = '' OR m.title ILIKE '%' || $3 || '%' ESCAPE '\\')\n           ORDER BY m.state = 'closed', m.due_date ASC NULLS LAST, m.id DESC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "milestones",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "project_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "milestones",
+            "name": "project_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "iid",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "milestones",
+            "name": "iid"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "milestones",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "description",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "milestones",
+            "name": "description"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "state",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "milestones",
+            "name": "state"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "start_date",
+        "type_info": "Date",
+        "origin": {
+          "Table": {
+            "table": "milestones",
+            "name": "start_date"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "due_date",
+        "type_info": "Date",
+        "origin": {
+          "Table": {
+            "table": "milestones",
+            "name": "due_date"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "milestones",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "updated_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "milestones",
+            "name": "updated_at"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "open_issues!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 11,
+        "name": "closed_issues!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 12,
+        "name": "open_merge_requests!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 13,
+        "name": "merged_merge_requests!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "bb3f452f1b39be20829916db13434cdea442192f49d1217783f8e73a3644380c"
+}

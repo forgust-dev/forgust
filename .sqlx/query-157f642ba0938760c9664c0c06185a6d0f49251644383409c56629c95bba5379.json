@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO push_rules (project_id, commit_message_regex, commit_message_negative_regex, author_email_regex, branch_name_regex,\n                                 max_file_size_mb, prevent_secrets, reject_unsigned_commits)\n         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)\n         ON CONFLICT (project_id) DO UPDATE SET commit_message_regex = $2, commit_message_negative_regex = $3,\n             author_email_regex = $4, branch_name_regex = $5, max_file_size_mb = $6, prevent_secrets = $7,\n             reject_unsigned_commits = $8, updated_at = now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Int4",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "157f642ba0938760c9664c0c06185a6d0f49251644383409c56629c95bba5379"
+}

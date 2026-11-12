@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT upstream_build_id, auto_cancel_on_job_failure FROM ci_pipelines WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "upstream_build_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "upstream_build_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "auto_cancel_on_job_failure",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "auto_cancel_on_job_failure"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "a85b12fe070386a979353b05d05681c9492483a8d4d033ed3b477e3928fce1e0"
+}

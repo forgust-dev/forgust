@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT l.id, l.group_id, r.path AS group_full_path, l.max_access_level, l.expires_at\n         FROM project_group_links l JOIN routes r ON r.source_type = 'namespace' AND r.source_id = l.group_id\n         WHERE l.project_id = $1 ORDER BY r.path",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "project_group_links",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "group_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "project_group_links",
+            "name": "group_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "group_full_path",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "routes",
+            "name": "path"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "max_access_level",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "project_group_links",
+            "name": "max_access_level"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "expires_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "project_group_links",
+            "name": "expires_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "325dabf07080c59d4221b2f69d28c53d793d2341ddc2a3b9e6b5dffbf7922905"
+}

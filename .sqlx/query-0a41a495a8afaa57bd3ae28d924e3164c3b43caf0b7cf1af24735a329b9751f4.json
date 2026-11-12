@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE imports SET status = $2,\n                token_enc = CASE WHEN $2 IN ('finished', 'failed', 'canceled') THEN NULL ELSE token_enc END,\n                finished_at = CASE WHEN $2 IN ('finished', 'failed', 'canceled') THEN now() ELSE NULL END\n         WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0a41a495a8afaa57bd3ae28d924e3164c3b43caf0b7cf1af24735a329b9751f4"
+}

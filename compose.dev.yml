@@ -1,0 +1,52 @@
+# Backing services for development and tests:
+#   docker compose -f compose.dev.yml up -d
+# Postgres for the server and `cargo test`; S3 (maxio) and SMTP (mailpit) for
+# the tests in crates/forgust-server/tests/services.rs, and to try the S3 blob
+# backend or read sent email (http://localhost:8026) by hand.
+# Host ports avoid the usual ones (5432, 9000, 1025, 8025) so other projects'
+# services can run alongside.
+name: forgust-dev
+
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:5440:5432"
+    environment:
+      POSTGRES_USER: forgust
+      POSTGRES_PASSWORD: forgust
+      POSTGRES_DB: forgust
+    command: ["postgres", "-c", "max_connections=400"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U forgust"]
+      interval: 5s
+      retries: 10
+    volumes:
+      - db-data:/var/lib/postgresql/data
+
+  s3:
+    image: ghcr.io/coollabsio/maxio:0.4.2@sha256:2e7fc2a32d66fb31c44ce366e8a289218d3c38fcbe25bd6fa575b4df7c0e0272
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9010:9000"
+    environment:
+      MAXIO_ACCESS_KEY: forgust
+      MAXIO_SECRET_KEY: forgust-secret
+      MAXIO_DEFAULT_BUCKETS: forgust
+    volumes:
+      - s3-data:/data
+
+  mail:
+    image: axllent/mailpit:v1.33.0@sha256:9b3a463be15354c0f0eba91697d80e3e0d8a5623ef0e627cacc836bc17fd5231
+    restart: unless-stopped
+    ports:
+      - "1026:1025"
+      - "8026:8025"
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "1"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+
+volumes:
+  db-data:
+  s3-data:

@@ -1,0 +1,5 @@
+deploy:
+  script: [aws sts assume-role-with-web-identity]
+  id_tokens:
+    AWS_TOKEN:
+      aud: https://sts.amazonaws.com

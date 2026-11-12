@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO merge_request_reviewers (merge_request_id, user_id, state, review_note_id) VALUES ($1, $2, $3, $4)\n         ON CONFLICT (merge_request_id, user_id) DO UPDATE SET state = EXCLUDED.state, review_note_id = EXCLUDED.review_note_id,\n                                                              updated_at = now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2b7b8c10d5421c28d67aed6c28a920edcbf70b1456193db5ef9f4af5071a0ba4"
+}

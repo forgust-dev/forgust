@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT security_scanning FROM instance_settings",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "security_scanning",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "instance_settings",
+            "name": "security_scanning"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b6dca8c27952cda6eaa507b5a7054dcdd90747367d7bd057f1b3fd4e041c15dd"
+}

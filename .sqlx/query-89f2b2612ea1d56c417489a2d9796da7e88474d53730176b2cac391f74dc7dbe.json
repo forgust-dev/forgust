@@ -1,0 +1,54 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT f.project_id AS \"project_id!\", r.path AS \"full_path!\",\n                  count(*) FILTER (WHERE f.severity = 'critical') AS \"critical!\",\n                  count(*) FILTER (WHERE f.severity = 'high') AS \"high!\"\n             FROM security_findings f\n             JOIN routes r ON r.source_type = 'project' AND r.source_id = f.project_id\n            WHERE f.on_default AND f.state = 'detected' AND f.severity IN ('critical', 'high')\n            GROUP BY f.project_id, r.path\n            ORDER BY 3 DESC, 4 DESC, 2 LIMIT $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project_id!",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "security_findings",
+            "name": "project_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "full_path!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "routes",
+            "name": "path"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "critical!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "high!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "89f2b2612ea1d56c417489a2d9796da7e88474d53730176b2cac391f74dc7dbe"
+}

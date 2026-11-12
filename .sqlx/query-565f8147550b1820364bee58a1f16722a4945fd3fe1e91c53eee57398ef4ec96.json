@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH seen AS (\n               SELECT p.id, p.name, r.path,\n                      ($2 OR p.visibility = 20 OR (p.visibility = 10 AND $4)\n                       OR EXISTS (SELECT 1 FROM listed_project_authorizations a WHERE a.project_id = p.id AND a.user_id = $1 AND a.access_level >= 20)) AS code\n                 FROM projects p JOIN routes r ON r.source_type = 'project' AND r.source_id = p.id\n                WHERE $2 OR p.visibility = 20 OR (p.visibility = 10 AND $4)\n                   OR EXISTS (SELECT 1 FROM listed_project_authorizations a WHERE a.project_id = p.id AND a.user_id = $1)\n           )\n           SELECT (SELECT count(*) FROM seen WHERE seen.name ILIKE '%' || $3 || '%' ESCAPE '\\' OR seen.path ILIKE '%' || $3 || '%' ESCAPE '\\') AS \"projects!\",\n                  (SELECT count(*) FROM issues i JOIN seen ON seen.id = i.project_id WHERE i.title ILIKE '%' || $3 || '%' ESCAPE '\\') AS \"issues!\",\n                  (SELECT count(*) FROM merge_requests m JOIN seen ON seen.id = m.project_id AND seen.code\n                    WHERE m.title ILIKE '%' || $3 || '%' ESCAPE '\\') AS \"merge_requests!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "projects!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "issues!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "merge_requests!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Bool",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "565f8147550b1820364bee58a1f16722a4945fd3fe1e91c53eee57398ef4ec96"
+}

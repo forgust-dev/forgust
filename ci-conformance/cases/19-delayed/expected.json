@@ -1,0 +1,5 @@
+{ "jobs": [
+  { "name": "test", "stage": "test", "when": "on_success", "allow_failure": false },
+  { "name": "rollout", "stage": "rollout", "when": "delayed", "allow_failure": false },
+  { "name": "later", "stage": "rollout", "when": "delayed", "allow_failure": false }
+] }

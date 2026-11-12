@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE namespaces SET traversal_ids =\n            coalesce((SELECT traversal_ids FROM namespaces WHERE id = $2), '{}') || id\n         WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9c95a4d99b4f160b3f44880bd55e7e3bc3ce73f27e6bc1b4c5812ba8abb352c0"
+}

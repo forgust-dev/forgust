@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO instance_keys (name, value_enc) VALUES ($1, $2) ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING value_enc",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "value_enc",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "instance_keys",
+            "name": "value_enc"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "012963041d9555e348dc019f1d1f6fd734eb166ae2e9034c57295224dadb1c8d"
+}

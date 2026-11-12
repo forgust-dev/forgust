@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO repo_maintenance (project_id, pushes_since_maintenance, last_maintenance_at) VALUES ($1, 0, now())\n         ON CONFLICT (project_id) DO UPDATE SET pushes_since_maintenance = 0, last_maintenance_at = now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b10cbf92740505b4cd4b3ea220a0b8822a665c9f817a268922aafd97db5175db"
+}

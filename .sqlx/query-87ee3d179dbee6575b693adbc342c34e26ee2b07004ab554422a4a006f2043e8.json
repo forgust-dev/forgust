@@ -1,0 +1,148 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, runner_id, system_id, version, revision, platform, architecture, executor, ip_address, created_at, contacted_at\n         FROM ci_runner_managers WHERE runner_id = $1 ORDER BY contacted_at DESC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_runner_managers",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "runner_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_runner_managers",
+            "name": "runner_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "system_id",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_runner_managers",
+            "name": "system_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "version",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_runner_managers",
+            "name": "version"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "revision",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_runner_managers",
+            "name": "revision"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "platform",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_runner_managers",
+            "name": "platform"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "architecture",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_runner_managers",
+            "name": "architecture"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "executor",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_runner_managers",
+            "name": "executor"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "ip_address",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_runner_managers",
+            "name": "ip_address"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "ci_runner_managers",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "contacted_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "ci_runner_managers",
+            "name": "contacted_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "87ee3d179dbee6575b693adbc342c34e26ee2b07004ab554422a4a006f2043e8"
+}

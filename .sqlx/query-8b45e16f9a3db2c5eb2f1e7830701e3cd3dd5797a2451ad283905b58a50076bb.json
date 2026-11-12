@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT coalesce(max(array_length(traversal_ids, 1) - array_position(traversal_ids, $1) + 1), 1) AS \"h!\"\n           FROM namespaces WHERE traversal_ids @> ARRAY[$1::bigint]",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "h!",
+        "type_info": "Int4",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "8b45e16f9a3db2c5eb2f1e7830701e3cd3dd5797a2451ad283905b58a50076bb"
+}

@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE merge_train_cars SET base_sha = $2, head_sha = $3, train_sha = $4, pipeline_id = $5, updated_at = now() WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8a13628582d9b6d06c9009af759ffb734575c1b4899931de32b203719970cb98"
+}

@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT max(s.pipeline_id) FROM security_scans s JOIN ci_pipelines p ON p.id = s.pipeline_id\n          WHERE p.project_id = $1 AND p.ref = $2 AND NOT p.tag AND p.merge_request_id IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "max",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "bb2f6f616c3eafd405929a6bcdc963670bdcaba4a3023c1092e271369da821f8"
+}

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT u.id AS \"id!\" FROM users u\n            WHERE u.state = 'active' AND u.user_type = 'human'\n              AND (u.id IN (SELECT m.user_id FROM members m WHERE m.source_type = 'namespace' AND m.source_id = $1 AND m.access_level >= 50\n                                    AND (m.expires_at IS NULL OR m.expires_at > now()))\n                OR u.id = (SELECT owner_id FROM namespaces WHERE id = $1))",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "fd13d3535aa0e7a2f82248f42b6420d86fd4f617b55b4e79ee523996bc122c32"
+}

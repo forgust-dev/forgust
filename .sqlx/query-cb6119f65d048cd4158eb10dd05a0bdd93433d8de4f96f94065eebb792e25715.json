@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO approval_rules (project_id, name, approvals_required, min_access_level) VALUES ($1, $2, $3, $4)\n         ON CONFLICT (project_id, name) DO UPDATE SET approvals_required = EXCLUDED.approvals_required,\n             min_access_level = EXCLUDED.min_access_level",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Int2",
+        "Int2"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cb6119f65d048cd4158eb10dd05a0bdd93433d8de4f96f94065eebb792e25715"
+}

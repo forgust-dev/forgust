@@ -1,0 +1,13 @@
+default:
+  image: ruby:3.3
+  before_script: [bundle install]
+.tests:
+  stage: test
+  script: [rake test]
+  variables: { RAILS_ENV: test }
+unit:
+  extends: .tests
+integration:
+  extends: .tests
+  script: [rake integration]
+  allow_failure: true

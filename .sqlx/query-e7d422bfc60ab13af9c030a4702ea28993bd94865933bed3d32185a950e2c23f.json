@@ -1,0 +1,172 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, kind, group_id, project_id, description, token_last4, tags, run_untagged, protected_only, paused,\n                maximum_timeout_secs, created_at, contacted_at\n         FROM ci_runners WHERE token_hash = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_runners",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "kind",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_runners",
+            "name": "kind"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "group_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_runners",
+            "name": "group_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "project_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_runners",
+            "name": "project_id"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "description",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_runners",
+            "name": "description"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "token_last4",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_runners",
+            "name": "token_last4"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "tags",
+        "type_info": "TextArray",
+        "origin": {
+          "Table": {
+            "table": "ci_runners",
+            "name": "tags"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "run_untagged",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "ci_runners",
+            "name": "run_untagged"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "protected_only",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "ci_runners",
+            "name": "protected_only"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "paused",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "ci_runners",
+            "name": "paused"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "maximum_timeout_secs",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "ci_runners",
+            "name": "maximum_timeout_secs"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "ci_runners",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "contacted_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "ci_runners",
+            "name": "contacted_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "e7d422bfc60ab13af9c030a4702ea28993bd94865933bed3d32185a950e2c23f"
+}

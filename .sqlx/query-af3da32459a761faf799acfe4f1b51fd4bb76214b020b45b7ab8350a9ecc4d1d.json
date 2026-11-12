@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE ci_builds SET status = $2, updated_at = now(),\n             failure_reason = coalesce($3, failure_reason),\n             queued_at = CASE WHEN $2 = 'pending' THEN now() ELSE queued_at END,\n             finished_at = CASE WHEN $2 IN ('success', 'failed', 'canceled', 'skipped') THEN now() ELSE finished_at END\n         WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "af3da32459a761faf799acfe4f1b51fd4bb76214b020b45b7ab8350a9ecc4d1d"
+}

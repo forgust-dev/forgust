@@ -1,0 +1,6 @@
+{ "jobs": [
+  { "name": "build", "stage": "build", "when": "on_success", "allow_failure": false },
+  { "name": "review", "stage": "deploy", "when": "on_success", "allow_failure": false },
+  { "name": "stop_review", "stage": "deploy", "when": "manual", "allow_failure": true },
+  { "name": "production", "stage": "deploy", "when": "manual", "allow_failure": false }
+] }

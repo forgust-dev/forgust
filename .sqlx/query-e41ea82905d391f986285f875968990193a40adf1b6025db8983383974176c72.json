@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (SELECT 1 FROM security_scans s JOIN ci_pipelines p ON p.id = s.pipeline_id\n                           WHERE p.project_id = $1 AND p.id > $2 AND s.report_type = $3 AND p.ref = $4 AND NOT p.tag\n                             AND p.merge_request_id IS NULL) AS \"x!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "x!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "e41ea82905d391f986285f875968990193a40adf1b6025db8983383974176c72"
+}

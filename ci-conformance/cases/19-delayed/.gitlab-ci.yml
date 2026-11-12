@@ -1,0 +1,14 @@
+stages: [test, rollout]
+test:
+  script: [make test]
+rollout:
+  stage: rollout
+  script: [rollout]
+  when: delayed
+  start_in: 30 minutes
+later:
+  stage: rollout
+  script: [later]
+  rules:
+    - when: delayed
+      start_in: 2 hours

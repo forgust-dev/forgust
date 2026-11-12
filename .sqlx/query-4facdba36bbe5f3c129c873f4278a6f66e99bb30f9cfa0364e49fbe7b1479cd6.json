@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO push_events (user_id, project_id, ref_name, commit_count) VALUES ($1, $2, $3, $4)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4facdba36bbe5f3c129c873f4278a6f66e99bb30f9cfa0364e49fbe7b1479cd6"
+}

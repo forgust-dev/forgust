@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM ci_job_trace_chunks WHERE build_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f5251aca9f58f9e1cd82235bf5bce7ae10db8595c82efcda0bb25d380020eaca"
+}

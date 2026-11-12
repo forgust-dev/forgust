@@ -1,0 +1,101 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, release_id, name, url, direct_asset_path, link_type, created_at FROM release_links\n          WHERE release_id = $1 AND direct_asset_path = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "release_links",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "release_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "release_links",
+            "name": "release_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "release_links",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "url",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "release_links",
+            "name": "url"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "direct_asset_path",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "release_links",
+            "name": "direct_asset_path"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "link_type",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "release_links",
+            "name": "link_type"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "release_links",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "74c6ef1821eafec115f2c4cd373d8e1da642bcb99d918a9db6452f3d7b97c328"
+}

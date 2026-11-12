@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT m.user_id AS \"id!\" FROM members m\n             JOIN users u ON u.id = m.user_id AND u.state = 'active' AND u.user_type = 'human'\n            WHERE m.access_level >= 50 AND (m.expires_at IS NULL OR m.expires_at > now())\n              AND ((m.source_type = 'project' AND m.source_id = $1)\n                OR (m.source_type = 'namespace' AND m.source_id = ANY((SELECT n.traversal_ids FROM projects p JOIN namespaces n ON n.id = p.namespace_id WHERE p.id = $1)::bigint[])))",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "members",
+            "name": "user_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "13a4efd7dd2b2bcbde63cbe2c6c70c0f483b70c16f7cc366dfa1a3bf5e64ae9a"
+}

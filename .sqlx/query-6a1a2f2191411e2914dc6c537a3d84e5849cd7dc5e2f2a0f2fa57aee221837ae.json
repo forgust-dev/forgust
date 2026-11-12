@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO security_finding_sightings (finding_id, pipeline_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6a1a2f2191411e2914dc6c537a3d84e5849cd7dc5e2f2a0f2fa57aee221837ae"
+}

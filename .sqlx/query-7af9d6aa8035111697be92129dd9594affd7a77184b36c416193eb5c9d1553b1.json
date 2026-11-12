@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO internal_ids (project_id, usage, last_value) VALUES ($1, $2, 1)\n         ON CONFLICT (project_id, usage) DO UPDATE SET last_value = internal_ids.last_value + 1\n         RETURNING last_value",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "last_value",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "internal_ids",
+            "name": "last_value"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7af9d6aa8035111697be92129dd9594affd7a77184b36c416193eb5c9d1553b1"
+}

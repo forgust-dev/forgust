@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT u AS \"u!\" FROM (\n               SELECT author_id AS u FROM merge_requests WHERE id = $1\n               UNION SELECT author_id FROM notes WHERE merge_request_id = $1 AND NOT system\n               UNION SELECT user_id FROM approvals WHERE merge_request_id = $1\n               UNION SELECT user_id FROM merge_request_assignees WHERE merge_request_id = $1\n               UNION SELECT user_id FROM merge_request_reviewers WHERE merge_request_id = $1\n           ) x WHERE u IS NOT NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "u!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2cbf03e1d04bc99ed98d3c1390a53ae235d8845a2eaf92a93db810cdc7b95c1e"
+}

@@ -1,0 +1,3 @@
+job:
+  stage: nope
+  script: x

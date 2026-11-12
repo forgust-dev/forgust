@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM redirect_routes rr USING routes r WHERE lower(rr.path) = lower(r.path)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "27e308771fe5582cd48b89dd05a932b52d0fd52c329017566e290eb5ad9d8873"
+}

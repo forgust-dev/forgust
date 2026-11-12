@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE notes SET resolved_by = $2, resolved_at = CASE WHEN $2::bigint IS NULL THEN NULL ELSE now() END WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4b4c68c21f78084fca94245f1839b37340a79afad33881ebd6f837a66744d1dd"
+}

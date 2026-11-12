@@ -1,0 +1,5 @@
+{ "jobs": [
+  { "name": "test 1/3", "stage": "test", "when": "on_success", "allow_failure": false },
+  { "name": "test 2/3", "stage": "test", "when": "on_success", "allow_failure": false },
+  { "name": "test 3/3", "stage": "test", "when": "on_success", "allow_failure": false }
+] }

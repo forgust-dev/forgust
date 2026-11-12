@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE ci_pipeline_schedules SET active = false WHERE owner_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7bc50c87268ccb847c14ae6c0b7966051329666d1d78b9f3f7754112a71f2c82"
+}

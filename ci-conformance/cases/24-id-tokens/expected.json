@@ -1,0 +1,1 @@
+{ "jobs": [ { "name": "deploy", "stage": "test", "when": "on_success", "allow_failure": false } ] }

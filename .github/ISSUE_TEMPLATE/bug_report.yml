@@ -1,0 +1,35 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: For CI problems, the smallest `.gitlab-ci.yml` that shows it.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Forgust version or commit
+    validations:
+      required: true
+  - type: textarea
+    id: setup
+    attributes:
+      label: Setup
+      description: How you run it (image, binary), Postgres version, local disk or S3, gitlab-runner version and executor if CI is involved.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Server log lines or job logs around the problem. Remove tokens and passwords.
+      render: text

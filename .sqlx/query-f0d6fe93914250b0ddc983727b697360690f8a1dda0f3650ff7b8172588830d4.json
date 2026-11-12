@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE ci_builds SET status = 'running', runner_id = $2, runner_manager_id = $3, started_at = now(), contacted_at = now(),\n             updated_at = now()\n         WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f0d6fe93914250b0ddc983727b697360690f8a1dda0f3650ff7b8172588830d4"
+}

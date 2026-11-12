@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE merge_requests SET state = 'merged', merge_commit_sha = $2, merged_by = $3, merged_at = now(), updated_at = now(),\n                auto_merge_by = NULL, auto_merge_method = NULL, auto_merge_sha = NULL WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e382151b4e63b84fb144147441cdc407fe7494dce124d9e1f80552a2eefc1d8a"
+}

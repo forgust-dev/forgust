@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO merge_request_labels (merge_request_id, label_id) SELECT $1, unnest($2::bigint[]) ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "baed4b06f5f12592c43ebc30edb5c9d76d473d27317ee40f6884702c99fba46d"
+}

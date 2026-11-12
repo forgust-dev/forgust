@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT refresh_authorizations($1)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "refresh_authorizations",
+        "type_info": "Void",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8Array"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "4451a1389ddd99c1ed0e954a22321d39e72eda43d1ac16c6d52b121da5054af8"
+}

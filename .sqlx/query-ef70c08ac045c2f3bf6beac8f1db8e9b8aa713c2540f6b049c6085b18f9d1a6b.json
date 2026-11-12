@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT token_enc FROM imports WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "token_enc",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "imports",
+            "name": "token_enc"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "ef70c08ac045c2f3bf6beac8f1db8e9b8aa713c2540f6b049c6085b18f9d1a6b"
+}

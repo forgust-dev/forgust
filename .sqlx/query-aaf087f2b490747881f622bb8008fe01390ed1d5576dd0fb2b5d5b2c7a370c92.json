@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO group_group_links (shared_group_id, shared_with_group_id, max_access_level, expires_at) VALUES ($1, $2, $3, $4)\n         ON CONFLICT (shared_group_id, shared_with_group_id) DO UPDATE SET max_access_level = EXCLUDED.max_access_level, expires_at = EXCLUDED.expires_at",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Int2",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "aaf087f2b490747881f622bb8008fe01390ed1d5576dd0fb2b5d5b2c7a370c92"
+}

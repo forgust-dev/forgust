@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE registry_cleanup_policies SET last_run_at = now()\n          WHERE project_id IN (SELECT c.project_id FROM registry_cleanup_policies c JOIN projects p ON p.id = c.project_id\n                                WHERE c.enabled AND p.archived_at IS NULL\n                                  AND (c.last_run_at IS NULL OR c.last_run_at < now() - interval '1 day') LIMIT 50)\n          RETURNING project_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "registry_cleanup_policies",
+            "name": "project_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "ed06e7dbc6380dd8470341963d57102238b0071fc1a38d77ff373bc1c1bc52dd"
+}

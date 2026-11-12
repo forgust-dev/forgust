@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT m.user_id FROM members m JOIN namespaces g ON g.id = $1\n         WHERE m.source_type = 'namespace' AND m.source_id = ANY(g.traversal_ids)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "members",
+            "name": "user_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "72e39dee6ef7e461dd79ad5ba6efd1a7cda190ffa13f04421ba8dfce43aeb62a"
+}

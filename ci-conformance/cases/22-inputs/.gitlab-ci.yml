@@ -1,0 +1,9 @@
+include:
+  - local: templates/build.yml
+    inputs:
+      job-prefix: api
+      stage: build
+  - local: templates/build.yml
+    inputs:
+      job-prefix: web
+stages: [build, test]

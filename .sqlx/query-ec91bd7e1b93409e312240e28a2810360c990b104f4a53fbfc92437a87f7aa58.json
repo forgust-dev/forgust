@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (EXISTS (SELECT 1 FROM namespaces WHERE parent_id = $1)\n                OR EXISTS (SELECT 1 FROM projects WHERE namespace_id = $1)) AS \"x!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "x!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ec91bd7e1b93409e312240e28a2810360c990b104f4a53fbfc92437a87f7aa58"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO merge_request_reviewers (merge_request_id, user_id) SELECT $1, unnest($2::bigint[]) ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "33cb20decf09ca688a774ef1d7548a15057e62c2ff18582cb47759a296a192d8"
+}

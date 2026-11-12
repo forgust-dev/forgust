@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM ci_runner_managers WHERE runner_id = $1 AND system_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c0fc1647a6a6944de0a1550509379837b1b576ddd0d35da2bdfe936559bf9169"
+}

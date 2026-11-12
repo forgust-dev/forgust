@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE admin_blob_scans SET finished_at = now(), prefixes = $1, orphans = $2, complete = $3, error = $4",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "Jsonb",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8c06a9e02a349d58c1568f2c24dd62de7610cd0a3a4eb08232d2a759169bd26f"
+}

@@ -1,0 +1,148 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT t.build_id, b.name AS job_name, b.stage, t.total, t.failed, t.errored, t.skipped, t.duration, t.failures, t.cases, t.error\n           FROM ci_build_test_reports t JOIN ci_builds b ON b.id = t.build_id\n          WHERE t.pipeline_id = $1 AND NOT b.retried\n          ORDER BY b.stage_idx, b.name",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "build_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_build_test_reports",
+            "name": "build_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "job_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "stage",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "stage"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "total",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "ci_build_test_reports",
+            "name": "total"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "failed",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "ci_build_test_reports",
+            "name": "failed"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "errored",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "ci_build_test_reports",
+            "name": "errored"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "skipped",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "ci_build_test_reports",
+            "name": "skipped"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "duration",
+        "type_info": "Float8",
+        "origin": {
+          "Table": {
+            "table": "ci_build_test_reports",
+            "name": "duration"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "failures",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "ci_build_test_reports",
+            "name": "failures"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "cases",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "ci_build_test_reports",
+            "name": "cases"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "error",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_build_test_reports",
+            "name": "error"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "6fc66fec2798077ee8c9f5af522b21aadd52ab5e9ffbfe172565e6abd18ef470"
+}

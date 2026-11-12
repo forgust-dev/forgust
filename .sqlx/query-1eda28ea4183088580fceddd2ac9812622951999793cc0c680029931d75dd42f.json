@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM ci_job_token_allowlist WHERE project_id = $1 AND source_project_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1eda28ea4183088580fceddd2ac9812622951999793cc0c680029931d75dd42f"
+}

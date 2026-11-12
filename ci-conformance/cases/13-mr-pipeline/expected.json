@@ -1,0 +1,1 @@
+{ "gitlab_dry_run": false, "jobs": [ { "name": "mr_job", "stage": "test", "when": "on_success", "allow_failure": false } ] }

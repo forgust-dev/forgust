@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH r AS (UPDATE ci_runners SET contacted_at = now() WHERE id = $1)\n         INSERT INTO ci_runner_managers (runner_id, system_id, version, revision, platform, architecture, executor, ip_address)\n         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)\n         ON CONFLICT (runner_id, system_id) DO UPDATE SET contacted_at = now(),\n             version = CASE WHEN $3 = '' THEN ci_runner_managers.version ELSE $3 END,\n             revision = CASE WHEN $4 = '' THEN ci_runner_managers.revision ELSE $4 END,\n             platform = CASE WHEN $5 = '' THEN ci_runner_managers.platform ELSE $5 END,\n             architecture = CASE WHEN $6 = '' THEN ci_runner_managers.architecture ELSE $6 END,\n             executor = CASE WHEN $7 = '' THEN ci_runner_managers.executor ELSE $7 END,\n             ip_address = CASE WHEN $8 = '' THEN ci_runner_managers.ip_address ELSE $8 END\n         RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_runner_managers",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "ef9d07d1370650b2c3b031fc4f9c600da872c0de89215be9ac293a326a7202eb"
+}

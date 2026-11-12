@@ -1,0 +1,5 @@
+{ "jobs": [
+  { "name": "deploy: [aws, monitoring]", "stage": "deploy", "when": "on_success", "allow_failure": false },
+  { "name": "deploy: [aws, app]", "stage": "deploy", "when": "on_success", "allow_failure": false },
+  { "name": "deploy: [gcp]", "stage": "deploy", "when": "on_success", "allow_failure": false }
+] }

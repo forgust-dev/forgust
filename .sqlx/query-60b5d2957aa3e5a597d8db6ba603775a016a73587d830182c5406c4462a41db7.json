@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM group_group_links WHERE shared_group_id = $1 AND shared_with_group_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "60b5d2957aa3e5a597d8db6ba603775a016a73587d830182c5406c4462a41db7"
+}

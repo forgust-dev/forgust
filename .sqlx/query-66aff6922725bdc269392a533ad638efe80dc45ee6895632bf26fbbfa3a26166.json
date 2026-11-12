@@ -1,0 +1,143 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO commit_statuses (project_id, sha, ref, name, status, description, target_url, author_id)\n           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)\n           ON CONFLICT (project_id, sha, name) DO UPDATE SET status = EXCLUDED.status, ref = coalesce(EXCLUDED.ref, commit_statuses.ref),\n               description = EXCLUDED.description, target_url = EXCLUDED.target_url, author_id = EXCLUDED.author_id, updated_at = now()\n           RETURNING id, sha, ref AS git_ref, name, status, description, target_url, author_id, created_at, updated_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "commit_statuses",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "sha",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "commit_statuses",
+            "name": "sha"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "git_ref",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "commit_statuses",
+            "name": "ref"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "commit_statuses",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "status",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "commit_statuses",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "description",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "commit_statuses",
+            "name": "description"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "target_url",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "commit_statuses",
+            "name": "target_url"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "author_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "commit_statuses",
+            "name": "author_id"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "commit_statuses",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "updated_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "commit_statuses",
+            "name": "updated_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "66aff6922725bdc269392a533ad638efe80dc45ee6895632bf26fbbfa3a26166"
+}

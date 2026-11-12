@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO renovate_instance (id, overrides, github_com_token_enc) VALUES (true, $1, $3)\n         ON CONFLICT (id) DO UPDATE SET overrides = $1,\n             github_com_token_enc = CASE WHEN $2 THEN $3 ELSE renovate_instance.github_com_token_enc END, updated_at = now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8de2d50214673ff6c7a36559f1ebfd94a7ee0a488221326bf5ca9bd27f70bd0d"
+}

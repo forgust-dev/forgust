@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT r.name AS repo, t.name AS tag FROM (\n             SELECT DISTINCT ON (t.repository_id) t.repository_id, t.name FROM registry_tags t\n               JOIN registry_repositories r ON r.id = t.repository_id\n              WHERE r.project_id = $1 ORDER BY t.repository_id, t.updated_at DESC\n         ) t JOIN registry_repositories r ON r.id = t.repository_id ORDER BY r.name",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "repo",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "registry_repositories",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "tag",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "registry_tags",
+            "name": "name"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "3874f055aecaf2deb8d51966eeeb539b3e70bf8149b81fb4f5c5db5a8425e7fe"
+}

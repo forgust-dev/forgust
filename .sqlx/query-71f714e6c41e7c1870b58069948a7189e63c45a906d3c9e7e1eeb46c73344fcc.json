@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE routes SET path = $2 || substr(path, length($1) + 1)\n         WHERE lower(path) = lower($1) OR starts_with(lower(path), lower($1) || '/')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "71f714e6c41e7c1870b58069948a7189e63c45a906d3c9e7e1eeb46c73344fcc"
+}

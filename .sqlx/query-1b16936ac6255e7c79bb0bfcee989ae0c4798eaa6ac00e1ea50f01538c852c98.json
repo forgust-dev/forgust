@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO issue_assignees (issue_id, user_id) SELECT $1, unnest($2::bigint[]) ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1b16936ac6255e7c79bb0bfcee989ae0c4798eaa6ac00e1ea50f01538c852c98"
+}

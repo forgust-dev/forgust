@@ -1,0 +1,72 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) FILTER (WHERE on_default AND state = 'detected' AND severity = 'critical') AS \"critical!\",\n                  count(*) FILTER (WHERE on_default AND state = 'detected' AND severity = 'high') AS \"high!\",\n                  count(*) FILTER (WHERE on_default AND state = 'detected' AND severity = 'medium') AS \"medium!\",\n                  count(*) FILTER (WHERE on_default AND state = 'detected' AND severity = 'low') AS \"low!\",\n                  count(*) FILTER (WHERE on_default AND state = 'detected' AND severity = 'info') AS \"info!\",\n                  count(*) FILTER (WHERE on_default AND state = 'detected' AND severity = 'unknown') AS \"unknown!\",\n                  count(*) FILTER (WHERE on_default AND state = 'dismissed') AS \"dismissed!\",\n                  count(*) FILTER (WHERE state = 'resolved') AS \"resolved!\"\n             FROM security_findings WHERE project_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "critical!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "high!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "medium!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "low!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "info!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "unknown!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "dismissed!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "resolved!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "2d3472e2e4820408aebaae579019f72ccf64a46f1aee481973d487d6084b312c"
+}

@@ -1,0 +1,9 @@
+stages: [build, test, deploy]
+compile:
+  stage: build
+  script: make
+unit:
+  script: make test
+ship:
+  stage: deploy
+  script: make deploy

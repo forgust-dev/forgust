@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE merge_requests SET auto_merge_by = $2, auto_merge_method = $3, auto_merge_sha = $4, auto_merge_remove_source = $5,\n                auto_merge_target = $6\n         WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text",
+        "Text",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8b3c4557b22ee96468a7f39476fa6891294db700739be362982d6640381437fd"
+}

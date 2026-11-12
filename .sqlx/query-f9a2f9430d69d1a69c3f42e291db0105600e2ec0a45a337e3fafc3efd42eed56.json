@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id FROM ci_builds WHERE status IN ('running', 'canceling') AND runner_id IS NOT NULL\n           AND (coalesce(contacted_at, started_at) < now() - make_interval(secs => $1)\n                OR started_at < now() - make_interval(secs => timeout_secs + $2))",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Float8",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f9a2f9430d69d1a69c3f42e291db0105600e2ec0a45a337e3fafc3efd42eed56"
+}

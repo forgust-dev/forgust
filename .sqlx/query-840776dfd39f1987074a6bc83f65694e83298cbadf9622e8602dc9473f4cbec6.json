@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.quota_level AS project_level, root.quota_level AS namespace_level, root.path AS \"root_path!\"\n             FROM projects p JOIN namespaces n ON n.id = p.namespace_id JOIN namespaces root ON root.id = n.traversal_ids[1]\n            WHERE p.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project_level",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "projects",
+            "name": "quota_level"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "namespace_level",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "namespaces",
+            "name": "quota_level"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "root_path!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "namespaces",
+            "name": "path"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "840776dfd39f1987074a6bc83f65694e83298cbadf9622e8602dc9473f4cbec6"
+}

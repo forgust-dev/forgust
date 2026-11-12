@@ -1,0 +1,39 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO issues (project_id, iid, title, description, author_id, imported_author, state, created_at, updated_at, closed_at,\n                             milestone_id, due_date)\n         VALUES ($1, $2, $3, $4, $5, $6, $7, coalesce($8, now()), coalesce($9, $8, now()), $10, $11, $12) RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "issues",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text",
+        "Text",
+        "Int8",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Timestamptz",
+        "Int8",
+        "Date"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "04712a7703c45b9880e5e4560b51364d58abe72d4c72397b5277fed01deb6e26"
+}

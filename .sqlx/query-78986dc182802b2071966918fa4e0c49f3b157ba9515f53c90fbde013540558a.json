@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT image_pull_username, image_pull_password_enc FROM renovate_instance WHERE id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "image_pull_username",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "renovate_instance",
+            "name": "image_pull_username"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "image_pull_password_enc",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "renovate_instance",
+            "name": "image_pull_password_enc"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "78986dc182802b2071966918fa4e0c49f3b157ba9515f53c90fbde013540558a"
+}

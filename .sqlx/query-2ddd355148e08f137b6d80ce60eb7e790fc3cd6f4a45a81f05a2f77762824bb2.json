@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM merge_request_reviewers WHERE merge_request_id = $1 AND user_id = ANY($2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2ddd355148e08f137b6d80ce60eb7e790fc3cd6f4a45a81f05a2f77762824bb2"
+}

@@ -1,0 +1,286 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# a new push to a pull request cancels its previous run; runs on main all finish
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  SQLX_OFFLINE: "true"
+  # no debug info: CI never reads it, and the server's test builds are smaller
+  # and faster without it
+  CARGO_PROFILE_DEV_DEBUG: "0"
+
+# Jobs run side by side on GitHub-hosted runners, straight on the VM (no job
+# container): services are reached through their published ports on 127.0.0.1,
+# and the containers tests start (gitlab-runner, Renovate, skopeo, scanners) use
+# the host network, the tests' default.
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Format
+        run: cargo fmt --all --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+  test:
+    # The server's integration tests split over three machines, balanced by
+    # .github/test-shard.sh; shard 1 also runs the unit tests and the other crates.
+    name: test (${{ matrix.shard }}/3)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: forgust
+          POSTGRES_PASSWORD: forgust
+          POSTGRES_DB: forgust
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U forgust" --health-interval 2s --health-timeout 5s --health-retries 20
+      # tests/services.rs: S3 for the blob store and LFS, SMTP for email
+      s3:
+        image: ghcr.io/coollabsio/maxio:0.4.2@sha256:2e7fc2a32d66fb31c44ce366e8a289218d3c38fcbe25bd6fa575b4df7c0e0272
+        env:
+          MAXIO_ACCESS_KEY: forgust
+          MAXIO_SECRET_KEY: forgust-secret
+          MAXIO_DEFAULT_BUCKETS: forgust
+        ports: ["9000:9000"]
+      mail:
+        image: axllent/mailpit:v1.33.0@sha256:9b3a463be15354c0f0eba91697d80e3e0d8a5623ef0e627cacc836bc17fd5231
+        env:
+          MP_SMTP_AUTH_ACCEPT_ANY: "1"
+          MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+        ports: ["1025:1025", "8025:8025"]
+    env:
+      DATABASE_URL: postgres://forgust:forgust@127.0.0.1:5432/forgust
+      FORGUST_TEST_S3_ENDPOINT: http://127.0.0.1:9000
+      FORGUST_TEST_SMTP_URL: smtp://127.0.0.1:1025
+      FORGUST_TEST_MAILPIT_API: http://127.0.0.1:8025/api/v1
+      FORGUST_TEST_PG_DUMP: /usr/lib/postgresql/17/bin/pg_dump
+      FORGUST_TEST_PG_RESTORE: /usr/lib/postgresql/17/bin/pg_restore
+      FORGUST_TEST_PG_URL: postgres://forgust:forgust@127.0.0.1:5432
+    steps:
+      - uses: actions/checkout@v4
+      - name: System packages (git-lfs, the Postgres 17 client for the backup test)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends git-lfs openssh-client postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y --no-install-recommends postgresql-client-17
+          git --version && git lfs version && /usr/lib/postgresql/17/bin/pg_dump --version
+      - uses: dtolnay/rust-toolchain@1.99
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: test
+          save-if: ${{ matrix.shard == 1 }}
+      - name: Unit tests and the other crates
+        # web/openapi.json is checked by a unit test (api::openapi)
+        if: matrix.shard == 1
+        run: |
+          cargo test --workspace --exclude forgust-server
+          cargo test -p forgust-server --lib --bins
+      - name: Integration tests (one throwaway database per test)
+        run: cargo test -p forgust-server $(.github/test-shard.sh ${{ matrix.shard }} 3)
+
+  runner-compat:
+    # a stock gitlab-runner (Docker executor) against Forgust, per supported
+    # version; also asserts the ADR-0008 pick-up (1 s) and cancel (5 s) targets.
+    # The runner and its job containers use the host network, so 127.0.0.1 is
+    # the test server for all of them.
+    name: runner-compat (${{ matrix.runner }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [v17.11.0, v19.5.3]
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: forgust
+          POSTGRES_PASSWORD: forgust
+          POSTGRES_DB: forgust
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U forgust" --health-interval 2s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgres://forgust:forgust@127.0.0.1:5432/forgust
+      FORGUST_TEST_RUNNER: gitlab/gitlab-runner:${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99
+      - uses: Swatinem/rust-cache@v2
+      - name: Images
+        run: |
+          pull() { for i in 1 2 3 4; do docker pull -q "$1" && return; sleep 15; done; return 1; }
+          pull alpine:3.20 && pull "$FORGUST_TEST_RUNNER"
+      - name: Real runner
+        run: cargo test -p forgust-server --test m4_runner -- --nocapture
+
+  real-tools:
+    # the real Renovate (container), glab (binary), skopeo and the security
+    # scanners (containers) against a test server (tests/m5_tools.rs,
+    # m9_registry.rs, m16_security.rs)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: forgust
+          POSTGRES_PASSWORD: forgust
+          POSTGRES_DB: forgust
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U forgust" --health-interval 2s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgres://forgust:forgust@127.0.0.1:5432/forgust
+      FORGUST_TEST_RENOVATE: renovate/renovate:44.226.3
+      FORGUST_TEST_SKOPEO: quay.io/skopeo/stable:v1.22.3
+      GLAB_VERSION: "1.128.0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99
+      - uses: Swatinem/rust-cache@v2
+      - name: glab, Renovate and skopeo
+        run: |
+          curl -sSfL "https://gitlab.com/gitlab-org/cli/-/releases/v${GLAB_VERSION}/downloads/glab_${GLAB_VERSION}_linux_amd64.tar.gz" \
+            | tar xz -C /tmp bin/glab
+          /tmp/bin/glab --version
+          echo "FORGUST_TEST_GLAB=/tmp/bin/glab" >> "$GITHUB_ENV"
+          pull() { for i in 1 2 3 4; do docker pull -q "$1" && return; sleep 15; done; return 1; }
+          pull "$FORGUST_TEST_RENOVATE" && pull "$FORGUST_TEST_SKOPEO"
+      - name: Real Renovate and glab
+        run: cargo test -p forgust-server --test m5_tools -- --nocapture --test-threads 1
+      - name: Real skopeo against the registry
+        run: cargo test -p forgust-server --test m9_registry real_skopeo -- --nocapture
+      - name: Real security scanners (the images the built-in scans use)
+        env:
+          FORGUST_TEST_SCANNERS: "1"
+        run: |
+          pull() { for i in 1 2 3 4; do docker pull -q "$1" && return; sleep 15; done; return 1; }
+          pull registry.gitlab.com/security-products/semgrep:5
+          pull registry.gitlab.com/security-products/secrets:6
+          pull aquasec/trivy:0.57.1
+          cargo test -p forgust-server --test m16_security real_scanners -- --nocapture
+
+  deny:
+    runs-on: ubuntu-latest
+    env:
+      CARGO_DENY: "0.20.2"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99
+      - name: cargo-deny
+        run: |
+          curl -sSfL "https://github.com/EmbarkStudios/cargo-deny/releases/download/${CARGO_DENY}/cargo-deny-${CARGO_DENY}-x86_64-unknown-linux-musl.tar.gz" \
+            | tar xz --strip-components=1 -C "$HOME/.cargo/bin" "cargo-deny-${CARGO_DENY}-x86_64-unknown-linux-musl/cargo-deny"
+          cargo deny --version
+      - run: cargo deny --all-features check
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: Types from OpenAPI are committed
+        run: npm run gen:api && git diff --exit-code src/api/schema.d.ts
+      - run: npm run build
+
+  image:
+    # a full release build (~25 min on a 2-core runner): on main, not on every
+    # pull request push
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build -t "forgust:ci-${GITHUB_RUN_NUMBER}" .
+      - name: The image starts
+        run: docker run --rm "forgust:ci-${GITHUB_RUN_NUMBER}" --help
+
+  e2e:
+    # browser tests (desktop and 390 px) against the server built in the job
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: forgust
+          POSTGRES_PASSWORD: forgust
+          POSTGRES_DB: forgust
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U forgust" --health-interval 2s --health-timeout 5s --health-retries 20
+    env:
+      FORGUST_DATABASE__URL: postgres://forgust:forgust@127.0.0.1:5432/forgust
+      FORGUST_SERVER__LISTEN: 127.0.0.1:18491
+      FORGUST_SERVER__EXTERNAL_URL: http://127.0.0.1:18491
+      FORGUST_SERVER__SSH_LISTEN: ""
+      FORGUST_SERVER__DATA_DIR: /tmp/forgust-e2e
+      FORGUST_SERVER__STATIC_DIR: web/dist
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Build
+        run: |
+          cargo build -p forgust-server
+          cd web && npm ci && npm run build
+      - name: Start Forgust
+        run: |
+          target/debug/forgust migrate
+          FORGUST_ADMIN_PASSWORD=rootpassword target/debug/forgust admin create-user --username root --email root@example.com --admin
+          nohup target/debug/forgust serve > /tmp/forgust-e2e.log 2>&1 &
+          for i in $(seq 60); do curl -sf 127.0.0.1:18491/health && break; sleep 1; done
+          curl -sf 127.0.0.1:18491/health
+      - name: Playwright
+        working-directory: web
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright test
+        env:
+          CI: "true"
+          FORGUST_E2E_URL: http://127.0.0.1:18491
+      - name: Server log
+        if: failure()
+        run: tail -200 /tmp/forgust-e2e.log
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        continue-on-error: true
+        with:
+          name: playwright-report
+          path: web/playwright-report

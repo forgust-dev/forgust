@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT enabled, keep_n, older_than_days, name_regex, name_regex_keep FROM registry_cleanup_policies WHERE project_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "enabled",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "registry_cleanup_policies",
+            "name": "enabled"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "keep_n",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "registry_cleanup_policies",
+            "name": "keep_n"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "older_than_days",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "registry_cleanup_policies",
+            "name": "older_than_days"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "name_regex",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "registry_cleanup_policies",
+            "name": "name_regex"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "name_regex_keep",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "registry_cleanup_policies",
+            "name": "name_regex_keep"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "e5871631b0187ae55e3e4a55440522c11b671934f73cddc96148ddd26c4ca68a"
+}

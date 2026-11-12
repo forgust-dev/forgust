@@ -1,0 +1,316 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT n.id, n.merge_request_id, n.author_id, u.username AS \"author_username?\", u.name AS \"author_name?\",\n                  n.parent_id, n.body, n.system, n.diff_id, n.base_sha, n.start_sha, n.head_sha, n.old_path, n.new_path,\n                  n.old_line, n.new_line, n.resolved_by, n.resolved_at, n.created_at, n.updated_at, n.imported_author,\n                  n.suggestion_applied_sha, n.start_old_line, n.start_new_line, n.review\n           FROM notes n LEFT JOIN users u ON u.id = n.author_id\n           WHERE n.merge_request_id = $1 ORDER BY n.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "notes",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "merge_request_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "notes",
+            "name": "merge_request_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "author_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "notes",
+            "name": "author_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "author_username?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "username"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "author_name?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "parent_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "notes",
+            "name": "parent_id"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "body",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "notes",
+            "name": "body"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "system",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "notes",
+            "name": "system"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "diff_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "notes",
+            "name": "diff_id"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "base_sha",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "notes",
+            "name": "base_sha"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "start_sha",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "notes",
+            "name": "start_sha"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "head_sha",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "notes",
+            "name": "head_sha"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "old_path",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "notes",
+            "name": "old_path"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "new_path",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "notes",
+            "name": "new_path"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "old_line",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "notes",
+            "name": "old_line"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "new_line",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "notes",
+            "name": "new_line"
+          }
+        }
+      },
+      {
+        "ordinal": 16,
+        "name": "resolved_by",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "notes",
+            "name": "resolved_by"
+          }
+        }
+      },
+      {
+        "ordinal": 17,
+        "name": "resolved_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "notes",
+            "name": "resolved_at"
+          }
+        }
+      },
+      {
+        "ordinal": 18,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "notes",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 19,
+        "name": "updated_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "notes",
+            "name": "updated_at"
+          }
+        }
+      },
+      {
+        "ordinal": 20,
+        "name": "imported_author",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "notes",
+            "name": "imported_author"
+          }
+        }
+      },
+      {
+        "ordinal": 21,
+        "name": "suggestion_applied_sha",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "notes",
+            "name": "suggestion_applied_sha"
+          }
+        }
+      },
+      {
+        "ordinal": 22,
+        "name": "start_old_line",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "notes",
+            "name": "start_old_line"
+          }
+        }
+      },
+      {
+        "ordinal": 23,
+        "name": "start_new_line",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "notes",
+            "name": "start_new_line"
+          }
+        }
+      },
+      {
+        "ordinal": 24,
+        "name": "review",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "notes",
+            "name": "review"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "bd59e15ca4930aab5be6a40a42614ef6574354bc56392c74046aacc795413f67"
+}

@@ -1,0 +1,67 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH ev AS (\n               (SELECT 'pushed' AS action, true AS code, project_id, 0::bigint AS iid,\n                       regexp_replace(ref_name, '^refs/(heads|tags)/', '') AS title, commit_count AS count, created_at AS at\n                FROM push_events WHERE user_id = $1 ORDER BY created_at DESC LIMIT $4)\n               UNION ALL (SELECT 'opened_merge_request', true, project_id, iid, title, 0, created_at FROM merge_requests\n                          WHERE author_id = $1 ORDER BY created_at DESC LIMIT $4)\n               UNION ALL (SELECT 'merged_merge_request', true, project_id, iid, title, 0, merged_at FROM merge_requests\n                          WHERE merged_by = $1 AND merged_at IS NOT NULL ORDER BY merged_at DESC LIMIT $4)\n               UNION ALL (SELECT 'opened_issue', false, project_id, iid, title, 0, created_at FROM issues\n                          WHERE author_id = $1 ORDER BY created_at DESC LIMIT $4)\n               UNION ALL (SELECT 'closed_issue', false, project_id, iid, title, 0, closed_at FROM issues\n                          WHERE closed_by = $1 AND closed_at IS NOT NULL ORDER BY closed_at DESC LIMIT $4)\n               UNION ALL (SELECT 'commented_merge_request', true, m.project_id, m.iid, m.title, 0, n.created_at\n                          FROM notes n JOIN merge_requests m ON m.id = n.merge_request_id\n                          WHERE n.author_id = $1 AND NOT n.system ORDER BY n.created_at DESC LIMIT $4)\n               UNION ALL (SELECT 'commented_issue', false, i.project_id, i.iid, i.title, 0, n.created_at\n                          FROM issue_notes n JOIN issues i ON i.id = n.issue_id\n                          WHERE n.author_id = $1 AND NOT n.system ORDER BY n.created_at DESC LIMIT $4)\n               UNION ALL (SELECT 'approved', true, m.project_id, m.iid, m.title, 0, a.created_at\n                          FROM approvals a JOIN merge_requests m ON m.id = a.merge_request_id\n                          WHERE a.user_id = $1 ORDER BY a.created_at DESC LIMIT $4)\n           )\n           SELECT ev.action AS \"action!\", r.path AS project_path, ev.iid AS \"iid!\", ev.title AS \"title!\",\n                  ev.count AS \"count!\", ev.at AS \"at!\"\n           FROM ev JOIN projects p ON p.id = ev.project_id\n           JOIN routes r ON r.source_type = 'project' AND r.source_id = p.id\n           WHERE $3 OR p.visibility = 20 OR (p.visibility = 10 AND $5)\n              OR EXISTS (SELECT 1 FROM listed_project_authorizations pa\n                         WHERE pa.project_id = p.id AND pa.user_id = $2 AND (NOT ev.code OR pa.access_level >= 20))\n           ORDER BY ev.at DESC LIMIT $4",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "action!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "project_path",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "routes",
+            "name": "path"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "iid!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "title!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "count!",
+        "type_info": "Int4",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "at!",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Bool",
+        "Int8",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "1f9d22751347a7720c63defbf79a03bb6cd7bbdf0d02e16afd6d51b83701f95f"
+}

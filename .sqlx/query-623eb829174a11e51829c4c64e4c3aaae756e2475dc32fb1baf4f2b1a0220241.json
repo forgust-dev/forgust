@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.id FROM projects p JOIN namespaces n ON n.id = p.namespace_id\n          WHERE $1 = ANY (n.traversal_ids) AND NOT EXISTS (SELECT 1 FROM security_scanning_settings s WHERE s.project_id = p.id)\n          ORDER BY p.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "projects",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "623eb829174a11e51829c4c64e4c3aaae756e2475dc32fb1baf4f2b1a0220241"
+}

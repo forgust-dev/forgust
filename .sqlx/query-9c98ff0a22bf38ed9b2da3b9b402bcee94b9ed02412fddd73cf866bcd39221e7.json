@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM registry_manifests m\n          WHERE m.created_at < now() - interval '1 hour'\n            AND NOT EXISTS (SELECT 1 FROM registry_tags t WHERE t.manifest_id = m.id)\n            AND NOT EXISTS (SELECT 1 FROM registry_manifests p WHERE p.repository_id = m.repository_id AND m.digest = ANY(p.manifest_digests))\n            AND (m.subject IS NULL OR NOT EXISTS (SELECT 1 FROM registry_manifests s WHERE s.repository_id = m.repository_id AND s.digest = m.subject))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "9c98ff0a22bf38ed9b2da3b9b402bcee94b9ed02412fddd73cf866bcd39221e7"
+}

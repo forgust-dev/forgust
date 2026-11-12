@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) AS \"n!\" FROM notes\n           WHERE merge_request_id = $1 AND parent_id IS NULL AND NOT system AND head_sha IS NOT NULL AND resolved_at IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "n!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "5ba5a501d17b484af4d353218cfb3d2d0956a0d48afd789fe785ecf6b66c1241"
+}

@@ -1,0 +1,21 @@
+{
+  "version": "15.0.7",
+  "vulnerabilities": [
+    {
+      "id": "5f1a8f3e0a9c4e1a9b2a7d6c5b4a3f2e",
+      "name": "Prototype Pollution in lodash",
+      "description": "lodash prior to 4.17.21 is vulnerable to prototype pollution.",
+      "severity": "Critical",
+      "solution": "Upgrade to version 4.17.21 or above.",
+      "location": { "file": "package-lock.json", "dependency": { "package": { "name": "lodash" }, "version": "4.17.15" } },
+      "identifiers": [
+        { "type": "gemnasium", "name": "Gemnasium-6a3f7a1e", "value": "6a3f7a1e-0000-4000-8000-000000000000" },
+        { "type": "cve", "name": "CVE-2020-8203", "value": "CVE-2020-8203", "url": "https://nvd.nist.gov/vuln/detail/CVE-2020-8203" },
+        { "type": "ghsa", "name": "GHSA-p6mc-m468-83gw", "value": "GHSA-p6mc-m468-83gw" }
+      ],
+      "links": [{ "url": "https://github.com/lodash/lodash/issues/4874" }]
+    }
+  ],
+  "dependency_files": [],
+  "scan": { "scanner": { "id": "gemnasium", "name": "Gemnasium" }, "type": "dependency_scanning", "status": "success" }
+}

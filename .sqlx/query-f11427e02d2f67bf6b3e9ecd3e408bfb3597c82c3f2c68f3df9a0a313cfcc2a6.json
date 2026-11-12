@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO admin_blob_scans (id, started_at) VALUES (true, now())\n         ON CONFLICT (id) DO UPDATE SET started_at = now(), finished_at = NULL, prefixes = '[]', orphans = '[]', complete = false, error = NULL\n         WHERE admin_blob_scans.finished_at IS NOT NULL OR admin_blob_scans.started_at < now() - interval '1 hour'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "f11427e02d2f67bf6b3e9ecd3e408bfb3597c82c3f2c68f3df9a0a313cfcc2a6"
+}

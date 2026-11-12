@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH q AS (SELECT n.id, n.quota_level AS old, nullif(coalesce(n.quota_bytes, s.namespace_quota_bytes), 0) AS quota\n                        FROM namespaces n CROSS JOIN instance_settings s WHERE n.parent_id IS NULL),\n                used AS (SELECT q.id, (SELECT coalesce(sum(project_storage_bytes(p.id)), 0) FROM projects p JOIN namespaces n ON n.id = p.namespace_id\n                                        WHERE n.traversal_ids @> ARRAY[q.id])::bigint AS b\n                           FROM q WHERE q.quota IS NOT NULL),\n                lv AS (SELECT q.id, q.old, q.quota, coalesce(u.b, 0) AS used,\n                              CASE WHEN q.quota IS NULL THEN 0 WHEN coalesce(u.b, 0) >= q.quota THEN 100\n                                   WHEN coalesce(u.b, 0) * 5 >= q.quota * 4 THEN 80 ELSE 0 END::smallint AS level\n                         FROM q LEFT JOIN used u ON u.id = q.id)\n           UPDATE namespaces n SET quota_level = lv.level FROM lv WHERE n.id = lv.id AND n.quota_level <> lv.level\n           RETURNING n.id, lv.level AS \"level!\", lv.old AS \"old!\", lv.used AS \"used!\", lv.quota",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "namespaces",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "level!",
+        "type_info": "Int2",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "old!",
+        "type_info": "Int2",
+        "origin": {
+          "Table": {
+            "table": "namespaces",
+            "name": "quota_level"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "used!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "quota",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      null,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "7b0e01cb3398c28b9ee80504b9bed44a94fa7c3e367d897548de2fbdc563ccf5"
+}

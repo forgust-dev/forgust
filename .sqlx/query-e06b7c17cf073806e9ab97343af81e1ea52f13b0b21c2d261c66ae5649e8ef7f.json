@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT project_id, principal_kind, principal_id, can_write FROM lfs_ssh_tokens WHERE token_hash = $1 AND expires_at > now()",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "lfs_ssh_tokens",
+            "name": "project_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "principal_kind",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "lfs_ssh_tokens",
+            "name": "principal_kind"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "principal_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "lfs_ssh_tokens",
+            "name": "principal_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "can_write",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "lfs_ssh_tokens",
+            "name": "can_write"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "e06b7c17cf073806e9ab97343af81e1ea52f13b0b21c2d261c66ae5649e8ef7f"
+}

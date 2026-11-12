@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH prev AS (SELECT state, on_default FROM security_findings WHERE project_id = $1 AND fingerprint = $2)\n           INSERT INTO security_findings (project_id, fingerprint, report_type, scanner, severity, title, description, solution, rule_id,\n                                          identifiers, file, start_line, end_line, package_name, package_version, fixed_version, image,\n                                          first_pipeline_id, last_pipeline_id)\n           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $18)\n           ON CONFLICT (project_id, fingerprint) DO UPDATE SET\n               scanner = EXCLUDED.scanner, severity = EXCLUDED.severity, title = EXCLUDED.title, description = EXCLUDED.description,\n               solution = EXCLUDED.solution, identifiers = EXCLUDED.identifiers, file = EXCLUDED.file, start_line = EXCLUDED.start_line,\n               end_line = EXCLUDED.end_line, package_version = EXCLUDED.package_version, fixed_version = EXCLUDED.fixed_version,\n               image = EXCLUDED.image, last_pipeline_id = EXCLUDED.last_pipeline_id, last_seen_at = now()\n           RETURNING id, (SELECT state FROM prev) AS prev_state, (SELECT on_default FROM prev) AS prev_default",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "security_findings",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "prev_state",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "prev_default",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Text",
+        "Int4",
+        "Int4",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "b2f9510bff76b065aeab6c02deeb46ccf3d8185406003b1a9731cf4c1bd66cfc"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO renovate_instance (id, image_pull_username, image_pull_password_enc) VALUES (true, $1, $2)\n         ON CONFLICT (id) DO UPDATE SET image_pull_username = $1, image_pull_password_enc = $2, updated_at = now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a9b54387a55c98a4e52c58a4beb3028d4cb7e37cc5b4973e9a4ba07bdc86b1ee"
+}

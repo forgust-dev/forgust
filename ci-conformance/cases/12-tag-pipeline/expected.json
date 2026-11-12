@@ -1,0 +1,4 @@
+{ "jobs": [
+  { "name": "build", "stage": "test", "when": "on_success", "allow_failure": false },
+  { "name": "release", "stage": "deploy", "when": "on_success", "allow_failure": false }
+] }

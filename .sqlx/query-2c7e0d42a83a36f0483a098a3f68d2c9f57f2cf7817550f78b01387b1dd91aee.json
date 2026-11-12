@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE namespaces SET avatar_at = CASE WHEN $2 THEN now() END WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2c7e0d42a83a36f0483a098a3f68d2c9f57f2cf7817550f78b01387b1dd91aee"
+}

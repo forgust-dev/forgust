@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM ssh_keys k WHERE k.id = $1 AND k.kind = 'deploy'\n         AND NOT EXISTS (SELECT 1 FROM deploy_keys_projects l WHERE l.deploy_key_id = k.id)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "222488156770106a0cae814b9bd1e5d2956a5a6b57554c5073991d5bfc1b390f"
+}

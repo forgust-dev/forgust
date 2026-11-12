@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) AS \"n!\" FROM todos t JOIN listed_project_authorizations a ON a.project_id = t.project_id AND a.user_id = t.user_id\n           WHERE t.user_id = $1 AND t.state = 'pending' AND (t.target_type <> 'merge_request' OR a.access_level >= 20)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "n!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "11cee6b103f21389da1a8a28d010bc260c84ba9f593d36d51d010e9aa9243bc8"
+}

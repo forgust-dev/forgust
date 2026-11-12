@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT s.project_id FROM renovate_settings s JOIN projects p ON p.id = s.project_id\n          WHERE s.enabled AND s.next_run_at <= now() AND p.archived_at IS NULL ORDER BY s.next_run_at LIMIT $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "renovate_settings",
+            "name": "project_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "cb265316c168ced84bd5df664bd31e98cf66122754b3f7a91f390aa5c37687cc"
+}

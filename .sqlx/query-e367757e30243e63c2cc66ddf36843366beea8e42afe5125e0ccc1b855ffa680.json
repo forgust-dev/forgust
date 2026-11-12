@@ -1,0 +1,94 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH lfs AS (SELECT lp.project_id, sum(o.size) AS b FROM lfs_objects_projects lp JOIN lfs_objects o ON o.oid = lp.oid GROUP BY 1),\n                art AS (SELECT project_id, sum(size) AS b FROM ci_job_artifacts GROUP BY 1),\n                reg AS (SELECT d.project_id, sum(b.size) AS b\n                          FROM (SELECT DISTINCT r.project_id, l.digest FROM registry_repository_blobs l\n                                  JOIN registry_repositories r ON r.id = l.repository_id) d\n                          JOIN registry_blobs b ON b.digest = d.digest GROUP BY 1),\n                up AS (SELECT project_id, sum(size) AS b FROM uploads GROUP BY 1)\n           SELECT p.id AS \"project_id!\", r.path AS \"full_path!\", p.repository_bytes AS \"repository!\",\n                  coalesce(lfs.b, 0)::bigint AS \"lfs!\", coalesce(art.b, 0)::bigint AS \"artifacts!\",\n                  coalesce(reg.b, 0)::bigint AS \"registry!\", coalesce(up.b, 0)::bigint AS \"uploads!\",\n                  (p.repository_bytes + coalesce(lfs.b, 0) + coalesce(art.b, 0) + coalesce(reg.b, 0) + coalesce(up.b, 0))::bigint AS \"total!\",\n                  nullif(p.quota_bytes, 0) AS quota\n             FROM projects p\n             JOIN routes r ON r.source_type = 'project' AND r.source_id = p.id\n             LEFT JOIN lfs ON lfs.project_id = p.id LEFT JOIN art ON art.project_id = p.id\n             LEFT JOIN reg ON reg.project_id = p.id LEFT JOIN up ON up.project_id = p.id\n            ORDER BY 8 DESC, 2 LIMIT $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project_id!",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "projects",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "full_path!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "routes",
+            "name": "path"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "repository!",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "projects",
+            "name": "repository_bytes"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "lfs!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "artifacts!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "registry!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "uploads!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "total!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
+        "name": "quota",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "e367757e30243e63c2cc66ddf36843366beea8e42afe5125e0ccc1b855ffa680"
+}

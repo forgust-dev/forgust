@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT u.id, coalesce(ns.level, u.notification_level) AS \"level!\"\n             FROM users u LEFT JOIN notification_settings ns ON ns.user_id = u.id AND ns.project_id = $1\n            WHERE u.id = ANY($2)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "level!",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8Array"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "63d38b3e4b430d2448674afb33c6bc816852f5b2f66df237dc579aa4bc411d21"
+}

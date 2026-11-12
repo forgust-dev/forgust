@@ -1,0 +1,86 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT started_at, finished_at, prefixes, orphans, complete, error FROM admin_blob_scans",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "started_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "admin_blob_scans",
+            "name": "started_at"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "finished_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "admin_blob_scans",
+            "name": "finished_at"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "prefixes",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "admin_blob_scans",
+            "name": "prefixes"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "orphans",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "admin_blob_scans",
+            "name": "orphans"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "complete",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "admin_blob_scans",
+            "name": "complete"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "error",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "admin_blob_scans",
+            "name": "error"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "4a375600049f15fdcf72c1d376d52100c209669df649c247dd62fa80f0295b91"
+}

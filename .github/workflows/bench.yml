@@ -1,0 +1,31 @@
+name: Bench
+
+# Runs on the dedicated bench host only (ADR-0008); numbers from shared runners
+# are not comparable. Register that machine as a self-hosted runner labelled `bench`.
+#
+# Manual only until that runner exists: a push or a schedule would queue a job no
+# runner can take ("no runner matching self-hosted, bench"). Once it is registered,
+# restore these triggers:
+#   push:
+#     branches: [main]
+#   schedule:
+#     - cron: "17 2 * * *" # nightly: adds the chromium fixture
+on:
+  workflow_dispatch:
+
+jobs:
+  bench:
+    runs-on: [self-hosted, bench]
+    env:
+      BASELINE: bench/baselines/bench-host.json
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo build --release -p forgust-server -p forgust-bench
+      - name: Run (regression gate vs stored baseline)
+        run: bench/run.sh
+        env:
+          NIGHTLY: ${{ github.event_name == 'schedule' }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bench-results
+          path: bench/results/

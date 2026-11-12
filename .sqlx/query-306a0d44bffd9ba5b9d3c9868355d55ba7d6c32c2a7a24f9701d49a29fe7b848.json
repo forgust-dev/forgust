@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO security_scans (build_id, pipeline_id, report_type, scanner, findings, error) VALUES ($1, $2, $3, $4, $5, $6)\n         ON CONFLICT (build_id, report_type) DO UPDATE SET scanner = $4, findings = $5, error = $6, created_at = now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text",
+        "Text",
+        "Int4",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "306a0d44bffd9ba5b9d3c9868355d55ba7d6c32c2a7a24f9701d49a29fe7b848"
+}

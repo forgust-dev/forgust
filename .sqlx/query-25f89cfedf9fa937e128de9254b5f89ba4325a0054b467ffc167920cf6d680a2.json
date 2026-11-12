@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE personal_access_tokens SET revoked = true WHERE user_id = $1 AND NOT revoked",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "25f89cfedf9fa937e128de9254b5f89ba4325a0054b467ffc167920cf6d680a2"
+}

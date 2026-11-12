@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE security_findings SET state = CASE WHEN on_default THEN 'detected' ELSE 'resolved' END,\n                        resolved_at = CASE WHEN on_default THEN NULL ELSE coalesce(resolved_at, now()) END,\n                        dismissal_reason = NULL, dismissal_comment = NULL, dismissed_by = NULL, dismissed_at = NULL\n                  WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b150dd0ccc8338e721aa2d43eda21b3498aaaaf182fc03b1c98c33ee6459dbbe"
+}

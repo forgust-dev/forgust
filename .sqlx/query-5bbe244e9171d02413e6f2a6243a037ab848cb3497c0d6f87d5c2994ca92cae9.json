@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE ci_pipeline_schedules SET owner_id = $2, description = $3, ref = $4, cron = $5, cron_timezone = $6, active = $7,\n             variables_enc = $8, next_run_at = $9\n         WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Bool",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5bbe244e9171d02413e6f2a6243a037ab848cb3497c0d6f87d5c2994ca92cae9"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE merge_requests SET auto_merge_target = $2 WHERE id = $1 AND auto_merge_by IS NOT NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e283ecf15cc0c3a2f24992a51dd852c123b811347048ace70939349d38d62ed1"
+}

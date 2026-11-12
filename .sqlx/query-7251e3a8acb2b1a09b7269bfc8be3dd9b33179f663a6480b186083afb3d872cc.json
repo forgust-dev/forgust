@@ -1,0 +1,136 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.id, a.user_id, u.username, u.name AS user_name, a.name, a.merge_request_id, a.issue_id, a.note_id, a.issue_note_id, a.created_at\n           FROM award_emoji a JOIN users u ON u.id = a.user_id\n          WHERE a.id IN (SELECT id FROM award_emoji WHERE issue_id = $1\n                         UNION ALL\n                         SELECT x.id FROM award_emoji x JOIN issue_notes n ON n.id = x.issue_note_id WHERE n.issue_id = $1)\n          ORDER BY a.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "award_emoji",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "award_emoji",
+            "name": "user_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "username",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "username"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "user_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "award_emoji",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "merge_request_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "award_emoji",
+            "name": "merge_request_id"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "issue_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "award_emoji",
+            "name": "issue_id"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "note_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "award_emoji",
+            "name": "note_id"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "issue_note_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "award_emoji",
+            "name": "issue_note_id"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "award_emoji",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "7251e3a8acb2b1a09b7269bfc8be3dd9b33179f663a6480b186083afb3d872cc"
+}

@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (SELECT access_level FROM project_authorizations WHERE user_id = $1 AND project_id = $2) AS level,\n                  coalesce((SELECT require_two_factor FROM namespaces WHERE id = $3), false) AS \"require_2fa!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "level",
+        "type_info": "Int2",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "require_2fa!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "ef86226dbd25031b00da1bf33c12b88783a9eb1a5d4dcd50f6f80fdd356fc05f"
+}

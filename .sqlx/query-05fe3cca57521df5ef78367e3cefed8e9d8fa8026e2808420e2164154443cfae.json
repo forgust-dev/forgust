@@ -1,0 +1,91 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n             (SELECT count(*) FROM users WHERE user_type = 'human' AND state = 'active') AS \"users_active!\",\n             (SELECT count(*) FROM users WHERE user_type = 'human' AND state = 'blocked') AS \"users_blocked!\",\n             (SELECT count(*) FROM users WHERE user_type = 'human' AND is_admin) AS \"users_admins!\",\n             (SELECT count(*) FROM users WHERE user_type = 'human' AND email_verified_at IS NULL) AS \"users_unconfirmed!\",\n             (SELECT count(*) FROM users WHERE user_type <> 'human') AS \"bots!\",\n             (SELECT count(*) FROM namespaces WHERE kind = 'group') AS \"groups!\",\n             (SELECT count(*) FROM projects) AS \"projects!\",\n             (SELECT count(*) FROM merge_requests WHERE state = 'opened') AS \"mr_open!\",\n             (SELECT count(*) FROM merge_requests WHERE state = 'merged') AS \"mr_merged!\",\n             (SELECT count(*) FROM issues WHERE state = 'opened') AS \"issues_open!\",\n             (SELECT count(*) FROM issues WHERE state = 'closed') AS \"issues_closed!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "users_active!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "users_blocked!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "users_admins!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "users_unconfirmed!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "bots!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "groups!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "projects!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 7,
+        "name": "mr_open!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
+        "name": "mr_merged!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 9,
+        "name": "issues_open!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 10,
+        "name": "issues_closed!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "05fe3cca57521df5ef78367e3cefed8e9d8fa8026e2808420e2164154443cfae"
+}

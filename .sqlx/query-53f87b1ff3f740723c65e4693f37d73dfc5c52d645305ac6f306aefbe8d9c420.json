@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE ci_job_tokens SET expires_at = least(expires_at, now()) WHERE build_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "53f87b1ff3f740723c65e4693f37d73dfc5c52d645305ac6f306aefbe8d9c420"
+}

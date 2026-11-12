@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE projects SET avatar_at = CASE WHEN $2 THEN now() END WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f36e63d4484611579463cf528f0f9aa15be39abd175ae3f960abe63c31e8c2e8"
+}

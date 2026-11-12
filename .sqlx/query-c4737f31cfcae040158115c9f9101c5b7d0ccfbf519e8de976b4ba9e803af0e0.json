@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM blob_deletions WHERE id IN (SELECT id FROM blob_deletions ORDER BY id LIMIT $1 FOR UPDATE SKIP LOCKED)\n         RETURNING blob_key",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "blob_key",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "blob_deletions",
+            "name": "blob_key"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c4737f31cfcae040158115c9f9101c5b7d0ccfbf519e8de976b4ba9e803af0e0"
+}
