@@ -60,3 +60,17 @@ git commit -s
 
 adds the line from your `user.name` and `user.email`. To sign commits you already
 made: `git rebase --signoff main`.
+
+## Releasing (maintainers)
+
+1. In a pull request, set the new version in `Cargo.toml` (`[workspace.package]`) and
+   `web/package.json`, then refresh the lock files (`cargo check`,
+   `cd web && npm install`): `chore: release 0.2.0`.
+2. Once it is merged, tag that commit of `main` and push the tag:
+   `git tag v0.2.0 && git push origin v0.2.0`.
+3. The release workflow checks that the tag matches both versions and is on `main`,
+   builds the image for amd64 and arm64, pushes `ghcr.io/forgust-dev/forgust` as
+   `0.2.0`, `0.2` and `latest`, and opens a draft GitHub release with notes generated
+   from the merged pull requests. Edit the notes, then publish it.
+
+A tag such as `v0.2.0-rc.1` makes a pre-release: no `0.2` or `latest` tag.

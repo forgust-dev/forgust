@@ -62,12 +62,13 @@ The app is available at **http://$FORGUST_HOST:8080**, and the emails it sends a
 
 ### Production
 
-Build the image with `docker build -t forgust .`, then run it next to Postgres:
+Run the published image (amd64 and arm64) next to Postgres, or build your own with
+`docker build -t forgust .`:
 
 ```yaml
 services:
   forgust:
-    image: forgust
+    image: ghcr.io/forgust-dev/forgust:0.1
     restart: unless-stopped
     ports: ["8080:8080", "2222:2222"]
     environment:
