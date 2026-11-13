@@ -1,0 +1,8 @@
+# What code scanning looks at: the code that ships. Tests hold fixed passwords,
+# keys and tokens on purpose, which only make noise as findings.
+name: Forgust
+queries:
+  - uses: security-extended
+paths-ignore:
+  - crates/*/tests
+  - web/e2e
