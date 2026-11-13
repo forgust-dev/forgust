@@ -1,4 +1,7 @@
 version: 2
+
+# One pull request per ecosystem each week, majors included. A breaking update
+# turns its pull request red: it then gets a branch with the code changes.
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -17,9 +20,6 @@ updates:
       github-actions:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
 
   - package-ecosystem: "cargo"
     directory: "/"
@@ -34,22 +34,19 @@ updates:
       prefix: "chore"
       include: "scope"
     groups:
-      # released together: one without the others does not build
-      opentelemetry:
-        patterns:
-          - "opentelemetry*"
-          - "tracing-opentelemetry"
-      backend:
+      rust:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
 
   - package-ecosystem: "npm"
     directory: "/web"
     schedule:
       interval: "weekly"
+    # openapi-typescript (npm run gen:api) uses TypeScript's JavaScript API,
+    # which TypeScript 7 dropped: stay on 5.x until it supports 7
+    ignore:
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
     allow:
       - dependency-type: "all"
     cooldown:
@@ -59,34 +56,28 @@ updates:
       prefix: "chore"
       include: "scope"
     groups:
-      # @vitejs/plugin-react follows Vite's major version
-      vite:
-        patterns:
-          - "vite"
-          - "@vitejs/*"
-      frontend:
+      web:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
 
   - package-ecosystem: "docker-compose"
     directory: "/"
     schedule:
       interval: "weekly"
+    # a new Postgres major cannot open the old data directory: moved by hand,
+    # with upgrade steps for existing installs
+    ignore:
+      - dependency-name: "postgres"
+        update-types: ["version-update:semver-major"]
     cooldown:
       default-days: 3
     commit-message:
       prefix: "chore"
       include: "scope"
     groups:
-      docker:
+      docker-compose:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
 
   - package-ecosystem: "docker"
     directory: "/"
@@ -101,9 +92,6 @@ updates:
       prefix: "chore"
       include: "scope"
     groups:
-      docker-images:
+      docker:
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
