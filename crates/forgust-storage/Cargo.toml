@@ -15,7 +15,7 @@ tokio.workspace = true
 tokio-util.workspace = true
 serde.workspace = true
 tracing.workspace = true
-utoipa = { version = "5", features = ["chrono"] }
+utoipa = { version = "6", features = ["chrono"] }
 gix = { version = "0.90", default-features = false, features = ["max-performance", "sha1", "revision"] }
 lru = "0.18"
 sha2.workspace = true
