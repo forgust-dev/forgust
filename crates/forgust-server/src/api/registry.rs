@@ -109,8 +109,8 @@ pub async fn set_cleanup_policy(
 ) -> ApiResult<Json<CleanupPolicy>> {
     let p = project_for(&state, &principal, &id, ProjectAction::Admin).await?;
     for (what, re) in [("tags to remove", &policy.name_regex), ("tags to keep", &policy.name_regex_keep)] {
-        if !re.is_empty() && regex::Regex::new(re).is_err() {
-            return Err(ApiError::bad(format!("the pattern of {what} is not a valid regular expression")));
+        if !re.is_empty() {
+            crate::registry::tag_pattern(re).map_err(|e| ApiError::bad(format!("the pattern of {what} is not valid: {e}")))?;
         }
     }
     if policy.keep_n.is_some_and(|n| n < 0) || policy.older_than_days.is_some_and(|d| d < 0) {
