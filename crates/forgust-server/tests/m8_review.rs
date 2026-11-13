@@ -136,13 +136,22 @@ async fn ssh_signed_commits_are_verified_and_can_be_required(pool: sqlx::PgPool)
     let (s, v) = signature(&owner, project, &sha).await;
     assert_eq!(s, 200, "{v}");
     assert_eq!((v["signature_type"].as_str(), v["verification_status"].as_str()), (Some("SSH"), Some("unknown_key")), "{v}");
-    // once olivia adds the key, the same commit is verified
-    owner.ok_post("/api/v1/user/keys", json!({ "title": "laptop", "key": public })).await;
+    // added for authentication only, the key does not verify commits
+    let auth_only = owner.ok_post("/api/v1/user/keys", json!({ "title": "laptop", "key": public, "usage_type": "auth" })).await;
+    assert_eq!(signature(&owner, project, &sha).await.1["verification_status"], "unknown_key");
+    assert_eq!(owner.delete(&format!("/api/v1/user/keys/{}", auth_only["id"])).await.0, 200);
+    // once olivia adds it as a signing key, the same commit is verified
+    owner.ok_post("/api/v1/user/keys", json!({ "title": "laptop", "key": public, "usage_type": "signing" })).await;
     let (_, v) = signature(&owner, project, &sha).await;
     assert_eq!((v["verification_status"].as_str(), v["signer"].as_str()), (Some("verified"), Some("olivia")), "{v}");
     let batch = owner.ok_post(&format!("/api/v1/projects/{project}/repository/signatures"), json!({ "shas": [sha, head] })).await;
     assert_eq!(batch.as_object().unwrap().len(), 1, "unsigned commits are left out: {batch}");
     assert_eq!(batch[&sha]["verification_status"], "verified");
+    // once the key expires, what it signed stays verified
+    let expires = |sql: &'static str| sqlx::query(sql).execute(&srv.state.db);
+    expires("UPDATE ssh_keys SET expires_at = now() - interval '1 day' WHERE title = 'laptop'").await.unwrap();
+    assert_eq!(signature(&owner, project, &sha).await.1["verification_status"], "verified");
+    expires("UPDATE ssh_keys SET expires_at = NULL WHERE title = 'laptop'").await.unwrap();
 
     // required: unsigned commits are refused, verified ones pass
     assert_eq!(owner.put(&format!("/api/v1/projects/{project}/push_rule"), json!({ "reject_unsigned_commits": true })).await.0, 200);
@@ -163,6 +172,22 @@ async fn ssh_signed_commits_are_verified_and_can_be_required(pool: sqlx::PgPool)
     must(git_env(&work, &["commit", "-q", "--allow-empty", "-S", "-m", "other email"], &env).await);
     let out = push(&srv, &work, "olivia", "main").await;
     assert!(!out.ok && out.stderr.contains("not verified (unverified)"), "{}", out.stderr);
+    assert!(out.stderr.contains("commit with an email address confirmed on your profile"), "{}", out.stderr);
+    must(git(&work, &["reset", "-q", "--hard", "HEAD~1"]).await);
+    // signed with a key not added for signing: the refusal says how to add it
+    let (other, _) = ssh_signing_key(&srv.work_dir("other-keys"));
+    let mut env = OLIVIA.to_vec();
+    env.extend([
+        ("GIT_CONFIG_COUNT", "2"),
+        ("GIT_CONFIG_KEY_0", "gpg.format"),
+        ("GIT_CONFIG_VALUE_0", "ssh"),
+        ("GIT_CONFIG_KEY_1", "user.signingkey"),
+    ]);
+    env.push(("GIT_CONFIG_VALUE_1", Box::leak(other.into_boxed_str())));
+    must(git_env(&work, &["commit", "-q", "--allow-empty", "-S", "-m", "unknown key"], &env).await);
+    let out = push(&srv, &work, "olivia", "main").await;
+    assert!(!out.ok && out.stderr.contains("not verified (unknown key)"), "{}", out.stderr);
+    assert!(out.stderr.contains("an SSH key for signing (or for authentication and signing)"), "{}", out.stderr);
     must(git(&work, &["reset", "-q", "--hard", "HEAD~1"]).await);
     signed("feat: signed again").await;
     must(push(&srv, &work, "olivia", "main").await);

@@ -1,6 +1,6 @@
 //! Signed commits: the OpenPGP or SSH signature in a commit's
 //! `gpgsig` header, checked against the keys users registered (GPG keys, and
-//! their SSH keys, which sign as well as authenticate, as in GitLab).
+//! their SSH keys whose `usage_type` includes signing, as in GitLab).
 //!
 //! A commit is **verified** when the signature is good, the key belongs to a
 //! user, and the committer email is that user's confirmed address (and, for
@@ -19,7 +19,7 @@ pub struct Verification {
     pub signature_type: String,
     /// `verified`; `unverified` (good signature, but the committer email is not
     /// the key owner's confirmed address); `unknown_key` (no user registered
-    /// the key); `bad_signature`; `unsupported` (X.509).
+    /// the key for signing); `bad_signature`; `unsupported` (X.509).
     pub verification_status: String,
     /// The key's fingerprint (OpenPGP: primary key, hex; SSH: `SHA256:...`).
     pub key_fingerprint: Option<String>,
@@ -150,7 +150,7 @@ async fn verify_ssh(state: &AppState, s: &Signed, v: &mut Verification) {
     if key.verify("git", &s.payload, &sig).is_err() {
         return;
     }
-    let row = forgust_db::ssh_keys::find_by_fingerprint(&state.db, &fp).await.ok().flatten().filter(|k| k.kind == "user");
+    let row = forgust_db::ssh_keys::find_signing_key(&state.db, &fp).await.ok().flatten().filter(|k| k.for_signing());
     let Some(user_id) = row.and_then(|k| k.user_id) else {
         v.verification_status = "unknown_key".into();
         return;

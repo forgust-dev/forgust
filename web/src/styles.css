@@ -4641,6 +4641,10 @@ a.item.import-row:hover {
   gap: 5px;
   flex-wrap: wrap;
 }
+/* a key fingerprint: one long word */
+.hover-card-key {
+  overflow-wrap: anywhere;
+}
 .hover-card-user {
   flex-direction: row;
   align-items: center;
@@ -5139,6 +5143,8 @@ button.test-case-row:hover {
   font-size: 12px;
   line-height: 1.35;
   white-space: pre-line;
+  /* long words (a key fingerprint, a path) wrap inside the tip */
+  overflow-wrap: anywhere;
   pointer-events: none;
   transform: translateX(-50%);
   box-shadow: var(--shadow);

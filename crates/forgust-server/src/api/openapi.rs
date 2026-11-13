@@ -63,7 +63,7 @@ use super::{
         forgust_db::admin::BlobScan, forgust_db::admin::PrefixUsage, forgust_db::admin::TaskQueue, forgust_db::admin::FailedJob,
         dto::Resolved, dto::UserDto, dto::GroupDto, dto::GroupDetail, dto::OrgPolicyDto, dto::Breadcrumb, dto::ProjectDto, dto::ProjectDetail,
         dto::MemberDto, dto::ShareDto, dto::ProtectedBranchDto, dto::NewToken, dto::AccessTokenDto,
-        forgust_db::ssh_keys::SshKey, forgust_db::ssh_keys::DeployKey, forgust_db::tokens::AccessToken, forgust_db::tokens::DeployToken,
+        forgust_db::ssh_keys::SshKey, forgust_db::ssh_keys::KeyUsage, forgust_db::ssh_keys::DeployKey, forgust_db::tokens::AccessToken, forgust_db::tokens::DeployToken,
         forgust_db::audit::AuditEvent, forgust_db::settings::InstanceSettings,
         forgust_storage::TreeEntry, forgust_storage::EntryKind, forgust_storage::CommitInfo, forgust_storage::CommitSummary, forgust_storage::Person,
         forgust_storage::BlameHunk, forgust_storage::Diff, forgust_storage::DiffFile, forgust_storage::DiffHunk, forgust_storage::DiffLine,

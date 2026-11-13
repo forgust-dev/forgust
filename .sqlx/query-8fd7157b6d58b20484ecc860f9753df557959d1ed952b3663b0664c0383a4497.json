@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, kind, user_id, title, public_key, fingerprint, expires_at, last_used_at, created_at FROM ssh_keys\n         WHERE user_id = $1 ORDER BY created_at DESC",
+  "query": "SELECT id, kind, user_id, title, public_key, fingerprint, expires_at, last_used_at, created_at, usage_type AS \"usage_type: KeyUsage\" FROM ssh_keys\n         WHERE fingerprint = $1 AND (expires_at IS NULL OR expires_at > now())",
   "describe": {
     "columns": [
       {
@@ -101,11 +101,22 @@
             "name": "created_at"
           }
         }
+      },
+      {
+        "ordinal": 9,
+        "name": "usage_type: KeyUsage",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ssh_keys",
+            "name": "usage_type"
+          }
+        }
       }
     ],
     "parameters": {
       "Left": [
-        "Int8"
+        "Text"
       ]
     },
     "nullable": [
@@ -117,8 +128,9 @@
       false,
       true,
       true,
+      false,
       false
     ]
   },
-  "hash": "e44e3f063de434f4d47f62abfebdaf4032aff3977a410aad97f42d48c0503955"
+  "hash": "8fd7157b6d58b20484ecc860f9753df557959d1ed952b3663b0664c0383a4497"
 }

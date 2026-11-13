@@ -143,8 +143,15 @@ pub async fn check(
                     match crate::services::signatures::verify(state, &raw).await {
                         Some(v) if v.verified() => {}
                         Some(v) => {
+                            let fix = match v.verification_status.as_str() {
+                                "unknown_key" => {
+                                    "add the key to your profile: an SSH key for signing (or for authentication and signing), or a GPG key"
+                                }
+                                "unverified" => "commit with an email address confirmed on your profile",
+                                _ => "sign it again with a key on your profile",
+                            };
                             return Ok(Some(format!(
-                                "Commit {short}: its signature is not verified ({}). Only verified signed commits can be pushed: add your key to your profile and commit with your confirmed email.",
+                                "Commit {short}: its signature is not verified ({}). Only verified signed commits can be pushed: {fix}.",
                                 v.verification_status.replace('_', " ")
                             )));
                         }

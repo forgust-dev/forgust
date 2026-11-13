@@ -168,32 +168,83 @@ function GpgKeys() {
   );
 }
 
+/** The comment of an OpenSSH public key line (`ssh-ed25519 AAAA… you@laptop` → `you@laptop`). */
+const keyComment = (line: string) => line.trim().split(/\s+/).slice(2).join(" ");
+
+const KEY_USAGE: Record<S["KeyUsage"], string> = {
+  auth_and_signing: "Authentication and signing",
+  auth: "Authentication",
+  signing: "Signing",
+};
+
+/** Where ssh-keygen puts a public key of this type (`ssh-rsa AAAA…` → `~/.ssh/id_rsa.pub`). */
+const KEY_FILES: Record<string, string> = {
+  "ssh-ed25519": "id_ed25519",
+  "ssh-rsa": "id_rsa",
+  "ecdsa-sha2-nistp256": "id_ecdsa",
+  "ecdsa-sha2-nistp384": "id_ecdsa",
+  "ecdsa-sha2-nistp521": "id_ecdsa",
+  "sk-ssh-ed25519@openssh.com": "id_ed25519_sk",
+  "sk-ecdsa-sha2-nistp256@openssh.com": "id_ecdsa_sk",
+};
+const keyFile = (line: string) => `~/.ssh/${KEY_FILES[line.trim().split(/\s+/)[0]] ?? "id_ed25519"}.pub`;
+
 function SshKeys() {
   const [title, setTitle] = useState("");
   const [key, setKey] = useState("");
+  const [usage, setUsage] = useState<S["KeyUsage"]>("auth_and_signing");
   const { list, add, remove: del, error, setError } = useCrudList<S["SshKey"]>(["ssh-keys"], "/user/keys", () => {
     setTitle("");
     setKey("");
+    setUsage("auth_and_signing");
     setError(null);
   });
   return (
     <div className="settings-page">
-      <Section title="SSH keys" description="Public keys that let you push and pull over SSH as yourself, and that verify the commits you sign with them.">
+      <Section
+        title="SSH keys"
+        description="Public keys that let you push and pull over SSH as yourself (authentication), and that verify the commits you sign with them (signing)."
+      >
         <div className="stack">
           <Card title="Add an SSH key">
             <form
               className="stack"
               onSubmit={(e) => {
                 e.preventDefault();
-                add.mutate({ title, key });
+                add.mutate({ title, key, usage_type: usage });
               }}
             >
               <ErrorBox error={error} />
               <Field label="Key" hint="Contents of ~/.ssh/id_ed25519.pub (or another public key)">
-                <textarea value={key} onChange={(e) => setKey(e.target.value)} placeholder="ssh-ed25519 AAAA… you@laptop" />
+                <textarea
+                  value={key}
+                  onChange={(e) => {
+                    // the title follows the key's comment until you type your own
+                    if (!title || title === keyComment(key)) setTitle(keyComment(e.target.value));
+                    setKey(e.target.value);
+                  }}
+                  placeholder="ssh-ed25519 AAAA… you@laptop"
+                />
               </Field>
-              <Field label="Title">
+              <Field label="Title" hint="Filled in from the key's comment; change it if you like">
                 <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="laptop" />
+              </Field>
+              <Field
+                label="Use for"
+                hint={
+                  <>
+                    To sign commits with this key: <code>git config gpg.format ssh</code>, <code>git config user.signingkey {keyFile(key)}</code>, then{" "}
+                    <code>git commit -S</code>. Signed commits show as verified when you commit with your confirmed email.
+                  </>
+                }
+              >
+                <select value={usage} onChange={(e) => setUsage(e.target.value as S["KeyUsage"])}>
+                  {Object.entries(KEY_USAGE).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
               </Field>
               <div>
                 <button className="btn primary" disabled={!key}>
@@ -211,10 +262,13 @@ function SshKeys() {
                   {keys.map((k) => (
                     <div className="item" key={k.id}>
                       <div className="grow">
-                        <strong>{k.title}</strong>
+                        <strong>{k.title}</strong> <span className="badge">{KEY_USAGE[k.usage_type]}</span>
                         <div className="small faint mono">{k.fingerprint}</div>
                       </div>
-                      <span className="small faint">{k.last_used_at ? `used ${timeAgo(k.last_used_at)}` : "never used"}</span>
+                      {/* signing in is the use we see: verifying commits does not count */}
+                      {k.usage_type !== "signing" && (
+                        <span className="small faint">{k.last_used_at ? `last signed in ${timeAgo(k.last_used_at)}` : "never signed in"}</span>
+                      )}
                       <button className="btn small danger" onClick={() => del.mutate(k.id)}>
                         Delete
                       </button>

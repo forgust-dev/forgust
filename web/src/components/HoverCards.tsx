@@ -1,16 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, CalendarDays, CircleDot, GitBranch, GitCommitHorizontal, GitMerge, Lock, Tag, Timer } from "lucide-react";
+import { ArrowRight, CalendarDays, CircleDot, GitBranch, GitCommitHorizontal, GitMerge, Lock, ShieldAlert, ShieldCheck, Tag, Timer } from "lucide-react";
 import { api, timeAgo, type S } from "../api/client";
 import { fetchers, keys } from "../prefetch";
 import { Avatar } from "./ui";
 import { LabelList } from "./labels";
 import { StatusIcon, duration, statusLabel } from "../pages/project/ci/Status";
 import { SOURCE } from "../pages/project/ci/Pipelines";
+import { SIGNATURE_TEXT } from "../pages/project/Signatures";
 
 type Item = { kind: "mr" | "issue" | "pipeline" | "job"; path: string; iid: number };
-type Target = Item | { kind: "user"; username: string } | { kind: "commit"; path: string; sha: string } | { kind: "branch"; path: string; name: string };
+type Target =
+  | Item
+  | { kind: "user"; username: string }
+  | { kind: "commit"; path: string; sha: string }
+  | { kind: "branch"; path: string; name: string }
+  | { kind: "signature"; v: S["Verification"] };
 
 const KINDS: Record<string, Item["kind"]> = { merge_requests: "mr", issues: "issue", pipelines: "pipeline", jobs: "job" };
 
@@ -47,8 +53,20 @@ function targetOf(a: HTMLAnchorElement): Target | null {
   return null;
 }
 
-/** Links that may get a card (targetOf decides), and anything with a tooltip. */
-const SELECTOR = "a[href]";
+/** Links that may get a card (targetOf decides), and signature badges (their check in `data-signature`). */
+const SELECTOR = "a[href], [data-signature]";
+
+/** What an element shows a card for: a link's target, or a signature badge's check. */
+function cardOf(el: HTMLElement): Target | null {
+  if (el.dataset.signature) {
+    try {
+      return { kind: "signature", v: JSON.parse(el.dataset.signature) };
+    } catch {
+      return null;
+    }
+  }
+  return el instanceof HTMLAnchorElement ? targetOf(el) : null;
+}
 const SHOW_MS = 350;
 const HIDE_MS = 200;
 const TIP_MS = 300;
@@ -131,16 +149,16 @@ function useTips() {
  */
 export function HoverCards() {
   const tip = useTips();
-  const [card, setCard] = useState<{ target: Target; rect: DOMRect; anchor: HTMLAnchorElement } | null>(null);
+  const [card, setCard] = useState<{ target: Target; rect: DOMRect; anchor: HTMLElement } | null>(null);
   const showT = useRef<number | undefined>(undefined);
   const hideT = useRef<number | undefined>(undefined);
   const over = useRef(false);
 
   useEffect(() => {
     const enter = (e: Event) => {
-      const a = (e.target as Element | null)?.closest?.(SELECTOR) as HTMLAnchorElement | null;
+      const a = (e.target as Element | null)?.closest?.(SELECTOR) as HTMLElement | null;
       if (!a) return;
-      const target = targetOf(a);
+      const target = cardOf(a);
       if (!target) return;
       clearTimeout(hideT.current);
       clearTimeout(showT.current);
@@ -211,7 +229,9 @@ export function HoverCards() {
         setCard(null);
       }}
     >
-      {card.target.kind === "user" ? (
+      {card.target.kind === "signature" ? (
+        <SignatureCard v={card.target.v} />
+      ) : card.target.kind === "user" ? (
         <UserCard username={card.target.username} />
       ) : card.target.kind === "commit" ? (
         <CommitCard path={card.target.path} sha={card.target.sha} />
@@ -390,6 +410,29 @@ function ItemCard({ t }: { t: { kind: "mr" | "issue"; path: string; iid: number 
         {i.notes_count > 0 && ` · ${i.notes_count} comment${i.notes_count === 1 ? "" : "s"}`}
         {i.assignees.length > 0 && ` · assigned to ${i.assignees.map((a) => a.username).join(", ")}`}
       </div>
+    </div>
+  );
+}
+
+/** A commit's signature: verified or not and why, whose key, and which. */
+function SignatureCard({ v }: { v: S["Verification"] }) {
+  const ok = v.verification_status === "verified";
+  return (
+    <div className="hover-card-body">
+      <div className="hover-card-top">
+        <span className="hover-card-status">
+          {ok ? <ShieldCheck size={15} className="ic-ok" /> : <ShieldAlert size={15} className="ic-warn" />} {ok ? "Verified" : "Unverified"}
+        </span>
+        <span className="faint small">{v.signature_type} signature</span>
+      </div>
+      <div className="small">{SIGNATURE_TEXT[v.verification_status]}</div>
+      {v.signer && (
+        <div className="hover-card-refs">
+          <Avatar name={v.signer} username={v.signer} />
+          <span className="small">Key of @{v.signer}</span>
+        </div>
+      )}
+      {v.key_fingerprint && <div className="hover-card-meta faint small mono hover-card-key">{v.key_fingerprint}</div>}
     </div>
   );
 }
