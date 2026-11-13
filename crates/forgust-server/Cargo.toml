@@ -50,7 +50,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 opentelemetry = "0.30"
 opentelemetry_sdk = { version = "0.30", features = ["rt-tokio"] }
 opentelemetry-otlp = { version = "0.30", features = ["grpc-tonic", "trace"] }
-tracing-opentelemetry = "0.31"
+tracing-opentelemetry = "0.34"
 metrics = "0.24"
 metrics-exporter-prometheus = { version = "0.17", default-features = false }
 utoipa = { version = "5", features = ["chrono"] }
