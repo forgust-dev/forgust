@@ -3,6 +3,9 @@ name: Release
 # Pushing a tag vX.Y.Z publishes ghcr.io/forgust-dev/forgust:X.Y.Z (and X.Y,
 # latest) for amd64 and arm64, then opens a draft GitHub release with notes
 # grouped from the commit subjects since the last tag (.github/release-notes.sh).
+# The image carries an SBOM and BuildKit provenance, is scanned for known
+# vulnerabilities before it gets its tags, and is signed: a build provenance
+# attestation that `gh attestation verify` checks (see SECURITY.md).
 # Each architecture builds on its own runner: a Rust release build under
 # emulation would take hours.
 on:
@@ -15,6 +18,8 @@ permissions:
 env:
   IMAGE: ghcr.io/${{ github.repository }}
   DESCRIPTION: A fast, self-hosted code forge written in Rust
+  # moved by hand, with the one in image-scan.yml
+  TRIVY: ghcr.io/aquasecurity/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb
 
 jobs:
   check:
@@ -94,13 +99,52 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  publish:
-    # one multi-arch image under the version tags
+  scan:
+    # the Debian packages and the crates in the binary: a high or critical
+    # vulnerability that has a fix stops the release before the image gets a tag.
+    # A job of its own, so that the scanner only ever sees a token that can read.
+    name: scan (${{ matrix.arch }})
     needs: build
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    runs-on: ubuntu-latest
+    permissions:
+      packages: read
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: /tmp/digests
+          name: digests-${{ matrix.arch }}
+
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # the login above, read-only: credentials for ghcr.io and nothing else
+      - name: Scan for vulnerabilities
+        working-directory: /tmp/digests
+        run: |
+          docker run --rm -e DOCKER_CONFIG=/docker -v "$HOME/.docker/config.json:/docker/config.json:ro" "$TRIVY" image \
+            --image-src remote --platform "linux/$ARCH" --scanners vuln \
+            --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "$IMAGE@sha256:$(ls)"
+        env:
+          ARCH: ${{ matrix.arch }}
+
+  publish:
+    # one multi-arch image under the version tags, signed
+    needs: scan
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+      # the signature: a Sigstore certificate for this workflow run, stored with
+      # the repository's attestations and next to the image
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -130,16 +174,28 @@ jobs:
             org.opencontainers.image.description=${{ env.DESCRIPTION }}
 
       - name: Create the multi-arch image
+        id: image
         working-directory: /tmp/digests
         run: |
           # tags and the index's annotations (source, version, licenses...) from metadata-action
           mapfile -t args < <(jq -r '(.tags[] | "-t", .), (.annotations[] | "--annotation", .)' <<< "$DOCKER_METADATA_OUTPUT_JSON")
-          docker buildx imagetools create "${args[@]}" $(printf "$IMAGE@sha256:%s " *)
+          docker buildx imagetools create --metadata-file "$RUNNER_TEMP/image.json" "${args[@]}" $(printf "$IMAGE@sha256:%s " *)
+          # the digest of what was just pushed, for the signature: not read back from a tag
+          digest=$(jq -er '."containerimage.descriptor".digest' "$RUNNER_TEMP/image.json")
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
       - name: Inspect
         run: docker buildx imagetools inspect "$IMAGE:$VERSION"
         env:
           VERSION: ${{ steps.meta.outputs.version }}
+
+      # signed build provenance for the multi-arch image: which commit and which
+      # workflow run built this digest
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.image.outputs.digest }}
+          push-to-registry: true
 
   release:
     # a draft: read the notes, then publish it
