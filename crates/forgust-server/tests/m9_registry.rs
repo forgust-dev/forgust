@@ -361,6 +361,11 @@ async fn cleanup_policies_and_garbage_collection(pool: sqlx::PgPool) {
             .0,
         400
     );
+    // patterns are capped at 255 characters, as on GitLab
+    let (s, body) = owner
+        .put(&policy, json!({ "enabled": true, "keep_n": 1, "older_than_days": 30, "name_regex": "a".repeat(256), "name_regex_keep": "" }))
+        .await;
+    assert_eq!(s, 400, "{body}");
     let (s, body) = owner
         .put(&policy, json!({ "enabled": true, "keep_n": 1, "older_than_days": 30, "name_regex": "v.*", "name_regex_keep": "stable" }))
         .await;

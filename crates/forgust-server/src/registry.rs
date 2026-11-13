@@ -945,16 +945,27 @@ pub async fn sweep(state: &AppState) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// A cleanup policy's tag pattern, matched against whole tag names. Maintainers
+/// write these: GitLab's 255-character cap, and the same compiled-size limit
+/// as push rules (the `regex` crate matches in linear time).
+pub const MAX_TAG_PATTERN: usize = 255;
+pub fn tag_pattern(r: &str) -> Result<regex::Regex, String> {
+    if r.chars().count() > MAX_TAG_PATTERN {
+        return Err(format!("longer than {MAX_TAG_PATTERN} characters"));
+    }
+    regex::RegexBuilder::new(&format!("^(?:{r})$")).size_limit(1 << 20).build().map_err(|e| e.to_string())
+}
+
 /// Apply a project's cleanup policy, GitLab's way: per repository, take the
 /// tags `name_regex` matches, minus `latest` and those `name_regex_keep`
 /// matches; keep the newest `keep_n` of them; remove the rest that are older
 /// than `older_than_days`.
 pub async fn cleanup(state: &AppState, project_id: i64) -> anyhow::Result<u64> {
     let policy = rdb::cleanup_policy(&state.db, project_id).await?;
-    let anchored = |r: &str| regex::Regex::new(&format!("^(?:{r})$")).ok();
-    let (Some(remove), keep) =
-        (anchored(&policy.name_regex), (!policy.name_regex_keep.is_empty()).then(|| anchored(&policy.name_regex_keep)).flatten())
-    else {
+    let (Ok(remove), keep) = (
+        tag_pattern(&policy.name_regex),
+        (!policy.name_regex_keep.is_empty()).then(|| tag_pattern(&policy.name_regex_keep).ok()).flatten(),
+    ) else {
         return Ok(0);
     };
     let cutoff = policy.older_than_days.map(|d| chrono::Utc::now() - chrono::Duration::days(d as i64));
