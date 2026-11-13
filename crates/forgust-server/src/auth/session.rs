@@ -3,7 +3,7 @@
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use chrono::{Duration, Utc};
 use forgust_db::users::User;
-use totp_rs::{Algorithm, Secret, TOTP};
+use totp_rs::{Algorithm, Builder, Secret, Totp};
 
 use super::session_cookie_name;
 use crate::crypto;
@@ -84,14 +84,23 @@ pub async fn destroy(state: &AppState, token: &str) -> ApiResult<()> {
     Ok(())
 }
 
-pub fn totp_for(secret_b32: &str, account: &str) -> ApiResult<TOTP> {
-    let bytes = Secret::Encoded(secret_b32.to_string()).to_bytes().map_err(|_| ApiError::bad("bad TOTP secret"))?;
-    TOTP::new(Algorithm::SHA1, 6, 1, 30, bytes, Some("Forgust".into()), account.to_string())
+/// SHA-1, 6 digits, 30 s steps, one step of clock skew either way.
+pub fn totp_for(secret_b32: &str, account: &str) -> ApiResult<Totp> {
+    let secret = Secret::try_from_base32(secret_b32).map_err(|_| ApiError::bad("bad TOTP secret"))?;
+    Builder::new()
+        .with_algorithm(Algorithm::SHA1)
+        .with_digits(6)
+        .with_skew(1)
+        .with_step_duration(30)
+        .with_secret(secret)
+        .with_issuer(Some("Forgust"))
+        .with_account_name(account)
+        .build()
         .map_err(|e| ApiError::Internal(anyhow::anyhow!("{e}")))
 }
 
 pub fn new_totp_secret() -> String {
-    Secret::generate_secret().to_encoded().to_string()
+    Secret::generate().to_base32()
 }
 
 /// Check a code against the user's stored (encrypted) TOTP seed.
@@ -101,13 +110,34 @@ pub async fn verify_totp(state: &AppState, user: &User, code: &str) -> ApiResult
     let totp = totp_for(&secret, &user.username)?;
     let code = code.trim();
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|e| ApiError::Internal(e.into()))?.as_secs();
-    // the step before, this one and the next (clock skew), each once
-    let Some(step) = [now.saturating_sub(totp.step), now, now + totp.step]
-        .into_iter()
-        .find(|t| crate::crypto::eq_ct(&totp.generate(*t), code))
-        .map(|t| (t / totp.step) as i64)
-    else {
-        return Ok(false);
-    };
-    Ok(forgust_db::users::use_totp_step(&state.db, user.id, step).await?)
+    // the step before, this one and the next (clock skew), each accepted once
+    let Some(step) = totp.check(code, now) else { return Ok(false) };
+    Ok(forgust_db::users::use_totp_step(&state.db, user.id, step as i64).await?)
+}
+
+#[cfg(test)]
+mod totp_tests {
+    use super::*;
+
+    // RFC 6238 test vector: secret "12345678901234567890", SHA-1, T = 59 s
+    const RFC_SECRET: &str = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ";
+
+    #[test]
+    fn codes_match_the_rfc_and_the_window_is_one_step() {
+        let t = totp_for(RFC_SECRET, "x").unwrap();
+        assert_eq!(t.generate(59).to_string(), "287082");
+        // accepted from the step before to the step after, reporting the code's step
+        assert_eq!(t.check("287082", 59), Some(1));
+        assert_eq!(t.check("287082", 89), Some(1));
+        assert_eq!(t.check("287082", 29), Some(1));
+        assert_eq!(t.check("287082", 120), None);
+        assert_eq!(t.check("nope", 59), None);
+    }
+
+    #[test]
+    fn new_secrets_are_160_bits_of_base32() {
+        let s = new_totp_secret();
+        assert_eq!(s.len(), 32);
+        assert!(totp_for(&s, "x").is_ok());
+    }
 }

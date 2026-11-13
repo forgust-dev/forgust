@@ -274,7 +274,7 @@ pub async fn totp_setup(State(state): State<AppState>, SignedIn(u, p): SignedIn)
     let secret = session::new_totp_secret();
     let sealed = state.secrets.encrypt(secret.as_bytes())?;
     forgust_db::users::set_totp(&state.db, u.id, Some(&sealed), false).await?;
-    let url = session::totp_for(&secret, &u.username)?.get_url();
+    let url = session::totp_for(&secret, &u.username)?.to_url().map_err(|e| ApiError::Internal(anyhow::anyhow!("{e}")))?;
     Ok(Json(TotpSetup { secret, otpauth_url: url }))
 }
 

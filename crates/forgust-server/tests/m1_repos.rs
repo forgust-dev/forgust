@@ -241,9 +241,9 @@ fn totp_code(secret: &str) -> String {
 
 /// The code `ahead` seconds from now (the server accepts the next step too).
 fn totp_code_at(secret: &str, ahead: u64) -> String {
-    let bytes = totp_rs::Secret::Encoded(secret.to_string()).to_bytes().unwrap();
+    let secret = totp_rs::Secret::try_from_base32(secret).unwrap();
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-    totp_rs::TOTP::new(totp_rs::Algorithm::SHA1, 6, 1, 30, bytes, Some("Forgust".into()), "x".into()).unwrap().generate(now + ahead)
+    totp_rs::Builder::new().with_secret(secret).build().unwrap().generate(now + ahead).to_string()
 }
 
 #[sqlx::test(migrator = "forgust_db::MIGRATOR")]
