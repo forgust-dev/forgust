@@ -369,7 +369,10 @@ pub async fn add_deploy_key(
         // an existing deploy key can be attached to more projects; a user key cannot
         Some(k) if k.kind == "deploy" => k.id,
         Some(_) => return Err(ApiError::conflict("this key is already used as a personal key")),
-        None => forgust_db::ssh_keys::insert(&state.db, "deploy", None, &req.title, &key, &fp, None).await?,
+        None => {
+            forgust_db::ssh_keys::insert(&state.db, "deploy", None, &req.title, &key, &fp, None, forgust_db::ssh_keys::KeyUsage::Auth)
+                .await?
+        }
     };
     forgust_db::ssh_keys::link_deploy_key(&state.db, key_id, proj.id, req.can_push).await?;
     services::audit(

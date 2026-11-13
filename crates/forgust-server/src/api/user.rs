@@ -173,6 +173,15 @@ pub struct AddKey {
     pub title: String,
     pub key: String,
     pub expires_at: Option<DateTime<Utc>>,
+    /// What the key is for; default: both.
+    pub usage_type: Option<forgust_db::ssh_keys::KeyUsage>,
+}
+
+/// The comment of an OpenSSH public key line, all of it (`ssh-ed25519 AAAA… work laptop`
+/// → `work laptop`): the default title, as the profile page fills it in.
+fn key_comment(line: &str) -> Option<String> {
+    let comment = line.split_whitespace().skip(2).collect::<Vec<_>>().join(" ");
+    (!comment.is_empty()).then_some(comment)
 }
 
 #[utoipa::path(get, path = "/api/v1/user/keys", responses((status = 200, body = [SshKey])), tag = "user")]
@@ -184,12 +193,13 @@ pub async fn add_key(State(state): State<AppState>, SignedIn(u, p): SignedIn, Js
     // a key outlives any token: a leaked token must not be able to plant one
     require_interactive(&u, &p)?;
     require_confirmed(&state, &u)?;
+    let usage = req.usage_type.unwrap_or(forgust_db::ssh_keys::KeyUsage::AuthAndSigning);
     let (key, fp) = parse_public_key(&req.key)?;
-    let title = if req.title.trim().is_empty() { req.key.split_whitespace().nth(2).unwrap_or("key").to_string() } else { req.title };
-    let id = forgust_db::ssh_keys::insert(&state.db, "user", Some(u.id), &title, &key, &fp, req.expires_at)
+    let title = if req.title.trim().is_empty() { key_comment(&req.key).unwrap_or_else(|| "key".into()) } else { req.title };
+    let id = forgust_db::ssh_keys::insert(&state.db, "user", Some(u.id), &title, &key, &fp, req.expires_at, usage)
         .await
         .map_err(|e| if forgust_db::is_unique_violation(&e) { ApiError::conflict("this key is already in use") } else { e.into() })?;
-    services::audit(&state, &p, "ssh_key_added", Some(("user", u.id)), json!({ "fingerprint": fp }), None).await;
+    services::audit(&state, &p, "ssh_key_added", Some(("user", u.id)), json!({ "fingerprint": fp, "usage_type": usage }), None).await;
     let keys = forgust_db::ssh_keys::list_for_user(&state.db, u.id).await?;
     Ok(Json(keys.into_iter().find(|k| k.id == id).ok_or(ApiError::NotFound)?))
 }

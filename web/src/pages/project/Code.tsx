@@ -12,6 +12,7 @@ import { openPalette, useShortcuts } from "../../shell/palette";
 import { usePref } from "../../shell/theme";
 import { columns, HBar, hsVar, htmlText, remeasure, useCharWidth, useHScroll, useWidth } from "../../components/hscroll";
 import { Markdown } from "../../components/Markdown";
+import { SignatureBadge, useSignatures } from "./Signatures";
 
 /** Resolve `<ref>/<path>` (refs may contain slashes) once per URL. */
 export function useResolved(ctx: Ctx, refAndPath: string) {
@@ -171,6 +172,7 @@ function EntryCommit({ ctx, c, loading }: { ctx: Ctx; c?: S["CommitInfo"] | null
 
 /** The last commit of a directory or file: author, subject, sha, age, and its history. */
 function LastCommitBar({ ctx, c, history }: { ctx: Ctx; c: S["CommitInfo"]; history: string }) {
+  const signature = useSignatures(ctx, [c.id])[c.id];
   return (
     <div className="item last-commit">
       <Avatar name={c.author.name} username={c.author.username} />
@@ -180,6 +182,7 @@ function LastCommitBar({ ctx, c, history }: { ctx: Ctx; c: S["CommitInfo"]; hist
       <Link to={`${ctx.web}/-/commit/${c.id}`} className="muted grow ellipsis" title={c.subject}>
         {c.subject}
       </Link>
+      <SignatureBadge v={signature} />
       <Link to={`${ctx.web}/-/commit/${c.id}`} className="sha">
         {c.id.slice(0, 8)}
       </Link>

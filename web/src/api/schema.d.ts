@@ -2436,6 +2436,7 @@ export interface components {
             expires_at?: string | null;
             key: string;
             title: string;
+            usage_type?: components["schemas"]["KeyUsage"] | null;
         };
         AddMember: {
             access_level: string;
@@ -3777,6 +3778,13 @@ export interface components {
             failed: components["schemas"]["FailedJob"][];
             queues: components["schemas"]["TaskQueue"][];
         };
+        /**
+         * @description What an SSH key is for, as GitLab's `usage_type`: signing in over SSH,
+         *     verifying the commits its owner signs, or both. Deploy keys only sign in
+         *     (the table's CHECK holds them to it).
+         * @enum {string}
+         */
+        KeyUsage: "auth" | "signing" | "auth_and_signing";
         KeyValue: {
             key: string;
             value: string;
@@ -5218,6 +5226,7 @@ export interface components {
             last_used_at?: string | null;
             public_key: string;
             title: string;
+            usage_type: components["schemas"]["KeyUsage"];
             /** Format: int64 */
             user_id?: number | null;
         };
@@ -5670,7 +5679,7 @@ export interface components {
             /**
              * @description `verified`; `unverified` (good signature, but the committer email is not
              *     the key owner's confirmed address); `unknown_key` (no user registered
-             *     the key); `bad_signature`; `unsupported` (X.509).
+             *     the key for signing); `bad_signature`; `unsupported` (X.509).
              */
             verification_status: string;
         };

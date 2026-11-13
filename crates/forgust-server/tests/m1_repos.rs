@@ -263,7 +263,8 @@ async fn git_over_ssh_with_user_and_deploy_keys(pool: sqlx::PgPool) {
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(&key_path, std::fs::Permissions::from_mode(0o600)).unwrap();
     let public = key.public_key().to_openssh().unwrap();
-    owner.ok_post("/api/v1/user/keys", json!({ "title": "laptop", "key": public })).await;
+    let added = owner.ok_post("/api/v1/user/keys", json!({ "title": "laptop", "key": public })).await;
+    assert_eq!(added["usage_type"], "auth_and_signing", "keys sign in and sign by default");
     // the same key cannot be added twice
     assert_eq!(owner.post("/api/v1/user/keys", json!({ "title": "again", "key": public })).await.0, 409);
 
@@ -294,6 +295,31 @@ async fn git_over_ssh_with_user_and_deploy_keys(pool: sqlx::PgPool) {
     must(git_env(&work, &["ls-remote", &url], &denv).await);
     let push = git_env(&repo, &["push", &url, "main:deploy"], &denv).await;
     assert!(!push.ok && push.stderr.contains("not allowed to push"), "{}", push.stderr);
+
+    // a key added for signing only cannot sign in over SSH; one added for
+    // authentication, used the same way, can
+    let new_key = |file: &str| {
+        let key = test_key();
+        let path = work.join(file);
+        key.write_openssh_file(&path, russh::keys::ssh_key::LineEnding::LF).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        let cmd = ssh_cmd.replace(key_path.to_str().unwrap(), path.to_str().unwrap());
+        assert_ne!(cmd, ssh_cmd, "the command uses the new key");
+        (key.public_key().to_openssh().unwrap(), cmd)
+    };
+    let (spublic, scmd) = new_key("signing_key");
+    let (s, _) = owner.post("/api/v1/user/keys", json!({ "title": "x", "key": spublic, "usage_type": "push" })).await;
+    assert_eq!(s, 422, "an unknown usage type is refused");
+    let added = owner.ok_post("/api/v1/user/keys", json!({ "title": "signing", "key": spublic, "usage_type": "signing" })).await;
+    assert_eq!(added["usage_type"], "signing");
+    let out = git_env(&work, &["ls-remote", &url], &[("GIT_SSH_COMMAND", scmd.as_str())]).await;
+    assert!(!out.ok && out.stderr.contains("Permission denied (publickey)"), "a signing key must not sign in: {}", out.stderr);
+    let (apublic, acmd) = new_key("auth_key");
+    // no title: the key's whole comment is
+    let added =
+        owner.ok_post("/api/v1/user/keys", json!({ "title": "", "key": format!("{apublic} work laptop"), "usage_type": "auth" })).await;
+    assert_eq!(added["title"], "work laptop");
+    must(git_env(&work, &["ls-remote", &url], &[("GIT_SSH_COMMAND", acmd.as_str())]).await);
 }
 
 /// M0 spike: jobs are enqueued inside our own transaction (ADR-0004).

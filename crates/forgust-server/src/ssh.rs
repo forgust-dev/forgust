@@ -295,8 +295,18 @@ impl Conn {
 impl russh::server::Handler for Conn {
     type Error = anyhow::Error;
 
-    async fn auth_publickey_offered(&mut self, user: &str, _offer: PublicKeyOffer<'_>) -> Result<Auth, Self::Error> {
-        Ok(if user == "git" && !self.over_limit { Auth::Accept } else { reject() })
+    async fn auth_publickey_offered(&mut self, user: &str, offer: PublicKeyOffer<'_>) -> Result<Auth, Self::Error> {
+        if user != "git" || self.over_limit {
+            return Ok(reject());
+        }
+        // a key for signing only is turned down before the client signs with it
+        // (a security key would ask for a touch for nothing); any other goes on
+        let fp = offer.public_key.fingerprint(HashAlg::Sha256).to_string();
+        if forgust_db::ssh_keys::find_by_fingerprint(&self.state.db, &fp).await?.is_some_and(|k| !k.for_auth()) {
+            tracing::debug!(peer = ?self.peer, %fp, "SSH key is for signing only");
+            return Ok(reject());
+        }
+        Ok(Auth::Accept)
     }
 
     async fn auth_publickey(&mut self, user: &str, verified: VerifiedPublicKey<'_>) -> Result<Auth, Self::Error> {
@@ -309,6 +319,10 @@ impl russh::server::Handler for Conn {
             tracing::debug!(peer = ?self.peer, %fp, "unknown SSH key");
             return Ok(reject());
         };
+        if !k.for_auth() {
+            tracing::debug!(peer = ?self.peer, %fp, "SSH key is for signing only");
+            return Ok(reject());
+        }
         forgust_db::ssh_keys::touch(&self.state.db, k.id).await?;
         self.principal = match (k.kind.as_str(), k.user_id) {
             ("user", Some(uid)) => match forgust_db::users::find(&self.state.db, uid).await? {
