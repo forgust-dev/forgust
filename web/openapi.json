@@ -19,7 +19,6 @@
         "operationId": "admin_get",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -47,7 +46,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -68,7 +66,6 @@
         "operationId": "admin_host_rules",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -99,7 +96,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -121,9 +117,7 @@
         ],
         "operationId": "admin_delete_host_rule",
         "responses": {
-          "204": {
-            "description": ""
-          }
+          "204": {}
         }
       }
     },
@@ -135,7 +129,6 @@
         "operationId": "instance_runners",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -166,7 +159,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -186,7 +178,6 @@
         "operationId": "admin_scanning",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -214,7 +205,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -244,9 +234,7 @@
           "required": true
         },
         "responses": {
-          "200": {
-            "description": ""
-          }
+          "200": {}
         }
       }
     },
@@ -268,7 +256,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -298,7 +285,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -328,9 +314,7 @@
           "required": true
         },
         "responses": {
-          "200": {
-            "description": ""
-          }
+          "200": {}
         }
       }
     },
@@ -352,9 +336,7 @@
           "required": true
         },
         "responses": {
-          "200": {
-            "description": ""
-          }
+          "200": {}
         }
       }
     },
@@ -366,7 +348,6 @@
         "operationId": "list_top",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -397,7 +378,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -417,7 +397,6 @@
         "operationId": "show",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -437,7 +416,6 @@
         "operationId": "members",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -460,7 +438,6 @@
         "operationId": "projects",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -483,7 +460,6 @@
         "operationId": "group_get",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -512,7 +488,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -532,7 +507,6 @@
         "operationId": "group_runners",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -563,7 +537,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -583,7 +556,6 @@
         "operationId": "group_scanning",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -611,7 +583,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -632,7 +603,6 @@
         "operationId": "storage",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -652,7 +622,6 @@
         "operationId": "subgroups",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -675,7 +644,6 @@
         "operationId": "group_variables",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -706,7 +674,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -728,9 +695,7 @@
         ],
         "operationId": "delete_group_variable",
         "responses": {
-          "200": {
-            "description": ""
-          }
+          "200": {}
         }
       }
     },
@@ -742,7 +707,6 @@
         "operationId": "list",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -774,7 +738,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -805,7 +768,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -836,7 +798,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -856,7 +817,6 @@
         "operationId": "show",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -877,7 +837,6 @@
         "operationId": "cancel",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -908,7 +867,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -939,7 +897,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1010,7 +967,6 @@
         ],
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1039,7 +995,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1059,7 +1014,6 @@
         "operationId": "explore",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1090,7 +1044,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1110,7 +1063,6 @@
         "operationId": "show",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1130,7 +1082,6 @@
         "operationId": "ci_settings",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1158,7 +1109,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1179,7 +1129,6 @@
         "operationId": "commit_statuses",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1202,7 +1151,6 @@
         "operationId": "list",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1225,7 +1173,6 @@
         "operationId": "show",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1245,7 +1192,6 @@
         "operationId": "list",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1273,7 +1219,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1293,7 +1238,6 @@
         "operationId": "show",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1321,7 +1265,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1341,7 +1284,6 @@
         "operationId": "notes",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1371,9 +1313,7 @@
           "required": true
         },
         "responses": {
-          "200": {
-            "description": ""
-          }
+          "200": {}
         }
       }
     },
@@ -1394,9 +1334,7 @@
           "required": true
         },
         "responses": {
-          "200": {
-            "description": ""
-          }
+          "200": {}
         }
       },
       "delete": {
@@ -1405,9 +1343,7 @@
         ],
         "operationId": "delete_note",
         "responses": {
-          "200": {
-            "description": ""
-          }
+          "200": {}
         }
       }
     },
@@ -1419,7 +1355,6 @@
         "operationId": "issue_reactions",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1447,7 +1382,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1467,7 +1401,6 @@
         "operationId": "job_token_allowlist",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1498,7 +1431,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1520,9 +1452,7 @@
         ],
         "operationId": "disallow_job_token",
         "responses": {
-          "200": {
-            "description": ""
-          }
+          "200": {}
         }
       }
     },
@@ -1534,7 +1464,6 @@
         "operationId": "show_job",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1555,7 +1484,6 @@
         "operationId": "job_artifacts",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/zip": {}
             }
@@ -1571,9 +1499,7 @@
         "summary": "One file of a job's artifacts archive (text and a few media types shown,\nanything else downloaded).",
         "operationId": "artifact_file",
         "responses": {
-          "200": {
-            "description": ""
-          }
+          "200": {}
         }
       }
     },
@@ -1586,7 +1512,6 @@
         "operationId": "artifact_tree",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1606,7 +1531,6 @@
         "operationId": "cancel_job",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1626,7 +1550,6 @@
         "operationId": "play_job",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1646,7 +1569,6 @@
         "operationId": "job_raw",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "text/plain": {}
             }
@@ -1662,7 +1584,6 @@
         "operationId": "retry_job",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1683,7 +1604,6 @@
         "operationId": "job_trace",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1703,7 +1623,6 @@
         "operationId": "labels",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1734,7 +1653,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1764,7 +1682,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1781,9 +1698,7 @@
         ],
         "operationId": "delete_label",
         "responses": {
-          "200": {
-            "description": ""
-          }
+          "200": {}
         }
       }
     },
@@ -1795,7 +1710,6 @@
         "operationId": "lfs_locks",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1818,7 +1732,6 @@
         "operationId": "members",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1841,7 +1754,6 @@
         "operationId": "list",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1872,7 +1784,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1892,7 +1803,6 @@
         "operationId": "show",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1923,7 +1833,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1943,7 +1852,6 @@
         "operationId": "code_owners",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1963,7 +1871,6 @@
         "operationId": "diff",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -1993,7 +1900,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2026,7 +1932,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2046,7 +1951,6 @@
         "operationId": "merge_status",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2067,7 +1971,6 @@
         "operationId": "add_to_train",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2087,7 +1990,6 @@
         "operationId": "notes",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2110,7 +2012,6 @@
         "operationId": "mr_pipelines",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2133,7 +2034,6 @@
         "operationId": "mr_reactions",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2162,7 +2062,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2182,7 +2081,6 @@
         "operationId": "merge_request",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2213,7 +2111,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2233,7 +2130,6 @@
         "operationId": "mr_tests",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2254,7 +2150,6 @@
         "operationId": "count",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2275,7 +2170,6 @@
         "operationId": "merge_trains",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2298,7 +2192,6 @@
         "operationId": "list",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2329,7 +2222,6 @@
         },
         "responses": {
           "201": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2349,7 +2241,6 @@
         "operationId": "show",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2377,7 +2268,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2394,9 +2284,7 @@
         ],
         "operationId": "delete",
         "responses": {
-          "204": {
-            "description": ""
-          }
+          "204": {}
         }
       }
     },
@@ -2408,7 +2296,6 @@
         "operationId": "project",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2436,7 +2323,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2456,7 +2342,6 @@
         "operationId": "pages",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2476,7 +2361,6 @@
         "operationId": "list_schedules",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2507,7 +2391,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2537,7 +2420,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2554,9 +2436,7 @@
         ],
         "operationId": "delete_schedule",
         "responses": {
-          "200": {
-            "description": ""
-          }
+          "200": {}
         }
       }
     },
@@ -2568,9 +2448,7 @@
         "summary": "Run a schedule's pipeline now (as its owner).",
         "operationId": "play_schedule",
         "responses": {
-          "200": {
-            "description": ""
-          }
+          "200": {}
         }
       }
     },
@@ -2582,7 +2460,6 @@
         "operationId": "list_pipelines",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2614,7 +2491,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2634,7 +2510,6 @@
         "operationId": "show_pipeline",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2654,7 +2529,6 @@
         "operationId": "cancel_pipeline",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2675,7 +2549,6 @@
         "operationId": "retry_pipeline",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2696,7 +2569,6 @@
         "operationId": "pipeline_test_cases",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2719,7 +2591,6 @@
         "operationId": "pipeline_tests",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2739,7 +2610,6 @@
         "operationId": "protected_branches",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2762,7 +2632,6 @@
         "operationId": "protected",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2793,7 +2662,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2816,7 +2684,6 @@
         "operationId": "protected_tags",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2848,7 +2715,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2870,9 +2736,7 @@
         ],
         "operationId": "unprotect_tag",
         "responses": {
-          "200": {
-            "description": ""
-          }
+          "200": {}
         }
       }
     },
@@ -2884,7 +2748,6 @@
         "operationId": "push_rule",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2912,7 +2775,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2932,7 +2794,6 @@
         "operationId": "info",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2952,7 +2813,6 @@
         "operationId": "cleanup_policy",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -2980,7 +2840,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3000,7 +2859,6 @@
         "operationId": "tags",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3024,7 +2882,6 @@
         "operationId": "list",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3056,7 +2913,6 @@
         },
         "responses": {
           "201": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3076,7 +2932,6 @@
         "operationId": "show",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3104,7 +2959,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3122,9 +2976,7 @@
         "summary": "Delete a release; its tag stays.",
         "operationId": "delete",
         "responses": {
-          "204": {
-            "description": ""
-          }
+          "204": {}
         }
       }
     },
@@ -3146,7 +2998,6 @@
         },
         "responses": {
           "201": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3165,9 +3016,7 @@
         ],
         "operationId": "delete_link",
         "responses": {
-          "204": {
-            "description": ""
-          }
+          "204": {}
         }
       }
     },
@@ -3180,7 +3029,6 @@
         "operationId": "get",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3209,7 +3057,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3230,7 +3077,6 @@
         "operationId": "host_rules",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3261,7 +3107,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3283,9 +3128,7 @@
         ],
         "operationId": "delete_host_rule",
         "responses": {
-          "204": {
-            "description": ""
-          }
+          "204": {}
         }
       }
     },
@@ -3298,7 +3141,6 @@
         "operationId": "run_now",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3318,7 +3160,6 @@
         "operationId": "blame",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3338,7 +3179,6 @@
         "operationId": "blob",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3358,7 +3198,6 @@
         "operationId": "branches",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3389,9 +3228,7 @@
           "required": true
         },
         "responses": {
-          "200": {
-            "description": ""
-          }
+          "200": {}
         }
       }
     },
@@ -3403,7 +3240,6 @@
         "operationId": "commits",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3435,7 +3271,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3455,7 +3290,6 @@
         "operationId": "commit",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3475,7 +3309,6 @@
         "operationId": "commit_diff",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3496,7 +3329,6 @@
         "operationId": "commit_signature",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3517,7 +3349,6 @@
         "operationId": "last_commits",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3548,7 +3379,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3574,7 +3404,6 @@
         "operationId": "stats",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3605,7 +3434,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3625,9 +3453,7 @@
         "summary": "Delete a tag; a release on it is deleted too.",
         "operationId": "delete_tag",
         "responses": {
-          "204": {
-            "description": ""
-          }
+          "204": {}
         }
       }
     },
@@ -3639,7 +3465,6 @@
         "operationId": "tree",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3660,7 +3485,6 @@
         "operationId": "project_runners",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3691,7 +3515,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3711,7 +3534,6 @@
         "operationId": "findings",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3731,7 +3553,6 @@
         "operationId": "finding",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3761,7 +3582,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3781,7 +3601,6 @@
         "operationId": "reopen",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3801,7 +3620,6 @@
         "operationId": "scanning",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3829,7 +3647,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3849,7 +3666,6 @@
         "operationId": "run_scan",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3870,7 +3686,6 @@
         "operationId": "storage",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3891,7 +3706,6 @@
         "operationId": "templates",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3915,7 +3729,6 @@
         "operationId": "upload",
         "responses": {
           "201": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3936,7 +3749,6 @@
         "operationId": "users",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3959,7 +3771,6 @@
         "operationId": "project_variables",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -3990,7 +3801,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -4012,9 +3822,7 @@
         ],
         "operationId": "delete_project_variable",
         "responses": {
-          "200": {
-            "description": ""
-          }
+          "200": {}
         }
       }
     },
@@ -4026,7 +3834,6 @@
         "operationId": "show_runner",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -4054,7 +3861,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -4071,9 +3877,7 @@
         ],
         "operationId": "delete_runner",
         "responses": {
-          "200": {
-            "description": ""
-          }
+          "200": {}
         }
       }
     },
@@ -4085,7 +3889,6 @@
         "operationId": "reset_runner_token",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -4105,7 +3908,6 @@
         "operationId": "search",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -4126,7 +3928,6 @@
         "operationId": "session",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -4147,7 +3948,6 @@
         "operationId": "unsubscribe_info",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -4166,7 +3966,6 @@
         "operationId": "unsubscribe",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -4186,7 +3985,6 @@
         "operationId": "me",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -4206,7 +4004,6 @@
         "operationId": "list_gpg_keys",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -4237,7 +4034,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -4257,7 +4053,6 @@
         "operationId": "list_keys",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -4280,7 +4075,6 @@
         "operationId": "mine",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -4308,7 +4102,6 @@
         },
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -4328,7 +4121,6 @@
         "operationId": "my_projects",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -4351,7 +4143,6 @@
         "operationId": "todos",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -4374,7 +4165,6 @@
         "operationId": "list_tokens",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -4398,7 +4188,6 @@
         "operationId": "work",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -4419,7 +4208,6 @@
         "operationId": "profile",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -4440,7 +4228,6 @@
         "operationId": "contributions",
         "responses": {
           "200": {
-            "description": "",
             "content": {
               "application/json": {
                 "schema": {
@@ -5311,10 +5098,10 @@
           "method": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/MergeMethod"
               },
               {
-                "$ref": "#/components/schemas/MergeMethod"
+                "type": "null"
               }
             ]
           },
@@ -5526,10 +5313,10 @@
           "lfs": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/LfsInfo"
               },
               {
-                "$ref": "#/components/schemas/LfsInfo"
+                "type": "null"
               }
             ]
           },
@@ -5620,10 +5407,10 @@
           "commit": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/CommitSummary"
               },
               {
-                "$ref": "#/components/schemas/CommitSummary"
+                "type": "null"
               }
             ]
           },
@@ -6402,10 +6189,10 @@
           "options": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/Options"
               },
               {
-                "$ref": "#/components/schemas/Options"
+                "type": "null"
               }
             ]
           },
@@ -6566,10 +6353,10 @@
           "position": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/NewPosition"
               },
               {
-                "$ref": "#/components/schemas/NewPosition"
+                "type": "null"
               }
             ]
           }
@@ -7357,10 +7144,10 @@
               "last_deployment": {
                 "oneOf": [
                   {
-                    "type": "null"
+                    "$ref": "#/components/schemas/Deployment"
                   },
                   {
-                    "$ref": "#/components/schemas/Deployment"
+                    "type": "null"
                   }
                 ]
               }
@@ -7857,11 +7644,11 @@
               "policy": {
                 "oneOf": [
                   {
-                    "type": "null"
-                  },
-                  {
                     "$ref": "#/components/schemas/OrgPolicyDto",
                     "description": "Present on orgs (top-level groups)."
+                  },
+                  {
+                    "type": "null"
                   }
                 ]
               }
@@ -8914,11 +8701,11 @@
           "downstream": {
             "oneOf": [
               {
-                "type": "null"
-              },
-              {
                 "$ref": "#/components/schemas/PipelineLink",
                 "description": "The pipeline a bridge started (when the viewer may see it)."
+              },
+              {
+                "type": "null"
               }
             ]
           },
@@ -8933,10 +8720,10 @@
           "environment": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/JobEnvironment"
               },
               {
-                "$ref": "#/components/schemas/JobEnvironment"
+                "type": "null"
               }
             ]
           },
@@ -9463,10 +9250,10 @@
           "session": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/SessionInfo"
               },
               {
-                "$ref": "#/components/schemas/SessionInfo"
+                "type": "null"
               }
             ]
           },
@@ -9772,10 +9559,10 @@
           "method": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/MergeMethod"
               },
               {
-                "$ref": "#/components/schemas/MergeMethod"
+                "type": "null"
               }
             ]
           },
@@ -10061,11 +9848,11 @@
               "auto_merge_user": {
                 "oneOf": [
                   {
-                    "type": "null"
-                  },
-                  {
                     "$ref": "#/components/schemas/UserBrief",
                     "description": "Who set auto-merge, when it is on."
+                  },
+                  {
+                    "type": "null"
                   }
                 ]
               },
@@ -10094,11 +9881,11 @@
               "stack": {
                 "oneOf": [
                   {
-                    "type": "null"
-                  },
-                  {
                     "$ref": "#/components/schemas/StackView",
                     "description": "The stack this MR belongs to, bottom first (ADR-0019)."
+                  },
+                  {
+                    "type": "null"
                   }
                 ]
               },
@@ -10201,10 +9988,10 @@
               "stack": {
                 "oneOf": [
                   {
-                    "type": "null"
+                    "$ref": "#/components/schemas/StackBadge"
                   },
                   {
-                    "$ref": "#/components/schemas/StackBadge"
+                    "type": "null"
                   }
                 ]
               }
@@ -10271,10 +10058,10 @@
           "base": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/Totals"
               },
               {
-                "$ref": "#/components/schemas/Totals"
+                "type": "null"
               }
             ]
           },
@@ -10296,10 +10083,10 @@
           "head": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/Totals"
               },
               {
-                "$ref": "#/components/schemas/Totals"
+                "type": "null"
               }
             ]
           },
@@ -10740,11 +10527,11 @@
               "position": {
                 "oneOf": [
                   {
-                    "type": "null"
-                  },
-                  {
                     "$ref": "#/components/schemas/MappedPosition",
                     "description": "Where the thread sits on the requested version; null when outdated."
+                  },
+                  {
+                    "type": "null"
                   }
                 ]
               },
@@ -10953,10 +10740,10 @@
           "deployment": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/PagesDeployment"
               },
               {
-                "$ref": "#/components/schemas/PagesDeployment"
+                "type": "null"
               }
             ]
           },
@@ -10986,11 +10773,11 @@
           "commit": {
             "oneOf": [
               {
-                "type": "null"
-              },
-              {
                 "$ref": "#/components/schemas/CommitInfo",
                 "description": "Last commit that touched this entry (none when it could not be found in time)."
+              },
+              {
+                "type": "null"
               }
             ]
           },
@@ -11217,11 +11004,11 @@
               "upstream": {
                 "oneOf": [
                   {
-                    "type": "null"
-                  },
-                  {
                     "$ref": "#/components/schemas/PipelineLink",
                     "description": "The pipeline whose `trigger` job started this one (when the viewer may see it)."
+                  },
+                  {
+                    "type": "null"
                   }
                 ]
               }
@@ -11526,11 +11313,11 @@
               "storage_warning": {
                 "oneOf": [
                   {
-                    "type": "null"
-                  },
-                  {
                     "$ref": "#/components/schemas/Warning",
                     "description": "Its storage quota, or its namespace's, is 80 % or 100 % full (for those\nwho can push)."
+                  },
+                  {
+                    "type": "null"
                   }
                 ]
               }
@@ -11729,22 +11516,22 @@
               "namespace": {
                 "oneOf": [
                   {
-                    "type": "null"
-                  },
-                  {
                     "$ref": "#/components/schemas/QuotaUse",
                     "description": "Its top-level namespace's (shared by all its projects)."
+                  },
+                  {
+                    "type": "null"
                   }
                 ]
               },
               "quota": {
                 "oneOf": [
                   {
-                    "type": "null"
-                  },
-                  {
                     "$ref": "#/components/schemas/QuotaUse",
                     "description": "The project's own quota."
+                  },
+                  {
+                    "type": "null"
                   }
                 ]
               },
@@ -12257,11 +12044,11 @@
               "commit": {
                 "oneOf": [
                   {
-                    "type": "null"
-                  },
-                  {
                     "$ref": "#/components/schemas/CommitBrief",
                     "description": "The tagged commit (none when the tag is gone)."
+                  },
+                  {
+                    "type": "null"
                   }
                 ]
               },
@@ -12424,10 +12211,10 @@
           "last_run": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/RenovateRun"
               },
               {
-                "$ref": "#/components/schemas/RenovateRun"
+                "type": "null"
               }
             ]
           },
@@ -13443,11 +13230,11 @@
           "impersonator": {
             "oneOf": [
               {
-                "type": "null"
-              },
-              {
                 "$ref": "#/components/schemas/UserDto",
                 "description": "The administrator signed in as `user` (impersonation), if any."
+              },
+              {
+                "type": "null"
               }
             ]
           },
@@ -13945,11 +13732,11 @@
           "scan": {
             "oneOf": [
               {
-                "type": "null"
-              },
-              {
                 "$ref": "#/components/schemas/BlobScan",
                 "description": "The last listing of the blob store, if any."
+              },
+              {
+                "type": "null"
               }
             ]
           },
@@ -14041,10 +13828,10 @@
           "commit": {
             "oneOf": [
               {
-                "type": "null"
+                "$ref": "#/components/schemas/CommitSummary"
               },
               {
-                "$ref": "#/components/schemas/CommitSummary"
+                "type": "null"
               }
             ]
           },
@@ -14472,11 +14259,11 @@
           "last_commit": {
             "oneOf": [
               {
-                "type": "null"
-              },
-              {
                 "$ref": "#/components/schemas/CommitInfo",
                 "description": "Last commit that touched this directory."
+              },
+              {
+                "type": "null"
               }
             ]
           },
