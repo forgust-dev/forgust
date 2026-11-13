@@ -161,13 +161,17 @@ export function HoverCards() {
       clearTimeout(showT.current);
       setCard(null);
     };
+    // a scroll moves an open card off its link, so it goes; a card about to show
+    // stays pending (scrolling a link under a still pointer, or into view first),
+    // and reads the link's position when it shows
+    const scrolled = () => setCard(null);
     const key = (e: KeyboardEvent) => e.key === "Escape" && close();
     document.addEventListener("mouseover", enter);
     document.addEventListener("mouseout", leave);
     document.addEventListener("focusin", enter);
     document.addEventListener("focusout", leave);
     document.addEventListener("keydown", key);
-    window.addEventListener("scroll", close, true);
+    window.addEventListener("scroll", scrolled, true);
     window.addEventListener("popstate", close);
     return () => {
       document.removeEventListener("mouseover", enter);
@@ -175,7 +179,7 @@ export function HoverCards() {
       document.removeEventListener("focusin", enter);
       document.removeEventListener("focusout", leave);
       document.removeEventListener("keydown", key);
-      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("scroll", scrolled, true);
       window.removeEventListener("popstate", close);
     };
   }, []);

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ADMIN, SEED } from "./global-setup";
 
-export { expect, SEED };
+export { expect, SEED, ADMIN };
 
 /** Every test fails on an uncaught page error or a console error. */
 export const test = base.extend<{ errors: string[] }>({
@@ -43,15 +43,22 @@ export async function csrfHeaders(page: Page): Promise<Record<string, string>> {
   return { "x-csrf-token": session.csrf_token };
 }
 
-/** A project of its own (settings other specs must not see), with a first
- * commit on `main` pushed over git; `files` are its content. Delete it after. */
-export async function freshProject(page: Page, prefix: string, files: Record<string, string>) {
+/** Calls `/api/v1` as the signed-in user and fails the test on an error answer:
+ * `const call = await apiCall(page); await call("post", "/projects", {...})`. */
+export async function apiCall(page: Page) {
   const csrf = await csrfHeaders(page);
-  const call = async (method: "get" | "post" | "put" | "delete", url: string, data?: unknown) => {
+  return async (method: "get" | "post" | "put" | "delete", url: string, data?: unknown) => {
     const r = await page.request[method](`/api/v1${url}`, { headers: csrf, data });
     expect(r.ok(), `${method} ${url}: ${await r.text()}`).toBeTruthy();
     return r.status() === 204 ? null : r.json();
   };
+}
+
+/** A project of its own (settings other specs must not see), with a first
+ * commit on `main` pushed over git; `files` are its content. Delete it after. */
+export async function freshProject(page: Page, prefix: string, files: Record<string, string>) {
+  const csrf = await csrfHeaders(page);
+  const call = await apiCall(page);
   const group = await call("get", `/resolve?path=${SEED.group}`);
   const n = Date.now() % 1_000_000;
   const path = `${prefix}-${n}`;
