@@ -2139,10 +2139,10 @@ dependencies = [
 name = "forgust-server"
 version = "0.1.0"
 dependencies = [
- "aes-gcm 0.10.3",
+ "aes-gcm 0.11.1",
  "ammonia",
  "anyhow",
- "argon2 0.5.3",
+ "argon2 0.6.0",
  "async-compression",
  "async-trait",
  "axum",
@@ -2162,7 +2162,7 @@ dependencies = [
  "globset",
  "graphile_worker",
  "hex",
- "hmac 0.12.1",
+ "hmac 0.13.0",
  "http-body-util",
  "hyper",
  "hyper-util",
@@ -2181,14 +2181,14 @@ dependencies = [
  "percent-encoding",
  "pgp",
  "quick-xml 0.42.0",
- "rand 0.8.8",
+ "rand 0.10.3",
  "regex",
  "reqwest 0.12.28",
  "ring",
  "russh",
  "serde",
  "serde_json",
- "sha2 0.10.9",
+ "sha2 0.11.1",
  "sqlx",
  "syntect",
  "tempfile",
@@ -2219,7 +2219,7 @@ dependencies = [
  "hex",
  "lru",
  "serde",
- "sha2 0.10.9",
+ "sha2 0.11.1",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
@@ -5165,6 +5165,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aab41826031698d6ffcd9cff78ef56ef998e39dc7e5067cdfebe373842d4723b"
 dependencies = [
+ "getrandom 0.4.3",
  "phc",
 ]
 
@@ -5302,6 +5303,7 @@ checksum = "44dc769b75f93afdddd8c7fa12d685292ddeff1e66f7f0f3a234cf1818afe892"
 dependencies = [
  "base64ct",
  "ctutils",
+ "getrandom 0.4.3",
 ]
 
 [[package]]

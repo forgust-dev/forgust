@@ -29,7 +29,7 @@ pub fn load_or_create_host_key(path: &Path) -> anyhow::Result<PrivateKey> {
         return Ok(PrivateKey::read_openssh_file(path)?);
     }
     let mut seed = [0u8; 32];
-    rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, &mut seed);
+    rand::TryRng::try_fill_bytes(&mut rand::rngs::SysRng, &mut seed)?;
     let key = PrivateKey::from(russh::keys::ssh_key::private::Ed25519Keypair::from_seed(&seed));
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;

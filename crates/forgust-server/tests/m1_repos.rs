@@ -374,7 +374,7 @@ async fn setup_and_admin(pool: sqlx::PgPool) {
 
 fn test_key() -> russh::keys::PrivateKey {
     let mut seed = [0u8; 32];
-    rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, &mut seed);
+    rand::TryRng::try_fill_bytes(&mut rand::rngs::SysRng, &mut seed).unwrap();
     russh::keys::PrivateKey::from(russh::keys::ssh_key::private::Ed25519Keypair::from_seed(&seed))
 }
 
