@@ -1,6 +1,6 @@
 //! Tokens, password hashing and encryption at rest.
 
-use aes_gcm::aead::{Aead, KeyInit};
+use aes_gcm::aead::{Aead, AeadCore, KeyInit, OsRng};
 use aes_gcm::{Aes256Gcm, Nonce};
 use argon2::Argon2;
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
@@ -126,9 +126,9 @@ impl SecretBox {
 
     /// AES-256-GCM; output is base64(nonce || ciphertext).
     pub fn encrypt(&self, plaintext: &[u8]) -> anyhow::Result<String> {
-        let mut nonce = [0u8; 12];
-        rand::thread_rng().fill_bytes(&mut nonce);
-        let ct = self.cipher.encrypt(Nonce::from_slice(&nonce), plaintext).map_err(|e| anyhow::anyhow!("{e}"))?;
+        // a fresh random nonce for every message, from the OS
+        let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+        let ct = self.cipher.encrypt(&nonce, plaintext).map_err(|e| anyhow::anyhow!("{e}"))?;
         let mut out = nonce.to_vec();
         out.extend(ct);
         Ok(STANDARD.encode(out))
@@ -188,6 +188,8 @@ mod tests {
         let b = SecretBox::from_base64(&SecretBox::generate_key()).unwrap();
         let sealed = b.encrypt(b"JBSWY3DPEHPK3PXP").unwrap();
         assert_eq!(b.decrypt(&sealed).unwrap(), b"JBSWY3DPEHPK3PXP");
+        // a new nonce each time: the same secret never seals the same way twice
+        assert_ne!(b.encrypt(b"JBSWY3DPEHPK3PXP").unwrap(), sealed);
         assert!(SecretBox::from_base64(&SecretBox::generate_key()).unwrap().decrypt(&sealed).is_err());
     }
 }
