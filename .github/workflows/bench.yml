@@ -13,6 +13,9 @@ name: Bench
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   bench:
     runs-on: [self-hosted, bench]

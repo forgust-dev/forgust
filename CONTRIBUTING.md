@@ -43,10 +43,13 @@ And when you changed:
 - **CI behaviour:** a case in [`ci-conformance/cases/`](ci-conformance/README.md), and
   a note in the pull request for the CI compatibility guide.
 
-Keep each pull request to one change, with tests. Commit messages follow
-[Conventional Commits](https://www.conventionalcommits.org/): a type, then what the
-change does, in lower case (`fix: keep reviewed requests apart in your work`,
-`feat: …`, `perf: …`, `refactor: …`, `docs: …`, `chore: …`).
+Keep each pull request to one change, with tests. Commit messages and pull request
+titles follow [Conventional Commits](https://www.conventionalcommits.org/): a type,
+then what the change does, in lower case (`fix: keep reviewed requests apart in your
+work`). Types: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `ci`, `chore`,
+`revert`; add `!` for a breaking change (`feat!: …`). Pull requests are squashed, so
+their title becomes the commit on `main` and the line in the release notes: CI checks
+it.
 
 ## Sign your commits (DCO)
 
@@ -71,7 +74,9 @@ made: `git rebase --signoff main`.
    `git tag v0.2.0 && git push origin v0.2.0`.
 3. The release workflow checks that the tag matches both versions and is on `main`,
    builds the image for amd64 and arm64, pushes `ghcr.io/forgust-dev/forgust` as
-   `0.2.0`, `0.2` and `latest`, and opens a draft GitHub release with notes generated
-   from the merged pull requests. Edit the notes, then publish it.
+   `0.2.0`, `0.2` and `latest`, and opens a draft GitHub release whose notes group the
+   commits since the previous release (its release candidates included) by type.
+   Edit the notes, then publish it. To preview them before tagging:
+   `.github/release-notes.sh v0.1.0 main`.
 
 A tag such as `v0.2.0-rc.1` makes a pre-release: no `0.2` or `latest` tag.
