@@ -1,8 +1,8 @@
-import { useEffect, useState, type ChangeEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { lazy, useEffect, useState, type ChangeEvent, type ComponentType } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, timeAgo, type S, bytes } from "../../api/client";
-import { Badge, Section, ErrorBox, Field, Q, VisibilitySelect, ListHead, Tile, QuotaBar, useFormRun } from "../../components/ui";
+import { Badge, Section, ErrorBox, Field, Q, VisibilitySelect, ListHead, NotFound, Tile, QuotaBar, useFormRun } from "../../components/ui";
 import { AvatarUpload } from "../../components/AvatarUpload";
 import { Select } from "../../components/controls";
 import { AccessTokens, DeployTokens } from "../../components/Tokens";
@@ -12,7 +12,8 @@ import { HostRules } from "../../components/HostRules";
 import { useBranches } from "./Code";
 import { fetchers } from "../../prefetch";
 import { StatusBadge } from "./ci/Status";
-import { useToast } from "../../shell/toast";
+import { settingsPage, type SettingsSlug } from "./settingsPages";
+const CiSettings = lazy(() => import("./ci/Settings").then((m) => ({ default: m.CiSettings })));
 
 /** Who may push or merge to a protected branch, or create a protected tag. */
 const PROTECT_LEVELS = [
@@ -21,7 +22,104 @@ const PROTECT_LEVELS = [
   { value: "maintainer", label: "Maintainers" },
 ];
 
-export function ProjectSettings({ ctx }: { ctx: Ctx }) {
+/** Each settings page, by its slug in `settingsPages.ts` (a page missing here does not compile). */
+const PAGES: Record<SettingsSlug, ComponentType<{ ctx: Ctx }>> = {
+  "": GeneralSettings,
+  repository: RepositorySettings,
+  merge_requests: MergeRequestSettings,
+  ci_cd: CiSettings,
+  automation: AutomationSettings,
+  integrations: IntegrationSettings,
+};
+
+/** A settings page of a project: `settings` (general) or `settings/<page>`. */
+export function ProjectSettings({ ctx, page }: { ctx: Ctx; page: string }) {
+  const found = settingsPage(page);
+  if (!found) return <NotFound />;
+  const Page = PAGES[found.slug];
+  return <Page ctx={ctx} />;
+}
+
+/** Sections that had an anchor here before they moved to a page of their own. */
+const MOVED: Record<string, SettingsSlug> = { "#pages": "ci_cd", "#security-scanning": "automation" };
+
+function RepositorySettings({ ctx }: { ctx: Ctx }) {
+  const p = ctx.p;
+  return (
+    <div className="stack settings-page">
+      <ListHead title="Repository settings" sub="Protected branches and tags, push rules, locked files, and keys and tokens to clone the repository." />
+      <Section title="Protected branches" description="Who can push and force-push to matching branches.">
+        <ProtectedBranches ctx={ctx} />
+      </Section>
+      <Section title="Protected tags" description="Who can create matching tags. Nobody can move or delete them by pushing; Maintainers can delete them here.">
+        <ProtectedTags ctx={ctx} />
+      </Section>
+      <Section title="Push rules" description="Checks every push (and every commit made in the browser) must pass.">
+        <PushRules ctx={ctx} />
+      </Section>
+      <Section title="Locked files" description="Files locked with git lfs lock: on the default branch, only their owner can change them.">
+        <LockedFiles ctx={ctx} />
+      </Section>
+      <Section title="Deploy keys" description="SSH keys that reach this repository only, read-only unless allowed to write.">
+        <DeployKeys ctx={ctx} />
+      </Section>
+      <Section title="Deploy tokens" description="Credentials to clone the repository without a user account.">
+        <DeployTokens base={`/projects/${p.id}`} />
+      </Section>
+    </div>
+  );
+}
+
+function MergeRequestSettings({ ctx }: { ctx: Ctx }) {
+  const p = ctx.p;
+  return (
+    <div className="stack settings-page">
+      <ListHead title="Merge request settings" sub="What a merge request needs before it can be merged." />
+      <Section title="Merge request approvals" description="How many approvals a merge request needs, and from whom, before it can be merged.">
+        <ApprovalRules projectId={p.id} />
+      </Section>
+    </div>
+  );
+}
+
+function AutomationSettings({ ctx }: { ctx: Ctx }) {
+  return (
+    <div className="stack settings-page">
+      <ListHead title="Automation settings" sub="Built-in security scanning and dependency updates." />
+      <Section
+        id="security-scanning"
+        title="Security scanning"
+        description="Built-in scanners for code, secrets, dependencies, infrastructure files and container images, run on the instance's runners. Findings show in the Security tab."
+      >
+        <SecurityScanning ctx={ctx} />
+      </Section>
+      <Section
+        title="Dependency updates"
+        description="Renovate opens merge requests that update this project's dependencies, as a bot member of the project. No token or pipeline to set up."
+      >
+        <DependencyUpdates ctx={ctx} />
+        <HostRules base={`/projects/${ctx.p.id}/renovate/host_rules`} empty="None. This instance's container registry needs none." />
+      </Section>
+    </div>
+  );
+}
+
+function IntegrationSettings({ ctx }: { ctx: Ctx }) {
+  const p = ctx.p;
+  return (
+    <div className="stack settings-page">
+      <ListHead title="Integration settings" sub="Webhooks and access tokens for scripts and other services." />
+      <Section title="Webhooks" description="Call a URL when something happens in this project.">
+        <Webhooks base={`/projects/${p.id}`} />
+      </Section>
+      <Section title="Access tokens" description="Tokens for scripts and integrations, acting as a bot member of this project.">
+        <AccessTokens base={`/projects/${p.id}`} />
+      </Section>
+    </div>
+  );
+}
+
+function GeneralSettings({ ctx }: { ctx: Ctx }) {
   const p = ctx.p;
   const qc = useQueryClient();
   const nav = useNavigate();
@@ -33,10 +131,15 @@ export function ProjectSettings({ ctx }: { ctx: Ctx }) {
   const [target, setTarget] = useState("");
   const branches = useBranches(ctx);
   const { run, msg, error } = useFormRun(() => qc.invalidateQueries({ queryKey: ["project", p.id] }));
+  // old links to a section that moved: follow it
+  const { hash } = useLocation();
+  useEffect(() => {
+    if (Object.hasOwn(MOVED, hash)) nav(`${ctx.web}/-/settings/${MOVED[hash]}${hash}`, { replace: true });
+  }, [hash]);
 
   return (
     <div className="stack settings-page">
-      <ListHead title="Settings" sub="General settings of this project. Pipelines and runners are under CI/CD." />
+      <ListHead title="General settings" sub="Name, picture and storage of this project." />
       <ErrorBox error={error} />
       {msg && <div className="alert ok">{msg}</div>}
       <Section title="Picture" description="The project's picture in lists, its page and the sidebar.">
@@ -71,55 +174,8 @@ export function ProjectSettings({ ctx }: { ctx: Ctx }) {
           </div>
         </form>
       </Section>
-      <Section title="Protected branches" description="Who can push and force-push to matching branches.">
-        <ProtectedBranches ctx={ctx} />
-      </Section>
       <Section id="storage" title="Storage" description="What this project keeps: its repository, uploaded files, CI artifacts and logs, Git LFS objects and container images; and its storage quotas, if any.">
         <StorageUse ctx={ctx} />
-      </Section>
-      <Section id="pages" title="Pages" description="A static site built by CI: a job named pages (or with pages: true) publishes the public/ folder of its artifacts.">
-        <PagesSite ctx={ctx} />
-      </Section>
-      <Section title="Protected tags" description="Who can create matching tags. Nobody can move or delete them by pushing; Maintainers can delete them here.">
-        <ProtectedTags ctx={ctx} />
-      </Section>
-      <Section title="Merge request approvals" description="How many approvals a merge request needs, and from whom, before it can be merged.">
-        <ApprovalRules projectId={p.id} />
-      </Section>
-      <Section title="Push rules" description="Checks every push (and every commit made in the browser) must pass.">
-        <PushRules ctx={ctx} />
-      </Section>
-      <Section title="Locked files" description="Files locked with git lfs lock: on the default branch, only their owner can change them.">
-        <LockedFiles ctx={ctx} />
-      </Section>
-      <Section
-        id="security-scanning"
-        title="Security scanning"
-        description="Built-in scanners for code, secrets, dependencies, infrastructure files and container images, run on the instance's runners. Findings show in the Security tab."
-      >
-        <SecurityScanning ctx={ctx} />
-      </Section>
-      <Section
-        title="Dependency updates"
-        description="Renovate opens merge requests that update this project's dependencies, as a bot member of the project. No token or pipeline to set up."
-      >
-        <DependencyUpdates ctx={ctx} />
-        <HostRules base={`/projects/${ctx.p.id}/renovate/host_rules`} empty="None. This instance's container registry needs none." />
-      </Section>
-      <Section title="Webhooks" description="Call a URL when something happens in this project.">
-        <Webhooks base={`/projects/${p.id}`} />
-      </Section>
-      <Section title="Deploy keys" description="SSH keys that reach this repository only, read-only unless allowed to write.">
-        <DeployKeys ctx={ctx} />
-      </Section>
-      <Section title="Access tokens" description="Tokens for scripts and integrations, acting as a bot member of this project.">
-        <AccessTokens base={`/projects/${p.id}`} />
-      </Section>
-      <Section title="Deploy tokens" description="Credentials to clone the repository without a user account.">
-        <DeployTokens base={`/projects/${p.id}`} />
-      </Section>
-      <Section title="Audit log" description="Who changed what in this project, and when.">
-        <Audit ctx={ctx} />
       </Section>
       {p.can_own && (
         <Section title="Advanced" description="Change the path, move the project to another group, or delete it." danger>
@@ -639,66 +695,6 @@ function StorageUse({ ctx }: { ctx: Ctx }) {
   );
 }
 
-function PagesSite({ ctx }: { ctx: Ctx }) {
-  const qc = useQueryClient();
-  const toast = useToast();
-  const q = useQuery({ queryKey: ["pages", ctx.p.id], queryFn: () => api.get<S["PagesInfo"]>(`/projects/${ctx.p.id}/pages`) });
-  return (
-    <Q q={q}>
-      {(s) =>
-        !s.enabled ? (
-          <p className="small muted" style={{ margin: 0 }}>
-            This instance does not serve sites: an administrator sets <code>pages.domain</code> (a wildcard DNS name) to turn them on.
-          </p>
-        ) : (
-          <div className="stack">
-            {s.deployment ? (
-              <>
-                <p style={{ margin: 0 }}>
-                  {s.public ? (
-                    <a href={s.url ?? "#"} target="_blank" rel="noreferrer">
-                      {s.url}
-                    </a>
-                  ) : (
-                    <span className="mono">{s.url}</span>
-                  )}
-                </p>
-                <p className="small muted" style={{ margin: 0 }}>
-                  Published from <code>{s.deployment.publish}/</code> of <Link to={`${ctx.web}/-/jobs/${s.deployment.build_id}`}>job #{s.deployment.build_id}</Link> (pipeline #{s.deployment.pipeline_iid}),{" "}
-                  {timeAgo(s.deployment.created_at)}. Its artifacts are kept while it is the site.
-                  {!s.public && " Only public projects' sites are served: this one is not reachable."}
-                </p>
-                <div>
-                  <button
-                    className="btn small danger"
-                    onClick={async () => {
-                      if (!confirm("Take the site down? The next Pages job publishes it again.")) return;
-                      try {
-                        await api.del(`/projects/${ctx.p.id}/pages`);
-                        toast.ok("Site removed");
-                        qc.invalidateQueries({ queryKey: ["pages", ctx.p.id] });
-                      } catch (e) {
-                        toast.error(e);
-                      }
-                    }}
-                  >
-                    Remove the site
-                  </button>
-                </div>
-              </>
-            ) : (
-              <p className="small muted" style={{ margin: 0 }}>
-                Not published yet. Once a Pages job passes, the site is at <span className="mono">{s.url}</span>
-                {!s.public && " (public projects only)"}.
-              </p>
-            )}
-          </div>
-        )
-      }
-    </Q>
-  );
-}
-
 function ProtectedTags({ ctx }: { ctx: Ctx }) {
   const qc = useQueryClient();
   const key = ["protected-tags", ctx.p.id];
@@ -823,29 +819,5 @@ function DeployKeys({ ctx }: { ctx: Ctx }) {
         }
       </Q>
     </div>
-  );
-}
-
-function Audit({ ctx }: { ctx: Ctx }) {
-  const q = useQuery({ queryKey: ["audit", ctx.p.id], queryFn: () => api.get<S["AuditEvent"][]>(`/projects/${ctx.p.id}/audit`) });
-  return (
-    <Q q={q}>
-      {(events) =>
-        events.length === 0 ? (
-          <p className="muted">No events.</p>
-        ) : (
-          <div className="list">
-            {events.slice(0, 50).map((e) => (
-              <div className="item small" key={e.id}>
-                <code>{e.action}</code>
-                <span className="grow muted ellipsis">{JSON.stringify(e.details)}</span>
-                <span>{e.principal_name ?? e.principal_kind}</span>
-                <span className="faint">{timeAgo(e.created_at)}</span>
-              </div>
-            ))}
-          </div>
-        )
-      }
-    </Q>
   );
 }
