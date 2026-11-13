@@ -34,6 +34,11 @@ updates:
       prefix: "chore"
       include: "scope"
     groups:
+      # released together: one without the others does not build
+      opentelemetry:
+        patterns:
+          - "opentelemetry*"
+          - "tracing-opentelemetry"
       backend:
         patterns:
           - "*"
@@ -54,6 +59,11 @@ updates:
       prefix: "chore"
       include: "scope"
     groups:
+      # @vitejs/plugin-react follows Vite's major version
+      vite:
+        patterns:
+          - "vite"
+          - "@vitejs/*"
       frontend:
         patterns:
           - "*"
