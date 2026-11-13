@@ -40,6 +40,11 @@ pub fn load_or_create_host_key(path: &Path) -> anyhow::Result<PrivateKey> {
     Ok(key)
 }
 
+/// Failed sign-in attempts before a connection is closed, and keys a client may
+/// offer: each offer is looked up, and russh neither delays nor counts the
+/// offers it accepts.
+const MAX_AUTH_ATTEMPTS: usize = 10;
+
 pub async fn serve(state: AppState, listener: tokio::net::TcpListener) -> anyhow::Result<()> {
     let key = load_or_create_host_key(&state.cfg.server.data_dir.join("ssh_host_ed25519_key"))?;
     let config = Arc::new(russh::server::Config {
@@ -47,7 +52,7 @@ pub async fn serve(state: AppState, listener: tokio::net::TcpListener) -> anyhow
         auth_rejection_time: Duration::from_millis(500),
         auth_rejection_time_initial: Some(Duration::ZERO),
         inactivity_timeout: Some(Duration::from_secs(600)),
-        max_auth_attempts: 10,
+        max_auth_attempts: MAX_AUTH_ATTEMPTS,
         methods: russh::MethodSet::from(&[russh::MethodKind::PublicKey][..]),
         ..Default::default()
     });
@@ -73,6 +78,7 @@ impl russh::server::Server for SshServer {
             active: self.active.clone(),
             over_limit: n > self.state.cfg.limits.ssh_max_connections,
             peer,
+            offers: 0,
             principal: None,
             channels: HashMap::new(),
         }
@@ -89,6 +95,8 @@ pub struct Conn {
     active: Arc<AtomicUsize>,
     over_limit: bool,
     peer: Option<std::net::SocketAddr>,
+    /// Keys offered so far.
+    offers: usize,
     principal: Option<Principal>,
     channels: HashMap<ChannelId, ChannelState>,
 }
@@ -295,8 +303,23 @@ impl Conn {
 impl russh::server::Handler for Conn {
     type Error = anyhow::Error;
 
-    async fn auth_publickey_offered(&mut self, user: &str, _offer: PublicKeyOffer<'_>) -> Result<Auth, Self::Error> {
-        Ok(if user == "git" && !self.over_limit { Auth::Accept } else { reject() })
+    async fn auth_publickey_offered(&mut self, user: &str, offer: PublicKeyOffer<'_>) -> Result<Auth, Self::Error> {
+        if user != "git" || self.over_limit {
+            return Ok(reject());
+        }
+        // each offer is a lookup: past a client's few keys, it is making them up
+        self.offers += 1;
+        if self.offers > MAX_AUTH_ATTEMPTS {
+            return Ok(reject());
+        }
+        // a key for signing only is turned down before the client signs with it
+        // (a security key would ask for a touch for nothing); any other goes on
+        let fp = offer.public_key.fingerprint(HashAlg::Sha256).to_string();
+        if forgust_db::ssh_keys::find_by_fingerprint(&self.state.db, &fp).await?.is_some_and(|k| !k.for_auth()) {
+            tracing::debug!(peer = ?self.peer, %fp, "SSH key is for signing only");
+            return Ok(reject());
+        }
+        Ok(Auth::Accept)
     }
 
     async fn auth_publickey(&mut self, user: &str, verified: VerifiedPublicKey<'_>) -> Result<Auth, Self::Error> {
@@ -309,6 +332,10 @@ impl russh::server::Handler for Conn {
             tracing::debug!(peer = ?self.peer, %fp, "unknown SSH key");
             return Ok(reject());
         };
+        if !k.for_auth() {
+            tracing::debug!(peer = ?self.peer, %fp, "SSH key is for signing only");
+            return Ok(reject());
+        }
         forgust_db::ssh_keys::touch(&self.state.db, k.id).await?;
         self.principal = match (k.kind.as_str(), k.user_id) {
             ("user", Some(uid)) => match forgust_db::users::find(&self.state.db, uid).await? {

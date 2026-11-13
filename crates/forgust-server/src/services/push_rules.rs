@@ -141,10 +141,25 @@ pub async fn check(
                 }
                 if rules.reject_unsigned_commits {
                     match crate::services::signatures::verify(state, &raw).await {
+                        Some(v) if v.verified() && v.key_expired => {
+                            return Ok(Some(format!(
+                                "Commit {short} is signed with an SSH key that has expired. Only commits signed with a key that has not expired can be pushed: if the commit is yours, sign it again with a key on your profile; if not, its author has to sign it again."
+                            )));
+                        }
                         Some(v) if v.verified() => {}
                         Some(v) => {
+                            let fix = match v.verification_status.as_str() {
+                                // a key there for authentication only cannot be changed: deleted, it can be added again
+                                "unknown_key" => {
+                                    "add it to your profile as an SSH key for signing (or for authentication and signing), or as a GPG key; an SSH key added for authentication only has to be deleted and added again for signing"
+                                }
+                                "unverified" => {
+                                    "commit with an email address confirmed on your profile, and sign with your own key (a GPG key has to list that address)"
+                                }
+                                _ => "sign it again with a key on your profile",
+                            };
                             return Ok(Some(format!(
-                                "Commit {short}: its signature is not verified ({}). Only verified signed commits can be pushed: add your key to your profile and commit with your confirmed email.",
+                                "Commit {short}: its signature is not verified ({}). Only verified signed commits can be pushed: {fix}.",
                                 v.verification_status.replace('_', " ")
                             )));
                         }
