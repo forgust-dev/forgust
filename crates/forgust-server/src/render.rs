@@ -262,13 +262,13 @@ pub fn markdown_with(source: &str, project_url: &str, git_ref: &str, dir: &str, 
     opts.extension.autolink = true;
     opts.extension.tasklist = true;
     opts.extension.footnotes = true;
-    opts.extension.header_ids = Some("user-content-".into());
+    opts.extension.header_id_prefix = Some("user-content-".into());
     // `> [!NOTE]` and friends (GitHub's and GitLab's alerts)
     opts.extension.alerts = true;
     // `$x^2$`, `$$...$$`, `` $`x`$ `` and ```math: marked here, typeset in the browser
     opts.extension.math_dollars = true;
     opts.extension.math_code = true;
-    opts.render.unsafe_ = false;
+    opts.render.r#unsafe = false;
     let html = comrak::markdown_to_html(source, &opts);
 
     let rewrite = LinkRewriter {
