@@ -30,7 +30,7 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 tracing = "0.1"
 sqlx = { version = "0.9", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-webpki", "postgres", "macros", "migrate", "chrono", "json", "uuid"] }
-rand = "0.8"
+rand = "0.10"
 sha2 = "0.10"
 hex = "0.4"
 base64 = "0.23"
