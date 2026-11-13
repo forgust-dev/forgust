@@ -1,0 +1,14 @@
+{
+  "name": "forgust-gen-api",
+  "private": true,
+  "description": "openapi-typescript for `npm run gen:api`, on its own: it needs TypeScript's JavaScript API, which TypeScript 7 (the project's compiler) no longer has",
+  "devDependencies": {
+    "openapi-typescript": "7.13.0",
+    "typescript": "6.0.3"
+  },
+  "overrides": {
+    "openapi-typescript": {
+      "typescript": "$typescript"
+    }
+  }
+}
