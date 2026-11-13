@@ -6,7 +6,7 @@ test("push rules are saved from settings, and a bad pattern is explained", async
   const csrf = await csrfHeaders(page);
   const project = await (await page.request.get(`/api/v1/resolve?path=${P.slice(1)}`)).json();
   try {
-    await page.goto(`${P}/-/settings`);
+    await page.goto(`${P}/-/settings/repository`);
     const field = page.getByLabel("Commit messages must match");
     await field.fill("(");
     await page.getByRole("button", { name: "Save push rules" }).click();

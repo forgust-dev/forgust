@@ -44,6 +44,7 @@ import { HoverCards } from "../components/HoverCards";
 import { Avatar, Tile } from "../components/ui";
 import { ResendLink } from "../components/ResendLink";
 import { useWork } from "../prefetch";
+import { SETTINGS_PAGES } from "../pages/project/settingsPages";
 
 /** A nav entry; `children` show under it while its section is active. */
 type Item = { to: string; label: string; icon?: ReactNode; end?: boolean; count?: number; match?: RegExp; children?: Item[] };
@@ -93,7 +94,19 @@ function projectItems(p: S["ProjectDetail"], ref: string, mrCount?: number, issu
   const schedules = p.can_push ? [{ to: `${web}/-/pipeline_schedules`, label: "Schedules", match: sec("pipeline_schedules") }] : [];
   // findings are for Developers and above
   const developer = p.can_push || p.can_admin || ["developer", "maintainer", "owner"].includes(p.access_level);
-  const security = developer ? [{ to: `${web}/-/security`, label: "Security", icon: <ShieldAlert size={16} />, match: sec("security") }] : [];
+  // the audit log is for Maintainers and above, with the findings
+  const audit = p.can_admin ? [{ to: `${web}/-/audit`, label: "Audit log", match: sec("audit") }] : [];
+  const security = developer
+    ? [
+        {
+          to: `${web}/-/security`,
+          label: "Security",
+          icon: <ShieldAlert size={16} />,
+          match: sec("security|audit"),
+          children: [{ to: `${web}/-/security`, label: "Findings", match: sec("security") }, ...audit],
+        },
+      ]
+    : [];
   return [
     {
       to: web,
@@ -143,10 +156,11 @@ function projectItems(p: S["ProjectDetail"], ref: string, mrCount?: number, issu
             label: "Settings",
             icon: <Settings size={16} />,
             match: sec("settings"),
-            children: [
-              { to: `${web}/-/settings`, label: "General", match: new RegExp(`^/${esc}/-/settings/?$`) },
-              { to: `${web}/-/settings/ci_cd`, label: "CI/CD", match: sec("settings/ci_cd") },
-            ],
+            // only the page's own path: deeper ones are not found
+            children: SETTINGS_PAGES.map(({ slug, label }) => {
+              const path = slug ? `settings/${slug}` : "settings";
+              return { to: `${web}/-/${path}`, label, match: new RegExp(`^/${esc}/-/${path}/?$`) };
+            }),
           },
         ]
       : []),

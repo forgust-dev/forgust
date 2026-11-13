@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff, KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
-import { api, type S } from "../../../api/client";
+import { Link } from "react-router-dom";
+import { api, timeAgo, type S } from "../../../api/client";
 import { Section, Empty, ErrorBox, Field, Q, ListHead } from "../../../components/ui";
 import { RunnersPanel } from "./Runners";
 import { Select } from "../../../components/controls";
@@ -299,7 +300,7 @@ function JobTokenAllowlist({ ctx }: { ctx: Ctx }) {
 export function CiSettings({ ctx }: { ctx: Ctx }) {
   return (
     <div className="stack settings-page">
-      <ListHead title="CI/CD settings" sub="Pipelines, runners and variables of this project." />
+      <ListHead title="CI/CD settings" sub="Pipelines, runners, variables, environments and Pages of this project." />
       <General ctx={ctx} />
       <RunnersPanel
         list={`/projects/${ctx.p.id}/runners`}
@@ -308,6 +309,9 @@ export function CiSettings({ ctx }: { ctx: Ctx }) {
       />
       <VariablesPanel base={`/projects/${ctx.p.id}`} />
       <ProtectedEnvironments ctx={ctx} />
+      <Section id="pages" title="Pages" description="A static site built by CI: a job named pages (or with pages: true) publishes the public/ folder of its artifacts.">
+        <PagesSite ctx={ctx} />
+      </Section>
       <JobTokenAllowlist ctx={ctx} />
     </div>
   );
@@ -383,5 +387,66 @@ function ProtectedEnvironments({ ctx }: { ctx: Ctx }) {
         )}
       </Q>
     </Section>
+  );
+}
+
+/** The project's static site, published by its Pages job. */
+function PagesSite({ ctx }: { ctx: Ctx }) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const q = useQuery({ queryKey: ["pages", ctx.p.id], queryFn: () => api.get<S["PagesInfo"]>(`/projects/${ctx.p.id}/pages`) });
+  return (
+    <Q q={q}>
+      {(s) =>
+        !s.enabled ? (
+          <p className="small muted" style={{ margin: 0 }}>
+            This instance does not serve sites: an administrator sets <code>pages.domain</code> (a wildcard DNS name) to turn them on.
+          </p>
+        ) : (
+          <div className="stack">
+            {s.deployment ? (
+              <>
+                <p style={{ margin: 0 }}>
+                  {s.public ? (
+                    <a href={s.url ?? "#"} target="_blank" rel="noreferrer">
+                      {s.url}
+                    </a>
+                  ) : (
+                    <span className="mono">{s.url}</span>
+                  )}
+                </p>
+                <p className="small muted" style={{ margin: 0 }}>
+                  Published from <code>{s.deployment.publish}/</code> of <Link to={`${ctx.web}/-/jobs/${s.deployment.build_id}`}>job #{s.deployment.build_id}</Link> (pipeline #{s.deployment.pipeline_iid}),{" "}
+                  {timeAgo(s.deployment.created_at)}. Its artifacts are kept while it is the site.
+                  {!s.public && " Only public projects' sites are served: this one is not reachable."}
+                </p>
+                <div>
+                  <button
+                    className="btn small danger"
+                    onClick={async () => {
+                      if (!confirm("Take the site down? The next Pages job publishes it again.")) return;
+                      try {
+                        await api.del(`/projects/${ctx.p.id}/pages`);
+                        toast.ok("Site removed");
+                        qc.invalidateQueries({ queryKey: ["pages", ctx.p.id] });
+                      } catch (e) {
+                        toast.error(e);
+                      }
+                    }}
+                  >
+                    Remove the site
+                  </button>
+                </div>
+              </>
+            ) : (
+              <p className="small muted" style={{ margin: 0 }}>
+                Not published yet. Once a Pages job passes, the site is at <span className="mono">{s.url}</span>
+                {!s.public && " (public projects only)"}.
+              </p>
+            )}
+          </div>
+        )
+      }
+    </Q>
   );
 }
