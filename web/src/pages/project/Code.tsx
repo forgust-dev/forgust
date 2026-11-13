@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
@@ -130,7 +130,7 @@ export function PathCrumbs({ ctx, gitRef, path }: { ctx: Ctx; gitRef: string; pa
   );
 }
 
-const ICONS: Record<string, JSX.Element> = {
+const ICONS: Record<string, ReactElement> = {
   tree: <Folder size={16} className="ic-folder" />,
   blob: <FileText size={16} />,
   executable: <FileCode size={16} />,

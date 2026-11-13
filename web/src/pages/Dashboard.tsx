@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactElement } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Globe, Lock, Shield } from "lucide-react";
@@ -6,7 +6,7 @@ import { api, qs, timeAgo, type S } from "../api/client";
 import { Empty, FilterTabs, ListHead, Q, SearchField, Tile, useDebounced } from "../components/ui";
 import { useGroups, usePrefetch } from "../prefetch";
 
-const VIS_ICON: Record<string, JSX.Element> = {
+const VIS_ICON: Record<string, ReactElement> = {
   private: <Lock size={12} />,
   internal: <Shield size={12} />,
   public: <Globe size={12} />,

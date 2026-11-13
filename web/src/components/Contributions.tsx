@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, type ReactElement } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { CircleDot, GitCommitHorizontal, GitMerge, MessageSquare, ThumbsUp } from "lucide-react";
@@ -102,7 +102,7 @@ export function ContributionCalendar({ days }: { days: S["Day"][] }) {
   );
 }
 
-const ACTIVITY: Record<string, { icon: JSX.Element; verb: string }> = {
+const ACTIVITY: Record<string, { icon: ReactElement; verb: string }> = {
   pushed: { icon: <GitCommitHorizontal size={14} />, verb: "pushed to" },
   opened_merge_request: { icon: <GitMerge size={14} />, verb: "opened" },
   merged_merge_request: { icon: <GitMerge size={14} />, verb: "merged" },

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useState, type ReactNode, type ReactElement } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AtSign, Check, CircleDot, Eye, GitMerge, UserCheck } from "lucide-react";
@@ -10,7 +10,7 @@ import { useWork } from "../prefetch";
 type Tab = "todos" | "reviews" | "mrs" | "issues";
 
 
-const ACTION: Record<string, { icon: JSX.Element; text: string }> = {
+const ACTION: Record<string, { icon: ReactElement; text: string }> = {
   assigned: { icon: <UserCheck size={14} />, text: "assigned you" },
   review_requested: { icon: <Eye size={14} />, text: "asked you to review" },
   mentioned: { icon: <AtSign size={14} />, text: "mentioned you" },
