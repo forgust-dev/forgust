@@ -16,6 +16,9 @@ commit_email = "noreply@forgust.local"
 # add your load balancer's network when it is not on this host (else every client
 # looks like the proxy and shares one budget of failed sign-ins)
 trusted_proxies = ["127.0.0.0/8", "::1/128"]
+# where the worker asks for the latest Forgust release, to tell administrators
+# (Admin > Settings turns it off); empty: never ask
+release_check_url = "https://api.github.com/repos/forgust-dev/forgust/releases/latest"
 
 [database]
 url = "postgres://forgust:forgust@localhost:5432/forgust"

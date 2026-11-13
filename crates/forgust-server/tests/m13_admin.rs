@@ -559,3 +559,103 @@ async fn run_now_tasks_run(pool: sqlx::PgPool) {
     .unwrap();
     assert!(failed.is_empty(), "{failed:?}");
 }
+
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn administrators_hear_of_new_releases(pool: sqlx::PgPool) {
+    let srv = TestServer::start(pool).await;
+    let admin = srv.user("root", true).await;
+    let owner = srv.user("olivia", false).await;
+    assert_eq!(owner.get("/api/v1/admin/update").await.0, 403);
+
+    let u = admin.ok_get("/api/v1/admin/update").await;
+    assert_eq!(u["current"], env!("CARGO_PKG_VERSION"));
+    assert!(u["available"].is_null(), "nothing checked yet: {u}");
+
+    // what the worker keeps from GitHub
+    sqlx::query("UPDATE instance_settings SET latest_version = '99.0.0', latest_release_url = 'https://example.com/v99'")
+        .execute(&srv.state.db)
+        .await
+        .unwrap();
+    let u = admin.ok_get("/api/v1/admin/update").await;
+    assert_eq!(u["available"], "99.0.0");
+    assert_eq!(u["url"], "https://example.com/v99");
+
+    // turned off: nothing to tell
+    let mut settings = admin.ok_get("/api/v1/admin/settings").await;
+    assert_eq!(settings["update_check_enabled"], true);
+    settings["update_check_enabled"] = json!(false);
+    admin.ok_put("/api/v1/admin/settings", settings.clone()).await;
+    assert!(admin.ok_get("/api/v1/admin/update").await["available"].is_null());
+
+    // a client that does not know the switch leaves it off
+    let older = json!({
+        "signup_enabled": settings["signup_enabled"],
+        "allow_personal_projects": settings["allow_personal_projects"],
+        "default_branch_name": settings["default_branch_name"],
+    });
+    let saved = admin.ok_put("/api/v1/admin/settings", older).await;
+    assert_eq!(saved["update_check_enabled"], false);
+    assert_eq!(saved["mcp_enabled"], settings["mcp_enabled"]);
+}
+
+/// A GitHub stand-in answering `releases/latest` with `tag`.
+async fn releases(tag: &'static str) -> String {
+    let app = axum::Router::new().route(
+        "/releases/latest",
+        axum::routing::get(move || async move {
+            axum::Json(json!({ "tag_name": tag, "html_url": format!("https://github.com/forgust-dev/forgust/releases/tag/{tag}") }))
+        }),
+    );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    format!("http://{addr}/releases/latest")
+}
+
+/// The worker asks at start (no 6 hours to wait), keeps the release's own page,
+/// and asks again when the check is turned back on.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn the_release_check_asks_at_start_and_when_turned_on(pool: sqlx::PgPool) {
+    let url = releases("v99.0.0").await;
+    let srv = TestServer::start_with(pool, |c| c.server.release_check_url = url).await;
+    let admin = srv.user("root", true).await;
+    wait_jobs(&srv.state).await;
+    let u = admin.ok_get("/api/v1/admin/update").await;
+    assert_eq!(u["available"], "99.0.0", "{u}");
+    assert_eq!(u["url"], "https://github.com/forgust-dev/forgust/releases/tag/v99.0.0");
+
+    let mut settings = admin.ok_get("/api/v1/admin/settings").await;
+    settings["update_check_enabled"] = json!(false);
+    admin.ok_put("/api/v1/admin/settings", settings.clone()).await;
+    sqlx::query("UPDATE instance_settings SET latest_version = NULL, latest_release_url = NULL").execute(&srv.state.db).await.unwrap();
+    settings["update_check_enabled"] = json!(true);
+    admin.ok_put("/api/v1/admin/settings", settings).await;
+    wait_jobs(&srv.state).await;
+    assert_eq!(admin.ok_get("/api/v1/admin/update").await["available"], "99.0.0");
+}
+
+/// A release check an administrator runs from Admin > Jobs fails when it
+/// cannot reach GitHub; the one at start only logs it.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn a_release_check_run_now_reports_failure(pool: sqlx::PgPool) {
+    // nothing listens on port 1
+    let srv = TestServer::start_with(pool, |c| c.server.release_check_url = "http://127.0.0.1:1/releases/latest".into()).await;
+    let admin = srv.user("root", true).await;
+    wait_jobs(&srv.state).await;
+    let failed = || async {
+        sqlx::query_scalar::<_, String>(
+            "SELECT j.last_error FROM graphile_worker._private_jobs j JOIN graphile_worker._private_tasks t ON t.id = j.task_id
+              WHERE t.identifier = 'update_check' AND j.last_error IS NOT NULL",
+        )
+        .fetch_all(&srv.state.db)
+        .await
+        .unwrap()
+    };
+    assert!(failed().await.is_empty(), "the check at start only logs");
+
+    admin.ok_post("/api/v1/admin/tasks/update_check", json!({})).await;
+    wait_jobs(&srv.state).await;
+    let errors = failed().await;
+    assert_eq!(errors.len(), 1, "{errors:?}");
+    assert!(errors[0].contains("release check failed"), "{errors:?}");
+}

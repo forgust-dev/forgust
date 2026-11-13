@@ -339,6 +339,7 @@ const RUNNABLE: &[(&str, &str)] = &[
     ("maintenance_sweep", "Repository maintenance (full repack of repositories pushed to) and repository sizes"),
     ("cleanup", "Expired sessions and tokens, idle git processes"),
     ("measure_repositories", "Repository sizes for Storage"),
+    ("update_check", "Ask GitHub for the latest Forgust release (unless turned off in Settings)"),
 ];
 
 #[derive(Serialize, ToSchema)]
@@ -830,17 +831,64 @@ pub async fn settings(State(state): State<AppState>, Admin(..): Admin) -> ApiRes
     Ok(Json(forgust_db::settings::get(&state.db).await?))
 }
 
+/// The instance settings to save. A switch left out keeps its value: a client
+/// that predates it (or a script) does not turn it back on.
+#[derive(Deserialize, ToSchema)]
+pub struct UpdateInstanceSettings {
+    pub signup_enabled: bool,
+    pub allow_personal_projects: bool,
+    pub default_branch_name: String,
+    pub mcp_enabled: Option<bool>,
+    pub update_check_enabled: Option<bool>,
+}
+
 pub async fn update_settings(
     State(state): State<AppState>,
     Admin(_, p): Admin,
-    Json(req): Json<InstanceSettings>,
+    Json(req): Json<UpdateInstanceSettings>,
 ) -> ApiResult<Json<InstanceSettings>> {
     if !forgust_storage::validate_rev(&req.default_branch_name) {
         return Err(ApiError::bad("invalid default branch name"));
     }
-    forgust_db::settings::update(&state.db, &req).await?;
-    services::audit(&state, &p, "instance_settings_updated", None, serde_json::to_value(&req).unwrap_or_default(), None).await;
+    let before = forgust_db::settings::get(&state.db).await?;
+    let after = InstanceSettings {
+        signup_enabled: req.signup_enabled,
+        allow_personal_projects: req.allow_personal_projects,
+        default_branch_name: req.default_branch_name,
+        mcp_enabled: req.mcp_enabled.unwrap_or(before.mcp_enabled),
+        update_check_enabled: req.update_check_enabled.unwrap_or(before.update_check_enabled),
+    };
+    forgust_db::settings::update(&state.db, &after).await?;
+    services::audit(&state, &p, "instance_settings_updated", None, serde_json::to_value(&after).unwrap_or_default(), None).await;
+    // turned (back) on: hear of the latest release now, not at the next 6-hourly check
+    if after.update_check_enabled
+        && !before.update_check_enabled
+        && let Err(e) = services::updates::queue_check(&state).await
+    {
+        tracing::warn!(error = %e, "could not queue the release check");
+    }
     Ok(Json(forgust_db::settings::get(&state.db).await?))
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct UpdateStatus {
+    pub current: String,
+    /// The latest release on GitHub, when it is newer than this one and the check is on.
+    pub available: Option<String>,
+    /// Its release notes, when GitHub gave them.
+    pub url: Option<String>,
+}
+
+/// Whether a newer Forgust release is out.
+pub async fn update_status(State(state): State<AppState>, Admin(..): Admin) -> ApiResult<Json<UpdateStatus>> {
+    let current = env!("CARGO_PKG_VERSION");
+    let latest = forgust_db::settings::latest_release(&state.db).await?;
+    let newer = latest.and_then(|l| Some((services::updates::newer(current, &l.version)?, l.url)));
+    let (available, url) = match newer {
+        Some((v, url)) => (Some(v.to_string()), url),
+        None => (None, None),
+    };
+    Ok(Json(UpdateStatus { current: current.into(), available, url }))
 }
 
 #[derive(Deserialize)]

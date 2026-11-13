@@ -32,6 +32,7 @@ pub mod security;
 pub mod signatures;
 pub mod stack;
 pub mod suggestions;
+pub mod updates;
 pub mod uploads;
 pub mod users;
 pub mod webhooks;

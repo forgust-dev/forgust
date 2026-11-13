@@ -625,9 +625,43 @@ impl TaskHandler for CiSweep {
     }
 }
 
+/// Ask GitHub for the latest Forgust release (every 6 hours, at start, when
+/// turned on, or from Admin > Jobs; unless turned off).
+#[derive(Debug, Serialize)]
+pub struct UpdateCheck {
+    /// Fail when the check does. Scheduled runs say `false`: an offline instance
+    /// would fill the failed jobs, and the next run tries again. Admin > Jobs
+    /// queues no payload, so an administrator's run shows why it failed.
+    pub report: bool,
+}
+
+impl<'de> Deserialize<'de> for UpdateCheck {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let payload = serde_json::Value::deserialize(d)?;
+        Ok(UpdateCheck { report: payload.get("report").and_then(|r| r.as_bool()).unwrap_or(true) })
+    }
+}
+
+impl TaskHandler for UpdateCheck {
+    const IDENTIFIER: &'static str = "update_check";
+
+    async fn run(self, ctx: WorkerContext) -> impl IntoTaskHandlerResult {
+        let state = ctx.get_ext::<AppState>().ok_or("no app state")?;
+        match crate::services::updates::check(state).await {
+            Err(e) if self.report => Err(format!("release check failed: {e:#}")),
+            Err(e) => {
+                tracing::warn!(error = %e, "release check failed");
+                Ok(())
+            }
+            Ok(()) => Ok(()),
+        }
+    }
+}
+
 /// Start the worker (role `worker`). Also installs the graphile schema.
 #[allow(deprecated)]
 pub async fn start_worker(state: AppState, concurrency: usize) -> anyhow::Result<tokio::task::JoinHandle<()>> {
+    let check_state = state.clone();
     let worker = WorkerOptions::default()
         .concurrency(concurrency)
         .schema(SCHEMA)
@@ -647,9 +681,10 @@ pub async fn start_worker(state: AppState, concurrency: usize) -> anyhow::Result
         .define_job::<StartBridge>()
         .define_job::<SendEmail>()
         .define_job::<CiSweep>()
+        .define_job::<UpdateCheck>()
         .define_job::<crate::services::auto_merge::AutoMergeCheck>()
         .define_job::<crate::import::ImportJob>()
-        .with_crontab("*/5 * * * * cleanup\n17 * * * * maintenance_sweep\n* * * * * ci_sweep")?
+        .with_crontab("*/5 * * * * cleanup\n17 * * * * maintenance_sweep\n* * * * * ci_sweep\n43 */6 * * * update_check {report:false}")?
         .listen_os_shutdown_signals(false)
         // a worker that stops answering (a restart, a crash) gives its jobs back
         // within minutes: else they stay locked to it for hours, and so does
@@ -658,6 +693,10 @@ pub async fn start_worker(state: AppState, concurrency: usize) -> anyhow::Result
         .add_extension(state)
         .init()
         .await?;
+    // a fresh install, or one that was down, hears of a release now rather than in up to 6 hours
+    if let Err(e) = crate::services::updates::queue_check(&check_state).await {
+        tracing::warn!(error = %e, "could not queue the release check");
+    }
     Ok(tokio::spawn(async move {
         if let Err(e) = worker.run().await {
             tracing::error!(error = %e, "job worker stopped");
@@ -686,5 +725,16 @@ mod payload_tests {
             serde_json::from_value::<ScanBlobs>(payload.clone()).unwrap();
             serde_json::from_value::<Backup>(payload).unwrap();
         }
+    }
+
+    #[test]
+    fn only_runs_asked_for_report_a_failed_release_check() {
+        // Admin > Jobs queues null, which the queue stores as `{}`
+        assert!(serde_json::from_value::<UpdateCheck>(serde_json::Value::Null).unwrap().report);
+        assert!(serde_json::from_value::<UpdateCheck>(serde_json::json!({})).unwrap().report);
+        // the crontab line and `queue_check` say so
+        let cron = serde_json::json!({ "report": false, "_cron": { "ts": "x", "backfilled": false } });
+        assert!(!serde_json::from_value::<UpdateCheck>(cron).unwrap().report);
+        assert!(!serde_json::from_value::<UpdateCheck>(serde_json::json!({ "report": false })).unwrap().report);
     }
 }

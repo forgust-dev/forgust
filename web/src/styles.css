@@ -1562,6 +1562,28 @@ kbd {
 .toast.error > svg:first-child {
   color: var(--danger);
 }
+/* a notice: title, text and a link, until dismissed */
+.toast.info {
+  align-items: flex-start;
+  padding: 10px 8px 10px 12px;
+}
+.toast.info > svg:first-child {
+  color: var(--accent);
+  margin-top: 2px;
+}
+.toast-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.toast-body > span {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.toast-body > .btn {
+  margin-top: 6px;
+}
 @keyframes toast-in {
   from {
     transform: translateY(8px);
@@ -1602,6 +1624,31 @@ kbd {
 }
 .site-banner.info > svg {
   color: var(--accent);
+}
+/* the bottom of the sidebar, for administrators: the version, and a newer one */
+.side-version {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 4px 0;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.side-version a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent);
+}
+.side-version a:hover {
+  text-decoration: underline;
+}
+.side-version .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
 }
 
 /* ---- repository overview (Repo v1) */

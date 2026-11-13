@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT signup_enabled, allow_personal_projects, default_branch_name, mcp_enabled FROM instance_settings",
+  "query": "SELECT signup_enabled, allow_personal_projects, default_branch_name, mcp_enabled, update_check_enabled FROM instance_settings",
   "describe": {
     "columns": [
       {
@@ -46,6 +46,17 @@
             "name": "mcp_enabled"
           }
         }
+      },
+      {
+        "ordinal": 4,
+        "name": "update_check_enabled",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "instance_settings",
+            "name": "update_check_enabled"
+          }
+        }
       }
     ],
     "parameters": {
@@ -55,8 +66,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "d770beffb5ece419cc0b0f57670e415f880e069c40bf1af44108a0c92b158154"
+  "hash": "7f4fb1f58914f8a37d8f163336cd44c40a34e7e6f6371478d19de9c846b3f503"
 }
