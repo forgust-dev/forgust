@@ -17,7 +17,7 @@ Thanks for helping. Bug reports, fixes, docs and tests are all welcome.
 
 ## Set up
 
-See [Development](README.md#development) in the README: Rust, git, Node 22, and Docker for
+See [Development](README.md#development) in the README: Rust, git, Node 26, and Docker for
 Postgres, S3 and SMTP.
 
 ## Before you open a pull request
