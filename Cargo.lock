@@ -2233,6 +2233,7 @@ dependencies = [
  "reqwest 0.13.5",
  "ring",
  "russh",
+ "semver",
  "serde",
  "serde_json",
  "sha2 0.11.1",

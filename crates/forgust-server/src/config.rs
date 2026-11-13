@@ -218,6 +218,9 @@ pub struct ServerConfig {
     /// client IP (rate limits, audit, sessions) is the last hop not added by
     /// one of these; from anyone else the headers are ignored.
     pub trusted_proxies: Vec<ipnet::IpNet>,
+    /// Where the worker asks for the latest Forgust release (GitHub's API, the
+    /// shape of `releases/latest`); empty: never ask. Admin > Settings turns it off too.
+    pub release_check_url: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -384,6 +387,7 @@ impl Default for ServerConfig {
             commit_name: "Forgust".into(),
             commit_email: "noreply@forgust.local".into(),
             trusted_proxies: vec!["127.0.0.0/8".parse().unwrap(), "::1/128".parse().unwrap()],
+            release_check_url: "https://api.github.com/repos/forgust-dev/forgust/releases/latest".into(),
         }
     }
 }

@@ -135,7 +135,7 @@ volumes: { forgust-data: {}, db-data: {} }
 - Overview with activity and CI statistics
 - Users: block, reset two-factor, impersonate (audited)
 - Storage by kind and by project, quotas per group and project
-- Background jobs, health checks, backups from the UI, an instance banner
+- Background jobs, health checks, backups from the UI, an instance banner, a notice to administrators when a new release is out (can be turned off)
 
 ### 🔌 Integrations
 - Import from GitLab and GitHub: repositories, merge requests, issues, labels,

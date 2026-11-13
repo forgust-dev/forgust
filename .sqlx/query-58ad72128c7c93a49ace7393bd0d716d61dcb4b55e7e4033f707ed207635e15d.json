@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT latest_version, latest_release_url FROM instance_settings WHERE update_check_enabled",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "latest_version",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "instance_settings",
+            "name": "latest_version"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "latest_release_url",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "instance_settings",
+            "name": "latest_release_url"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "58ad72128c7c93a49ace7393bd0d716d61dcb4b55e7e4033f707ed207635e15d"
+}

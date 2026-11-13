@@ -36,6 +36,8 @@ impl TestServer {
         base.server.static_dir = tmp.path().join("no-web");
         base.server.hooks_exe = Some(PathBuf::from(env!("CARGO_BIN_EXE_forgust")));
         base.telemetry.metrics = false;
+        // never ask GitHub for releases: a test that wants it serves its own
+        base.server.release_check_url = String::new();
         tweak(&mut base);
         forgust_server::jobs::migrate(&pool).await.unwrap();
         // the free port can be taken by a parallel test before we bind it: try another

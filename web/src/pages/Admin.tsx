@@ -242,6 +242,7 @@ function Settings() {
 }
 
 function SettingsForm({ initial }: { initial: S["InstanceSettings"] }) {
+  const qc = useQueryClient();
   const [s, setS] = useState(initial);
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -253,6 +254,7 @@ function SettingsForm({ initial }: { initial: S["InstanceSettings"] }) {
         e.preventDefault();
         try {
           await api.put("/admin/settings", s);
+          qc.invalidateQueries({ queryKey: ["admin-update"] });
           setMsg("Saved.");
         } catch (err) {
           setError(err);
@@ -274,6 +276,10 @@ function SettingsForm({ initial }: { initial: S["InstanceSettings"] }) {
         <span>
           MCP server <span className="muted small">— AI assistants connect to <code>/api/v4/mcp</code> with a token or by signing in</span>
         </span>
+      </label>
+      <label className="check">
+        <input type="checkbox" checked={s.update_check_enabled ?? true} onChange={(e) => setS({ ...s, update_check_enabled: e.target.checked })} />
+        <span>Check for new releases</span>
       </label>
       <Field label="Default branch name for new projects">
         <input value={s.default_branch_name} onChange={(e) => setS({ ...s, default_branch_name: e.target.value })} />

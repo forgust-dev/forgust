@@ -8271,6 +8271,10 @@
           },
           "signup_enabled": {
             "type": "boolean"
+          },
+          "update_check_enabled": {
+            "type": "boolean",
+            "description": "Ask GitHub for new Forgust releases, to tell administrators."
           }
         }
       },
@@ -14306,6 +14310,38 @@
           }
         }
       },
+      "UpdateInstanceSettings": {
+        "type": "object",
+        "description": "The instance settings to save. A switch left out keeps its value: a client\nthat predates it (or a script) does not turn it back on.",
+        "required": [
+          "signup_enabled",
+          "allow_personal_projects",
+          "default_branch_name"
+        ],
+        "properties": {
+          "allow_personal_projects": {
+            "type": "boolean"
+          },
+          "default_branch_name": {
+            "type": "string"
+          },
+          "mcp_enabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "signup_enabled": {
+            "type": "boolean"
+          },
+          "update_check_enabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        }
+      },
       "UpdateIssueBody": {
         "type": "object",
         "properties": {
@@ -14495,6 +14531,31 @@
               "null"
             ],
             "format": "date-time"
+          }
+        }
+      },
+      "UpdateStatus": {
+        "type": "object",
+        "required": [
+          "current"
+        ],
+        "properties": {
+          "available": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The latest release on GitHub, when it is newer than this one and the check is on."
+          },
+          "current": {
+            "type": "string"
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Its release notes, when GitHub gave them."
           }
         }
       },

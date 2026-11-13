@@ -312,6 +312,7 @@ pub fn router() -> Router<AppState> {
         .route("/admin/jobs/{job_id}/retry", post(admin::retry_job))
         .route("/admin/jobs/{job_id}", delete(admin::drop_job))
         .route("/admin/tasks", get(admin::runnable))
+        .route("/admin/update", get(admin::update_status))
         .route("/admin/tasks/{task}", post(admin::run_task))
         .route("/admin/health/email", post(admin::test_email))
         .route("/admin/banner", get(admin::banner_settings).put(admin::set_banner))

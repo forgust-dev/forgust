@@ -229,6 +229,7 @@ function Sidebar({ collapsed, setCollapsed, mobileOpen, closeMobile }: { collaps
         {collapsed ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
         {!c && <span>Collapse</span>}
       </button>
+      {!c && <SideVersion />}
     </aside>
   );
 }
@@ -364,6 +365,58 @@ function SiteBanner() {
   );
 }
 
+/** This server's version and the latest release, for administrators (Admin > Settings turns the check off). */
+function useUpdateStatus() {
+  const { user } = useSession();
+  const q = useQuery({
+    queryKey: ["admin-update"],
+    queryFn: () => api.get<S["UpdateStatus"]>("/admin/update"),
+    enabled: !!user?.is_admin,
+    staleTime: 3_600_000,
+  });
+  return user?.is_admin ? q.data : undefined;
+}
+
+/** For administrators: a newer Forgust release is out, in a notice that stays until dismissed (then until the next one). */
+function UpdateNotice() {
+  const status = useUpdateStatus();
+  const toast = useToast();
+  const [dismissed, setDismissed] = usePref("update.dismissed", "");
+  const v = status?.available;
+  const url = status?.url;
+  useEffect(() => {
+    if (!v || dismissed === v) return;
+    toast.notice({
+      key: `update:${v}`,
+      title: "Update available",
+      text: `Forgust ${v} is available.`,
+      action: url ? { label: "View release notes", href: url } : undefined,
+      onDismiss: () => setDismissed(v),
+    });
+  }, [v, url, dismissed]);
+  return null;
+}
+
+/** The bottom of the sidebar, for administrators: this server's version, and a newer one. */
+function SideVersion() {
+  const status = useUpdateStatus();
+  if (!status) return null;
+  return (
+    <div className="side-version">
+      <span>v{status.current}</span>
+      {status.available &&
+        (status.url ? (
+          <a href={status.url} target="_blank" rel="noreferrer" title={`Forgust ${status.available} is available`}>
+            <span className="dot" />
+            Update available
+          </a>
+        ) : (
+          <span title={`Forgust ${status.available} is available`}>Update available</span>
+        ))}
+    </div>
+  );
+}
+
 function EmailBanner() {
   const { user } = useSession();
   if (!user || user.email_verified !== false) return null;
@@ -466,6 +519,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} mobileOpen={mobileOpen} closeMobile={() => setMobileOpen(false)} />
       <main className="main">
         <ImpersonationBanner />
+        <UpdateNotice />
         <SiteBanner />
         <EmailBanner />
         {children}
