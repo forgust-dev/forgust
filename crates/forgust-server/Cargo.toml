@@ -60,7 +60,7 @@ object_store = { version = "0.14", features = ["aws"] }
 argon2 = "0.5"
 totp-rs = { version = "5", features = ["otpauth", "gen_secret"] }
 openidconnect = { version = "4", default-features = false, features = ["reqwest", "rustls-tls"] }
-aes-gcm = "0.10"
+aes-gcm = "0.11"
 russh = "0.65"
 # OpenPGP signatures on commits; no bzip2: signatures are not compressed
 pgp = { version = "0.21", default-features = false }
