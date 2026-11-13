@@ -204,7 +204,7 @@ pub async fn fetch_image(state: &AppState, raw: &str, max_bytes: usize) -> Resul
 }
 
 pub fn sign(secret: &str, body: &[u8]) -> String {
-    let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes()).expect("any key length works");
+    let mut mac = <Hmac<Sha256> as hmac::KeyInit>::new_from_slice(secret.as_bytes()).expect("any key length works");
     mac.update(body);
     format!("sha256={}", hex::encode(mac.finalize().into_bytes()))
 }
@@ -287,6 +287,12 @@ pub async fn deliver(state: &AppState, delivery_id: i64) -> anyhow::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn signature_unchanged() {
+        // receivers check this header: the value from the previous hmac version
+        assert_eq!(sign("whsec", b"{\"a\":1}"), "sha256=19373ef0e8c66f206e49d251e4402291615bbce6ef00922e94a47a213fb76ee1");
+    }
 
     #[test]
     fn internal_addresses_are_refused() {

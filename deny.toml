@@ -42,6 +42,11 @@ allow = [
     "MPL-2.0",
 ]
 
+# MIT plus "modified versions must not claim to be the original": via comrak
+[[licenses.exceptions]]
+crate = "fmt2io"
+allow = ["MITNFA"]
+
 [[licenses.clarify]]
 crate = "ring"
 expression = "MIT AND ISC AND OpenSSL"

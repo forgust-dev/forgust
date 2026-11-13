@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # Forgust: one binary + the web UI. Runtime needs git >= 2.45 (trixie ships 2.47).
 
-FROM node:22.11-bookworm-slim AS web
+FROM node:26.12-bookworm-slim AS web
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --no-audit --no-fund

@@ -13,6 +13,6 @@ serde_json.workspace = true
 chrono.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
-utoipa = { version = "5", features = ["chrono"] }
+utoipa = { version = "6", features = ["chrono"] }
 globset = "0.4"
 uuid.workspace = true

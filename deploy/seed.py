@@ -222,7 +222,7 @@ workflow:
 stages: [build, test, package, deploy]
 
 default:
-  image: python:3.13-alpine
+  image: python:3.15-alpine
   interruptible: true
 
 variables:
@@ -291,7 +291,7 @@ container-image:
   script:
     - crane auth login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD"
     - mkdir -p layer/app && tar xzf dist/*.tar.gz -C layer/app && tar cf layer.tar -C layer app
-    - crane append --insecure --platform linux/amd64 -b python:3.13-alpine -f layer.tar -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
+    - crane append --insecure --platform linux/amd64 -b python:3.15-alpine -f layer.tar -t "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
     - crane tag --insecure "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA" "${CI_COMMIT_TAG:-latest}"
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_TAG

@@ -1,6 +1,7 @@
 /target
 /data
 /web/node_modules
+/web/tools/gen-api/node_modules
 /web/dist
 /bench/results
 .env

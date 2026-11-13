@@ -1,0 +1,111 @@
+version: 2
+
+# One pull request per ecosystem each week, majors included. A breaking update
+# turns its pull request red: it then gets a branch with the code changes.
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # pinned to the commit of its `1.99` branch, which picks the Rust version:
+    # moved by hand with the toolchain
+    ignore:
+      - dependency-name: "dtolnay/rust-toolchain"
+    cooldown:
+      default-days: 3
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    allow:
+      - dependency-type: "all"
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      rust:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "npm"
+    directory: "/web"
+    schedule:
+      interval: "weekly"
+    allow:
+      - dependency-type: "all"
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      web:
+        patterns:
+          - "*"
+
+  # npm run gen:api's own install: openapi-typescript uses TypeScript's
+  # JavaScript API, which TypeScript 7 dropped, so it keeps TypeScript 6
+  - package-ecosystem: "npm"
+    directory: "/web/tools/gen-api"
+    schedule:
+      interval: "weekly"
+    ignore:
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+    cooldown:
+      default-days: 3
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      gen-api:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker-compose"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # a new Postgres major cannot open the old data directory: moved by hand,
+    # with upgrade steps for existing installs
+    ignore:
+      - dependency-name: "postgres"
+        update-types: ["version-update:semver-major"]
+    cooldown:
+      default-days: 3
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      docker-compose:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # the Rust image moves with the toolchain CI pins (dtolnay/rust-toolchain)
+    ignore:
+      - dependency-name: "rust"
+    cooldown:
+      default-days: 3
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      docker:
+        patterns:
+          - "*"

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -65,7 +65,7 @@ export function openPalette(mode: Mode = "all") {
   window.dispatchEvent(new CustomEvent(OPEN, { detail: mode }));
 }
 
-type Entry = { key: string; label: string; hint?: string; icon: JSX.Element; to: string };
+type Entry = { key: string; label: string; hint?: string; icon: ReactElement; to: string };
 
 /** Subsequence match, scored so contiguous and basename hits rank first. */
 function fuzzy(needle: string, hay: string): number {

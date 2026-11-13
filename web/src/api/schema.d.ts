@@ -732,8 +732,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** One file of a job's artifacts archive (text and a few media types shown,
-         *     anything else downloaded). */
+        /**
+         * One file of a job's artifacts archive (text and a few media types shown,
+         *     anything else downloaded).
+         */
         get: operations["artifact_file"];
         put?: never;
         post?: never;
@@ -1156,8 +1158,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** How many merge requests are in each state (cheaper than listing them), with
-         *     the list's filters (`state`, `page` and `per_page` are ignored). */
+        /**
+         * How many merge requests are in each state (cheaper than listing them), with
+         *     the list's filters (`state`, `page` and `per_page` are ignored).
+         */
         get: operations["count"];
         put?: never;
         post?: never;
@@ -1782,9 +1786,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The last commit of each entry of a directory (a `git log -1 -- <path>` per
+        /**
+         * The last commit of each entry of a directory (a `git log -1 -- <path>` per
          *     entry, fast with the commit-graph's changed-path filters). Cached per
-         *     commit once complete. */
+         *     commit once complete.
+         */
         get: operations["last_commits"];
         put?: never;
         post?: never;
@@ -1803,8 +1809,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Signatures of several commits (a commit list): sha → verification; unsigned
-         *     commits are left out. */
+        /**
+         * Signatures of several commits (a commit list): sha → verification; unsigned
+         *     commits are left out.
+         */
         post: operations["signatures"];
         delete?: never;
         options?: never;
@@ -2015,9 +2023,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Description templates on the default branch: `merge_request` from
+        /**
+         * Description templates on the default branch: `merge_request` from
          *     `.gitlab/merge_request_templates/*.md` (or GitHub's pull request template),
-         *     `issue` from `.gitlab/issue_templates/*.md` (or `.github/ISSUE_TEMPLATE/*.md`). */
+         *     `issue` from `.gitlab/issue_templates/*.md` (or `.github/ISSUE_TEMPLATE/*.md`).
+         */
         get: operations["templates"];
         put?: never;
         post?: never;
@@ -2036,8 +2046,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Upload a file (multipart, part `file`) to show or link in Markdown, or to attach
-         *     to a release. */
+        /**
+         * Upload a file (multipart, part `file`) to show or link in Markdown, or to attach
+         *     to a release.
+         */
         post: operations["upload"];
         delete?: never;
         options?: never;
@@ -2169,8 +2181,10 @@ export interface paths {
         /** What a signed unsubscribe link is for (changes nothing: link scanners GET). */
         get: operations["unsubscribe_info"];
         put?: never;
-        /** One-click unsubscribe (RFC 8058, `List-Unsubscribe-Post`): the link's
-         *     signature is the authorization; the project's emails stop for that person. */
+        /**
+         * One-click unsubscribe (RFC 8058, `List-Unsubscribe-Post`): the link's
+         *     signature is the authorization; the project's emails stop for that person.
+         */
         post: operations["unsubscribe"];
         delete?: never;
         options?: never;
@@ -2331,8 +2345,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** A user's contribution calendar and recent activity, counting only projects
-         *     the viewer can see. */
+        /**
+         * A user's contribution calendar and recent activity, counting only projects
+         *     the viewer can see.
+         */
         get: operations["contributions"];
         put?: never;
         post?: never;
@@ -2385,8 +2401,10 @@ export interface components {
         /** @enum {string} */
         ActionKind: "create" | "update" | "delete" | "move";
         Activity: {
-            /** @description pushed, opened_merge_request, merged_merge_request, opened_issue,
-             *     closed_issue, commented_merge_request, commented_issue, approved */
+            /**
+             * @description pushed, opened_merge_request, merged_merge_request, opened_issue,
+             *     closed_issue, commented_merge_request, commented_issue, approved
+             */
             action: string;
             /** Format: date-time */
             at: string;
@@ -2640,7 +2658,7 @@ export interface components {
             scope?: string;
         };
         AutoMergeBody: {
-            method?: null | components["schemas"]["MergeMethod"];
+            method?: components["schemas"]["MergeMethod"] | null;
             /** @description Default: the MR's own choice. */
             remove_source_branch?: boolean | null;
             /** @description The source head the user reviewed (from merge_status.head_sha). */
@@ -2699,7 +2717,7 @@ export interface components {
             image: boolean;
             kind: components["schemas"]["EntryKind"];
             language: string;
-            lfs?: null | components["schemas"]["LfsInfo"];
+            lfs?: components["schemas"]["LfsInfo"] | null;
             /** @description Highlighted HTML, one entry per line. */
             lines: string[];
             /** @description Rendered Markdown, for `.md` files. */
@@ -2712,21 +2730,25 @@ export interface components {
             too_large: boolean;
         };
         BlobScan: {
-            /** @description False while it runs, or when it stopped at its limits (then the orphans
-             *     are partial too). */
+            /**
+             * @description False while it runs, or when it stopped at its limits (then the orphans
+             *     are partial too).
+             */
             complete: boolean;
             error?: string | null;
             /** Format: date-time */
             finished_at?: string | null;
-            /** @description What nothing references, by family (objects older than a day; a dry
-             *     run: nothing is deleted). */
+            /**
+             * @description What nothing references, by family (objects older than a day; a dry
+             *     run: nothing is deleted).
+             */
             orphans: components["schemas"]["OrphanGroup"][];
             prefixes: components["schemas"]["PrefixUsage"][];
             /** Format: date-time */
             started_at: string;
         };
         BranchDto: {
-            commit?: null | components["schemas"]["CommitSummary"];
+            commit?: components["schemas"]["CommitSummary"] | null;
             default: boolean;
             name: string;
             protected: boolean;
@@ -2760,8 +2782,10 @@ export interface components {
             pipeline_status?: string | null;
             /** Format: int64 */
             project_id: number;
-            /** @description Lands as its own commits rebased onto what is ahead (rebase /
-             *     fast-forward), not a merge commit. */
+            /**
+             * @description Lands as its own commits rebased onto what is ahead (rebase /
+             *     fast-forward), not a merge commit.
+             */
             rebase: boolean;
             /** @description Deletes the source branch once merged. */
             remove_source_branch: boolean;
@@ -2966,7 +2990,7 @@ export interface components {
             visibility?: string;
         };
         CreateImportBody: {
-            options?: null | components["schemas"]["Options"];
+            options?: components["schemas"]["Options"] | null;
             projects: components["schemas"]["ImportProjectBody"][];
             source: string;
             /** Format: int64 */
@@ -2998,8 +3022,10 @@ export interface components {
              * @description A milestone of the project.
              */
             milestone_id?: number | null;
-            /** @description Delete the source branch when the MR merges. Off by default, as in
-             *     GitLab's API (the web form ticks it). */
+            /**
+             * @description Delete the source branch when the MR merges. Off by default, as in
+             *     GitLab's API (the web form ticks it).
+             */
             remove_source_branch?: boolean | null;
             reviewer_ids?: number[] | null;
             source_branch: string;
@@ -3016,7 +3042,7 @@ export interface components {
             body: string;
             /** Format: int64 */
             parent_id?: number | null;
-            position?: null | components["schemas"]["NewPosition"];
+            position?: components["schemas"]["NewPosition"] | null;
         };
         CreateProject: {
             default_branch?: string | null;
@@ -3231,7 +3257,7 @@ export interface components {
             protected: boolean;
         };
         EnvironmentSummary: components["schemas"]["Environment"] & {
-            last_deployment?: null | components["schemas"]["Deployment"];
+            last_deployment?: components["schemas"]["Deployment"] | null;
         };
         /** @description Projects with open critical or high findings on their default branch. */
         ExposedProject: {
@@ -3369,7 +3395,7 @@ export interface components {
             can_admin: boolean;
             can_create_project: boolean;
             can_create_subgroup: boolean;
-            policy?: null | components["schemas"]["OrgPolicyDto"];
+            policy?: components["schemas"]["OrgPolicyDto"] | null;
         };
         GroupDto: {
             /** @description The avatar's URL (versioned), when it has one. */
@@ -3451,8 +3477,10 @@ export interface components {
         HookBody: {
             /** @description push, merge_request, note, release, pipeline, build */
             events: string[];
-            /** @description `generic` (default: the JSON payload) or a chat app: `slack`,
-             *     `mattermost`, `discord`, `matrix`, `teams`. */
+            /**
+             * @description `generic` (default: the JSON payload) or a chat app: `slack`,
+             *     `mattermost`, `discord`, `matrix`, `teams`.
+             */
             format?: string | null;
             secret?: string | null;
             url: string;
@@ -3685,13 +3713,13 @@ export interface components {
             coverage?: number | null;
             /** Format: date-time */
             created_at: string;
-            downstream?: null | components["schemas"]["PipelineLink"];
+            downstream?: components["schemas"]["PipelineLink"] | null;
             /**
              * Format: double
              * @description Seconds spent running (so far, while running).
              */
             duration?: number | null;
-            environment?: null | components["schemas"]["JobEnvironment"];
+            environment?: components["schemas"]["JobEnvironment"] | null;
             /** Format: int32 */
             exit_code?: number | null;
             failure_reason?: string | null;
@@ -3850,7 +3878,7 @@ export interface components {
         };
         LoginResponse: {
             challenge?: string | null;
-            session?: null | components["schemas"]["SessionInfo"];
+            session?: components["schemas"]["SessionInfo"] | null;
             two_factor_required: boolean;
         };
         LookupBody: {
@@ -3942,7 +3970,7 @@ export interface components {
         };
         MergeRequestBody: {
             message?: string | null;
-            method?: null | components["schemas"]["MergeMethod"];
+            method?: components["schemas"]["MergeMethod"] | null;
             /** @description Default: the MR's own choice (`remove_source_branch`). */
             remove_source_branch?: boolean | null;
             /** @description The source head the user reviewed (from merge_status.head_sha). */
@@ -4024,14 +4052,14 @@ export interface components {
             approvals: components["schemas"]["Approval"][];
             approved_by_me: boolean;
             assignees: components["schemas"]["UserBrief"][];
-            auto_merge_user?: null | components["schemas"]["UserBrief"];
+            auto_merge_user?: components["schemas"]["UserBrief"] | null;
             can_approve: boolean;
             can_edit: boolean;
             /** @description Sanitized HTML of the description (Markdown). */
             description_html: string;
             labels: components["schemas"]["Label"][];
             reviewers: components["schemas"]["Reviewer"][];
-            stack?: null | components["schemas"]["StackView"];
+            stack?: components["schemas"]["StackView"] | null;
             /** @description Newest first. */
             versions: components["schemas"]["MrDiff"][];
         };
@@ -4058,7 +4086,7 @@ export interface components {
             assignees: components["schemas"]["UserBrief"][];
             labels: components["schemas"]["Label"][];
             reviewers: components["schemas"]["Reviewer"][];
-            stack?: null | components["schemas"]["StackBadge"];
+            stack?: components["schemas"]["StackBadge"] | null;
         };
         /** @description What a merge request's pipeline finds, against the default branch. */
         MrSecurity: {
@@ -4080,7 +4108,7 @@ export interface components {
             report_types: string[];
         };
         MrTests: {
-            base?: null | components["schemas"]["Totals"];
+            base?: components["schemas"]["Totals"] | null;
             /**
              * Format: int64
              * @description The target branch's latest finished pipeline with test reports.
@@ -4088,7 +4116,7 @@ export interface components {
             base_pipeline_iid?: number | null;
             /** @description Failing here and on the target branch. */
             existing_failures: components["schemas"]["ComparedFailure"][];
-            head?: null | components["schemas"]["Totals"];
+            head?: components["schemas"]["Totals"] | null;
             /**
              * Format: int64
              * @description The merge request's head pipeline with test reports.
@@ -4220,7 +4248,7 @@ export interface components {
             /** @description Sanitized HTML of the body (Markdown). */
             body_html: string;
             outdated: boolean;
-            position?: null | components["schemas"]["MappedPosition"];
+            position?: components["schemas"]["MappedPosition"] | null;
             /**
              * Format: int32
              * @description Version the comment was written on.
@@ -4263,11 +4291,13 @@ export interface components {
         OrphanGroup: {
             /** Format: int64 */
             bytes: number;
-            /** @description `lfs` (no LFS record), `lfs_unused` (a record no project uses), `registry`
+            /**
+             * @description `lfs` (no LFS record), `lfs_unused` (a record no project uses), `registry`
              *     (no blob record), `registry_uploads` (no upload in progress), `ci` (no
              *     artifact or log record), `uploads`, `avatars` (of a deleted user, project
              *     or group), `tmp` (interrupted writes), or `unrecognized` (keys Forgust does
-             *     not write: listed, never called orphans). */
+             *     not write: listed, never called orphans).
+             */
             family: string;
             /** Format: int64 */
             objects: number;
@@ -4310,7 +4340,7 @@ export interface components {
         };
         /** @description The project's Pages site. */
         PagesInfo: {
-            deployment?: null | components["schemas"]["PagesDeployment"];
+            deployment?: components["schemas"]["PagesDeployment"] | null;
             /** @description The instance serves sites (`pages.domain` is set). */
             enabled: boolean;
             /** @description Only public projects' sites are served. */
@@ -4319,7 +4349,7 @@ export interface components {
             url?: string | null;
         };
         PathCommit: {
-            commit?: null | components["schemas"]["CommitInfo"];
+            commit?: components["schemas"]["CommitInfo"] | null;
             path: string;
         };
         Person: {
@@ -4390,7 +4420,7 @@ export interface components {
             jobs: components["schemas"]["JobDto"][];
             /** @description Stage names in order (only stages that have jobs). */
             stages: string[];
-            upstream?: null | components["schemas"]["PipelineLink"];
+            upstream?: components["schemas"]["PipelineLink"] | null;
         };
         PipelineLink: {
             /** Format: int64 */
@@ -4450,8 +4480,10 @@ export interface components {
         ProjectCiSettings: {
             /** @description Cancel older pipelines of a branch when a new commit's pipeline starts. */
             auto_cancel_redundant: boolean;
-            /** @description Merge check: no new critical or high security finding left
-             *     undismissed. */
+            /**
+             * @description Merge check: no new critical or high security finding left
+             *     undismissed.
+             */
             block_new_security_findings: boolean;
             ci_config_path: string;
             /** Format: int32 */
@@ -4460,8 +4492,10 @@ export interface components {
             default_timeout_secs: number;
             instance_runners_enabled: boolean;
             job_token_scope_enabled: boolean;
-            /** @description Merge requests merge through a merge train (each tested on the merge
-             *     of everything ahead of it). */
+            /**
+             * @description Merge requests merge through a merge train (each tested on the merge
+             *     of everything ahead of it).
+             */
             merge_trains_enabled: boolean;
             only_merge_if_pipeline_succeeds: boolean;
             /** Format: int64 */
@@ -4477,7 +4511,7 @@ export interface components {
             empty_repo: boolean;
             /** @description Older paths that still redirect here. */
             redirects: string[];
-            storage_warning?: null | components["schemas"]["Warning"];
+            storage_warning?: components["schemas"]["Warning"] | null;
         };
         ProjectDto: {
             /** @description Read-only since then (its Owner can unarchive it). */
@@ -4540,8 +4574,8 @@ export interface components {
         };
         /** @description What a project keeps, against its quotas. */
         ProjectStorageUse: components["schemas"]["StorageUse"] & {
-            namespace?: null | components["schemas"]["QuotaUse"];
-            quota?: null | components["schemas"]["QuotaUse"];
+            namespace?: components["schemas"]["QuotaUse"] | null;
+            quota?: components["schemas"]["QuotaUse"] | null;
             /** Format: int64 */
             repository_bytes: number;
             /** Format: int64 */
@@ -4550,8 +4584,10 @@ export interface components {
         ProtectBranch: {
             allow_deploy_keys?: boolean;
             allow_force_push?: boolean;
-            /** @description Merge requests into it need an approval from the code owners of the
-             *     files they change (`CODEOWNERS`). */
+            /**
+             * @description Merge requests into it need an approval from the code owners of the
+             *     files they change (`CODEOWNERS`).
+             */
             code_owner_approval_required?: boolean;
             merge_access_level?: string;
             /** @description Branch name or glob, e.g. `release/*`. */
@@ -4709,7 +4745,7 @@ export interface components {
             updated_at: string;
         };
         ReleaseDto: components["schemas"]["Release"] & {
-            commit?: null | components["schemas"]["CommitBrief"];
+            commit?: components["schemas"]["CommitBrief"] | null;
             description_html: string;
             links: components["schemas"]["LinkDto"][];
             sources: components["schemas"]["Source"][];
@@ -4764,11 +4800,13 @@ export interface components {
              * @description Hours between runs (1 to 168).
              */
             interval_hours: number;
-            last_run?: null | components["schemas"]["RenovateRun"];
+            last_run?: components["schemas"]["RenovateRun"] | null;
             /** Format: date-time */
             next_run_at?: string | null;
-            /** @description Renovate opens an onboarding merge request first; false: it runs with
-             *     its defaults, no config file needed. */
+            /**
+             * @description Renovate opens an onboarding merge request first; false: it runs with
+             *     its defaults, no config file needed.
+             */
             onboarding: boolean;
         };
         RepoStats: {
@@ -5058,10 +5096,12 @@ export interface components {
              */
             last_scan_pipeline_iid?: number | null;
         };
-        /** @description Built-in security scanners (ADR-0024): projects turn them on and
+        /**
+         * @description Built-in security scanners (ADR-0024): projects turn them on and
          *     Forgust runs them as CI jobs on the instance's runners. Administrators
          *     change these in Admin > Security scanning (stored over this). Config
-         *     section `[security_scanning]`. */
+         *     section `[security_scanning]`.
+         */
         SecurityScanningConfig: {
             /** @default true */
             enabled: boolean;
@@ -5101,7 +5141,7 @@ export interface components {
         SessionInfo: {
             /** @description Send back as `X-CSRF-Token` on POST/PUT/DELETE. */
             csrf_token: string;
-            impersonator?: null | components["schemas"]["UserDto"];
+            impersonator?: components["schemas"]["UserDto"] | null;
             user: components["schemas"]["UserDto"];
         };
         SetQuota: {
@@ -5281,7 +5321,7 @@ export interface components {
              * @description Repositories not measured yet (sizes refresh after pushes and hourly).
              */
             repositories_unmeasured: number;
-            scan?: null | components["schemas"]["BlobScan"];
+            scan?: components["schemas"]["BlobScan"] | null;
             /** Format: int64 */
             total: number;
         };
@@ -5313,7 +5353,7 @@ export interface components {
         };
         TagDto: {
             annotated: boolean;
-            commit?: null | components["schemas"]["CommitSummary"];
+            commit?: components["schemas"]["CommitSummary"] | null;
             name: string;
             /** @description A protected tag rule matches it. */
             protected: boolean;
@@ -5417,8 +5457,10 @@ export interface components {
         };
         TotpCode: {
             code: string;
-            /** @description The account's password: a borrowed session must not be able to put its
-             *     own second factor on the account. */
+            /**
+             * @description The account's password: a borrowed session must not be able to put its
+             *     own second factor on the account.
+             */
             password?: string;
         };
         TotpDisable: {
@@ -5437,8 +5479,10 @@ export interface components {
             complete: boolean;
             /** @description Log text from `offset` (raw bytes as UTF-8, invalid sequences replaced). */
             content: string;
-            /** @description More bytes are there already: read again from `size` (a log is sent in
-             *     pieces of at most 1 MB). */
+            /**
+             * @description More bytes are there already: read again from `size` (a log is sent in
+             *     pieces of at most 1 MB).
+             */
             more: boolean;
             /**
              * Format: int64
@@ -5472,7 +5516,7 @@ export interface components {
         TreeResponse: {
             commit: string;
             entries: components["schemas"]["TreeEntry"][];
-            last_commit?: null | components["schemas"]["CommitInfo"];
+            last_commit?: components["schemas"]["CommitInfo"] | null;
             path: string;
         };
         Unsubscription: {
@@ -5503,8 +5547,10 @@ export interface components {
             title?: string | null;
         };
         UpdateMe: {
-            /** @description Needed to change the email address (a borrowed session must not be
-             *     able to move the account to another inbox). */
+            /**
+             * @description Needed to change the email address (a borrowed session must not be
+             *     able to move the account to another inbox).
+             */
             current_password?: string;
             email: string;
             name: string;
@@ -5572,8 +5618,10 @@ export interface components {
             /** Format: date-time */
             created_at: string;
             email?: string | null;
-            /** @description Shown with the email: whether it is confirmed, and a new address
-             *     waiting for its confirmation link. */
+            /**
+             * @description Shown with the email: whether it is confirmed, and a new address
+             *     waiting for its confirmation link.
+             */
             email_verified?: boolean | null;
             /** Format: int64 */
             id: number;
@@ -5619,9 +5667,11 @@ export interface components {
             signature_type: string;
             /** @description The key owner's username, when the key is registered. */
             signer?: string | null;
-            /** @description `verified`; `unverified` (good signature, but the committer email is not
+            /**
+             * @description `verified`; `unverified` (good signature, but the committer email is not
              *     the key owner's confirmed address); `unknown_key` (no user registered
-             *     the key); `bad_signature`; `unsupported` (X.509). */
+             *     the key); `bad_signature`; `unsupported` (X.509).
+             */
             verification_status: string;
         };
         /** @description How full a project or its namespace was when last measured (the fuller one). */
@@ -5641,8 +5691,10 @@ export interface components {
             created_at: string;
             enabled: boolean;
             events: string[];
-            /** @description `generic` (the JSON payload), or a chat app: `slack`, `mattermost`,
-             *     `discord`, `matrix`, `teams`. */
+            /**
+             * @description `generic` (the JSON payload), or a chat app: `slack`, `mattermost`,
+             *     `discord`, `matrix`, `teams`.
+             */
             format: string;
             /** Format: int64 */
             id: number;

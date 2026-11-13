@@ -1,12 +1,13 @@
 //! Tokens, password hashing and encryption at rest.
 
-use aes_gcm::aead::{Aead, AeadCore, KeyInit, OsRng};
-use aes_gcm::{Aes256Gcm, Nonce};
+use aes_gcm::Aes256Gcm;
+use aes_gcm::aead::{Aead, Generate, KeyInit, Nonce};
 use argon2::Argon2;
-use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
+use argon2::password_hash::phc::PasswordHash;
+use argon2::password_hash::{PasswordHasher, PasswordVerifier};
 use base64::Engine;
 use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
-use rand::{Rng, RngCore};
+use rand::{Rng, RngExt};
 use sha2::{Digest, Sha256};
 
 /// Token prefixes by type (ADR-0015), so leaked tokens are easy to scan for.
@@ -21,14 +22,14 @@ pub mod prefix {
 const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
 pub fn random_token(prefix: &str) -> String {
-    let mut rng = rand::thread_rng();
-    let body: String = (0..32).map(|_| ALPHABET[rng.gen_range(0..ALPHABET.len())] as char).collect();
+    let mut rng = rand::rng();
+    let body: String = (0..32).map(|_| ALPHABET[rng.random_range(0..ALPHABET.len())] as char).collect();
     format!("{prefix}{body}")
 }
 
 pub fn random_urlsafe(bytes: usize) -> String {
     let mut buf = vec![0u8; bytes];
-    rand::thread_rng().fill_bytes(&mut buf);
+    rand::rng().fill_bytes(&mut buf);
     URL_SAFE_NO_PAD.encode(buf)
 }
 
@@ -52,8 +53,8 @@ pub async fn hash_password_gated(password: &str) -> anyhow::Result<String> {
 }
 
 pub fn hash_password(password: &str) -> anyhow::Result<String> {
-    let salt = SaltString::generate(&mut argon2::password_hash::rand_core::OsRng);
-    Ok(Argon2::default().hash_password(password.as_bytes(), &salt).map_err(|e| anyhow::anyhow!("{e}"))?.to_string())
+    // a fresh random salt from the OS for every hash
+    Ok(Argon2::default().hash_password(password.as_bytes()).map_err(|e| anyhow::anyhow!("{e}"))?.to_string())
 }
 
 pub fn verify_password(password: &str, hash: &str) -> bool {
@@ -108,8 +109,8 @@ impl SecretBox {
 
     /// A signature of `msg` for a link (HMAC-SHA256, URL-safe).
     pub fn sign(&self, msg: &str) -> String {
-        use hmac::{Hmac, Mac};
-        let mut m = <Hmac<Sha256> as Mac>::new_from_slice(&self.mac_key).expect("any key length");
+        use hmac::{Hmac, KeyInit, Mac};
+        let mut m = <Hmac<Sha256> as KeyInit>::new_from_slice(&self.mac_key).expect("any key length");
         m.update(msg.as_bytes());
         URL_SAFE_NO_PAD.encode(m.finalize().into_bytes())
     }
@@ -120,14 +121,14 @@ impl SecretBox {
 
     pub fn generate_key() -> String {
         let mut k = [0u8; 32];
-        rand::thread_rng().fill_bytes(&mut k);
+        rand::rng().fill_bytes(&mut k);
         STANDARD.encode(k)
     }
 
     /// AES-256-GCM; output is base64(nonce || ciphertext).
     pub fn encrypt(&self, plaintext: &[u8]) -> anyhow::Result<String> {
         // a fresh random nonce for every message, from the OS
-        let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+        let nonce = Nonce::<Aes256Gcm>::generate();
         let ct = self.cipher.encrypt(&nonce, plaintext).map_err(|e| anyhow::anyhow!("{e}"))?;
         let mut out = nonce.to_vec();
         out.extend(ct);
@@ -138,7 +139,8 @@ impl SecretBox {
         let raw = STANDARD.decode(sealed)?;
         anyhow::ensure!(raw.len() > 12, "sealed value too short");
         let (nonce, ct) = raw.split_at(12);
-        self.cipher.decrypt(Nonce::from_slice(nonce), ct).map_err(|e| anyhow::anyhow!("{e}"))
+        let nonce = Nonce::<Aes256Gcm>::try_from(nonce).map_err(|e| anyhow::anyhow!("{e}"))?;
+        self.cipher.decrypt(&nonce, ct).map_err(|e| anyhow::anyhow!("{e}"))
     }
 
     pub fn decrypt_str(&self, sealed: &str) -> anyhow::Result<String> {
@@ -191,5 +193,25 @@ mod tests {
         // a new nonce each time: the same secret never seals the same way twice
         assert_ne!(b.encrypt(b"JBSWY3DPEHPK3PXP").unwrap(), sealed);
         assert!(SecretBox::from_base64(&SecretBox::generate_key()).unwrap().decrypt(&sealed).is_err());
+    }
+
+    // Values produced by the previous versions of argon2, aes-gcm and hmac:
+    // what is already stored, or already sent out, must still work.
+    const OLD_KEY: &str = "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc=";
+
+    #[test]
+    fn verifies_existing_password_hashes() {
+        let h = "$argon2id$v=19$m=19456,t=2,p=1$qfkAMuMQOdo1ELfRKTteQg$FOMCy1G7PZEfRiKce1KkLnAk7NtL/6m0Gvkizr6FAHA";
+        assert!(verify_password("correct horse", h));
+        assert!(!verify_password("wrong", h));
+        // new hashes keep the same algorithm and cost
+        assert!(hash_password("x").unwrap().starts_with("$argon2id$v=19$m=19456,t=2,p=1$"));
+    }
+
+    #[test]
+    fn opens_existing_secrets_and_signs_links_the_same_way() {
+        let b = SecretBox::from_base64(OLD_KEY).unwrap();
+        assert_eq!(b.decrypt_str("L0dibbhn63DwoVD+J0pZ/txPw6UrqAqGn9C6Q25/bcoMsxGdGRtgKVg=").unwrap(), "stored secret");
+        assert_eq!(b.sign("unsubscribe:42"), "zQ99AL3EG0XzmB8kDKyOdhu-_sfjOzKp-ygLHkELI2I");
     }
 }

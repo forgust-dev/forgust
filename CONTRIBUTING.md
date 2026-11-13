@@ -17,7 +17,7 @@ Thanks for helping. Bug reports, fixes, docs and tests are all welcome.
 
 ## Set up
 
-See [Development](README.md#development) in the README: Rust, git, Node 22, and Docker for
+See [Development](README.md#development) in the README: Rust, git, Node 26, and Docker for
 Postgres, S3 and SMTP.
 
 ## Before you open a pull request
@@ -38,7 +38,8 @@ And when you changed:
 - **the API:** `cargo run -p forgust-server -- openapi > web/openapi.json`, then
   `(cd web && npm run gen:api)`; a unit test fails while they are stale;
 - **the UI:** the Playwright tests (`cd web && npm run e2e`), at desktop width and
-  390 px;
+  390 px; if a page in the README changed, its screenshots too
+  (`node deploy/screenshots.mjs`, see the script for the demo it needs);
 - **CI behaviour:** a case in [`ci-conformance/cases/`](ci-conformance/README.md), and
   a note in the pull request for the CI compatibility guide.
 
@@ -60,3 +61,17 @@ git commit -s
 
 adds the line from your `user.name` and `user.email`. To sign commits you already
 made: `git rebase --signoff main`.
+
+## Releasing (maintainers)
+
+1. In a pull request, set the new version in `Cargo.toml` (`[workspace.package]`) and
+   `web/package.json`, then refresh the lock files (`cargo check`,
+   `cd web && npm install`): `chore: release 0.2.0`.
+2. Once it is merged, tag that commit of `main` and push the tag:
+   `git tag v0.2.0 && git push origin v0.2.0`.
+3. The release workflow checks that the tag matches both versions and is on `main`,
+   builds the image for amd64 and arm64, pushes `ghcr.io/forgust-dev/forgust` as
+   `0.2.0`, `0.2` and `latest`, and opens a draft GitHub release with notes generated
+   from the merged pull requests. Edit the notes, then publish it.
+
+A tag such as `v0.2.0-rc.1` makes a pre-release: no `0.2` or `latest` tag.

@@ -71,7 +71,7 @@ export function remeasure(v: { measure: () => void; getVirtualItems: () => unkno
 }
 
 /** The element's content width, kept up to date. */
-export function useWidth(ref: RefObject<HTMLElement>): number {
+export function useWidth(ref: RefObject<HTMLElement | null>): number {
   const [w, setW] = useState(0);
   useLayoutEffect(() => {
     const el = ref.current;
@@ -97,7 +97,7 @@ export type HScroll = {
  * every bar. Gestures: trackpad / shift+wheel and swipes over a row, its
  * bars, and dragging a text selection past either edge of the code.
  */
-export function useHScroll(scope: RefObject<HTMLElement>, ranges: number[]): HScroll {
+export function useHScroll(scope: RefObject<HTMLElement | null>, ranges: number[]): HScroll {
   const xs = useRef(new Map<number, number>());
   const rs = useRef(ranges);
   rs.current = ranges;

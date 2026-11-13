@@ -73,7 +73,7 @@ function Tip({ text, rect }: { text: string; rect: DOMRect }) {
  */
 function useTips() {
   const [tip, setTip] = useState<{ text: string; rect: DOMRect } | null>(null);
-  const t = useRef<number>();
+  const t = useRef<number | undefined>(undefined);
   useEffect(() => {
     const enter = (e: Event) => {
       const el = (e.target as Element | null)?.closest?.("[title], [data-title]") as HTMLElement | SVGElement | null;
@@ -132,8 +132,8 @@ function useTips() {
 export function HoverCards() {
   const tip = useTips();
   const [card, setCard] = useState<{ target: Target; rect: DOMRect; anchor: HTMLAnchorElement } | null>(null);
-  const showT = useRef<number>();
-  const hideT = useRef<number>();
+  const showT = useRef<number | undefined>(undefined);
+  const hideT = useRef<number | undefined>(undefined);
   const over = useRef(false);
 
   useEffect(() => {

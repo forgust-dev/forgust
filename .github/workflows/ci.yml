@@ -29,11 +29,11 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.99
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@d124f86f28ff42855784ff3319f48ac182c248f8 # 1.99
         with:
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Format
         run: cargo fmt --all --check
       - name: Clippy
@@ -81,7 +81,7 @@ jobs:
       FORGUST_TEST_PG_RESTORE: /usr/lib/postgresql/17/bin/pg_restore
       FORGUST_TEST_PG_URL: postgres://forgust:forgust@127.0.0.1:5432
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: System packages (git-lfs, the Postgres 17 client for the backup test)
         run: |
           sudo apt-get update
@@ -89,8 +89,8 @@ jobs:
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
           sudo apt-get install -y --no-install-recommends postgresql-client-17
           git --version && git lfs version && /usr/lib/postgresql/17/bin/pg_dump --version
-      - uses: dtolnay/rust-toolchain@1.99
-      - uses: Swatinem/rust-cache@v2
+      - uses: dtolnay/rust-toolchain@d124f86f28ff42855784ff3319f48ac182c248f8 # 1.99
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           shared-key: test
           save-if: ${{ matrix.shard == 1 }}
@@ -128,9 +128,9 @@ jobs:
       DATABASE_URL: postgres://forgust:forgust@127.0.0.1:5432/forgust
       FORGUST_TEST_RUNNER: gitlab/gitlab-runner:${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.99
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@d124f86f28ff42855784ff3319f48ac182c248f8 # 1.99
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Images
         run: |
           pull() { for i in 1 2 3 4; do docker pull -q "$1" && return; sleep 15; done; return 1; }
@@ -159,9 +159,9 @@ jobs:
       FORGUST_TEST_SKOPEO: quay.io/skopeo/stable:v1.22.3
       GLAB_VERSION: "1.128.0"
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.99
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@d124f86f28ff42855784ff3319f48ac182c248f8 # 1.99
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: glab, Renovate and skopeo
         run: |
           curl -sSfL "https://gitlab.com/gitlab-org/cli/-/releases/v${GLAB_VERSION}/downloads/glab_${GLAB_VERSION}_linux_amd64.tar.gz" \
@@ -189,8 +189,8 @@ jobs:
     env:
       CARGO_DENY: "0.20.2"
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.99
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@d124f86f28ff42855784ff3319f48ac182c248f8 # 1.99
       - name: cargo-deny
         run: |
           curl -sSfL "https://github.com/EmbarkStudios/cargo-deny/releases/download/${CARGO_DENY}/cargo-deny-${CARGO_DENY}-x86_64-unknown-linux-musl.tar.gz" \
@@ -204,10 +204,10 @@ jobs:
       run:
         working-directory: web
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version: 26
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
@@ -221,7 +221,7 @@ jobs:
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build the image
         run: docker build -t "forgust:ci-${GITHUB_RUN_NUMBER}" .
       - name: The image starts
@@ -248,12 +248,12 @@ jobs:
       FORGUST_SERVER__DATA_DIR: /tmp/forgust-e2e
       FORGUST_SERVER__STATIC_DIR: web/dist
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.99
-      - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@d124f86f28ff42855784ff3319f48ac182c248f8 # 1.99
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version: 26
           cache: npm
           cache-dependency-path: web/package-lock.json
       - name: Build
@@ -278,7 +278,7 @@ jobs:
       - name: Server log
         if: failure()
         run: tail -200 /tmp/forgust-e2e.log
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         continue-on-error: true
         with:
