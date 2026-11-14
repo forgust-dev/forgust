@@ -1,0 +1,156 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT n.id AS \"id!\", n.kind AS \"kind!: String\", n.project_id AS \"project_id!\", r.path AS project_path,\n                  n.target_type AS \"target_type!\", n.target_iid, n.title AS \"title!\", n.summary AS \"summary!\",\n                  u.username AS \"actor_username?\", u.name AS \"actor_name?\", n.read_at IS NOT NULL AS \"read!\", n.created_at AS \"created_at!\"\n           FROM listed_notifications n\n           JOIN routes r ON r.source_type = 'project' AND r.source_id = n.project_id\n           LEFT JOIN users u ON u.id = n.actor_id\n           WHERE n.user_id = $1\n           ORDER BY n.created_at DESC, n.id DESC LIMIT $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "listed_notifications",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "kind!: String",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "listed_notifications",
+            "name": "kind"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "project_id!",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "listed_notifications",
+            "name": "project_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "project_path",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "routes",
+            "name": "path"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "target_type!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "listed_notifications",
+            "name": "target_type"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "target_iid",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "listed_notifications",
+            "name": "target_iid"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "title!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "listed_notifications",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "summary!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "listed_notifications",
+            "name": "summary"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "actor_username?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "username"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "actor_name?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "read!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at!",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "listed_notifications",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      null,
+      true
+    ]
+  },
+  "hash": "497b295c32fc31132353729aa85396a3d3d6da25a6029c9344307c30f9aa8a39"
+}

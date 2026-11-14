@@ -136,7 +136,7 @@ pub async fn ingest(state: &AppState, build_id: i64) -> anyhow::Result<()> {
 /// the Maintainers. A new secret: to whoever ran the pipeline (they pushed it),
 /// to rotate it.
 async fn alert(state: &AppState, p: &Project, pl: &Pipeline, fixable: &[Finding], secrets: &[Finding]) {
-    use super::notify::{Notice, Reason, deliver};
+    use super::notify::{About, Notice, Reason, deliver};
     let web = state.cfg.web_url(&p.full_path);
     if !fixable.is_empty() {
         let mut body = format!(
@@ -170,7 +170,10 @@ async fn alert(state: &AppState, p: &Project, pl: &Pipeline, fixable: &[Finding]
             state,
             Notice {
                 project: p,
-                need: crate::auth::authz::ProjectAction::ReadCode,
+                about: About::security(
+                    &pl.git_ref,
+                    format!("found {} vulnerable dependenc{} to update", fixable.len(), if fixable.len() == 1 { "y" } else { "ies" }),
+                ),
                 actor: None,
                 subject,
                 body,
@@ -204,7 +207,10 @@ async fn alert(state: &AppState, p: &Project, pl: &Pipeline, fixable: &[Finding]
             state,
             Notice {
                 project: p,
-                need: crate::auth::authz::ProjectAction::ReadCode,
+                about: About::security(
+                    &pl.git_ref,
+                    format!("found {} secret{} in the code", secrets.len(), if secrets.len() == 1 { "" } else { "s" }),
+                ),
                 actor: None,
                 subject: format!("[{}] A secret was found in the code", p.full_path),
                 body,

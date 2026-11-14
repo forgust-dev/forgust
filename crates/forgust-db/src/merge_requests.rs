@@ -597,11 +597,13 @@ pub async fn approvals(e: impl PgExecutor<'_>, mr_id: i64, project_id: i64) -> R
     .await
 }
 
-pub async fn approve(e: impl PgExecutor<'_>, mr_id: i64, user_id: i64) -> Result<()> {
-    sqlx::query!("INSERT INTO approvals (merge_request_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", mr_id, user_id)
+/// Whether the approval is new (not one the person had already given).
+pub async fn approve(e: impl PgExecutor<'_>, mr_id: i64, user_id: i64) -> Result<bool> {
+    Ok(sqlx::query!("INSERT INTO approvals (merge_request_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", mr_id, user_id)
         .execute(e)
-        .await?;
-    Ok(())
+        .await?
+        .rows_affected()
+        > 0)
 }
 
 pub async fn unapprove(e: impl PgExecutor<'_>, mr_id: i64, user_id: i64) -> Result<bool> {

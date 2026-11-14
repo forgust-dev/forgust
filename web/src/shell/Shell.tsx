@@ -45,6 +45,7 @@ import { Avatar, Tile } from "../components/ui";
 import { ResendLink } from "../components/ResendLink";
 import { useWork } from "../prefetch";
 import { SETTINGS_PAGES } from "../pages/project/settingsPages";
+import { InboxBell } from "../components/Inbox";
 
 /** A nav entry; `children` show under it while its section is active. */
 type Item = { to: string; label: string; icon?: ReactNode; end?: boolean; count?: number; match?: RegExp; children?: Item[] };
@@ -473,6 +474,7 @@ export function Shell({ children }: { children: ReactNode }) {
           <kbd>{IS_MAC ? "⌘K" : "Ctrl K"}</kbd>
         </button>
         <NewMenu />
+        <InboxBell />
         <ThemeButton />
         <UserMenu />
       </header>

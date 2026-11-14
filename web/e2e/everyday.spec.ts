@@ -1,4 +1,4 @@
-import { test, expect, P, ADMIN, apiCall, csrfHeaders, freshProject, isMobile } from "./fixtures";
+import { test, expect, P, ADMIN, apiCall, at, csrfHeaders, freshProject, isMobile } from "./fixtures";
 
 const MR = `${P}/-/merge_requests`;
 
@@ -478,4 +478,40 @@ test("an unsubscribe link cannot point the page at another API route", async ({ 
   await expect(page.getByText("This link is not valid any more.")).toBeVisible();
   await expect(page.getByRole("button", { name: /Stop emails/ })).toHaveCount(0);
   expect(posts).toEqual([]);
+});
+
+test("the bell: a failed pipeline arrives live, and each kind has its switches", async ({ page }) => {
+  const csrf = await csrfHeaders(page);
+  await page.request.post("/api/v1/user/notifications/read", { headers: csrf });
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: "Notifications", exact: true })).toBeVisible();
+  // a configuration that does not load: the pipeline of the push is born failed
+  const fresh = await freshProject(page, "bell", { ".gitlab-ci.yml": "job:\n  script: x\n  secrets:\n    DB: {vault: db/pw}\n" });
+  try {
+    // no reload: the event stream brings it, and it shows on screen
+    await expect(page.locator(".toast.notice").last()).toContainText("failed: Pipeline #1 on main");
+    await page.getByRole("button", { name: "Notifications: 1 unread" }).click();
+    const item = page.locator(".inbox").getByRole("link", { name: /Pipeline #1 on main/ });
+    await expect(item).toContainText("failed");
+    await item.click();
+    await at(page, `${fresh.web}/-/pipelines/1`);
+    // the click focused the link (its hover card is asked for) and the list closed
+    // under it: no card may show up in a corner afterwards
+    await page.waitForTimeout(700);
+    await expect(page.locator(".hover-card")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Notifications", exact: true })).toBeVisible();
+
+    await page.goto("/profile/notifications");
+    const email = page.getByRole("checkbox", { name: "Failed pipelines: email" });
+    await expect(email).toBeChecked();
+    await expect(page.getByRole("checkbox", { name: "Fixed pipelines: email" })).not.toBeChecked();
+    await email.uncheck();
+    await expect(email).not.toBeChecked();
+    await page.reload();
+    await expect(email).not.toBeChecked();
+    await expect(page.getByRole("checkbox", { name: "Failed pipelines: in app" })).toBeChecked();
+  } finally {
+    await page.request.put("/api/v1/user/notification_channels", { data: { kind: "pipeline_failed", channel: "email", enabled: true }, headers: csrf });
+    await fresh.remove();
+  }
 });

@@ -48,6 +48,17 @@ pub enum Event {
     JobsQueued {
         project_id: i64,
     },
+    /// A notification reached this person's inbox (only their own streams hear
+    /// it); `screen`: they want it shown as it arrives.
+    Notification {
+        user_id: i64,
+        screen: bool,
+        notification: forgust_db::notifications::Notification,
+    },
+    /// This person's inbox changed otherwise (they read something elsewhere).
+    Inbox {
+        user_id: i64,
+    },
 }
 
 impl Event {
@@ -56,8 +67,10 @@ impl Event {
         Event::Job { project_id: b.project_id, pipeline_id: b.pipeline_id, job_id: b.id, status: status.into(), trace_size: b.trace_size }
     }
 
-    pub fn project_id(&self) -> i64 {
+    /// Who may hear it on a live stream.
+    pub fn audience(&self) -> Audience {
         match self {
+            Event::Notification { user_id, .. } | Event::Inbox { user_id } => Audience::User(*user_id),
             Event::Push { project_id, .. }
             | Event::ProjectDeleted { project_id }
             | Event::RepoReset { project_id }
@@ -65,9 +78,16 @@ impl Event {
             | Event::Pipeline { project_id, .. }
             | Event::Job { project_id, .. }
             | Event::JobTrace { project_id, .. }
-            | Event::JobsQueued { project_id } => *project_id,
+            | Event::JobsQueued { project_id } => Audience::Project(*project_id),
         }
     }
+}
+
+/// Who an event is for: those who see a project, or one person.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Audience {
+    Project(i64),
+    User(i64),
 }
 
 pub trait EventBus: Send + Sync + 'static {
@@ -106,6 +126,6 @@ mod tests {
         let bus = InProcessBus::new(16);
         let mut rx = bus.subscribe();
         bus.publish(Event::Push { project_id: 1, refs: vec!["refs/heads/main".into()] });
-        assert_eq!(rx.recv().await.unwrap().project_id(), 1);
+        assert_eq!(rx.recv().await.unwrap().audience(), Audience::Project(1));
     }
 }

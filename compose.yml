@@ -17,6 +17,11 @@ services:
     image: forgust:local
     build: .
     restart: unless-stopped
+    # the server only writes to its volume and /tmp, and needs no capability
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
     depends_on:
       db: { condition: service_healthy }
       s3: { condition: service_healthy }

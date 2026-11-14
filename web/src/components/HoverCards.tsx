@@ -66,6 +66,25 @@ function Tip({ text, rect }: { text: string; rect: DOMRect }) {
 }
 
 /**
+ * Focus asks for a tip or a card only when it came from the keyboard: a click
+ * focuses what it hits, and a menu or popover that closes hands the focus back
+ * to its button, with the pointer elsewhere and nothing to end the tip.
+ */
+function byKeyboard(e: Event, el: Element) {
+  return e.type !== "focusin" || el.matches(":focus-visible");
+}
+
+/**
+ * Whether the element still asks for its tip or card when the delay ends: on
+ * the page, and under the pointer or focused from the keyboard. Not one that
+ * went away meanwhile (a click that navigated, a menu that closed): its tip
+ * would show in a corner with nothing to end it.
+ */
+function wanted(el: Element) {
+  return el.isConnected && el.matches(":hover, :focus-visible");
+}
+
+/**
  * Plain tooltips: an element's `title` shows in a styled tip instead of the
  * browser's, after a short delay. The title moves to `data-title` (and to
  * `aria-label` when the element has no text of its own, so screen readers
@@ -79,6 +98,7 @@ function useTips() {
       const el = (e.target as Element | null)?.closest?.("[title], [data-title]") as HTMLElement | SVGElement | null;
       if (!el || el.closest(".hover-card")) return;
       if (el instanceof HTMLAnchorElement && targetOf(el)) return;
+      if (!byKeyboard(e, el)) return;
       const title = el.getAttribute("title");
       if (title) {
         el.setAttribute("data-title", title);
@@ -88,7 +108,7 @@ function useTips() {
       const text = el.getAttribute("data-title");
       if (!text) return;
       clearTimeout(t.current);
-      t.current = window.setTimeout(() => setTip({ text, rect: el.getBoundingClientRect() }), TIP_MS);
+      t.current = window.setTimeout(() => wanted(el) && setTip({ text, rect: el.getBoundingClientRect() }), TIP_MS);
     };
     const leave = (e: Event) => {
       const el = (e.target as Element | null)?.closest?.("[data-title]");
@@ -108,9 +128,13 @@ function useTips() {
     document.addEventListener("focusin", enter);
     document.addEventListener("focusout", leave);
     document.addEventListener("mousedown", close);
+    // a click focuses what it hits (a tip is asked for again) and may remove it
+    // (a link that navigates): no `mouseout` or `focusout` follows, so it ends here
+    document.addEventListener("click", close, true);
     window.addEventListener("scroll", close, true);
     window.addEventListener("popstate", close);
     return () => {
+      document.removeEventListener("click", close, true);
       document.removeEventListener("mouseover", enter);
       document.removeEventListener("mouseout", leave);
       document.removeEventListener("focusin", enter);
@@ -131,7 +155,7 @@ function useTips() {
  */
 export function HoverCards() {
   const tip = useTips();
-  const [card, setCard] = useState<{ target: Target; rect: DOMRect; anchor: HTMLAnchorElement } | null>(null);
+  const [card, setCard] = useState<{ target: Target; rect: DOMRect } | null>(null);
   const showT = useRef<number | undefined>(undefined);
   const hideT = useRef<number | undefined>(undefined);
   const over = useRef(false);
@@ -139,7 +163,7 @@ export function HoverCards() {
   useEffect(() => {
     const enter = (e: Event) => {
       const a = (e.target as Element | null)?.closest?.(SELECTOR) as HTMLAnchorElement | null;
-      if (!a) return;
+      if (!a || !byKeyboard(e, a)) return;
       const target = targetOf(a);
       if (!target) return;
       clearTimeout(hideT.current);
@@ -149,7 +173,7 @@ export function HoverCards() {
         a.dataset.title = a.title;
         a.removeAttribute("title");
       }
-      showT.current = window.setTimeout(() => setCard({ target, rect: a.getBoundingClientRect(), anchor: a }), SHOW_MS);
+      showT.current = window.setTimeout(() => wanted(a) && setCard({ target, rect: a.getBoundingClientRect() }), SHOW_MS);
     };
     const leave = (e: Event) => {
       const a = (e.target as Element | null)?.closest?.(SELECTOR);
@@ -171,9 +195,13 @@ export function HoverCards() {
     document.addEventListener("focusin", enter);
     document.addEventListener("focusout", leave);
     document.addEventListener("keydown", key);
+    // a click navigates (and focuses the link, which asks for its card again):
+    // the card goes, shown or about to be, wherever the link ends up
+    document.addEventListener("click", close, true);
     window.addEventListener("scroll", scrolled, true);
     window.addEventListener("popstate", close);
     return () => {
+      document.removeEventListener("click", close, true);
       document.removeEventListener("mouseover", enter);
       document.removeEventListener("mouseout", leave);
       document.removeEventListener("focusin", enter);
@@ -183,14 +211,6 @@ export function HoverCards() {
       window.removeEventListener("popstate", close);
     };
   }, []);
-
-  // a click navigates: the card goes with it
-  useEffect(() => {
-    if (!card) return;
-    const click = () => setCard(null);
-    card.anchor.addEventListener("click", click);
-    return () => card.anchor.removeEventListener("click", click);
-  }, [card]);
 
   if (!card) return tip && <Tip text={tip.text} rect={tip.rect} />;
   const width = 340;

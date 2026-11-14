@@ -13,9 +13,10 @@ use forgust_db::projects::Project;
 use forgust_db::users::User;
 
 use crate::auth::Principal;
-use crate::auth::authz::{ProjectAction, project_role};
+use crate::auth::authz::project_role;
 use crate::error::{ApiError, ApiResult};
 use crate::events::Event;
+use crate::services::notify::{About, Kind};
 use crate::state::AppState;
 
 const MAX: usize = 20;
@@ -128,16 +129,15 @@ pub async fn set_mr(
     let what = format!("merge request !{} \"{}\"", m.iid, m.title);
     let url = state.cfg.mr_url(&p.full_path, m.iid);
     let subject = format!("{} !{}: {}", p.full_path, m.iid, m.title);
-    let rc = ProjectAction::ReadCode;
     let direct = super::notify::Reason::Direct;
     super::notify::tell(
         state,
         p,
-        rc,
         actor.id,
         &notify(&assigned.added),
         direct,
         super::notify::mr_thread(m.id),
+        About::mr(Kind::Assignment, m, "assigned you"),
         &subject,
         &format!("{} assigned you to {what}.\n\n{url}\n", actor.username),
     )
@@ -145,11 +145,11 @@ pub async fn set_mr(
     super::notify::tell(
         state,
         p,
-        rc,
         actor.id,
         &notify(&requested.added),
         direct,
         super::notify::mr_thread(m.id),
+        About::mr(Kind::Assignment, m, "asked you to review"),
         &subject,
         &format!("{} asked you to review {what}.\n\n{url}\n", actor.username),
     )
@@ -178,11 +178,11 @@ pub async fn rerequest(state: &AppState, principal: &Principal, p: &Project, m: 
     super::notify::tell(
         state,
         p,
-        ProjectAction::ReadCode,
         actor.id,
         &to,
         super::notify::Reason::Direct,
         super::notify::mr_thread(m.id),
+        About::mr(Kind::Assignment, m, "asked you to review again"),
         &format!("{} !{}: {}", p.full_path, m.iid, m.title),
         &format!("{} asked you to review merge request !{} \"{}\" again.\n\n{url}\n", actor.username, m.iid, m.title),
     )
@@ -270,11 +270,11 @@ pub async fn set_issue(state: &AppState, principal: &Principal, p: &Project, i: 
     super::notify::tell(
         state,
         p,
-        ProjectAction::Read,
         actor.id,
         &to,
         super::notify::Reason::Direct,
         super::notify::issue_thread(i.id),
+        About::issue(Kind::Assignment, i, "assigned you"),
         &format!("{} #{}: {}", p.full_path, i.iid, i.title),
         &format!("{} assigned you to issue #{} \"{}\".\n\n{url}\n", actor.username, i.iid, i.title),
     )
@@ -329,11 +329,11 @@ pub async fn request_changes(
         super::notify::tell(
             state,
             p,
-            ProjectAction::ReadCode,
             user.id,
             &[author],
             super::notify::Reason::Direct,
             super::notify::mr_thread(m.id),
+            About::mr(Kind::Review, m, "requested changes"),
             &format!("{} !{}: {}", p.full_path, m.iid, m.title),
             &match comment {
                 Some(text) => {
