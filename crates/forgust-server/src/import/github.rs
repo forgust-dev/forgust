@@ -367,6 +367,10 @@ impl Source for GitHub {
         4
     }
 
+    fn shared_numbers(&self) -> bool {
+        true
+    }
+
     async fn labels(&self, p: &SourceProject) -> Result<Vec<SourceLabel>> {
         let list: Vec<HLabel> = self.http.all(&format!("{}/labels", repo(p)), &[]).await?;
         Ok(list
@@ -407,6 +411,7 @@ impl Source for GitHub {
                 closed_at: i.closed_at,
                 milestone: i.milestone.map(HMilestone::source),
                 due_date: None,
+                confidential: false,
             })
             .collect())
     }

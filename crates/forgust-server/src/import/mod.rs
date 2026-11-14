@@ -815,8 +815,23 @@ impl<'a> Runner<'a> {
     async fn issues(&mut self, p: &Project, sp: &SourceProject) -> Result<()> {
         self.milestones(p, sp).await?;
         let issues = self.src.issues(sp).await?;
-        let total = issues.len();
         let max_iid = issues.iter().map(|i| i.iid).max().unwrap_or(0);
+        // keep the source numbers before writing any: an issue made here while the
+        // import runs, or after it fails halfway, must not take one of them
+        mrdb::bump_iid(&self.state.db, p.id, "issues", max_iid).await.map_err(other)?;
+        // confidential issues are left out (their numbers stay kept above, so a
+        // `#N` naming one never comes to name another issue)
+        let (secret, issues): (Vec<SourceIssue>, Vec<SourceIssue>) = issues.into_iter().partition(|i| i.confidential);
+        if !secret.is_empty() {
+            let list: Vec<String> = secret.iter().map(|i| format!("#{}", i.iid)).collect();
+            self.warnings.push(format!(
+                "{} confidential issue{} not imported, as Forgust has no confidential issues: {}.",
+                secret.len(),
+                if secret.len() == 1 { " was" } else { "s were" },
+                list.join(", ")
+            ));
+        }
+        let total = issues.len();
         let done_ids = idb::imported_ids(&self.state.db, p.id, "issue").await.map_err(other)?;
         let todo: Vec<&SourceIssue> = issues.iter().filter(|i| !done_ids.contains(&i.id)).collect();
         let mut done = total - todo.len();
@@ -834,7 +849,6 @@ impl<'a> Runner<'a> {
             }
             self.progress("issues", done, total).await;
         }
-        mrdb::bump_iid(&self.state.db, p.id, "issues", max_iid).await.map_err(other)?;
         self.progress("issues", total, total).await;
         Ok(())
     }
@@ -933,6 +947,11 @@ impl<'a> Runner<'a> {
         let mrs = self.src.merge_requests(sp).await?;
         let total = mrs.len();
         let max_iid = mrs.iter().map(|m| m.iid).max().unwrap_or(0);
+        // as for issues: the source numbers are kept before any is written
+        mrdb::bump_iid(&self.state.db, p.id, "merge_requests", max_iid).await.map_err(other)?;
+        if self.src.shared_numbers() {
+            mrdb::bump_iid(&self.state.db, p.id, "issues", max_iid).await.map_err(other)?;
+        }
         let done_ids = idb::imported_ids(&self.state.db, p.id, "merge_request").await.map_err(other)?;
         let todo: Vec<&SourceMergeRequest> = mrs.iter().filter(|m| !done_ids.contains(&m.id)).collect();
         self.fetch_missing_heads(p, sp, &todo).await?;
@@ -981,7 +1000,6 @@ impl<'a> Runner<'a> {
                 )
             });
         }
-        mrdb::bump_iid(&self.state.db, p.id, "merge_requests", max_iid).await.map_err(other)?;
         self.progress("merge_requests", total, total).await;
         Ok(())
     }

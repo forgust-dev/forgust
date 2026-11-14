@@ -55,6 +55,8 @@ async fn mock_gitlab_counted(routes: HashMap<String, Value>, delay_ms: u64, anon
         let flight = flight.clone();
         async move {
             seen.lock().unwrap().push(req.uri().path().to_string());
+            // the one list filter an import asks for
+            let only_confidential = req.uri().query().is_some_and(|q| q.split('&').any(|kv| kv == "confidential=true"));
             let n = flight.now.fetch_add(1, SeqCst) + 1;
             flight.peak.fetch_max(n, SeqCst);
             tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
@@ -79,6 +81,12 @@ async fn mock_gitlab_counted(routes: HashMap<String, Value>, delay_ms: u64, anon
                     .into_response(),
                 Some(Value::String(raw)) => raw.clone().into_response(),
                 Some(v) => {
+                    let v = match v.as_array() {
+                        Some(items) if only_confidential => {
+                            Value::Array(items.iter().filter(|i| i["confidential"] == true).cloned().collect())
+                        }
+                        _ => v.clone(),
+                    };
                     let total = v.as_array().map(|a| a.len()).unwrap_or(1);
                     ([("x-total", total.to_string()), ("content-type", "application/json".into())], v.to_string()).into_response()
                 }
@@ -175,14 +183,17 @@ async fn import_a_gitlab_project(pool: sqlx::PgPool) {
                   "milestone": { "id": 1, "iid": 1, "title": "v1", "state": "active", "due_date": "2024-07-01" } },
                 { "id": 505, "iid": 5, "title": "Old idea", "description": "", "author": ghost, "state": "closed", "labels": ["wontfix"],
                   "milestone": { "id": 77, "iid": 3, "group_id": 5, "title": "Q3 (group)", "state": "closed", "due_date": null },
-                  "created_at": "2024-06-01T08:00:00Z", "updated_at": "2024-06-03T08:00:00Z", "closed_at": "2024-06-03T08:00:00Z" }
+                  "created_at": "2024-06-01T08:00:00Z", "updated_at": "2024-06-03T08:00:00Z", "closed_at": "2024-06-03T08:00:00Z" },
+                { "id": 508, "iid": 8, "title": "Token leak", "description": "secret", "author": jane, "state": "opened", "labels": [],
+                  "confidential": true, "created_at": "2024-06-05T08:00:00Z", "updated_at": "2024-06-05T08:00:00Z" }
             ]),
         ),
         (
             "/api/v4/projects/42/issues/3/notes",
             json!([
                 { "id": 1, "body": "Me too", "author": ghost, "created_at": "2024-05-01T09:00:00Z", "system": false },
-                { "id": 2, "body": "added ~bug label", "author": jane, "created_at": "2024-05-01T09:30:00Z", "system": true }
+                { "id": 2, "body": "added ~bug label", "author": jane, "created_at": "2024-05-01T09:30:00Z", "system": true },
+                { "id": 3, "body": "members only", "author": jane, "created_at": "2024-05-01T10:00:00Z", "system": false, "internal": true }
             ]),
         ),
         ("/api/v4/projects/42/issues/5/notes", json!([])),
@@ -251,7 +262,11 @@ async fn import_a_gitlab_project(pool: sqlx::PgPool) {
     let planned = owner.ok_get(&format!("/api/v1/imports/{id}")).await;
     assert_eq!(planned["status"], "planned", "{planned}");
     let report = &planned["projects"][0]["report"];
-    assert_eq!(report["issues"], 2);
+    assert_eq!(report["issues"], 2, "the confidential one is not counted");
+    assert!(
+        report["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().starts_with("1 confidential issue will not be imported")),
+        "{report}"
+    );
     assert_eq!(report["merge_requests"], 2);
     assert!(report["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("secrets")), "{report}");
     assert!(planned["projects"][0]["project_id"].is_null(), "a dry run creates nothing");
@@ -263,6 +278,8 @@ async fn import_a_gitlab_project(pool: sqlx::PgPool) {
     let done = owner.ok_get(&format!("/api/v1/imports/{id}")).await;
     assert_eq!(done["status"], "finished", "{done}");
     assert_eq!(done["has_token"], false, "the token is erased at the end");
+    let said = done["projects"][0]["report"]["warnings"].as_array().unwrap();
+    assert!(said.iter().any(|w| w.as_str().unwrap().contains("1 confidential issue was not imported")), "{said:?}");
     let row = &done["projects"][0];
     assert_eq!(row["status"], "finished", "{row}");
     let pid = row["project_id"].as_i64().unwrap();
@@ -303,10 +320,10 @@ async fn import_a_gitlab_project(pool: sqlx::PgPool) {
     assert_eq!(first["open_issues"], 1);
     assert_eq!(ms.as_array().unwrap().iter().find(|m| m["title"] == "Q3 (group)").unwrap()["state"], "closed");
     let notes = owner.ok_get(&format!("/api/v1/projects/{pid}/issues/3/notes")).await;
-    assert_eq!(notes.as_array().unwrap().len(), 1, "system notes are left behind");
+    assert_eq!(notes.as_array().unwrap().len(), 1, "system and internal notes are left behind");
     assert_eq!(notes[0]["imported_author"], "Ghost Y (@ghosty)");
     let next = owner.ok_post(&format!("/api/v1/projects/{pid}/issues"), json!({ "title": "New here" })).await;
-    assert_eq!(next["iid"], 6, "new numbers follow the imported ones");
+    assert_eq!(next["iid"], 9, "new numbers follow the imported ones, the confidential issue's kept");
 
     // merge requests: versions on the original commits, threads with positions
     let mrs = owner.ok_get(&format!("/api/v1/projects/{pid}/merge_requests?state=all")).await;
@@ -614,6 +631,10 @@ async fn import_a_github_repository(pool: sqlx::PgPool) {
     assert_eq!(i1["author_username"], "jane");
     assert_eq!(i1["labels"][0]["color"], "#d73a4a");
     assert_eq!(i1["milestone_title"], "Launch");
+    // GitHub numbers issues and pull requests together: a new issue never takes
+    // #4, which old `#4` references name (the pull request)
+    let next = owner.ok_post(&format!("/api/v1/projects/{pid}/issues"), json!({ "title": "New here" })).await;
+    assert_eq!(next["iid"], 5, "{next}");
 
     // pull requests: the open one on its branch, the merged fork one from refs/pull/4/head
     let p2 = owner.ok_get(&format!("/api/v1/projects/{pid}/merge_requests/2")).await;
@@ -736,6 +757,69 @@ async fn import_a_public_github_repository_without_a_token(pool: sqlx::PgPool) {
     assert!(pr.as_array().unwrap().iter().any(|n| n["body"] == "Nice"), "{pr}");
     assert_eq!(hits_on(&hits, |p| p.contains("/users/")), 0, "no email lookups");
     assert_eq!(hits_on(&hits, |p| p.ends_with("/reviews")), 0, "no review summaries");
+}
+
+/// An import that fails halfway through the issues keeps the source's numbers:
+/// an issue made in the project afterwards does not take one of them (it
+/// would collide with the import's next run, or with what it already wrote).
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn a_failed_import_keeps_the_numbers_it_reserved(pool: sqlx::PgPool) {
+    let srv = TestServer::start_with(pool, |c| c.features.imports_allow_local = true).await;
+    let owner = srv.user("olivia", false).await;
+    let org = owner.ok_post("/api/v1/groups", json!({ "name": "Acme", "path": "acme" })).await;
+    owner.ok_post("/api/v1/projects", json!({ "name": "Tracker", "path": "tracker", "namespace_id": org["id"] })).await;
+    let work = srv.work_dir("half-origin");
+    seed_repo(&work).await;
+    must(git(&work, &["push", "-q", &srv.http_url("olivia", "acme/tracker"), "main"]).await);
+    wait_jobs(&srv.state).await;
+    let token = owner.ok_post("/api/v1/user/tokens", json!({ "name": "import", "scopes": ["read_repository"] })).await["token"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let jane = person(7, "jane", "Jane Doe");
+    let project = json!({
+        "id": 5, "path_with_namespace": "team/tracker", "name": "Tracker", "path": "tracker", "visibility": "private", "default_branch": "main",
+        "http_url_to_repo": format!("{}/acme/tracker.git", srv.base), "web_url": "https://gitlab.example/team/tracker", "issues_enabled": true
+    });
+    let issue = |id: i64, iid: i64| {
+        json!({ "id": id, "iid": iid, "title": format!("Issue {iid}"), "description": "", "author": jane, "state": "opened", "labels": [],
+                "created_at": "2024-05-01T08:00:00Z", "updated_at": "2024-05-01T08:00:00Z" })
+    };
+    let routes: HashMap<String, Value> = [
+        ("/api/v4/user", json!({ "id": 1, "username": "importer", "name": "Importer" })),
+        ("/api/v4/projects/5", project),
+        ("/api/v4/projects/5/issues", json!([issue(503, 3), issue(507, 7)])),
+        ("/api/v4/projects/5/issues/3/notes", json!([])),
+        // the source breaks on the second issue: the import fails there
+        ("/api/v4/projects/5/issues/7/notes", json!("this is not json")),
+    ]
+    .into_iter()
+    .map(|(k, v)| (k.to_string(), v))
+    .collect();
+    let gitlab = mock_gitlab(routes).await;
+    let target = owner.ok_post("/api/v1/groups", json!({ "name": "Imported", "path": "imported" })).await;
+    let started = owner
+        .ok_post(
+            "/api/v1/imports",
+            json!({ "source": "gitlab", "url": gitlab, "token": token, "target_namespace_id": target["id"],
+                    "projects": [{ "source_id": "5", "source_path": "team/tracker", "target_path": "tracker" }] }),
+        )
+        .await;
+    let id = started["id"].as_i64().unwrap();
+    wait_jobs(&srv.state).await;
+    owner.ok_post(&format!("/api/v1/imports/{id}/start"), json!({})).await;
+    wait_jobs(&srv.state).await;
+    let done = owner.ok_get(&format!("/api/v1/imports/{id}")).await;
+    let row = &done["projects"][0];
+    assert_eq!(row["status"], "failed", "{done}");
+    let pid = row["project_id"].as_i64().unwrap();
+    let issues = owner.ok_get(&format!("/api/v1/projects/{pid}/issues?state=all")).await;
+    let iids: Vec<i64> = issues["issues"].as_array().unwrap().iter().map(|i| i["iid"].as_i64().unwrap()).collect();
+    assert_eq!(iids, vec![3], "the issue before the failure was written");
+
+    let next = owner.ok_post(&format!("/api/v1/projects/{pid}/issues"), json!({ "title": "Made here" })).await;
+    assert_eq!(next["iid"], 8, "after every number the source used: {next}");
 }
 
 #[sqlx::test(migrator = "forgust_db::MIGRATOR")]
