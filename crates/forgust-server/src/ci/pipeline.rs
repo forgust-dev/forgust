@@ -411,7 +411,12 @@ pub async fn create(state: &AppState, t: Trigger<'_>) -> anyhow::Result<Created>
         pipeline_id,
         status: if errors.is_some() { "failed".into() } else { "created".into() },
     });
-    if errors.is_none() {
+    if errors.is_some() {
+        // a configuration that does not load: the pipeline is born failed
+        if let Some(pipeline) = forgust_db::ci::pipeline(&state.db, pipeline_id).await? {
+            crate::services::notify::pipeline_finished(state, &pipeline, "failed").await;
+        }
+    } else {
         process(state, pipeline_id).await?;
         if settings.auto_cancel_redundant && !t.tag && matches!(t.source, "push" | "merge_request_event") {
             auto_cancel_redundant(state, pipeline_id).await?;
@@ -573,6 +578,7 @@ pub async fn process(state: &AppState, pipeline_id: i64) -> anyhow::Result<()> {
         // `refs/pipelines/<id>` keeps the commit fetchable while jobs may run
         // (a retry or a played job makes the pipeline active again)
         if is_complete(status) {
+            crate::services::notify::pipeline_finished(state, &pipeline, status).await;
             // findings are resolved by the default branch's scans only: not a
             // tag's or a merge request's pipeline (no job queued for nothing)
             if !pipeline.tag && pipeline.merge_request_id.is_none() {

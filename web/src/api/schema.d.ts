@@ -2240,6 +2240,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/user/notification_channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Where each kind of notification goes for the caller. */
+        get: operations["channels"];
+        /** Turn one kind on or off for one channel. */
+        put: operations["set_channel"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/user/notification_settings": {
         parameters: {
             query?: never;
@@ -2249,6 +2267,23 @@ export interface paths {
         };
         get: operations["mine"];
         put: operations["set_mine"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's notifications in the app. */
+        get: operations["inbox"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -2802,6 +2837,28 @@ export interface components {
         ChangePassword: {
             current?: string;
             new: string;
+        };
+        /**
+         * @description Where a notification goes.
+         * @enum {string}
+         */
+        Channel: "web" | "email" | "screen";
+        ChannelBody: {
+            channel: components["schemas"]["Channel"];
+            enabled: boolean;
+            kind: components["schemas"]["Kind"];
+        };
+        /** @description Where one kind of notification goes. */
+        ChannelDto: {
+            email: boolean;
+            kind: components["schemas"]["Kind"];
+            /**
+             * @description A message on screen as it arrives, while the app is open (only what
+             *     reaches the bell).
+             */
+            screen: boolean;
+            /** @description The bell in the app. */
+            web: boolean;
         };
         CiActivity: {
             /** @description Most pipelines in the last 30 days. */
@@ -3557,6 +3614,15 @@ export interface components {
             user_id?: number | null;
             username: string;
         };
+        Inbox: {
+            /** @description Newest first. */
+            items: components["schemas"]["Notification"][];
+            /**
+             * Format: int64
+             * @description How many are unread (of everything, not only `items`).
+             */
+            unread: number;
+        };
         InstanceCounts: {
             /**
              * Format: int64
@@ -3785,6 +3851,12 @@ export interface components {
             key: string;
             value: string;
         };
+        /**
+         * @description What a notification is about: each kind has its own switch per channel.
+         *     (The `notification_kind` domain in the database lists the same names.)
+         * @enum {string}
+         */
+        Kind: "mention" | "assignment" | "activity" | "review" | "pipeline_failed" | "pipeline_fixed" | "security";
         Label: {
             color: string;
             description: string;
@@ -4254,6 +4326,30 @@ export interface components {
              * @description Version the comment was written on.
              */
             version?: number | null;
+        };
+        /** @description A notification in someone's inbox. */
+        Notification: {
+            actor_name?: string | null;
+            actor_username?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: int64 */
+            id: number;
+            /** @description mention, assignment, activity, review, pipeline_failed, pipeline_fixed or security */
+            kind: string;
+            /** Format: int64 */
+            project_id: number;
+            project_path: string;
+            read: boolean;
+            summary: string;
+            /**
+             * Format: int64
+             * @description Its number in the project (none for security).
+             */
+            target_iid?: number | null;
+            /** @description merge_request, issue, pipeline or security (the project's findings) */
+            target_type: string;
+            title: string;
         };
         /** @description What an import brings besides the repository (all on by default). */
         Options: {
@@ -9441,6 +9537,48 @@ export interface operations {
             };
         };
     };
+    channels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelDto"][];
+                };
+            };
+        };
+    };
+    set_channel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChannelBody"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelDto"][];
+                };
+            };
+        };
+    };
     mine: {
         parameters: {
             query?: never;
@@ -9479,6 +9617,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LevelDto"];
+                };
+            };
+        };
+    };
+    inbox: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Inbox"];
                 };
             };
         };

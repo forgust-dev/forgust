@@ -866,3 +866,63 @@ async fn merge_request_pipelines_are_protected_only_between_protected_branches(p
         "main's own pipeline stays protected: {main}"
     );
 }
+
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn a_failed_pipeline_and_the_one_that_fixes_it_reach_who_started_them(pool: sqlx::PgPool) {
+    let srv = TestServer::start_with(pool, |c| {
+        c.ci.long_poll_secs = 1;
+    })
+    .await;
+    let owner = srv.user("olivia", false).await;
+    let (_org, _sub, project) = org_project(&owner).await;
+    let work = srv.work_dir("notify");
+    must(git(&work, &["init", "-q", "-b", "main"]).await);
+    let f = Fixture { srv, owner, project, sha: String::new() };
+    let token = new_runner(&f, json!({})).await;
+    // a push, then its only job ends as `state`
+    let run = async |n: usize, state: &str| {
+        std::fs::write(work.join(".gitlab-ci.yml"), format!("job:\n  script: [make v{n}]\n")).unwrap();
+        must(git(&work, &["add", "."]).await);
+        must(git(&work, &["commit", "-q", "-m", &format!("v{n}")]).await);
+        must(git(&work, &["push", "-q", &f.srv.http_url("olivia", "acme/platform/api"), "main"]).await);
+        wait_jobs(&f.srv.state).await;
+        let (s, j) = request_job(&f, &token).await;
+        assert_eq!(s, StatusCode::CREATED, "{j}");
+        let mut body = json!({ "token": j["token"], "state": state });
+        if state == "failed" {
+            body["failure_reason"] = json!("script_failure");
+        }
+        assert_eq!(put(&f, j["id"].as_i64().unwrap(), body).await.status(), StatusCode::OK);
+        wait_jobs(&f.srv.state).await;
+    };
+    let inbox = || async {
+        let got = f.owner.ok_get("/api/v1/user/notifications").await;
+        got["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|n| format!("{} {}", n["kind"].as_str().unwrap(), n["title"].as_str().unwrap()))
+            .collect::<Vec<_>>()
+    };
+    let mails = |text: &str| f.srv.state.mailer.sent().iter().filter(|m| m.subject.contains(text)).count();
+
+    // a pipeline that passes with nothing before it: nothing to say
+    run(1, "success").await;
+    assert!(inbox().await.is_empty(), "{:?}", inbox().await);
+    // a job fails: who pushed hears about it, in the app and by email
+    run(2, "failed").await;
+    assert_eq!(inbox().await, ["pipeline_failed Pipeline #2 on main"]);
+    assert_eq!(mails("pipeline #2 failed on main"), 1);
+    // the next one passes: fixed, in the app only (its email is off by default)
+    run(3, "success").await;
+    assert_eq!(inbox().await, ["pipeline_fixed Pipeline #3 on main", "pipeline_failed Pipeline #2 on main"]);
+    assert_eq!(mails("passed again"), 0);
+    // and the one after that is just a pipeline that passes
+    run(4, "success").await;
+    assert_eq!(inbox().await.len(), 2, "{:?}", inbox().await);
+    // with the email on, the next fix is mailed too
+    f.owner.ok_put("/api/v1/user/notification_channels", json!({ "kind": "pipeline_fixed", "channel": "email", "enabled": true })).await;
+    run(5, "failed").await;
+    run(6, "success").await;
+    assert_eq!(mails("pipeline #6 passed again on main"), 1);
+}
