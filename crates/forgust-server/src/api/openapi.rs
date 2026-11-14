@@ -19,7 +19,7 @@ use super::{
         repo::tree, repo::last_commits, repo::stats, repo::blob, repo::commits, repo::commit, repo::commit_diff, repo::branches, repo::blame, repo::templates, repo::create_branch, repo::create_commit, repo::create_tag, repo::delete_tag,
         mr::list, mr::count, mr::create, mr::show, mr::stack_on, mr::auto_merge, mr::merge_status, mr::merge, mr::diff, mr::notes, mr::set_labels,
         awards::mr_reactions, awards::mr_react, awards::issue_reactions, awards::issue_react,
-        notifications::mine, notifications::unsubscribe_info, notifications::unsubscribe, notifications::set_mine, notifications::project, notifications::set_project,
+        notifications::mine, notifications::channels, notifications::set_channel, notifications::inbox, notifications::unsubscribe_info, notifications::unsubscribe, notifications::set_mine, notifications::project, notifications::set_project,
         search::search, security::findings, security::finding, security::dismiss, security::reopen, security::merge_request, security::scanning, security::set_scanning, security::run_scan,
         security::group_scanning, security::set_group_scanning, security::admin_scanning, security::set_admin_scanning, tests::pipeline_tests, tests::pipeline_test_cases, tests::mr_tests,
         milestones::list, milestones::show, milestones::create, milestones::update, milestones::delete,

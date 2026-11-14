@@ -26,6 +26,7 @@ use super::{group_for, project_for};
 use crate::auth::authz::{GroupAction, ProjectAction, can_project};
 use crate::auth::{SignedIn, Viewer};
 use crate::error::{ApiError, ApiResult};
+use crate::events::Audience;
 use crate::services::mr::{self, MappedPosition, MergeMethod, MergeStatus, NewPosition};
 use crate::state::{AppState, ResponseCache};
 
@@ -768,7 +769,9 @@ pub async fn hook_deliveries(
 
 #[derive(Deserialize)]
 pub struct EventsQuery {
-    /// Projects this tab watches (comma-separated IDs).
+    /// Projects this tab watches (comma-separated IDs; none: only the
+    /// caller's own events, their inbox).
+    #[serde(default)]
     projects: String,
 }
 
@@ -795,13 +798,19 @@ pub async fn events(
     }
     // access is looked at again (once a minute by default) when an event comes: a member
     // removed from a project stops hearing about it
+    let me = v.direct_user().map(|u| u.id);
     let checked = std::sync::Arc::new(tokio::sync::Mutex::new((allowed, std::time::Instant::now())));
     let stream = futures::StreamExt::filter_map(BroadcastStream::new(state.events.subscribe()), move |ev| {
         let (state, v, checked) = (state.clone(), v.clone(), checked.clone());
         async move {
             let ev = ev.ok()?;
+            // a person's own events (their inbox changed): whatever the projects watched
+            let project_id = match ev.audience() {
+                Audience::User(id) => return (Some(id) == me).then(|| Ok(SseEvent::default().json_data(&ev).unwrap_or_default())),
+                Audience::Project(id) => id,
+            };
             let mut guard = checked.lock().await;
-            if !guard.0.contains(&ev.project_id()) {
+            if !guard.0.contains(&project_id) {
                 return None;
             }
             if guard.1.elapsed() >= Duration::from_secs(state.cfg.limits.events_recheck_secs) {
@@ -814,7 +823,7 @@ pub async fn events(
                     }
                 }
                 *guard = (still, std::time::Instant::now());
-                if !guard.0.contains(&ev.project_id()) {
+                if !guard.0.contains(&project_id) {
                     return None;
                 }
             }

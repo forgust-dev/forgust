@@ -605,6 +605,107 @@ async fn notification_levels_and_watching(pool: sqlx::PgPool) {
 }
 
 #[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn inbox_and_a_switch_per_kind_and_channel(pool: sqlx::PgPool) {
+    let srv = TestServer::start(pool).await;
+    let (owner, dev, rep, proj, work) = setup(&srv).await;
+    let inbox = "/api/v1/user/notifications";
+    let channels = "/api/v1/user/notification_channels";
+    let of = |v: &serde_json::Value, kind: &str| {
+        v["items"].as_array().unwrap().iter().filter(|n| n["kind"] == kind).cloned().collect::<Vec<_>>()
+    };
+
+    // everything goes to the app and by email, but the email of a pipeline that passes again
+    let all = dev.ok_get(channels).await;
+    assert_eq!(all.as_array().unwrap().len(), 7, "{all}");
+    assert!(
+        all.as_array()
+            .unwrap()
+            .iter()
+            .all(|c| c["web"] == true && c["screen"] == true && (c["email"] == true) == (c["kind"] != "pipeline_fixed")),
+        "{all}"
+    );
+    assert_eq!(dev.ok_put(channels, json!({ "kind": "activity", "channel": "screen", "enabled": false })).await[2]["screen"], false);
+    assert!(matches!(dev.put(channels, json!({ "kind": "loud", "channel": "web", "enabled": false })).await.0, 400 | 422));
+    assert!(matches!(dev.put(channels, json!({ "kind": "review", "channel": "pager", "enabled": false })).await.0, 400 | 422));
+    // every kind the server knows is one the database takes
+    for c in all.as_array().unwrap() {
+        dev.ok_put(channels, json!({ "kind": c["kind"], "channel": "web", "enabled": true })).await;
+    }
+
+    // an approval reaches the author: the bell and an email
+    push_branch(&srv, &work, "feature", "a.txt").await;
+    let mrs = format!("/api/v1/projects/{proj}/merge_requests");
+    dev.ok_post(&mrs, json!({ "source_branch": "feature", "target_branch": "main", "title": "Add a" })).await;
+    rep.ok_post(&format!("{mrs}/1/approve"), json!({})).await;
+    wait_jobs(&srv.state).await;
+    let mine = dev.ok_get(inbox).await;
+    let reviews = of(&mine, "review");
+    assert_eq!(reviews.len(), 1, "{mine}");
+    assert_eq!(mine["unread"], 1, "{mine}");
+    let n = &reviews[0];
+    assert_eq!((n["summary"].as_str(), n["title"].as_str(), n["actor_username"].as_str()), (Some("approved"), Some("Add a"), Some("rita")));
+    assert_eq!((n["target_type"].as_str(), n["target_iid"].as_i64(), n["read"].as_bool()), (Some("merge_request"), Some(1), Some(false)));
+    assert_eq!(mails_to(&srv, "dave", "rita approved merge request !1"), 1);
+    // approving again says nothing new
+    rep.ok_post(&format!("{mrs}/1/approve"), json!({})).await;
+    wait_jobs(&srv.state).await;
+    assert_eq!(of(&dev.ok_get(inbox).await, "review").len(), 1);
+    // not who approved, and nobody reads another's inbox
+    assert_eq!(rep.ok_get(inbox).await["unread"], 0);
+    let id = n["id"].as_i64().unwrap();
+    assert_eq!(rep.post(&format!("{inbox}/{id}/read"), json!({})).await.0, 404);
+
+    // read it; then all
+    assert_eq!(dev.ok_post(&format!("{inbox}/{id}/read"), json!({})).await["unread"], 0);
+    assert_eq!(dev.post(&format!("{inbox}/{id}/read"), json!({})).await.0, 200, "reading it again is not an error");
+    assert_eq!(of(&dev.ok_get(inbox).await, "review")[0]["read"], true);
+
+    // email off for reviews: the bell only; then the bell off too
+    let set = dev.ok_put(channels, json!({ "kind": "review", "channel": "email", "enabled": false })).await;
+    assert!(set.as_array().unwrap().iter().any(|c| c["kind"] == "review" && c["web"] == true && c["email"] == false), "{set}");
+    rep.ok_post(&format!("{mrs}/1/request_changes"), json!({})).await;
+    wait_jobs(&srv.state).await;
+    assert_eq!(of(&dev.ok_get(inbox).await, "review").len(), 2);
+    assert_eq!(mails_to(&srv, "dave", "rita requested changes"), 0);
+    dev.ok_put(channels, json!({ "kind": "review", "channel": "web", "enabled": false })).await;
+    rep.ok_post(&format!("{mrs}/1/approve"), json!({})).await;
+    wait_jobs(&srv.state).await;
+    assert_eq!(of(&dev.ok_get(inbox).await, "review").len(), 2);
+    assert_eq!(mails_to(&srv, "dave", "rita approved merge request !1"), 1);
+
+    // the other kinds are untouched: a comment is activity, a mention a mention
+    owner.ok_post(&format!("{mrs}/1/notes"), json!({ "body": "Looks fine @dave" })).await;
+    wait_jobs(&srv.state).await;
+    let mine = dev.ok_get(inbox).await;
+    assert_eq!(of(&mine, "mention")[0]["summary"], "mentioned you", "{mine}");
+    assert_eq!(mails_to(&srv, "dave", "mentioned you"), 1);
+    assert_eq!(dev.ok_post(&format!("{inbox}/read"), json!({})).await["unread"], 0);
+
+    // a pipeline that fails tells who started it and the author of its merge request
+    std::fs::write(work.join(".gitlab-ci.yml"), "job:\n  script: x\n  secrets:\n    DB: {vault: db/pw}\n").unwrap();
+    must(git(&work, &["add", "."]).await);
+    must(git(&work, &["commit", "-qm", "ci"]).await);
+    must(git(&work, &["push", "-q", &srv.http_url("olivia", REPO), "feature"]).await);
+    wait_jobs(&srv.state).await;
+    for who in [&owner, &dev] {
+        let got = who.ok_get(inbox).await;
+        let failed = of(&got, "pipeline_failed");
+        // the branch's pipeline and the merge request's: a broken config fails both
+        assert_eq!(failed.len(), 2, "{got}");
+        assert_eq!((failed[0]["target_type"].as_str(), failed[0]["summary"].as_str()), (Some("pipeline"), Some("failed")), "{got}");
+        assert!(failed[0]["title"].as_str().unwrap().ends_with("on feature"), "{got}");
+    }
+    assert_eq!(mails_to(&srv, "olivia", "failed on feature"), 2);
+    assert!(of(&rep.ok_get(inbox).await, "pipeline_failed").is_empty(), "rita has nothing to do with it");
+
+    // a level of disabled for the project: nothing, in the app either
+    dev.put(&format!("/api/v1/projects/{proj}/notification_settings"), json!({ "level": "disabled" })).await;
+    owner.ok_post(&format!("{mrs}/1/notes"), json!({ "body": "@dave again" })).await;
+    wait_jobs(&srv.state).await;
+    assert_eq!(of(&dev.ok_get(inbox).await, "mention").len(), 1);
+}
+
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
 async fn instance_search_sees_only_what_it_may(pool: sqlx::PgPool) {
     let srv = TestServer::start(pool).await;
     let (owner, dev, rep, proj, work) = setup(&srv).await;

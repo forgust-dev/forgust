@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO notification_channels (user_id, kind, channel, enabled) VALUES ($1, $2, $3, $4)\n         ON CONFLICT (user_id, kind, channel) DO UPDATE SET enabled = $4, updated_at = now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        {
+          "Custom": {
+            "name": "notification_kind",
+            "kind": {
+              "Domain": "Text"
+            }
+          }
+        },
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e89e6471065c3ea18732b9116f324c062e9e346a19854ec29ce9ffec1b9f056f"
+}
