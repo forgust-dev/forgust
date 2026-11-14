@@ -14,6 +14,29 @@ published, unless you prefer not to be named.
 
 Forgust is before 1.0: only the latest release gets security fixes.
 
+## Verifying a release
+
+The release workflow builds `ghcr.io/forgust-dev/forgust` on GitHub's runners and
+signs it with a build provenance attestation: a Sigstore certificate that names the
+repository, the tag and the workflow run that built the image. To check an image
+before running it, with the [GitHub CLI](https://cli.github.com):
+
+```sh
+gh attestation verify oci://ghcr.io/forgust-dev/forgust:0.2.0 \
+  --repo forgust-dev/forgust --signer-workflow forgust-dev/forgust/.github/workflows/release.yml
+```
+
+Each image also carries an SBOM (SPDX): the Debian packages of the image, the crates
+compiled into the binary, and the packages of the build stages.
+
+```sh
+docker buildx imagetools inspect ghcr.io/forgust-dev/forgust:0.2.0 --format '{{ json .SBOM }}'
+```
+
+The image is scanned for known vulnerabilities at each release, and `latest` every
+week. Releases up to 0.1.0 were published before signing and have no attestation
+to verify.
+
 ## Scope
 
 Anything in this repository: the server and its APIs (`/api/v1`, `/api/v4`, the

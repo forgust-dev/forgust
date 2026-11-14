@@ -70,6 +70,10 @@ services:
   forgust:
     image: ghcr.io/forgust-dev/forgust:0.1
     restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
     ports: ["8080:8080", "2222:2222"]
     environment:
       FORGUST_DATABASE__URL: postgres://forgust:change-me@db:5432/forgust
@@ -87,6 +91,8 @@ services:
 volumes: { forgust-data: {}, db-data: {} }
 ```
 
+- **Verify the image:** releases are signed and carry an SBOM, see
+  [SECURITY.md](SECURITY.md#verifying-a-release).
 - **First administrator:** the log prints a one-time link on first start
   (`docker compose logs forgust | grep setup`).
 - **Configuration:** every key in [`forgust.example.toml`](forgust.example.toml) can
