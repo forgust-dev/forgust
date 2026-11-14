@@ -70,6 +70,9 @@ pub struct SourceIssue {
     /// Its milestone (a group one on GitLab becomes the project's).
     pub milestone: Option<SourceMilestone>,
     pub due_date: Option<chrono::NaiveDate>,
+    /// Hidden on the source from all but the project's members (GitLab).
+    /// Forgust has no such issues, so it is left out rather than published.
+    pub confidential: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -284,5 +287,11 @@ pub trait Source: Send + Sync {
     /// How many requests to have in flight at once.
     fn concurrency(&self) -> usize {
         8
+    }
+    /// Issues and merge requests share one sequence of numbers (GitHub): a new
+    /// issue here then never takes a number a pull request had, which `#N`
+    /// written on the source still names.
+    fn shared_numbers(&self) -> bool {
+        false
     }
 }
