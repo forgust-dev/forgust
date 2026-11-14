@@ -17,6 +17,7 @@ import { useSession } from "../../session";
 import { useToast } from "../../shell/toast";
 import { Members } from "../../components/Members";
 import { RecentBranchBanner } from "./MrStack";
+import { settingsPage } from "./settingsPages";
 
 // each section loads with its first visit (the repository's home needs none of these)
 const mrs = () => import("./MergeRequests");
@@ -40,8 +41,8 @@ const JobPage = lazy(() => import("./ci/Job").then((m) => ({ default: m.JobPage 
 const ArtifactBrowser = lazy(() => import("./ci/Artifacts").then((m) => ({ default: m.ArtifactBrowser })));
 const Schedules = lazy(() => import("./ci/Schedules").then((m) => ({ default: m.Schedules })));
 const Environments = lazy(() => import("./ci/Environments").then((m) => ({ default: m.Environments })));
-const CiSettings = lazy(() => import("./ci/Settings").then((m) => ({ default: m.CiSettings })));
 const ProjectSettings = lazy(() => import("./Settings").then((m) => ({ default: m.ProjectSettings })));
+const ProjectAuditLog = lazy(() => import("./Audit").then((m) => ({ default: m.ProjectAuditLog })));
 const SecurityPage = lazy(() => import("./Security").then((m) => ({ default: m.SecurityPage })));
 const Registry = lazy(() => import("./Registry").then((m) => ({ default: m.Registry })));
 const EditFile = lazy(() => import("./Edit").then((m) => ({ default: m.EditFile })));
@@ -59,6 +60,7 @@ const SECTIONS: Record<string, string> = {
   releases: "Releases",
   container_registry: "Container registry",
   security: "Security",
+  audit: "Audit log",
   compare: "Compare",
   members: "Members",
   merge_requests: "Merge requests",
@@ -72,18 +74,27 @@ const SECTIONS: Record<string, string> = {
   environments: "Environments",
 };
 
+/** Sections with no breadcrumb: the project's home and the file editor's actions. */
+const UNTITLED = ["", "edit", "new", "delete"];
+const knownSection = (section: string) => UNTITLED.includes(section) || Object.hasOwn(SECTIONS, section);
+
 /** Sidebar + breadcrumbs for a project page. */
 function ProjectNav({ p, rest, gitRef }: { p: S["ProjectDetail"]; rest: string; gitRef?: string }) {
   const [section, ...more] = rest.split("/");
   const crumbs: { label: string; to?: string }[] = [];
   const web = `/${p.full_path}`;
-  if (SECTIONS[section]) crumbs.push({ label: SECTIONS[section], to: section === "commit" ? `${web}/-/commits/${gitRef ?? p.default_branch ?? "main"}` : section === "tree" || section === "blob" ? web : section === "jobs" ? `${web}/-/pipelines` : `${web}/-/${section}` });
+  // the audit log is shown under Security
+  if (section === "audit") crumbs.push({ label: "Security", to: `${web}/-/security` });
+  if (Object.hasOwn(SECTIONS, section)) crumbs.push({ label: SECTIONS[section], to: section === "commit" ? `${web}/-/commits/${gitRef ?? p.default_branch ?? "main"}` : section === "tree" || section === "blob" ? web : section === "jobs" ? `${web}/-/pipelines` : `${web}/-/${section}` });
   if (section === "merge_requests" && more[0]) crumbs.push({ label: more[0] === "new" ? "New" : `!${more[0]}` });
   if (section === "issues" && more[0]) crumbs.push({ label: more[0] === "new" ? "New" : `#${more[0]}` });
   if (section === "commit" && more[0]) crumbs.push({ label: more[0].slice(0, 8) });
   if (section === "pipelines" && more[0]) crumbs.push({ label: more[0] === "new" ? "Run" : `#${more[0]}` });
   if (section === "jobs" && more[0]) crumbs.push({ label: `#${more[0]}` });
-  if (section === "settings" && more[0] === "ci_cd") crumbs.push({ label: "CI/CD" });
+  if (section === "settings" && more.length === 1) {
+    const page = settingsPage(more[0]);
+    if (page) crumbs.push({ label: page.label });
+  }
   if (section === "milestones" && more[0]) crumbs.push({ label: more[0] === "new" ? "New" : more[1] === "edit" ? "Edit" : `Milestone` });
   if (section === "releases" && more[0]) crumbs.push({ label: more.length === 1 && more[0] === "new" ? "New" : more.at(-1) === "edit" ? `Edit ${more.slice(0, -1).join("/")}` : more.join("/") });
   useSetNav({ kind: "project", project: p, ref: gitRef, crumbs }, [p, rest, gitRef]);
@@ -148,6 +159,7 @@ export function ProjectPage({ id, fullPath, rest }: { id: number; fullPath: stri
                   {section === "releases" && <ReleaseRoute ctx={ctx} more={more} />}
                   {section === "container_registry" && <Registry ctx={ctx} />}
                   {section === "security" && <SecurityPage ctx={ctx} />}
+                  {section === "audit" && (p.can_admin && more.length === 0 ? <ProjectAuditLog ctx={ctx} /> : <NotFound />)}
                   {section === "compare" && <Compare ctx={ctx} spec={tail} />}
                   {section === "members" && <Members base={`/projects/${id}`} canManage={p.can_admin} kind="project" />}
                   {section === "issues" && more.length === 0 && <IssueList ctx={ctx} />}
@@ -163,8 +175,7 @@ export function ProjectPage({ id, fullPath, rest }: { id: number; fullPath: stri
                   {section === "merge_requests" && /^\d+$/.test(more[0] ?? "") && (
                     <MergeRequestPage ctx={ctx} iid={Number(more[0])} tab={more[1] === "commits" ? "commits" : more[1] === "diffs" ? "diffs" : "overview"} />
                   )}
-                  {section === "settings" && more[0] !== "ci_cd" && (p.can_admin ? <ProjectSettings ctx={ctx} /> : <NotFound />)}
-                  {section === "settings" && more[0] === "ci_cd" && (p.can_admin ? <CiSettings ctx={ctx} /> : <NotFound />)}
+                  {section === "settings" && (p.can_admin && more.length <= 1 ? <ProjectSettings ctx={ctx} page={more[0] ?? ""} /> : <NotFound />)}
                   {section === "pipelines" && more.length === 0 && <PipelineList ctx={ctx} />}
                   {section === "pipelines" && more[0] === "new" && <RunPipeline ctx={ctx} />}
                   {section === "pipelines" && /^\d+$/.test(more[0] ?? "") && <PipelinePage ctx={ctx} iid={Number(more[0])} />}
@@ -172,7 +183,7 @@ export function ProjectPage({ id, fullPath, rest }: { id: number; fullPath: stri
                   {section === "jobs" && /^\d+$/.test(more[0] ?? "") && more[1] === "artifacts" && <ArtifactBrowser ctx={ctx} jobId={Number(more[0])} />}
                   {section === "pipeline_schedules" && (p.can_push ? <Schedules ctx={ctx} /> : <NotFound />)}
                   {section === "environments" && <Environments ctx={ctx} stopped={more[0] === "stopped"} />}
-                  {!["", "tree", "blob", "blame", "edit", "new", "delete", "commits", "commit", "branches", "tags", "releases", "container_registry", "security", "compare", "members", "settings", "merge_requests", "issues", "labels", "milestones", "pipelines", "jobs", "pipeline_schedules", "environments"].includes(section) && <NotFound />}
+                  {!knownSection(section) && <NotFound />}
                 </Suspense>
               )}
             </>

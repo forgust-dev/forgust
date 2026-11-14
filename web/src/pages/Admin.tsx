@@ -1,4 +1,5 @@
 import { HostRules } from "../components/HostRules";
+import { AuditEvents } from "../components/AuditEvents";
 import { useState, type FormEvent } from "react";
 import { Route, Routes } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -48,7 +49,7 @@ export function Admin() {
         <Route path="settings" element={<Settings />} />
         <Route path="dependency-updates" element={<DependencyUpdatesAdmin />} />
         <Route path="security-scanning" element={<SecurityScanningAdmin />} />
-        <Route path="audit" element={<AuditLog />} />
+        <Route path="audit" element={<AdminAuditLog />} />
       </Routes>
     </div>
   );
@@ -285,27 +286,9 @@ function SettingsForm({ initial }: { initial: S["InstanceSettings"] }) {
   );
 }
 
-function AuditLog() {
-  const q = useQuery({ queryKey: ["admin-audit"], queryFn: () => api.get<S["AuditEvent"][]>("/admin/audit") });
-  return (
-    <Q q={q}>
-      {(events) => (
-        <div className="list">
-          {events.map((e) => (
-            <div className="item small" key={e.id}>
-              <code>{e.action}</code>
-              <span className="muted">
-                {e.target_type} {e.target_id}
-              </span>
-              <span className="grow muted ellipsis">{JSON.stringify(e.details)}</span>
-              <span>{e.principal_name ?? e.principal_kind}</span>
-              <span className="faint">{timeAgo(e.created_at)}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </Q>
-  );
+function AdminAuditLog() {
+  // the instance endpoint returns 200 events a call
+  return <AuditEvents path="/admin/audit" perPage={200} target />;
 }
 
 function DependencyUpdatesAdmin() {

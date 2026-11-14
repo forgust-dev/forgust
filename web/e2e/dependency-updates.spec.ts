@@ -6,7 +6,7 @@ import { test, expect, freshProject } from "./fixtures";
 test("dependency updates: turn on, run now, turn off", async ({ page }) => {
   const { project, web, remove } = await freshProject(page, "deps", { "package.json": '{ "dependencies": { "left-pad": "1.0.0" } }\n' });
   try {
-    await page.goto(`${web}/-/settings`);
+    await page.goto(`${web}/-/settings/automation`);
     const section = page.locator("section.settings-section", { has: page.getByRole("heading", { name: "Dependency updates" }) });
     await section.getByRole("checkbox", { name: /update dependencies/ }).check();
     await section.getByRole("button", { name: "Save", exact: true }).click();
@@ -20,7 +20,7 @@ test("dependency updates: turn on, run now, turn off", async ({ page }) => {
     await expect(page.getByText(`renovate-bot-${project.id}`)).toBeVisible();
 
     // a private registry: the password is never shown again
-    await page.goto(`${web}/-/settings`);
+    await page.goto(`${web}/-/settings/automation`);
     await section.getByLabel("Host").fill("npm.example.com");
     await section.getByLabel("Type").fill("npm");
     await section.getByLabel("Password or token").fill("e2e-npm-token");
