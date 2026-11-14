@@ -11,6 +11,10 @@ export const useGroups = (enabled = true) => useQuery({ queryKey: ["groups"], qu
 /** "Your work": review requests, assignments, to-dos (the page and the sidebar badge). */
 export const useWork = (enabled = true) => useQuery({ queryKey: ["work"], queryFn: () => api.get<S["Work"]>("/user/work"), enabled, staleTime: 15_000 });
 
+/** Where each kind of notification goes (the settings tab, and the bell for what shows on screen). */
+export const useNotificationChannels = () =>
+  useQuery({ queryKey: ["notifications", "channels"], queryFn: () => api.get<S["ChannelDto"][]>("/user/notification_channels"), staleTime: 60_000 });
+
 export const keys = {
   project: (id: number) => ["project", id] as const,
   pathResolve: (path: string) => ["resolve", path] as const,

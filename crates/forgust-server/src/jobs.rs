@@ -415,6 +415,8 @@ impl TaskHandler for Cleanup {
         if !ended.is_empty() {
             tracing::info!(users = ended.len(), "expired memberships removed");
         }
+        // notifications read a month ago leave the inbox
+        forgust_db::notifications::prune(&state.db, 30).await.map_err(|e| e.to_string())?;
         state.storage.reap_idle();
         metrics::gauge!("forgust_catfile_processes").set(state.storage.catfile_processes() as f64);
         Ok::<(), String>(())

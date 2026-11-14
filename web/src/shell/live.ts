@@ -1,10 +1,12 @@
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import type { S } from "../api/client";
 
 /** A server event (see `events.rs`): `push`, `merge_request`, `pipeline`, `job`, `job_trace`, ... */
 export type LiveEvent = {
   type: string;
-  project_id: number;
+  /** The project it happened in (none for the person's own events, see `UserEvent`). */
+  project_id?: number;
   pipeline_id?: number;
   job_id?: number;
   iid?: number;
@@ -12,11 +14,18 @@ export type LiveEvent = {
   trace_size?: number;
 };
 
+/** What only the signed-in person hears: a notification that reached their
+ * inbox (`screen`: they want it shown as it arrives), or their inbox changed
+ * otherwise (read in another tab). */
+export type UserEvent = { type: "notification"; screen: boolean; notification: S["Notification"] } | { type: "inbox" };
+
 type Listener = (ev: LiveEvent) => void;
 
-// One SSE stream per tab, for every project the open views watch (browsers
-// allow ~6 connections per site). It reconnects when the set changes.
+// One SSE stream per tab, for every project the open views watch and the
+// signed-in person's own events (browsers allow ~6 connections per site). It
+// reconnects when the set changes.
 const listeners = new Map<number, Set<Listener>>();
+const userListeners = new Set<(ev: UserEvent) => void>();
 let source: EventSource | null = null;
 let connectedFor = "";
 let timer: number | null = null;
@@ -24,17 +33,19 @@ let timer: number | null = null;
 function reconnect() {
   timer = null;
   const ids = [...listeners.entries()].filter(([, s]) => s.size > 0).map(([id]) => id).sort((a, b) => a - b);
-  const key = ids.join(",");
+  const projects = ids.join(",");
+  const key = `${userListeners.size ? "me" : ""}:${projects}`;
   if (key === connectedFor) return;
   source?.close();
   source = null;
   connectedFor = key;
-  if (!ids.length || typeof EventSource === "undefined") return;
-  source = new EventSource(`/api/v1/events?projects=${key}`);
+  if ((!ids.length && !userListeners.size) || typeof EventSource === "undefined") return;
+  source = new EventSource(`/api/v1/events?projects=${projects}`);
   source.onmessage = (m) => {
     try {
-      const ev = JSON.parse(m.data) as LiveEvent;
-      listeners.get(ev.project_id)?.forEach((f) => f(ev));
+      const ev = JSON.parse(m.data) as LiveEvent | UserEvent;
+      if (ev.type === "notification" || ev.type === "inbox") userListeners.forEach((f) => f(ev as UserEvent));
+      else if ((ev as LiveEvent).project_id != null) listeners.get((ev as LiveEvent).project_id!)?.forEach((f) => f(ev as LiveEvent));
     } catch {
       /* keep-alive or malformed */
     }
@@ -60,6 +71,21 @@ export function useProjectEvents(projectId: number | undefined, handler: Listene
       schedule();
     };
   }, [projectId]);
+}
+
+/** Call `handler` for what reaches the signed-in person (their inbox changed). */
+export function useUserEvents(handler: (ev: UserEvent) => void) {
+  const ref = useRef(handler);
+  ref.current = handler;
+  useEffect(() => {
+    const f = (ev: UserEvent) => ref.current(ev);
+    userListeners.add(f);
+    schedule();
+    return () => {
+      userListeners.delete(f);
+      schedule();
+    };
+  }, []);
 }
 
 /**

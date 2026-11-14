@@ -1,4 +1,4 @@
-import { test, expect, P, at, isMobile } from "./fixtures";
+import { test, expect, P, ADMIN, at, isMobile } from "./fixtures";
 
 test("dashboard → project through the sidebar and breadcrumbs", async ({ page }) => {
   await page.goto("/dashboard/projects");
@@ -148,4 +148,26 @@ test("search issues and merge requests across projects", async ({ page }) => {
   await expect(page.getByRole("link", { name: "Checkout with discounts" })).toBeVisible();
   await page.getByRole("button", { name: "Merged" }).click();
   await expect(page.getByText("Nothing matches")).toBeVisible();
+});
+
+test("tips go with a click, and do not come back when a popover closes", async ({ page }) => {
+  test.skip(isMobile(page), "hover needs a pointer");
+  await page.goto("/");
+  const tip = page.locator(".tip");
+  // the avatar's tip: shown on hover, gone once the menu is open
+  await page.locator(".avatar-btn").hover();
+  await expect(tip).toHaveText(ADMIN);
+  await page.locator(".avatar-btn").click();
+  // (the click focuses the button: a tip asked for by that focus would show after its delay)
+  await page.waitForTimeout(600);
+  await expect(tip).toHaveCount(0);
+  await page.mouse.click(500, 500);
+  // the bell: closing its list hands the focus back to the button, the pointer
+  // being elsewhere: no tip may stay there
+  await page.locator(".inbox-btn").click();
+  await expect(page.locator(".inbox")).toBeVisible();
+  await page.mouse.click(500, 500);
+  await expect(page.locator(".inbox")).toHaveCount(0);
+  await page.waitForTimeout(600);
+  await expect(tip).toHaveCount(0);
 });

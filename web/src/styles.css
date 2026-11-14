@@ -288,12 +288,12 @@ a:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
-input[type="checkbox"] {
-  width: auto;
-  height: auto;
-}
 input[type="checkbox"],
 input[type="radio"] {
+  flex: none;
+  width: auto;
+  height: auto;
+  padding: 0;
   accent-color: var(--accent);
 }
 
@@ -497,6 +497,13 @@ label.check {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+/* a choice whose text may wrap: the box stays on the first line */
+label.check.top {
+  align-items: flex-start;
+}
+label.check.top > input {
+  margin-top: 4px;
 }
 form.stack {
   gap: 14px;
@@ -1558,6 +1565,13 @@ kbd {
 }
 .toast.error {
   border-color: var(--danger);
+}
+.toast.notice > svg:first-child {
+  flex: none;
+  color: var(--accent);
+}
+.toast-link {
+  color: var(--text);
 }
 .toast.error > svg:first-child {
   color: var(--danger);
@@ -4934,6 +4948,121 @@ a.item.import-row:hover {
 .notif-hint {
   display: block;
   white-space: normal;
+}
+.notif-channels {
+  width: 100%;
+  border-collapse: collapse;
+}
+.notif-channels th,
+.notif-channels td {
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+  text-align: left;
+  font-weight: 400;
+  vertical-align: top;
+}
+.notif-channels thead th {
+  border-top: 0;
+  padding-top: 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+.notif-channels th + th,
+.notif-channels td {
+  width: 72px;
+  text-align: center;
+}
+.notif-channels tbody tr:first-child th,
+.notif-channels tbody tr:first-child td {
+  border-top-color: var(--border-strong);
+}
+.notif-channels td input {
+  margin-top: 4px;
+}
+
+/* ---------------------------------------------------------------- inbox (the bell) */
+.inbox-btn {
+  position: relative;
+}
+.inbox-count {
+  position: absolute;
+  top: 1px;
+  right: 0;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+}
+.inbox {
+  width: min(380px, calc(100vw - 48px));
+  margin: -12px;
+}
+.inbox-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.inbox-empty {
+  margin: 0;
+  padding: 20px 12px;
+  text-align: center;
+}
+.inbox-list {
+  max-height: min(440px, 70vh);
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  list-style: none;
+}
+.inbox-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 6px;
+  color: var(--text);
+  text-decoration: none;
+}
+.inbox-item:hover {
+  background: var(--bg-hover);
+  text-decoration: none;
+}
+.inbox-icon {
+  flex: none;
+  margin-top: 2px;
+  color: var(--text-muted);
+}
+.inbox-icon.bad {
+  color: var(--danger);
+}
+.inbox-icon.ok {
+  color: var(--ok);
+}
+.inbox-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+}
+.inbox-item.unread .inbox-title {
+  font-weight: 600;
+}
+.inbox-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--accent);
 }
 
 /* ---------------------------------------------------------------- test reports (M7) */

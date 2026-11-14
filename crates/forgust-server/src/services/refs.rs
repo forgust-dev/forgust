@@ -79,15 +79,6 @@ pub enum Target<'a> {
 }
 
 impl Target<'_> {
-    /// What seeing it takes: issues are for anyone who sees the project, merge
-    /// requests for those who see its code.
-    fn need(&self) -> crate::auth::authz::ProjectAction {
-        match self {
-            Target::MergeRequest { .. } => crate::auth::authz::ProjectAction::ReadCode,
-            Target::Issue { .. } => crate::auth::authz::ProjectAction::Read,
-        }
-    }
-
     fn thread(&self) -> Option<String> {
         match self {
             Target::MergeRequest { id, .. } => super::notify::mr_thread(*id),
@@ -174,11 +165,19 @@ pub async fn on_write(state: &AppState, p: &Project, actor: &User, target: Targe
         super::notify::tell(
             state,
             p,
-            target.need(),
             actor.id,
             &to,
             super::notify::Reason::Mention,
             target.thread(),
+            super::notify::About {
+                kind: super::notify::Kind::Mention,
+                target: match target {
+                    Target::MergeRequest { iid, .. } => super::notify::Target::MergeRequest(iid),
+                    Target::Issue { iid, .. } => super::notify::Target::Issue(iid),
+                },
+                title: title_of(&target).to_string(),
+                summary: "mentioned you".into(),
+            },
             &format!("{} {}: {}", p.full_path, target_ref(&target), title_of(&target)),
             &format!("{} mentioned you in {}:\n\n{}\n\n{}\n", actor.username, target.label(), text.trim(), target.url(state, p)),
         )

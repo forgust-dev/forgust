@@ -787,9 +787,13 @@ pub async fn approve(state: &AppState, principal: &Principal, p: &Project, mr: &
         return Err(ApiError::conflict("only open merge requests can be approved"));
     }
     if approve {
-        mrdb::approve(&state.db, mr.id, user.id).await?;
+        let new = mrdb::approve(&state.db, mr.id, user.id).await?;
         super::people::reviewed(state, mr, user.id, super::people::ReviewAction::Approved).await;
         done(state, user.id, p, mr).await;
+        // (approving again says nothing new)
+        if new {
+            super::notify::approved(state, p, mr, user).await;
+        }
     } else {
         mrdb::unapprove(&state.db, mr.id, user.id).await?;
         super::people::reviewed(state, mr, user.id, super::people::ReviewAction::Unapproved).await;

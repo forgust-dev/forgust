@@ -120,7 +120,7 @@ volumes: { forgust-data: {}, db-data: {} }
 ### 🗂️ Planning
 - Issues with labels, milestones, due dates, assignees and templates
 - Mentions, `#12` and `!45` references, to-dos and a "Your work" inbox
-- Emoji reactions, watching projects, per-project notification levels
+- Emoji reactions, watching projects, per-project notification levels, an inbox in the app (live), and a switch per kind of notification for the app and for email
 
 ### ⚙️ CI/CD
 - Pipelines with stages and `needs` graphs, live logs, artifacts, JUnit test reports

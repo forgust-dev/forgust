@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE notifications SET read_at = coalesce(read_at, now())\n          WHERE user_id = $1 AND (($2::bigint IS NULL AND read_at IS NULL) OR id = $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2aa7a72e063321341ee059745321d0cad31c52cbd5925cf22ff167b3bac15e65"
+}

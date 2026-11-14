@@ -440,6 +440,42 @@ pub async fn insert_pipeline(e: impl PgExecutor<'_>, p: NewPipeline<'_>) -> Resu
     .await
 }
 
+/// How the pipeline before this one ended (`success` or `failed`; canceled,
+/// skipped and child pipelines are not counted, nor the instance's own:
+/// dependency updates and security scans): the one before on the same ref
+/// and for the same merge request (a branch's pipelines and its merge
+/// request's are two series).
+pub async fn previous_status(e: impl PgExecutor<'_>, p: &Pipeline) -> Result<Option<String>> {
+    sqlx::query_scalar!(
+        "SELECT status FROM ci_pipelines
+          WHERE project_id = $1 AND ref = $2 AND tag = $3 AND merge_request_id IS NOT DISTINCT FROM $4 AND id < $5
+            AND status IN ('success', 'failed') AND source NOT IN ('parent_pipeline', 'renovate', 'security')
+          ORDER BY id DESC LIMIT 1",
+        p.project_id,
+        p.git_ref,
+        p.tag,
+        p.merge_request_id,
+        p.id
+    )
+    .fetch_optional(e)
+    .await
+}
+
+/// Record how the pipeline ended (`success` or `failed`) for its notifications,
+/// and return what was recorded before (none: it ends for the first time).
+pub async fn set_notified_status(e: impl PgExecutor<'_>, pipeline_id: i64, status: &str) -> Result<Option<String>> {
+    sqlx::query_scalar!(
+        "UPDATE ci_pipelines p SET notified_status = $2
+           FROM (SELECT id, notified_status FROM ci_pipelines WHERE id = $1 FOR UPDATE) before
+          WHERE p.id = before.id
+      RETURNING before.notified_status",
+        pipeline_id,
+        status
+    )
+    .fetch_one(e)
+    .await
+}
+
 pub async fn pipeline(e: impl PgExecutor<'_>, id: i64) -> Result<Option<Pipeline>> {
     sqlx::query_as!(
         Pipeline,

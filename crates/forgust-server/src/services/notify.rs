@@ -1,5 +1,6 @@
-//! Email notifications (SMTP), sent from a background job. Disabled when no SMTP
-//! URL is configured.
+//! Notifications: who hears about what (levels, ADR-0021), then where it goes,
+//! a switch per kind and channel: the bell in the app, and email (SMTP, sent
+//! from a background job; none when no SMTP URL is configured).
 
 use std::sync::Mutex;
 
@@ -146,12 +147,74 @@ pub fn allows(level: &str, r: Reason) -> bool {
     }
 }
 
+use forgust_db::notifications::Channel;
+pub use forgust_db::notifications::Kind;
+
+/// What a notification points at, by its number in the project.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Target {
+    MergeRequest(i64),
+    Issue(i64),
+    Pipeline(i64),
+    /// The project's security findings.
+    Security,
+}
+
+impl Target {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Target::MergeRequest(_) => "merge_request",
+            Target::Issue(_) => "issue",
+            Target::Pipeline(_) => "pipeline",
+            Target::Security => "security",
+        }
+    }
+
+    pub fn iid(self) -> Option<i64> {
+        match self {
+            Target::MergeRequest(iid) | Target::Issue(iid) | Target::Pipeline(iid) => Some(iid),
+            Target::Security => None,
+        }
+    }
+
+    /// What a recipient must still be allowed to do in the project to hear
+    /// about it: issues are for anyone who sees the project, the rest is code.
+    pub fn need(self) -> ProjectAction {
+        match self {
+            Target::Issue(_) => ProjectAction::Read,
+            _ => ProjectAction::ReadCode,
+        }
+    }
+}
+
+/// What the bell shows: the thing, its title, and what happened in a few words
+/// ("approved", "commented", "failed").
+pub struct About {
+    pub kind: Kind,
+    pub target: Target,
+    pub title: String,
+    pub summary: String,
+}
+
+impl About {
+    /// What a scan of `git_ref` found: it leads to the project's findings.
+    pub fn security(git_ref: &str, summary: String) -> About {
+        About { kind: Kind::Security, target: Target::Security, title: format!("Security scan of {git_ref}"), summary }
+    }
+
+    pub fn mr(kind: Kind, mr: &MergeRequest, summary: &str) -> About {
+        About { kind, target: Target::MergeRequest(mr.iid), title: mr.title.clone(), summary: summary.into() }
+    }
+
+    pub fn issue(kind: Kind, issue: &forgust_db::issues::Issue, summary: &str) -> About {
+        About { kind, target: Target::Issue(issue.iid), title: issue.title.clone(), summary: summary.into() }
+    }
+}
+
 /// One notification about something in a project.
 pub struct Notice<'a> {
     pub project: &'a Project,
-    /// What a recipient must still be allowed to do in the project (Read for
-    /// issues, ReadCode for merge requests), checked when sending.
-    pub need: ProjectAction,
+    pub about: About,
     /// Who did it: never told about their own action.
     pub actor: Option<i64>,
     pub subject: String,
@@ -198,9 +261,9 @@ pub fn unsubscribe_path(state: &AppState, user_id: i64, project_id: i64) -> Stri
 }
 
 /// The single way project notifications go out: each person once (with their
-/// strongest reason), if their level allows it, if they are an active human with
-/// a confirmed address, and if they can still see the thing. One Bcc message, so
-/// the footer is the same for everyone (ADR-0021).
+/// strongest reason), if their level allows it, if they are an active human and
+/// can still see the thing. Then where they chose to get that kind: the bell,
+/// and an email of their own when their address is confirmed (ADR-0021).
 pub async fn deliver(state: &AppState, n: Notice<'_>, people: Vec<(i64, Reason)>) {
     let mut strongest: std::collections::BTreeMap<i64, Reason> = std::collections::BTreeMap::new();
     for (id, r) in people {
@@ -220,14 +283,30 @@ pub async fn deliver(state: &AppState, n: Notice<'_>, people: Vec<(i64, Reason)>
     let thread_id = n.thread.as_ref().map(|t| format!("<{t}.{}@{host}>", n.project.id));
     let allowed: Vec<i64> = levels.iter().filter(|(id, level)| allows(level, strongest[id])).map(|(id, _)| *id).collect();
     let users = forgust_db::users::find_many(&state.db, &allowed).await.unwrap_or_default();
+    let kind = n.about.kind;
+    // (not known: nobody is told, rather than people who turned it off)
+    let Ok(choices) = forgust_db::notifications::channel_choices(&state.db, &allowed, kind).await else {
+        tracing::warn!(kind = kind.as_str(), "notification choices not read: not sent");
+        return;
+    };
+    let on = |user: i64, channel: Channel| {
+        forgust_db::notifications::enabled(choices.iter().filter(|(id, ..)| *id == user).map(|(_, c, on)| (c.as_str(), *on)), kind, channel)
+    };
+    let mut bell = Vec::new();
     let mut emails = Vec::new();
     for u in users {
         let reason = strongest[&u.id];
-        if !u.is_active() || u.is_bot() || !u.email_verified() {
+        if !u.is_active() || u.is_bot() {
             continue;
         }
         let who = crate::auth::Principal::User { user: u.clone(), scopes: None };
-        if !can_project(state, &who, n.need, n.project).await.unwrap_or(false) {
+        if !can_project(state, &who, n.about.target.need(), n.project).await.unwrap_or(false) {
+            continue;
+        }
+        if on(u.id, Channel::Web) {
+            bell.push(u.id);
+        }
+        if !on(u.id, Channel::Email) || !u.email_verified() {
             continue;
         }
         // one message each: their own reason, their own unsubscribe link (ADR-0021)
@@ -258,6 +337,49 @@ pub async fn deliver(state: &AppState, n: Notice<'_>, people: Vec<(i64, Reason)>
         };
         emails.push(email);
     }
+    if !bell.is_empty() {
+        let target = n.about.target;
+        let new = forgust_db::notifications::NewNotification {
+            project_id: n.project.id,
+            kind,
+            target_type: target.as_str(),
+            target_iid: target.iid(),
+            actor_id: n.actor,
+            title: &n.about.title,
+            summary: &n.about.summary,
+        };
+        let actor = match n.actor {
+            Some(id) => forgust_db::users::find(&state.db, id).await.ok().flatten(),
+            None => None,
+        };
+        match forgust_db::notifications::add(&state.db, &bell, new).await {
+            // each person's streams get theirs, to show at once
+            Ok(rows) => {
+                for (user_id, id, created_at) in rows {
+                    let notification = forgust_db::notifications::Notification {
+                        id,
+                        kind: kind.as_str().into(),
+                        project_id: n.project.id,
+                        project_path: n.project.full_path.clone(),
+                        target_type: target.as_str().into(),
+                        target_iid: target.iid(),
+                        title: n.about.title.clone(),
+                        summary: n.about.summary.clone(),
+                        actor_username: actor.as_ref().map(|u| u.username.clone()),
+                        actor_name: actor.as_ref().map(|u| u.name.clone()),
+                        read: false,
+                        created_at,
+                    };
+                    state.events.publish(crate::events::Event::Notification {
+                        user_id,
+                        screen: on(user_id, Channel::Screen),
+                        notification,
+                    });
+                }
+            }
+            Err(e) => tracing::warn!(error = %e, "notifications not recorded"),
+        }
+    }
     queue_all(state, emails).await;
 }
 
@@ -266,15 +388,15 @@ pub async fn deliver(state: &AppState, n: Notice<'_>, people: Vec<(i64, Reason)>
 pub async fn tell(
     state: &AppState,
     p: &Project,
-    need: ProjectAction,
     actor: i64,
     users: &[User],
     reason: Reason,
     thread: Option<String>,
+    about: About,
     subject: &str,
     body: &str,
 ) {
-    let n = Notice { project: p, need, actor: Some(actor), subject: subject.into(), body: body.into(), thread, starts_thread: false };
+    let n = Notice { project: p, about, actor: Some(actor), subject: subject.into(), body: body.into(), thread, starts_thread: false };
     deliver(state, n, users.iter().map(|u| (u.id, reason)).collect()).await;
 }
 
@@ -315,10 +437,10 @@ pub async fn merge_request_note(state: &AppState, p: &Project, mr: &MergeRequest
     };
     let people = mr_audience(state, p, mr).await.into_iter().filter(|(id, _)| !skip.contains(id)).collect();
     let n = Notice {
+        about: About::mr(Kind::Activity, mr, "commented"),
         thread: mr_thread(mr.id),
         starts_thread: false,
         project: p,
-        need: ProjectAction::ReadCode,
         actor: Some(author.id),
         subject: format!("Re: {} !{}: {}", p.full_path, mr.iid, mr.title),
         body: format!("{} commented{place}:\n\n{}\n\n{}\n", author.username, note.body, state.cfg.mr_url(&p.full_path, mr.iid)),
@@ -328,17 +450,19 @@ pub async fn merge_request_note(state: &AppState, p: &Project, mr: &MergeRequest
 
 pub async fn merge_request_state(state: &AppState, p: &Project, mr: &MergeRequest, action: &str, actor: Option<&User>) {
     let who = actor.map(|u| u.username.as_str()).unwrap_or("someone");
-    let verb = match action {
-        "merge" => format!("merged into {}", mr.target_branch),
-        "close" => "closed".into(),
-        "reopen" => "reopened".into(),
-        other => other.into(),
+    // what the bell says, and the email in full
+    let short = match action {
+        "merge" => "merged",
+        "close" => "closed",
+        "reopen" => "reopened",
+        other => other,
     };
+    let verb = if action == "merge" { format!("merged into {}", mr.target_branch) } else { short.to_string() };
     let n = Notice {
+        about: About::mr(Kind::Activity, mr, short),
         thread: mr_thread(mr.id),
         starts_thread: false,
         project: p,
-        need: ProjectAction::ReadCode,
         actor: actor.map(|u| u.id),
         subject: format!("{} !{}: {}", p.full_path, mr.iid, mr.title),
         body: format!("{who} {verb} merge request !{} \"{}\".\n\n{}\n", mr.iid, mr.title, state.cfg.mr_url(&p.full_path, mr.iid)),
@@ -349,10 +473,10 @@ pub async fn merge_request_state(state: &AppState, p: &Project, mr: &MergeReques
 /// A new merge request: its watchers hear about it.
 pub async fn new_merge_request(state: &AppState, p: &Project, mr: &MergeRequest, author: &User) {
     let n = Notice {
+        about: About::mr(Kind::Activity, mr, "opened"),
         thread: mr_thread(mr.id),
         starts_thread: true,
         project: p,
-        need: ProjectAction::ReadCode,
         actor: Some(author.id),
         subject: format!("{} !{}: {}", p.full_path, mr.iid, mr.title),
         body: format!(
@@ -372,10 +496,10 @@ pub async fn new_merge_request(state: &AppState, p: &Project, mr: &MergeRequest,
 /// A new issue: its watchers hear about it.
 pub async fn new_issue(state: &AppState, p: &Project, issue: &forgust_db::issues::Issue, author: &User) {
     let n = Notice {
+        about: About::issue(Kind::Activity, issue, "opened"),
         thread: issue_thread(issue.id),
         starts_thread: true,
         project: p,
-        need: ProjectAction::Read,
         actor: Some(author.id),
         subject: format!("{} #{}: {}", p.full_path, issue.iid, issue.title),
         body: format!(
@@ -393,10 +517,10 @@ pub async fn new_issue(state: &AppState, p: &Project, issue: &forgust_db::issues
 pub async fn issue_note(state: &AppState, p: &Project, issue: &forgust_db::issues::Issue, author: &User, body: &str, skip: &[i64]) {
     let people = issue_audience(state, p, issue.id).await.into_iter().filter(|(id, _)| !skip.contains(id)).collect();
     let n = Notice {
+        about: About::issue(Kind::Activity, issue, "commented"),
         thread: issue_thread(issue.id),
         starts_thread: false,
         project: p,
-        need: ProjectAction::Read,
         actor: Some(author.id),
         subject: format!("Re: {} #{}: {}", p.full_path, issue.iid, issue.title),
         body: format!("{} commented:\n\n{}\n\n{}\n", author.username, body, state.cfg.issue_url(&p.full_path, issue.iid)),
@@ -406,10 +530,10 @@ pub async fn issue_note(state: &AppState, p: &Project, issue: &forgust_db::issue
 
 pub async fn issue_state(state: &AppState, p: &Project, issue: &forgust_db::issues::Issue, open: bool, actor: &User) {
     let n = Notice {
+        about: About::issue(Kind::Activity, issue, if open { "reopened" } else { "closed" }),
         thread: issue_thread(issue.id),
         starts_thread: false,
         project: p,
-        need: ProjectAction::Read,
         actor: Some(actor.id),
         subject: format!("{} #{}: {}", p.full_path, issue.iid, issue.title),
         body: format!(
@@ -422,6 +546,73 @@ pub async fn issue_state(state: &AppState, p: &Project, issue: &forgust_db::issu
         ),
     };
     deliver(state, n, issue_audience(state, p, issue.id).await).await;
+}
+
+/// The author hears that someone approved their merge request (asking for
+/// changes tells them from `people::request_changes`, with the comment).
+pub async fn approved(state: &AppState, p: &Project, mr: &MergeRequest, by: &User) {
+    let Some(author) = mr.author_id else { return };
+    let n = Notice {
+        about: About::mr(Kind::Review, mr, "approved"),
+        thread: mr_thread(mr.id),
+        starts_thread: false,
+        project: p,
+        actor: Some(by.id),
+        subject: format!("{} !{}: {}", p.full_path, mr.iid, mr.title),
+        body: format!(
+            "{} approved merge request !{} \"{}\".\n\n{}\n",
+            by.username,
+            mr.iid,
+            mr.title,
+            state.cfg.mr_url(&p.full_path, mr.iid)
+        ),
+    };
+    deliver(state, n, vec![(author, Reason::Direct)]).await;
+}
+
+/// A pipeline failed, or passed where the one before on its ref failed (or
+/// where it failed itself before a retry): who started it hears about it, and
+/// the authors of the merge requests it runs for. Not a child pipeline (its
+/// parent says it), the instance's own (dependency updates, security scans),
+/// nor one canceled or skipped.
+pub async fn pipeline_finished(state: &AppState, pipeline: &forgust_db::ci::Pipeline, status: &str) {
+    if matches!(pipeline.source.as_str(), "parent_pipeline" | "renovate" | "security") || !matches!(status, "success" | "failed") {
+        return;
+    }
+    // a job retried or played makes the pipeline end again: each outcome is said once
+    let Ok(before) = forgust_db::ci::set_notified_status(&state.db, pipeline.id, status).await else { return };
+    let (kind, outcome) = match (status, before.as_deref()) {
+        (_, Some(same)) if same == status => return,
+        ("failed", _) => (Kind::PipelineFailed, "failed"),
+        // it failed before and was retried
+        (_, Some(_)) => (Kind::PipelineFixed, "passed again"),
+        _ => match forgust_db::ci::previous_status(&state.db, pipeline).await {
+            Ok(Some(earlier)) if earlier == "failed" => (Kind::PipelineFixed, "passed again"),
+            _ => return,
+        },
+    };
+    let Ok(Some(p)) = forgust_db::projects::find(&state.db, pipeline.project_id).await else { return };
+    let mrs = match pipeline.merge_request_id {
+        Some(id) => forgust_db::merge_requests::find_by_id(&state.db, id).await.ok().flatten().into_iter().collect(),
+        None if pipeline.tag => vec![],
+        None => forgust_db::merge_requests::open_with_source(&state.db, p.id, &pipeline.git_ref).await.unwrap_or_default(),
+    };
+    let people: Vec<(i64, Reason)> =
+        pipeline.user_id.into_iter().chain(mrs.iter().filter_map(|m| m.author_id)).map(|id| (id, Reason::Direct)).collect();
+    let title = format!("Pipeline #{} on {}", pipeline.iid, pipeline.git_ref);
+    let commit = pipeline.commit_title.as_deref().unwrap_or("");
+    let url = state.cfg.project_page(&p.full_path, &format!("pipelines/{}", pipeline.iid));
+    let n = Notice {
+        about: About { kind, target: Target::Pipeline(pipeline.iid), title: title.clone(), summary: outcome.into() },
+        thread: None,
+        starts_thread: false,
+        project: &p,
+        // who started it is told too
+        actor: None,
+        subject: format!("{} pipeline #{} {outcome} on {}", p.full_path, pipeline.iid, pipeline.git_ref),
+        body: format!("{title} {outcome}.\n\n{} {commit}\n\n{url}\n", &pipeline.sha[..pipeline.sha.len().min(8)]),
+    };
+    deliver(state, n, people).await;
 }
 
 /// One email to one address, whatever its state (password resets, address

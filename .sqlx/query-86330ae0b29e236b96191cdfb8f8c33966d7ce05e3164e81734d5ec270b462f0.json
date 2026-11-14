@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM notifications WHERE read_at < now() - make_interval(days => $1) OR created_at < now() - make_interval(days => 3 * $1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "86330ae0b29e236b96191cdfb8f8c33966d7ce05e3164e81734d5ec270b462f0"
+}

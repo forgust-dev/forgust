@@ -4067,6 +4067,60 @@
         }
       }
     },
+    "/api/v1/user/notification_channels": {
+      "get": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Where each kind of notification goes for the caller.",
+        "operationId": "channels",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ChannelDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Turn one kind on or off for one channel.",
+        "operationId": "set_channel",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ChannelDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/user/notification_settings": {
       "get": {
         "tags": [
@@ -4106,6 +4160,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LevelDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/user/notifications": {
+      "get": {
+        "tags": [
+          "user"
+        ],
+        "summary": "The caller's notifications in the app.",
+        "operationId": "inbox",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Inbox"
                 }
               }
             }
@@ -5575,6 +5649,60 @@
           },
           "new": {
             "type": "string"
+          }
+        }
+      },
+      "Channel": {
+        "type": "string",
+        "description": "Where a notification goes.",
+        "enum": [
+          "web",
+          "email",
+          "screen"
+        ]
+      },
+      "ChannelBody": {
+        "type": "object",
+        "required": [
+          "kind",
+          "channel",
+          "enabled"
+        ],
+        "properties": {
+          "channel": {
+            "$ref": "#/components/schemas/Channel"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/Kind"
+          }
+        }
+      },
+      "ChannelDto": {
+        "type": "object",
+        "description": "Where one kind of notification goes.",
+        "required": [
+          "kind",
+          "web",
+          "email",
+          "screen"
+        ],
+        "properties": {
+          "email": {
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/Kind"
+          },
+          "screen": {
+            "type": "boolean",
+            "description": "A message on screen as it arrives, while the app is open (only what\nreaches the bell)."
+          },
+          "web": {
+            "type": "boolean",
+            "description": "The bell in the app."
           }
         }
       },
@@ -8186,6 +8314,27 @@
           }
         }
       },
+      "Inbox": {
+        "type": "object",
+        "required": [
+          "unread",
+          "items"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Notification"
+            },
+            "description": "Newest first."
+          },
+          "unread": {
+            "type": "integer",
+            "format": "int64",
+            "description": "How many are unread (of everything, not only `items`)."
+          }
+        }
+      },
       "InstanceCounts": {
         "type": "object",
         "required": [
@@ -8936,6 +9085,19 @@
             "type": "string"
           }
         }
+      },
+      "Kind": {
+        "type": "string",
+        "description": "What a notification is about: each kind has its own switch per channel.\n(The `notification_kind` domain in the database lists the same names.)",
+        "enum": [
+          "mention",
+          "assignment",
+          "activity",
+          "review",
+          "pipeline_failed",
+          "pipeline_fixed",
+          "security"
+        ]
       },
       "Label": {
         "type": "object",
@@ -10546,6 +10708,75 @@
             }
           }
         ]
+      },
+      "Notification": {
+        "type": "object",
+        "description": "A notification in someone's inbox.",
+        "required": [
+          "id",
+          "kind",
+          "project_id",
+          "project_path",
+          "target_type",
+          "title",
+          "summary",
+          "read",
+          "created_at"
+        ],
+        "properties": {
+          "actor_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "actor_username": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "kind": {
+            "type": "string",
+            "description": "mention, assignment, activity, review, pipeline_failed, pipeline_fixed or security"
+          },
+          "project_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "project_path": {
+            "type": "string"
+          },
+          "read": {
+            "type": "boolean"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "target_iid": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "Its number in the project (none for security)."
+          },
+          "target_type": {
+            "type": "string",
+            "description": "merge_request, issue, pipeline or security (the project's findings)"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
       },
       "Options": {
         "type": "object",

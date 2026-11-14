@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE ci_pipelines p SET notified_status = $2\n           FROM (SELECT id, notified_status FROM ci_pipelines WHERE id = $1 FOR UPDATE) before\n          WHERE p.id = before.id\n      RETURNING before.notified_status",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "notified_status",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "notified_status"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "d3e2f616dc1ed411161b517fbf49c6712cfb751ea7f28c424b814f949b3d55aa"
+}
