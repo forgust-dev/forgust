@@ -1,0 +1,28 @@
+name: Advisories
+
+# Advisories are published after a dependency is merged: every week, check the
+# lockfile on main, so a new one does not first show as a failure on an
+# unrelated pull request.
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deny:
+    runs-on: ubuntu-latest
+    env:
+      # moved by hand, with the one in ci.yml
+      CARGO_DENY: "0.20.2"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@d124f86f28ff42855784ff3319f48ac182c248f8 # 1.99
+      - name: cargo-deny
+        run: |
+          curl -sSfL "https://github.com/EmbarkStudios/cargo-deny/releases/download/${CARGO_DENY}/cargo-deny-${CARGO_DENY}-x86_64-unknown-linux-musl.tar.gz" \
+            | tar xz --strip-components=1 -C "$HOME/.cargo/bin" "cargo-deny-${CARGO_DENY}-x86_64-unknown-linux-musl/cargo-deny"
+          cargo deny --version
+      - run: cargo deny --all-features check

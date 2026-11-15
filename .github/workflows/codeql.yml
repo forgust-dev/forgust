@@ -28,7 +28,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [rust, javascript-typescript, actions]
+        # Rust takes 10 minutes and more: on main and every week, not on pull requests
+        language: ${{ fromJSON(github.event_name == 'pull_request' && '["javascript-typescript", "actions"]' || '["rust", "javascript-typescript", "actions"]') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 

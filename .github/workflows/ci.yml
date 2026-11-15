@@ -25,8 +25,32 @@ env:
 # and the containers tests start (gitlab-runner, Renovate, skopeo, scanners) use
 # the host network, the tests' default.
 
+# `changes` tells what was touched, and the jobs it cannot affect are skipped. A
+# job with a matrix skips its steps instead of itself: skipped as a whole it
+# reports one check under its unexpanded name, and the checks main requires
+# ("test (1/3)", ...) would never come.
+
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.diff.outputs.rust }}
+      web: ${{ steps.diff.outputs.web }}
+      image: ${{ steps.diff.outputs.image }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+      - id: diff
+        env:
+          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+        run: .github/changes.sh | tee -a "$GITHUB_OUTPUT"
+
   lint:
+    # `!= 'false'`, here and below: when `changes` itself fails, the job runs
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.rust != 'false' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -34,6 +58,8 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Format
         run: cargo fmt --all --check
       - name: Clippy
@@ -43,6 +69,8 @@ jobs:
     # The server's integration tests split over three machines, balanced by
     # .github/test-shard.sh; shard 1 also runs the unit tests and the other crates.
     name: test (${{ matrix.shard }}/3)
+    needs: changes
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -73,6 +101,7 @@ jobs:
           MP_SMTP_AUTH_ALLOW_INSECURE: "1"
         ports: ["1025:1025", "8025:8025"]
     env:
+      RUN: ${{ needs.changes.outputs.rust != 'false' }}
       DATABASE_URL: postgres://forgust:forgust@127.0.0.1:5432/forgust
       FORGUST_TEST_S3_ENDPOINT: http://127.0.0.1:9000
       FORGUST_TEST_SMTP_URL: smtp://127.0.0.1:1025
@@ -82,7 +111,9 @@ jobs:
       FORGUST_TEST_PG_URL: postgres://forgust:forgust@127.0.0.1:5432
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: env.RUN == 'true'
       - name: System packages (git-lfs, the Postgres 17 client for the backup test)
+        if: env.RUN == 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends git-lfs openssh-client postgresql-common
@@ -90,30 +121,42 @@ jobs:
           sudo apt-get install -y --no-install-recommends postgresql-client-17
           git --version && git lfs version && /usr/lib/postgresql/17/bin/pg_dump --version
       - uses: dtolnay/rust-toolchain@d124f86f28ff42855784ff3319f48ac182c248f8 # 1.99
+        if: env.RUN == 'true'
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        if: env.RUN == 'true'
         with:
+          # one cache for the jobs that build the server's tests, saved by shard 1
+          # on main: a pull request reads main's caches and saves none of its own
+          # (a copy per branch eats into the repository's 10 GB)
           shared-key: test
-          save-if: ${{ matrix.shard == 1 }}
-      - name: Unit tests and the other crates
-        # web/openapi.json is checked by a unit test (api::openapi)
-        if: matrix.shard == 1
-        run: |
-          cargo test --workspace --exclude forgust-server
-          cargo test -p forgust-server --lib --bins
+          save-if: ${{ github.ref == 'refs/heads/main' && matrix.shard == 1 }}
+      - name: The other crates
+        if: env.RUN == 'true' && matrix.shard == 1
+        run: cargo test --workspace --exclude forgust-server
       - name: Integration tests (one throwaway database per test)
-        run: cargo test -p forgust-server $(.github/test-shard.sh ${{ matrix.shard }} 3)
+        # shard 1 adds the server's unit tests (one of them, api::openapi, checks
+        # web/openapi.json) in the same command: the crate then builds with and
+        # without its tests side by side, not one after the other
+        if: env.RUN == 'true'
+        run: cargo test -p forgust-server ${{ matrix.shard == 1 && '--lib --bins' || '' }} $(.github/test-shard.sh ${{ matrix.shard }} 3)
 
   runner-compat:
     # a stock gitlab-runner (Docker executor) against Forgust, per supported
     # version; also asserts the ADR-0008 pick-up (1 s) and cancel (5 s) targets.
     # The runner and its job containers use the host network, so 127.0.0.1 is
-    # the test server for all of them.
+    # the test server for all of them. A pull request runs the newest runner only:
+    # the oldest supported one runs on main.
     name: runner-compat (${{ matrix.runner }})
+    needs: changes
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         runner: [v17.11.0, v19.5.3]
+        include:
+          - runner: v17.11.0
+            main_only: true
     services:
       postgres:
         image: postgres:17
@@ -125,23 +168,34 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U forgust" --health-interval 2s --health-timeout 5s --health-retries 20
     env:
+      RUN: ${{ needs.changes.outputs.rust != 'false' && (github.event_name == 'push' || !matrix.main_only) }}
       DATABASE_URL: postgres://forgust:forgust@127.0.0.1:5432/forgust
       FORGUST_TEST_RUNNER: gitlab/gitlab-runner:${{ matrix.runner }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: env.RUN == 'true'
       - uses: dtolnay/rust-toolchain@d124f86f28ff42855784ff3319f48ac182c248f8 # 1.99
+        if: env.RUN == 'true'
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        if: env.RUN == 'true'
+        with:
+          shared-key: test
+          save-if: false
       - name: Images
+        if: env.RUN == 'true'
         run: |
           pull() { for i in 1 2 3 4; do docker pull -q "$1" && return; sleep 15; done; return 1; }
           pull alpine:3.20 && pull "$FORGUST_TEST_RUNNER"
       - name: Real runner
+        if: env.RUN == 'true'
         run: cargo test -p forgust-server --test m4_runner -- --nocapture
 
   real-tools:
     # the real Renovate (container), glab (binary), skopeo and the security
     # scanners (containers) against a test server (tests/m5_tools.rs,
     # m9_registry.rs, m16_security.rs)
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.rust != 'false' }}
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -162,6 +216,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@d124f86f28ff42855784ff3319f48ac182c248f8 # 1.99
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: test
+          save-if: false
       - name: glab, Renovate and skopeo
         run: |
           curl -sSfL "https://gitlab.com/gitlab-org/cli/-/releases/v${GLAB_VERSION}/downloads/glab_${GLAB_VERSION}_linux_amd64.tar.gz" \
@@ -187,6 +244,7 @@ jobs:
   deny:
     runs-on: ubuntu-latest
     env:
+      # moved by hand, with the one in advisories.yml
       CARGO_DENY: "0.20.2"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -199,6 +257,8 @@ jobs:
       - run: cargo deny --all-features check
 
   web:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.web != 'false' }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -216,9 +276,11 @@ jobs:
       - run: npm run build
 
   image:
-    # a full release build (~25 min on a 2-core runner): on main, not on every
-    # pull request push
-    if: github.event_name == 'push'
+    # a full release build (10 min): on main, and only when what the image is
+    # built from changed beyond the sources (Dockerfile, manifests, lockfiles);
+    # release.yml builds the image that ships
+    needs: changes
+    if: ${{ !cancelled() && github.event_name == 'push' && needs.changes.outputs.image != 'false' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -227,9 +289,17 @@ jobs:
       - name: The image starts
         run: docker run --rm "forgust:ci-${GITHUB_RUN_NUMBER}" --help
 
-  e2e:
-    # browser tests (desktop and 390 px) against the server built in the job
+  e2e-run:
+    # browser tests against the server built in the job: one machine, with its
+    # own server and database, per Playwright project (desktop and 390 px)
+    name: e2e (${{ matrix.project }})
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.outputs.rust != 'false' || needs.changes.outputs.web != 'false') }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [desktop, mobile]
     services:
       postgres:
         image: postgres:17
@@ -253,6 +323,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@d124f86f28ff42855784ff3319f48ac182c248f8 # 1.99
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 26
@@ -273,7 +345,7 @@ jobs:
         working-directory: web
         run: |
           npx playwright install --with-deps chromium
-          npx playwright test
+          npx playwright test --project ${{ matrix.project }}
         env:
           CI: "true"
           FORGUST_E2E_URL: http://127.0.0.1:18491
@@ -284,5 +356,14 @@ jobs:
         if: failure()
         continue-on-error: true
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.project }}
           path: web/playwright-report
+
+  e2e:
+    # one result for both e2e jobs: the status check the main branch requires
+    # (skipped counts: nothing the browser tests cover was touched)
+    if: always()
+    needs: e2e-run
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "${{ needs.e2e-run.result }}" = success || test "${{ needs.e2e-run.result }}" = skipped
