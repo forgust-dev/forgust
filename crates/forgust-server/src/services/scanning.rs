@@ -331,6 +331,7 @@ pub async fn run(state: &AppState, project: &Project) -> ApiResult<Option<i64>> 
     let Some(s) = sdb::scanning(&state.db, project.id).await?.filter(|s| s.enabled) else {
         return Err(ApiError::conflict("security scanning is off for this project"));
     };
+    let _lock = super::builtin::start_lock::<Scanning>(state, project.id).await?;
     if !sdb::active_scans(&state.db, Some(project.id)).await?.is_empty() {
         return Err(ApiError::conflict("a scan is already running"));
     }

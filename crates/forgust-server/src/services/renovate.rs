@@ -292,6 +292,7 @@ pub async fn run(state: &AppState, project: &Project) -> ApiResult<Option<i64>> 
     let Some(s) = forgust_db::renovate::get(&state.db, project.id).await?.filter(|s| s.enabled) else {
         return Err(ApiError::conflict("dependency updates are off for this project"));
     };
+    let _lock = super::builtin::start_lock::<Renovate>(state, project.id).await?;
     if forgust_db::renovate::active_runs(&state.db, Some(project.id)).await? > 0 {
         return Err(ApiError::conflict("a run is already going"));
     }

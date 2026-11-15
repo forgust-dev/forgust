@@ -43,6 +43,18 @@ pub(crate) trait Builtin {
     fn turn_on(state: &AppState, principal: &Principal, project: &Project) -> impl Future<Output = ApiResult<()>> + Send;
 }
 
+/// Held from the "is a run going?" check to the run's creation: "Run now" and
+/// the sweep reaching a project at the same time start one run, not two.
+/// Released when dropped.
+pub(crate) async fn start_lock<B: Builtin>(state: &AppState, project_id: i64) -> sqlx::Result<sqlx::Transaction<'static, sqlx::Postgres>> {
+    let mut lock = state.db.begin().await?;
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(format!("{}:{project_id}", B::RUN))
+        .execute(&mut *lock)
+        .await?;
+    Ok(lock)
+}
+
 /// Every minute: cancel what no runner took within a day, then start due runs
 /// while there is room.
 pub(crate) async fn run_due<B: Builtin>(state: &AppState) -> anyhow::Result<()> {

@@ -401,3 +401,24 @@ async fn renovate_admin_host_rules_and_group_default(pool: sqlx::PgPool) {
     assert_eq!(owner.ok_get(&format!("/api/v1/projects/{later}/renovate")).await["enabled"], false);
     assert_eq!(owner.ok_get(&format!("/api/v1/projects/{project}/renovate")).await["enabled"], true);
 }
+
+/// "Run now" as the every-minute sweep starts the run that was due: one run.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn a_run_started_twice_at_once_runs_once(pool: sqlx::PgPool) {
+    let srv = TestServer::start(pool).await;
+    let owner = srv.user("olivia", false).await;
+    let (_org, _sub, project) = org_project(&owner).await;
+    let work = srv.work_dir("rn");
+    seed_repo(&work).await;
+    must(git(&work, &["push", "-q", &srv.http_url("olivia", "acme/platform/api"), "main"]).await);
+    wait_jobs(&srv.state).await;
+    let rn = format!("/api/v1/projects/{project}/renovate");
+    let (s, st) = owner.put(&rn, json!({ "enabled": true, "interval_hours": 24, "onboarding": false })).await;
+    assert_eq!(s, 200, "{st}");
+
+    let run = format!("{rn}/run");
+    let (now, sweep) = tokio::join!(owner.post(&run, json!({})), forgust_server::services::renovate::run_due(&srv.state));
+    sweep.unwrap();
+    assert!(now.0 == 200 || now.0 == 409, "{now:?}");
+    assert_eq!(forgust_db::renovate::active_runs(&srv.state.db, Some(project)).await.unwrap(), 1);
+}
