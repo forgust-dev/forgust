@@ -1,6 +1,7 @@
 [env]
-# Every `#[sqlx::test]` pool borrows from one shared pool of 20 connections per
-# test binary, and each test (a full server with its workers) may hold 5: more
-# than 4 tests at once starve each other into `PoolTimedOut` (and 500s from the
-# server under test). Overridable: RUST_TEST_THREADS=8 cargo test.
-RUST_TEST_THREADS = { value = "4", force = false }
+# Every `#[sqlx::test]` pool takes its connections (up to 5) from one shared pool
+# of 20 per test binary, which also creates and drops the test databases: 4 tests
+# at once hold all 20, and everything then waits on timeouts (the same binary
+# takes six times longer at 4 threads than at 3). Overridable:
+# RUST_TEST_THREADS=2 cargo test.
+RUST_TEST_THREADS = { value = "3", force = false }
