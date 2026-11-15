@@ -45,7 +45,28 @@ pub fn init_sentry(cfg: &TelemetryConfig) -> anyhow::Result<Option<sentry::Clien
     if !environment.is_empty() {
         options = options.environment(environment.to_string());
     }
+    if !crate::tls::certs().is_empty() {
+        options = options.transport(SentryTransport);
+    }
     Ok(Some(sentry::init(options)))
+}
+
+/// Sentry's own transport, over a client that trusts `security.ca_file`. A
+/// client handed to Sentry gets no proxy from it: they are set here.
+struct SentryTransport;
+
+impl sentry::TransportFactory for SentryTransport {
+    fn create_transport_with_options(&self, options: sentry::TransportOptions) -> std::sync::Arc<dyn sentry::Transport> {
+        let mut builder = crate::tls::http_client();
+        if let Some(proxy) = options.http_proxy.as_deref().and_then(|url| reqwest::Proxy::http(url).ok()) {
+            builder = builder.proxy(proxy);
+        }
+        if let Some(proxy) = options.https_proxy.as_deref().and_then(|url| reqwest::Proxy::https(url).ok()) {
+            builder = builder.proxy(proxy);
+        }
+        let client = builder.build().expect("the client `tls::init` built with these authorities");
+        std::sync::Arc::new(sentry::transports::ReqwestHttpTransportOptions::from(options).with_client(client).build())
+    }
 }
 
 pub fn init(cfg: &TelemetryConfig) -> anyhow::Result<Telemetry> {

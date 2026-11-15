@@ -2286,6 +2286,8 @@ dependencies = [
  "reqwest 0.13.5",
  "ring",
  "russh",
+ "rustls-native-certs",
+ "rustls-pki-types",
  "semver",
  "sentry",
  "serde",

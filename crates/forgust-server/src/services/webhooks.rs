@@ -126,7 +126,7 @@ pub async fn safe_get(state: &AppState, raw: &str, max_bytes: usize) -> Result<S
     let url = validate_url(raw).map_err(|e| e.to_string())?;
     let addrs = safe_addrs(&url, state.cfg.features.webhooks_allow_local).await?;
     let host = url.host_str().unwrap_or_default().to_string();
-    let client = reqwest::Client::builder()
+    let client = crate::tls::http_client()
         .redirect(reqwest::redirect::Policy::none())
         .timeout(Duration::from_secs(10))
         .resolve_to_addrs(&host, &addrs)
@@ -159,7 +159,7 @@ pub async fn fetch_image(state: &AppState, raw: &str, max_bytes: usize) -> Resul
         // Maintainers' webhooks, not every comment's images
         let addrs = safe_addrs(&url, state.cfg.features.image_proxy_allow_local).await?;
         let host = url.host_str().unwrap_or_default().to_string();
-        let client = reqwest::Client::builder()
+        let client = crate::tls::http_client()
             .redirect(reqwest::redirect::Policy::none())
             .timeout(Duration::from_secs(10))
             .resolve_to_addrs(&host, &addrs)
@@ -240,7 +240,7 @@ pub async fn deliver(state: &AppState, delivery_id: i64) -> anyhow::Result<()> {
         let url = validate_url(&hook.url).map_err(|e| e.to_string())?;
         let addrs = safe_addrs(&url, state.cfg.features.webhooks_allow_local).await?;
         let host = url.host_str().unwrap_or_default().to_string();
-        let client = reqwest::Client::builder()
+        let client = crate::tls::http_client()
             .redirect(reqwest::redirect::Policy::none())
             .timeout(Duration::from_secs(10))
             .resolve_to_addrs(&host, &addrs)

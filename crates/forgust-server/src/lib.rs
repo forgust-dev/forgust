@@ -28,5 +28,6 @@ pub mod services;
 pub mod ssh;
 pub mod state;
 pub mod telemetry;
+pub mod tls;
 pub mod v4;
 pub mod web;

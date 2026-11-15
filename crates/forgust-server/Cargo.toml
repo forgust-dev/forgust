@@ -83,6 +83,9 @@ percent-encoding = "2"
 url = "2"
 semver = "1"
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "json", "stream"] }
+# `security.ca_file`: reading it, and the system's authorities for git and pg_dump
+rustls-pki-types = { version = "1", features = ["std"] }
+rustls-native-certs = "0.8"
 hmac = "0.13"
 lettre = { version = "0.11", default-features = false, features = ["builder", "smtp-transport", "tokio1", "tokio1-rustls", "ring", "webpki-roots"] }
 
