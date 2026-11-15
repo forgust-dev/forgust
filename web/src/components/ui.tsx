@@ -43,7 +43,7 @@ export function Badge({ children, tone }: { children: ReactNode; tone?: "accent"
   return <span className={`badge ${tone ?? ""}`}>{children}</span>;
 }
 
-export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+export function Field({ label, hint, children }: { label: string; hint?: ReactNode; children: ReactNode }) {
   return (
     <label className="field">
       {label}

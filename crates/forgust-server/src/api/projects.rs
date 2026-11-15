@@ -365,11 +365,15 @@ pub async fn add_deploy_key(
     p.may_mint_credentials()?;
     let proj = project_for(&state, &p, &id, ProjectAction::Admin).await?;
     let (key, fp) = super::user::parse_public_key(&req.key)?;
-    let key_id = match forgust_db::ssh_keys::find_by_fingerprint(&state.db, &fp).await? {
+    // expired keys too: an expired personal key still holds its fingerprint
+    let key_id = match forgust_db::ssh_keys::find_including_expired(&state.db, &fp).await? {
         // an existing deploy key can be attached to more projects; a user key cannot
         Some(k) if k.kind == "deploy" => k.id,
         Some(_) => return Err(ApiError::conflict("this key is already used as a personal key")),
-        None => forgust_db::ssh_keys::insert(&state.db, "deploy", None, &req.title, &key, &fp, None).await?,
+        None => {
+            forgust_db::ssh_keys::insert(&state.db, "deploy", None, &req.title, &key, &fp, None, forgust_db::ssh_keys::KeyUsage::Auth)
+                .await?
+        }
     };
     forgust_db::ssh_keys::link_deploy_key(&state.db, key_id, proj.id, req.can_push).await?;
     services::audit(

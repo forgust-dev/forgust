@@ -1,6 +1,6 @@
 //! Signed commits: the OpenPGP or SSH signature in a commit's
 //! `gpgsig` header, checked against the keys users registered (GPG keys, and
-//! their SSH keys, which sign as well as authenticate, as in GitLab).
+//! their SSH keys whose `usage_type` includes signing, as in GitLab).
 //!
 //! A commit is **verified** when the signature is good, the key belongs to a
 //! user, and the committer email is that user's confirmed address (and, for
@@ -19,12 +19,17 @@ pub struct Verification {
     pub signature_type: String,
     /// `verified`; `unverified` (good signature, but the committer email is not
     /// the key owner's confirmed address); `unknown_key` (no user registered
-    /// the key); `bad_signature`; `unsupported` (X.509).
+    /// the key for signing); `bad_signature`; `unsupported` (X.509).
     pub verification_status: String,
     /// The key's fingerprint (OpenPGP: primary key, hex; SSH: `SHA256:...`).
     pub key_fingerprint: Option<String>,
     /// The key owner's username, when the key is registered.
     pub signer: Option<String>,
+    /// The SSH key has expired. What it signed stays verified, but a push rule
+    /// requiring signed commits no longer takes it: an SSH signature carries no
+    /// trusted time that would tell the commits signed before from those after.
+    #[serde(skip)]
+    pub key_expired: bool,
 }
 
 impl Verification {
@@ -95,6 +100,7 @@ pub async fn verify(state: &AppState, raw: &[u8]) -> Option<Verification> {
         verification_status: "bad_signature".into(),
         key_fingerprint: None,
         signer: None,
+        key_expired: false,
     };
     match s.kind {
         "PGP" => verify_pgp(state, &s, &mut v).await,
@@ -150,11 +156,12 @@ async fn verify_ssh(state: &AppState, s: &Signed, v: &mut Verification) {
     if key.verify("git", &s.payload, &sig).is_err() {
         return;
     }
-    let row = forgust_db::ssh_keys::find_by_fingerprint(&state.db, &fp).await.ok().flatten().filter(|k| k.kind == "user");
-    let Some(user_id) = row.and_then(|k| k.user_id) else {
+    let row = forgust_db::ssh_keys::find_including_expired(&state.db, &fp).await.ok().flatten().filter(|k| k.for_signing());
+    let Some((user_id, expires_at)) = row.and_then(|k| Some((k.user_id?, k.expires_at))) else {
         v.verification_status = "unknown_key".into();
         return;
     };
+    v.key_expired = expires_at.is_some_and(|t| t <= chrono::Utc::now());
     let user = forgust_db::users::find(&state.db, user_id).await.ok().flatten();
     v.signer = user.as_ref().map(|u| u.username.clone());
     v.verification_status = if user.is_some_and(|u| owns_email(&u, &s.committer_email)) { "verified" } else { "unverified" }.into();
