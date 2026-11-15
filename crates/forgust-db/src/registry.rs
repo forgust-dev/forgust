@@ -121,14 +121,55 @@ pub async fn add_blob(c: &mut PgConnection, repository_id: i64, digest: &str, si
     link_blob(&mut *c, repository_id, digest).await
 }
 
+/// Link a blob to the repository (an upload, a mount). A link's `created_at`
+/// is when the repository last used the blob: the garbage collector's grace
+/// day counts from it, so linking again restarts it.
 pub async fn link_blob(e: impl PgExecutor<'_>, repository_id: i64, digest: &str) -> Result<()> {
-    sqlx::query!(
-        "INSERT INTO registry_repository_blobs (repository_id, digest) VALUES ($1, $2) ON CONFLICT DO NOTHING",
-        repository_id,
-        digest
+    sqlx::query(
+        "INSERT INTO registry_repository_blobs (repository_id, digest) VALUES ($1, $2)
+         ON CONFLICT (repository_id, digest) DO UPDATE SET created_at = now()",
     )
+    .bind(repository_id)
+    .bind(digest)
     .execute(e)
     .await?;
+    Ok(())
+}
+
+/// A client asked for a blob the repository has (a push checks which layers it
+/// can skip, then names them in its manifest): the link counts as used now.
+/// At most a write an hour per link.
+pub async fn touch_link(e: impl PgExecutor<'_>, repository_id: i64, digest: &str) -> Result<()> {
+    sqlx::query(
+        "UPDATE registry_repository_blobs SET created_at = now()
+          WHERE repository_id = $1 AND digest = $2 AND created_at < now() - interval '1 hour'",
+    )
+    .bind(repository_id)
+    .bind(digest)
+    .execute(e)
+    .await?;
+    Ok(())
+}
+
+/// For a manifest being stored, in its transaction: mark the links of the
+/// blobs it names as used (a garbage collection deleting them meanwhile then
+/// sees them new and keeps them), and return those the repository lacks.
+pub async fn hold_links(c: &mut PgConnection, repository_id: i64, digests: &[String]) -> Result<Vec<String>> {
+    let held: Vec<String> = sqlx::query_scalar(
+        "UPDATE registry_repository_blobs SET created_at = now() WHERE repository_id = $1 AND digest = ANY($2) RETURNING digest",
+    )
+    .bind(repository_id)
+    .bind(digests)
+    .fetch_all(&mut *c)
+    .await?;
+    Ok(digests.iter().filter(|d| !held.contains(d)).cloned().collect())
+}
+
+/// One writer or remover of a blob's file at a time (an upload completing,
+/// the deletion queue), for the rest of the transaction: files are named by
+/// their content, so a blob pushed again reuses the name of one being deleted.
+pub async fn lock_blob(c: &mut PgConnection, digest: &str) -> Result<()> {
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))").bind(format!("registry-blob:{digest}")).execute(&mut *c).await?;
     Ok(())
 }
 
