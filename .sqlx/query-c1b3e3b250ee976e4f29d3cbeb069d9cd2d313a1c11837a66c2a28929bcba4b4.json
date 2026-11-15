@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE instance_settings SET latest_version = $1, latest_release_url = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c1b3e3b250ee976e4f29d3cbeb069d9cd2d313a1c11837a66c2a28929bcba4b4"
+}

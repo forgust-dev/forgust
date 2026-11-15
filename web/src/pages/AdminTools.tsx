@@ -342,7 +342,7 @@ export function AdminJobs() {
               </table>
             )}
             <p className="small muted" style={{ margin: "8px 0 0" }}>
-              Scheduled tasks (every minute: CI housekeeping; every 5 minutes: cleanup; hourly: repository maintenance) come back once done.
+              Scheduled tasks (every minute: CI housekeeping; every 5 minutes: cleanup; hourly: repository maintenance; every 6 hours: the release check) come back once done.
             </p>
           </Card>
           <Card title="Run now">

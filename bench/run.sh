@@ -28,7 +28,7 @@ cleanup() {
 trap cleanup EXIT
 
 export FORGUST_DATABASE__URL="$BASE/$DB" FORGUST_SERVER__DATA_DIR="$WORK/data" FORGUST_SERVER__LISTEN="127.0.0.1:$PORT" \
-  FORGUST_SERVER__EXTERNAL_URL="http://127.0.0.1:$PORT" FORGUST_SERVER__SSH_LISTEN= FORGUST_TELEMETRY__LOG_FILTER=warn
+  FORGUST_SERVER__EXTERNAL_URL="http://127.0.0.1:$PORT" FORGUST_SERVER__SSH_LISTEN= FORGUST_SERVER__RELEASE_CHECK_URL= FORGUST_TELEMETRY__LOG_FILTER=warn
 $BIN/forgust admin create-user --username bench --email bench@example.com --password benchpassword --admin
 $BIN/forgust serve > "$WORK/server.log" 2>&1 &
 SERVER=$!

@@ -79,6 +79,7 @@ regex = "1"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
 percent-encoding = "2"
 url = "2"
+semver = "1"
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "json", "stream"] }
 hmac = "0.13"
 lettre = { version = "0.11", default-features = false, features = ["builder", "smtp-transport", "tokio1", "tokio1-rustls", "ring", "webpki-roots"] }
