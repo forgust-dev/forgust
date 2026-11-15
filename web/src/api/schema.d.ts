@@ -3010,6 +3010,13 @@ export interface components {
             /** @description The account's password (accounts without one: empty, within 10 minutes of signing in). */
             password?: string;
         };
+        ConfirmUserEmail: {
+            /**
+             * @description The address the administrator saw and vouches for: refused when the
+             *     account's is another one by now.
+             */
+            email: string;
+        };
         ConnectBody: {
             /** @description Only projects under this group (GitLab) or owner (GitHub). */
             scope?: string;
@@ -5289,6 +5296,11 @@ export interface components {
         SessionInfo: {
             /** @description Send back as `X-CSRF-Token` on POST/PUT/DELETE. */
             csrf_token: string;
+            /**
+             * @description Whether the instance sends email: without it, nothing promises or
+             *     waits for an emailed link.
+             */
+            email_enabled: boolean;
             impersonator?: components["schemas"]["UserDto"] | null;
             user: components["schemas"]["UserDto"];
         };
@@ -5308,6 +5320,11 @@ export interface components {
             username: string;
         };
         SetupStatus: {
+            /**
+             * @description Whether the instance sends email (confirmation and reset links,
+             *     notifications). Without it, nothing should promise or wait for one.
+             */
+            email_enabled: boolean;
             needs_setup: boolean;
         };
         ShareDto: {
@@ -5466,6 +5483,11 @@ export interface components {
             /** @description Largest first: what each keeps, LFS objects and image layers counted for every project using them. */
             projects: components["schemas"]["ProjectStorage"][];
             /**
+             * @description The directory of the Git repositories: always on this server's disk,
+             *     whatever the blob store is.
+             */
+            repositories_location: string;
+            /**
              * Format: int64
              * @description Repositories not measured yet (sizes refresh after pushes and hourly).
              */
@@ -5482,11 +5504,6 @@ export interface components {
             /**
              * Format: int64
              * @description Container images: the distinct blobs its repositories use.
-            /**
-             * @description The directory of the Git repositories: always on this server's disk,
-             *     whatever the blob store is.
-             */
-            repositories_location: string;
              */
             registry_bytes: number;
             /** Format: int64 */
@@ -5756,6 +5773,11 @@ export interface components {
             url?: string | null;
         };
         UpdateUser: {
+            /**
+             * @description A new address, confirmed at once: the administrator vouches for it
+             *     (the only way to a confirmed address on an instance without email).
+             */
+            email?: string | null;
             is_admin?: boolean | null;
             /** @description External people see only what they are a member of. */
             is_external?: boolean | null;

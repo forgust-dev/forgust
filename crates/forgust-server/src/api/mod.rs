@@ -318,6 +318,7 @@ pub fn router() -> Router<AppState> {
         .route("/auth/stop_impersonating", post(auth::stop_impersonating))
         .route("/admin/users/{id}/revoke_tokens", post(admin::revoke_tokens))
         .route("/admin/users/{id}/resend_confirmation", post(admin::resend_confirmation))
+        .route("/admin/users/{id}/confirm_email", post(admin::confirm_email))
         .route("/admin/jobs/{job_id}/retry", post(admin::retry_job))
         .route("/admin/jobs/{job_id}", delete(admin::drop_job))
         .route("/admin/tasks", get(admin::runnable))

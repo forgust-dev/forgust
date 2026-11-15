@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import { api, type S } from "../api/client";
-import { useProviders } from "../prefetch";
+import { useProviders, useSetup } from "../prefetch";
 import { useSession } from "../session";
 import { ErrorBox, Field } from "../components/ui";
 
@@ -29,7 +28,7 @@ export function Login() {
   const [error, setError] = useState<unknown>(params.get("error"));
   const [busy, setBusy] = useState(false);
   const providers = useProviders();
-  const setup = useQuery({ queryKey: ["setup"], queryFn: () => api.get<S["SetupStatus"]>("/setup") });
+  const setup = useSetup();
 
   const finish = (r: S["LoginResponse"]) => {
     if (r.two_factor_required) {
@@ -153,11 +152,17 @@ export function ForgotPassword() {
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const setup = useSetup();
   return (
     <div className="page narrow auth-page">
       <img src="/favicon.svg" width={36} height={36} alt="" className="auth-logo" />
       <h1>Reset your password</h1>
-      {sent ? (
+      {setup.data?.email_enabled === false ? (
+        <div className="stack">
+          <p>This instance sends no email, so it cannot send a reset link. Ask an administrator to set a new password for you.</p>
+          <Link to="/login">Back to sign in</Link>
+        </div>
+      ) : sent ? (
         <div className="stack">
           <p>If an account matches “{login}”, we sent a link to its email address. It works once, within an hour.</p>
           <Link to="/login">Back to sign in</Link>
@@ -184,7 +189,7 @@ export function ForgotPassword() {
           <Field label="Username or email">
             <input autoFocus autoComplete="username" value={login} onChange={(e) => setLogin(e.target.value)} />
           </Field>
-          <button className="btn primary" disabled={busy || !login.trim()}>
+          <button className="btn primary" disabled={busy || !login.trim() || !setup.data}>
             Send the link
           </button>
           <Link className="small" to="/login">

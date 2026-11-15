@@ -6,6 +6,8 @@ type Session = {
   user: S["UserDto"] | null;
   /** The administrator signed in as `user` (impersonation), if any. */
   impersonator: S["UserDto"] | null;
+  /** Whether the instance sends email: without it no page promises (or waits for) an emailed link. */
+  emailEnabled: boolean;
   loading: boolean;
   setSession: (s: S["SessionInfo"] | null) => void;
   /** Reload the signed-in user (after a profile change), keeping the caches. */
@@ -13,11 +15,12 @@ type Session = {
   logout: () => Promise<void>;
 };
 
-const Ctx = createContext<Session>({ user: null, impersonator: null, loading: true, setSession: () => {}, refresh: async () => {}, logout: async () => {} });
+const Ctx = createContext<Session>({ user: null, impersonator: null, emailEnabled: true, loading: true, setSession: () => {}, refresh: async () => {}, logout: async () => {} });
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<S["UserDto"] | null>(null);
   const [impersonator, setImpersonator] = useState<S["UserDto"] | null>(null);
+  const [emailEnabled, setEmailEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
   const qc = useQueryClient();
 
@@ -25,6 +28,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setCsrf(s?.csrf_token ?? null);
     setUser(s?.user ?? null);
     setImpersonator(s?.impersonator ?? null);
+    setEmailEnabled(s?.email_enabled ?? true);
     qc.clear();
   };
 
@@ -35,6 +39,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setCsrf(s.csrf_token);
         setUser(s.user);
         setImpersonator(s.impersonator ?? null);
+        setEmailEnabled(s.email_enabled);
       })
       .catch(() => setUser(null))
       .finally(() => setLoading(false));
@@ -50,7 +55,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setSession(null);
   };
 
-  return <Ctx.Provider value={{ user, impersonator, loading, setSession, refresh, logout }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ user, impersonator, emailEnabled, loading, setSession, refresh, logout }}>{children}</Ctx.Provider>;
 }
 
 export const useSession = () => useContext(Ctx);

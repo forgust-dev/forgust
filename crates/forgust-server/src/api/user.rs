@@ -30,7 +30,7 @@ pub(crate) fn require_interactive(u: &forgust_db::users::User, p: &crate::auth::
 /// address is confirmed (an account registered with someone else's address
 /// must not keep a way in after they take it back).
 pub(crate) fn require_confirmed(state: &AppState, u: &forgust_db::users::User) -> ApiResult<()> {
-    if !u.email_verified() && !state.cfg.email.smtp_url.is_empty() {
+    if !u.email_verified() && state.cfg.email.enabled() {
         return Err(ApiError::forbidden("confirm your email address first (see the link we sent)"));
     }
     Ok(())
@@ -58,33 +58,38 @@ pub async fn update_me(
     Json(req): Json<UpdateMe>,
 ) -> ApiResult<Json<UserDto>> {
     require_interactive(&u, &p)?;
-    let new_email = !req.email.trim().eq_ignore_ascii_case(&u.email)
-        && u.unconfirmed_email.as_deref().is_none_or(|x| !x.eq_ignore_ascii_case(req.email.trim()));
-    if new_email {
+    let email = req.email.trim();
+    let changes = !email.eq_ignore_ascii_case(&u.email);
+    let pending = u.unconfirmed_email.as_deref().is_some_and(|x| x.eq_ignore_ascii_case(email));
+    // without email there is no link to confirm a new address with: it changes at once
+    let at_once = changes && !state.cfg.email.enabled();
+    if changes && (!pending || at_once) {
         reauth(&state, &jar, u.id, &req.current_password).await?;
     }
     paths::validate_name(&req.name)?;
-    paths::validate_email(&req.email)?;
-    if let Some(other) = forgust_db::users::find_by_email(&state.db, &req.email).await?
+    paths::validate_email(email)?;
+    if let Some(other) = forgust_db::users::find_by_email(&state.db, email).await?
         && other.id != u.id
     {
         return Err(ApiError::conflict("email is already in use"));
     }
     // a new address takes over only once confirmed from its own inbox
     forgust_db::users::update_profile(&state.db, u.id, &req.name, &u.email).await?;
-    if !req.email.eq_ignore_ascii_case(&u.email) {
-        forgust_db::users::set_unconfirmed_email(&state.db, u.id, Some(req.email.trim())).await?;
-        services::accounts::send_confirmation(&state, &u, req.email.trim()).await?;
-        if new_email {
+    if at_once {
+        // an administrator vouches for addresses (the accounts they create are confirmed)
+        services::accounts::set_email(&state, &p, &u, email, u.is_admin).await?;
+    } else if changes {
+        forgust_db::users::set_unconfirmed_email(&state.db, u.id, Some(email)).await?;
+        services::accounts::send_confirmation(&state, &u, email).await?;
+        if !pending {
             // the current inbox hears of it: a change it did not ask for is a warning
             services::notify::send_to(
                 &state,
                 &u.email,
                 "Your email address is being changed",
                 &format!(
-                    "Hello {},\n\nSomeone signed in as you asked to move your Forgust account to {}. It moves once that address confirms.\n\nIf it was not you, change your password now: that ends every other session.\n",
-                    u.username,
-                    req.email.trim()
+                    "Hello {},\n\nSomeone signed in as you asked to move your Forgust account to {email}. It moves once that address confirms.\n\nIf it was not you, change your password now: that ends every other session.\n",
+                    u.username
                 ),
             )
             .await;
@@ -619,6 +624,7 @@ pub async fn profile(State(state): State<AppState>, SignedIn(_, v): SignedIn, Pa
 /// the account's own unconfirmed one.
 pub async fn resend_confirmation(State(state): State<AppState>, SignedIn(u, p): SignedIn) -> ApiResult<Json<Value>> {
     require_interactive(&u, &p)?;
+    services::accounts::require_email(&state)?;
     if !state.login_limiter.allow(&format!("confirm|{}", u.id)) {
         return Err(ApiError::forbidden("too many emails; try again in a minute"));
     }

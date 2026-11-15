@@ -292,9 +292,16 @@ test("forgot password, reset and email links", async ({ browser }) => {
   await page.goto("/login");
   await page.getByLabel("Username or email").fill("root");
   await page.getByRole("link", { name: "Forgot your password?" }).click();
-  await expect(page.getByLabel("Username or email")).toHaveValue("root");
-  await page.getByRole("button", { name: "Send the link" }).click();
-  await expect(page.getByText(/If an account matches “root”, we sent a link/)).toBeVisible();
+  // a server without email (email.smtp_url) promises no link: it says whom to ask
+  const { email_enabled } = await (await page.request.get("/api/v1/setup")).json();
+  if (email_enabled) {
+    await expect(page.getByLabel("Username or email")).toHaveValue("root");
+    await page.getByRole("button", { name: "Send the link" }).click();
+    await expect(page.getByText(/If an account matches “root”, we sent a link/)).toBeVisible();
+  } else {
+    await expect(page.getByText(/This instance sends no email/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Send the link" })).toHaveCount(0);
+  }
   // a link that is not (or no longer) valid says so
   await page.goto("/reset-password?token=not-a-real-token");
   await page.getByLabel("New password").fill("a-long-new-password");

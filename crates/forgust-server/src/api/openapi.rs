@@ -56,7 +56,7 @@ use super::{
         groups::ShareRequest, groups::CreateAccessToken, groups::CreateDeployToken,
         projects::CreateProject, projects::UpdateProject, projects::NewPath, projects::TransferProject, projects::ProtectBranch, projects::AddDeployKey,
         repo::RefResolved, repo::TreeResponse, repo::PathCommit, repo::LastCommits, repo::RepoStats, crate::languages::LanguageShare, repo::BlobResponse, repo::LfsInfo, repo::ReadmeResponse, repo::CompareResponse, repo::BranchDto, repo::TagDto, repo::BlameResponse, repo::FileList, repo::MarkdownBody, repo::MarkdownHtml, repo::DescriptionTemplate, repo::NewBranch, repo::CommitBody, crate::services::edits::FileAction, crate::services::edits::ActionKind, crate::services::edits::Committed,
-        super::admin::Overview, super::admin::CreateUser, super::admin::UpdateUser, super::admin::LinkIdentity,
+        super::admin::Overview, super::admin::CreateUser, super::admin::UpdateUser, super::admin::ConfirmUserEmail, super::admin::LinkIdentity,
         super::admin::StorageOverview, super::admin::SetQuota, super::admin::Backups, super::admin::BackupEntry, forgust_db::admin::AdminProject, forgust_db::admin::AdminGroup, super::admin::Runnable, super::admin::TestEmail, forgust_db::admin::AdminUser, forgust_db::admin::Banner, super::admin::Health, super::admin::HealthCheck, super::admin::JobsOverview, super::admin::UpdateStatus,
         forgust_db::admin::InstanceCounts, forgust_db::admin::CiActivity, forgust_db::admin::PipelineDay, forgust_db::admin::BusyProject,
         forgust_db::admin::StorageKinds, forgust_db::admin::ProjectStorage, forgust_db::admin::GroupStorage,

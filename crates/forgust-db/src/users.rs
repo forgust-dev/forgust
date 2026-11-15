@@ -334,6 +334,19 @@ pub async fn confirm_email(e: impl PgExecutor<'_>, id: i64, email: &str) -> Resu
     Ok(())
 }
 
+/// The account's email changes with nothing proving it is the user's (an
+/// instance without email): it is not a confirmed address anymore.
+pub async fn set_unproven_email(e: impl PgExecutor<'_>, id: i64, email: &str) -> Result<()> {
+    sqlx::query!(
+        "UPDATE users SET email = $2, unconfirmed_email = NULL, email_verified_at = NULL, updated_at = now() WHERE id = $1",
+        id,
+        email
+    )
+    .execute(e)
+    .await?;
+    Ok(())
+}
+
 /// Users by username or email (case-insensitive), for "forgot password".
 pub async fn find_by_login(e: impl PgExecutor<'_>, login: &str) -> Result<Option<User>> {
     sqlx::query_as!(

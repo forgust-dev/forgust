@@ -359,9 +359,17 @@ pub struct EmailConfig {
     /// `smtps://user:pass@host:465` (TLS), `smtp://user:pass@host:587?tls=required`
     /// (STARTTLS), or `smtp://host:port` with no TLS at all (a local relay, or
     /// mailpit in development: never across a network with a password).
-    /// Empty disables email.
+    /// Empty disables email. (`memory:` keeps emails in memory: the tests.)
     pub smtp_url: String,
     pub from: String,
+}
+
+impl EmailConfig {
+    /// Whether this instance sends email at all. When it does not, nothing may
+    /// wait for an emailed link: there are no confirmations and no resets.
+    pub fn enabled(&self) -> bool {
+        !self.smtp_url.is_empty()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -21,8 +21,20 @@ fn link(state: &AppState, page: &str, token: &str) -> String {
     state.cfg.web_url(&format!("{page}?token={token}"))
 }
 
+/// What every emailed link answers on an instance that sends no email.
+pub fn require_email(state: &AppState) -> ApiResult<()> {
+    if !state.cfg.email.enabled() {
+        return Err(ApiError::conflict("this instance sends no email (email.smtp_url is not set): ask an administrator"));
+    }
+    Ok(())
+}
+
 /// Email a link confirming `email` (the account's address or a new one).
+/// Nothing when the instance sends no email: there is no link to wait for.
 pub async fn send_confirmation(state: &AppState, user: &User, email: &str) -> ApiResult<()> {
+    if !state.cfg.email.enabled() {
+        return Ok(());
+    }
     let token = crypto::random_urlsafe(32);
     let mut tx = state.db.begin().await?;
     udb::delete_tokens(&mut *tx, user.id, "email").await?;
@@ -44,9 +56,36 @@ pub async fn send_confirmation(state: &AppState, user: &User, email: &str) -> Ap
     Ok(())
 }
 
+/// `email` becomes the account's address now, with no link. `vouched`: an
+/// administrator answers for it, so it is confirmed; otherwise nobody proved
+/// it is the user's and it is not trusted like a confirmed one (signatures,
+/// code owners, linking a single sign-on account by email).
+pub async fn set_email(state: &AppState, by: &Principal, user: &User, email: &str, vouched: bool) -> ApiResult<()> {
+    let mut tx = state.db.begin().await?;
+    let set =
+        if vouched { udb::confirm_email(&mut *tx, user.id, email).await } else { udb::set_unproven_email(&mut *tx, user.id, email).await };
+    set.map_err(|e| if forgust_db::is_unique_violation(&e) { ApiError::conflict("email is already in use") } else { e.into() })?;
+    // links sent to the old address prove nothing about this one
+    udb::delete_tokens(&mut *tx, user.id, "email").await?;
+    udb::delete_tokens(&mut *tx, user.id, "password_reset").await?;
+    tx.commit().await?;
+    super::audit(
+        state,
+        by,
+        "email_changed",
+        Some(("user", user.id)),
+        json!({ "from": user.email, "email": email, "confirmed": vouched }),
+        None,
+    )
+    .await;
+    Ok(())
+}
+
 /// "Forgot password": a reset link to the account's address, if there is such
-/// an active account. Says nothing either way.
+/// an active account. Says nothing either way (but that the instance sends no
+/// email, when it does not: that is no secret, and waiting for a link is no use).
 pub async fn forgot(state: &AppState, login: &str) -> ApiResult<()> {
+    require_email(state)?;
     let Some(user) = udb::find_by_login(&state.db, login.trim()).await? else { return Ok(()) };
     if !user.is_active() || user.is_bot() {
         return Ok(());

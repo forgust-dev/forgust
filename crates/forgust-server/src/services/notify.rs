@@ -107,7 +107,18 @@ impl Mailer for SmtpMailer {
     }
 }
 
-/// Keeps emails in memory (tests) or drops them (email disabled).
+/// Email is not configured: whatever still reaches it (a job queued before
+/// `smtp_url` was emptied) is dropped.
+pub struct NoMailer;
+
+#[async_trait]
+impl Mailer for NoMailer {
+    async fn send(&self, _: &Email) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
+/// Keeps emails in memory (tests: `smtp_url = "memory:"`).
 #[derive(Default)]
 pub struct MemoryMailer {
     pub sent: Mutex<Vec<Email>>,
@@ -132,7 +143,8 @@ async fn queue(state: &AppState, email: Email) {
 /// Each email is its own job (retried on its own), queued in one transaction.
 async fn queue_all(state: &AppState, emails: Vec<Email>) {
     let emails: Vec<Email> = emails.into_iter().filter(|e| !e.to.is_empty()).collect();
-    if emails.is_empty() {
+    // without email nothing is queued: no jobs that send nothing
+    if emails.is_empty() || !state.cfg.email.enabled() {
         return;
     }
     let r: anyhow::Result<()> = async {

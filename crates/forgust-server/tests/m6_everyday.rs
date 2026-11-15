@@ -827,6 +827,55 @@ async fn email_confirmation(pool: sqlx::PgPool) {
     assert_eq!(newbie.post("/api/v1/user/email/resend", json!({})).await.0, 400);
 }
 
+/// An instance without email promises no link and waits for none: no
+/// confirmation, no reset, and a new address takes effect at once.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn without_email_nothing_waits_for_a_link(pool: sqlx::PgPool) {
+    let srv = TestServer::start_with(pool, |c| c.email.smtp_url.clear()).await;
+    let admin = srv.user("root", true).await;
+    sqlx::query("UPDATE instance_settings SET signup_enabled = true").execute(&srv.state.db).await.unwrap();
+    let anon = Client::new(&srv.base);
+    assert_eq!(anon.ok_get("/api/v1/setup").await["email_enabled"], false);
+    let (code, body) = anon
+        .post("/api/v1/auth/register", json!({ "username": "newbie", "email": "newbie@example.com", "password": "newbie-password-1" }))
+        .await;
+    assert_eq!(code, 200, "{body}");
+    let mut newbie = Client::new(&srv.base);
+    newbie.login("newbie", "newbie-password-1").await;
+    let nid = newbie.ok_get("/api/v1/user").await["id"].as_i64().unwrap();
+    // no link was made, none can be asked for
+    let links: i64 = sqlx::query_scalar("SELECT count(*) FROM user_tokens").fetch_one(&srv.state.db).await.unwrap();
+    assert_eq!(links, 0);
+    assert_eq!(newbie.post("/api/v1/user/email/resend", json!({})).await.0, 409);
+    assert_eq!(admin.post(&format!("/api/v1/admin/users/{nid}/resend_confirmation"), json!({})).await.0, 409);
+    assert_eq!(admin.post("/api/v1/admin/health/email", json!({})).await.0, 409);
+    let (code, body) = anon.post("/api/v1/auth/password/forgot", json!({ "login": "newbie" })).await;
+    assert_eq!(code, 409, "{body}");
+    assert!(body["message"].as_str().unwrap_or_default().contains("sends no email"), "{body}");
+
+    // a new address still needs the password, then is the account's at once
+    let (code, body) = newbie.put("/api/v1/user", json!({ "name": "Newbie", "email": "moved@example.com" })).await;
+    assert_eq!(code, 403, "{body}");
+    let (code, body) = newbie
+        .put("/api/v1/user", json!({ "name": "Newbie", "email": "moved@example.com", "current_password": "newbie-password-1" }))
+        .await;
+    assert_eq!(code, 200, "{body}");
+    assert_eq!(body["email"], "moved@example.com");
+    assert!(body["unconfirmed_email"].is_null(), "{body}");
+    // nobody proved it: not a confirmed address
+    assert_eq!(body["email_verified"], false);
+    // someone else's address stays theirs
+    let (code, _) =
+        newbie.put("/api/v1/user", json!({ "name": "Newbie", "email": "root@example.com", "current_password": "newbie-password-1" })).await;
+    assert_eq!(code, 409);
+    // an administrator's address stays confirmed, as on the accounts they create
+    let (code, body) =
+        admin.put("/api/v1/user", json!({ "name": "Root", "email": "root@new.example", "current_password": password("root") })).await;
+    assert_eq!(code, 200, "{body}");
+    assert_eq!(body["email"], "root@new.example");
+    assert_eq!(body["email_verified"], true);
+}
+
 fn png(w: u32, h: u32) -> Vec<u8> {
     let img = image::RgbImage::from_fn(w, h, |x, y| image::Rgb([(x % 256) as u8, (y % 256) as u8, 200]));
     let mut out = Vec::new();
@@ -897,8 +946,14 @@ async fn a_reclaimed_address_keeps_no_way_in(pool: sqlx::PgPool) {
     assert_eq!(code, 200, "{body}");
     let mut squatter = Client::new(&srv.base);
     squatter.login("squatter", "squatter-pass-1").await;
-    let pat =
-        squatter.ok_post("/api/v1/user/tokens", json!({ "name": "keep", "scopes": ["api"] })).await["token"].as_str().unwrap().to_string();
+    // with email on, an unconfirmed account gets no token: this one is from
+    // before (the instance sent no email then, and asked for no confirmation)
+    assert_eq!(squatter.post("/api/v1/user/tokens", json!({ "name": "keep", "scopes": ["api"] })).await.0, 403);
+    let sid = squatter.ok_get("/api/v1/user").await["id"].as_i64().unwrap();
+    let pat = forgust_server::crypto::random_token(forgust_server::crypto::prefix::PERSONAL);
+    forgust_db::tokens::create_pat(&srv.state.db, sid, "keep", &forgust_server::crypto::token_hash(&pat), &["api".to_string()], None)
+        .await
+        .unwrap();
     let with_pat = Client::with_token(&srv.base, &pat);
     assert_eq!(with_pat.get("/api/v1/user").await.0, 200);
 
