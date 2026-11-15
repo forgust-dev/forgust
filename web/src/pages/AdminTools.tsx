@@ -769,7 +769,7 @@ function DefaultQuota({ value }: { value: number | null }) {
     <form className="stack" onSubmit={save}>
       <p className="small muted" style={{ margin: 0 }}>
         Each top-level group and personal namespace gets this quota for all its projects, unless it has its own (below). A project can also have its own. Once a quota is full, new
-        pushes, LFS files, CI artifacts, images and uploads are refused; Owners get an email at 80 % and 100 %.
+        pushes, commits, merges, LFS files, CI artifacts, images and uploads are refused; Owners get an email at 80 % and 100 %.
       </p>
       <div className="row" style={{ gap: 8, alignItems: "flex-end" }}>
         <Field label="Default quota (GB)">

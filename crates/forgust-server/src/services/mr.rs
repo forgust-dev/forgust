@@ -505,6 +505,15 @@ pub async fn merge_status(state: &AppState, principal: &Principal, p: &Project, 
     if p.archived() {
         blockers.push("the project is archived (read-only)".into());
     }
+    // a merge writes a commit (and a rebase, every commit of the source again)
+    if let Some(r) = crate::services::quotas::room(state, p.id).await?.filter(|r| r.full()) {
+        blockers.push(format!(
+            "the storage quota is reached ({} uses {} of {})",
+            r.scope,
+            super::quotas::bytes(r.used),
+            super::quotas::bytes(r.quota)
+        ));
+    }
     let user_can_merge = may_merge_into(state, principal, p, &mr.target_branch).await?;
     if !user_can_merge {
         blockers.push(format!("you are not allowed to merge into `{}`", mr.target_branch));
@@ -774,6 +783,7 @@ pub async fn rebase_source(state: &AppState, principal: &Principal, p: &Project,
     if mr.state != "opened" {
         return Err(ApiError::conflict("only open merge requests can be rebased"));
     }
+    super::quotas::check_write(state, p.id, 0).await?;
     let _lock = state.repo_locks.get(p.id).read_owned().await;
     let head = branch_head(state, p.id, &mr.source_branch).await?.ok_or(ApiError::NotFound)?;
     let target = branch_head(state, p.id, &mr.target_branch).await?.ok_or(ApiError::NotFound)?;

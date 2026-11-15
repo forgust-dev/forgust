@@ -149,6 +149,7 @@ pub async fn apply(state: &AppState, principal: &Principal, p: &Project, mr: &Me
     let content =
         replace_lines(&now, line - s.above, line + s.below, &s.lines).ok_or_else(|| ApiError::bad("the lines are out of range"))?;
 
+    crate::services::quotas::check_write(state, p.id, content.len() as u64).await?;
     let tree =
         state.storage.tree_with_changes(p.id, &head, &[FileChange { path: path.clone(), content: Some(content.into_bytes()) }]).await?;
     let author = Identity { name: if user.name.is_empty() { user.username.clone() } else { user.name.clone() }, email: user.email.clone() };

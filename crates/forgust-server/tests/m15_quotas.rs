@@ -154,6 +154,74 @@ async fn a_full_project_takes_nothing_new(pool: sqlx::PgPool) {
     assert!(audit.contains("storage_quota_changed"), "audited");
 }
 
+/// What the server writes itself stops at the quota too: commits made in the
+/// browser (or through the API), merges and rebases.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn commits_from_the_browser_and_merges_stop_at_the_quota(pool: sqlx::PgPool) {
+    let srv = TestServer::start(pool).await;
+    let admin = srv.user("root", true).await;
+    let owner = srv.user("olivia", false).await;
+    let (_org, _sub, p) = org_project(&owner).await;
+    let work = srv.work_dir("q");
+    seed_repo(&work).await;
+    must(git(&work, &["push", "-q", &srv.http_url("olivia", REPO), "main"]).await);
+    // a branch to merge, one commit behind main once main moves
+    must(git(&work, &["checkout", "-q", "-b", "topic"]).await);
+    commit_file(&work, "topic.txt", "topic\n", "topic").await;
+    must(git(&work, &["push", "-q", &srv.http_url("olivia", REPO), "topic"]).await);
+    wait_jobs(&srv.state).await;
+    let base = format!("/api/v1/projects/{p}");
+    let quota = format!("/api/v1/admin/projects/{p}/quota");
+    let mr = owner.ok_post(&format!("{base}/merge_requests"), json!({ "source_branch": "topic", "title": "Topic" })).await;
+    let mr = format!("{base}/merge_requests/{}", mr["iid"]);
+    let commit = |file: &'static str, content: String| {
+        let (owner, url) = (&owner, format!("{base}/repository/commits"));
+        async move {
+            let body = json!({ "branch": "main", "commit_message": file, "actions": [{ "action": "create", "file_path": file, "content": content }] });
+            owner.post(&url, body).await
+        }
+    };
+
+    admin.ok_put(&quota, json!({ "bytes": used(&srv, p).await + 20_000 })).await;
+    // more than what is left: refused, nothing written
+    let (s, b) = commit("big.txt", noise(30_000, 1)).await;
+    assert_eq!(s, 413, "{b}");
+    assert!(b.to_string().contains("Storage quota reached: this project"), "{b}");
+    assert_eq!(owner.get(&format!("{base}/repository/files/big.txt?ref=main")).await.0, 404);
+    // what fits goes through, and counts for the next one
+    let (s, b) = commit("one.txt", noise(15_000, 2)).await;
+    assert!(s < 300, "{s} {b}");
+    wait_jobs(&srv.state).await;
+    let (s, b) = commit("two.txt", noise(15_000, 3)).await;
+    assert_eq!(s, 413, "15 000 + 15 000 > 20 000: {b}");
+    // moving a file brings nothing new
+    let moved = json!({ "branch": "main", "commit_message": "move", "actions": [{ "action": "move", "previous_path": "one.txt", "file_path": "moved.txt" }] });
+    let (s, b) = owner.post(&format!("{base}/repository/commits"), moved).await;
+    assert!(s < 300, "{s} {b}");
+    wait_jobs(&srv.state).await;
+
+    // full: no commit however small, no rebase, no merge (said on the merge request)
+    admin.ok_put(&quota, json!({ "bytes": used(&srv, p).await })).await;
+    let (s, b) = commit("small.txt", "s".into()).await;
+    assert_eq!(s, 413, "{b}");
+    let (s, b) = owner.post(&format!("{mr}/rebase"), json!({})).await;
+    assert_eq!(s, 413, "{b}");
+    let st = owner.ok_get(&format!("{mr}/merge_status")).await;
+    assert!(st["blockers"].to_string().contains("storage quota is reached (this project"), "{st}");
+    let (s, b) = owner.post(&format!("{mr}/merge"), json!({})).await;
+    assert_eq!(s, 409, "{b}");
+    // deleting still works
+    let gone = json!({ "branch": "main", "commit_message": "less", "actions": [{ "action": "delete", "file_path": "moved.txt" }] });
+    let (s, b) = owner.post(&format!("{base}/repository/commits"), gone).await;
+    assert!(s < 300, "{s} {b}");
+
+    // room again: the merge goes through
+    admin.ok_put(&quota, json!({ "bytes": null })).await;
+    let st = owner.ok_get(&format!("{mr}/merge_status")).await;
+    assert!(!st["blockers"].to_string().contains("storage quota"), "{st}");
+    owner.ok_post(&format!("{mr}/merge"), json!({})).await;
+}
+
 #[sqlx::test(migrator = "forgust_db::MIGRATOR")]
 async fn a_namespace_quota_counts_every_project(pool: sqlx::PgPool) {
     let srv = TestServer::start(pool).await;

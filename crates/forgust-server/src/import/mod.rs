@@ -584,6 +584,25 @@ impl<'a> Runner<'a> {
     }
 
     async fn repository(&mut self, p: &Project, sp: &SourceProject) -> Result<()> {
+        // storage quota: the fetch is not a push, so it asks here. The size is
+        // the source's word (from the dry run); into a project with content,
+        // only what is missing comes, so only "full" is checked
+        let said = self.row.report["repository_bytes"].as_i64().unwrap_or(0).max(0) as u64;
+        let expected = if self.existing { 0 } else { said };
+        if let Some(r) = crate::services::quotas::room(self.state, p.id).await.map_err(other)? {
+            if r.full() {
+                return Err(SourceError::Refused(r.message()));
+            }
+            if expected > r.left {
+                return Err(SourceError::Refused(format!(
+                    "The repository ({}) does not fit in the storage quota: {} uses {} of {}.",
+                    crate::services::quotas::bytes(expected as i64),
+                    r.scope,
+                    crate::services::quotas::bytes(r.used),
+                    crate::services::quotas::bytes(r.quota)
+                )));
+            }
+        }
         let (url, cfg) = self.git_remote(sp).await?;
         // into a project that already has content (a run again): the source's
         // branches and tags land aside, and only missing ones are created
@@ -600,6 +619,16 @@ impl<'a> Runner<'a> {
             .fetch(p.id, url.as_str(), &refspecs, &cfg)
             .await
             .map_err(|e| SourceError::Transient(format!("git fetch: {e}")))?;
+        // counted at once: the next project of this import shares the quota
+        crate::jobs::refresh_repository_size(self.state, p.id).await;
+        if let Some(r) = crate::services::quotas::room(self.state, p.id).await.map_err(other)?.filter(|r| r.used > r.quota) {
+            self.warnings.push(format!(
+                "The repository was larger than the source said and went past the storage quota: {} uses {} of {}. Nothing can be added until something is deleted or the quota is raised.",
+                r.scope,
+                crate::services::quotas::bytes(r.used),
+                crate::services::quotas::bytes(r.quota)
+            ));
+        }
         if self.existing {
             for (aside, real) in [("refs/import/heads/", "refs/heads/"), ("refs/import/tags/", "refs/tags/")] {
                 for r in self.state.storage.refs(p.id, aside).await.map_err(other)? {

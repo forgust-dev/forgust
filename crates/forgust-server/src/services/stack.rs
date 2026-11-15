@@ -368,6 +368,7 @@ pub async fn after_merge(
 pub async fn rebase(state: &AppState, principal: &Principal, p: &Project, m: &MergeRequest) -> ApiResult<usize> {
     require_project(state, principal, ProjectAction::Push, p).await?;
     let sid = m.stack_id.ok_or(ApiError::NotFound)?;
+    crate::services::quotas::check_write(state, p.id, 0).await?;
     let _lock = state.repo_locks.get(p.id).read_owned().await;
     let (_, list) = members(state, sid).await?;
     let mut updates = Vec::new();

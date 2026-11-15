@@ -338,7 +338,7 @@ function GroupStorage({ groupId }: { groupId: number }) {
           <div className="stack">
             <QuotaBar label={`Quota of ${u.namespace}, shared by all its projects`} used={u.used} quota={u.quota} />
             <p className="small muted" style={{ margin: 0 }}>
-              Once it is full, new pushes, LFS files, CI artifacts, images and uploads are refused in every project of {u.namespace}. Administrators set quotas.
+              Once it is full, new pushes, commits, merges, LFS files, CI artifacts, images and uploads are refused in every project of {u.namespace}. Administrators set quotas.
             </p>
           </div>
         ) : (
