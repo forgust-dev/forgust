@@ -331,6 +331,10 @@ pub struct Job {
     /// becomes the project's site.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pages: Option<Pages>,
+    /// `hooks:pre_get_sources_script`: commands the runner runs before it
+    /// fetches the repository.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pre_get_sources_script: Vec<String>,
 }
 
 /// `pages:` (or a job named `pages`): what is published.
@@ -390,6 +394,7 @@ pub const JOB_KEYWORDS: &[&str] = &[
     "trigger",
     "id_tokens",
     "manual_confirmation",
+    "hooks",
 ];
 /// Accepted and ignored (they change nothing about how Forgust runs the job).
 pub const JOB_IGNORED: &[&str] = &["description"];
@@ -416,12 +421,23 @@ pub const JOB_UNSUPPORTED: &[(&str, &str)] = &[
     ("secrets", "external secrets (Vault and others) are not supported yet"),
     ("dast_configuration", "DAST profiles are not supported"),
     ("identity", "identity federation is not supported"),
-    ("hooks", "job hooks are not supported yet"),
     ("run", "CI/CD steps (`run`) are not supported yet"),
     ("inputs", "job inputs are not supported yet"),
 ];
-pub const DEFAULT_KEYWORDS: &[&str] =
-    &["after_script", "artifacts", "before_script", "cache", "id_tokens", "image", "interruptible", "retry", "services", "tags", "timeout"];
+pub const DEFAULT_KEYWORDS: &[&str] = &[
+    "after_script",
+    "artifacts",
+    "before_script",
+    "cache",
+    "hooks",
+    "id_tokens",
+    "image",
+    "interruptible",
+    "retry",
+    "services",
+    "tags",
+    "timeout",
+];
 
 fn err(job: &str, msg: impl std::fmt::Display) -> ConfigError {
     ConfigError::Invalid(format!("job `{job}`: {msg}"))
@@ -768,6 +784,19 @@ fn rule_paths(owner: &str, key: &str, v: &Value, extra: &[&str]) -> Result<(Vec<
         }
         other => Ok((strings(owner, key, other)?, IndexMap::new())),
     }
+}
+
+/// `hooks:`: only `pre_get_sources_script` exists.
+fn hooks(job: &str, v: &Value) -> Result<Vec<String>, ConfigError> {
+    let m = v.as_map().ok_or_else(|| err(job, "`hooks` must be a hash"))?;
+    let mut out = Vec::new();
+    for (k, val) in m {
+        match k.as_str() {
+            "pre_get_sources_script" => out = script(job, "hooks:pre_get_sources_script", val)?,
+            other => return Err(err(job, format!("`hooks:{other}` is not supported"))),
+        }
+    }
+    Ok(out)
 }
 
 /// `job`: the job these rules belong to (None for `workflow` and `include`
@@ -1177,6 +1206,8 @@ pub fn build(name: &str, m: &Map, defaults: &Map) -> Result<Job, ConfigError> {
     job.trigger = m.get("trigger").map(|v| trigger(name, v)).transpose()?;
     job.id_tokens = get("id_tokens").map(|v| id_tokens(name, v)).transpose()?.unwrap_or_default();
     job.manual_confirmation = m.get("manual_confirmation").map(|v| string(name, "manual_confirmation", v)).transpose()?;
+    job.pre_get_sources_script =
+        get("hooks").filter(|v| !matches!(v, Value::Null)).map(|v| hooks(name, v)).transpose()?.unwrap_or_default();
     if job.trigger.is_some() {
         // a bridge: GitLab gives it no image, script or runner settings
         job.before_script.clear();
@@ -1187,6 +1218,7 @@ pub fn build(name: &str, m: &Map, defaults: &Map) -> Result<Job, ConfigError> {
         job.artifacts = None;
         job.cache.clear();
         job.id_tokens.clear();
+        job.pre_get_sources_script.clear();
     } else if job.script.is_empty() {
         if job.release.is_some() {
             // GitLab lets a release job have no script of its own

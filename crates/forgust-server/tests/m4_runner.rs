@@ -108,7 +108,7 @@ async fn stock_runner_runs_pipelines(pool: sqlx::PgPool) {
     must(git(&work, &["init", "-q", "-b", "main"]).await);
     std::fs::write(
         work.join(".gitlab-ci.yml"),
-        "stages: [build, test]\nbuild:\n  stage: build\n  image: alpine:3.20\n  script:\n    - mkdir -p out && echo \"built $CI_COMMIT_SHORT_SHA\" > out/r.txt\n  artifacts:\n    paths: [out/]\ntest:\n  stage: test\n  image: alpine:3.20\n  script:\n    - grep built out/r.txt\n    - wget -qO- \"$CI_REPOSITORY_URL/info/refs?service=git-upload-pack\" | grep -q refs/heads/main\n",
+        "stages: [build, test]\nbuild:\n  stage: build\n  image: alpine:3.20\n  hooks:\n    pre_get_sources_script:\n      - echo \"hook before the sources\"\n  script:\n    - mkdir -p out && echo \"built $CI_COMMIT_SHORT_SHA\" > out/r.txt\n  artifacts:\n    paths: [out/]\ntest:\n  stage: test\n  image: alpine:3.20\n  script:\n    - grep built out/r.txt\n    - wget -qO- \"$CI_REPOSITORY_URL/info/refs?service=git-upload-pack\" | grep -q refs/heads/main\n",
     )
     .unwrap();
     must(git(&work, &["add", "."]).await);
@@ -124,6 +124,14 @@ async fn stock_runner_runs_pipelines(pool: sqlx::PgPool) {
     .await;
     let p = owner.ok_get(&format!("/api/v1/projects/{project}/pipelines/1")).await;
     assert!(green && p["status"] == "success", "pipeline: {p}");
+
+    // `hooks:pre_get_sources_script` ran, before the runner fetched the repository
+    let build = p["jobs"].as_array().unwrap().iter().find(|j| j["name"] == "build").unwrap()["id"].as_i64().unwrap();
+    let t = owner.ok_get(&format!("/api/v1/projects/{project}/jobs/{build}/trace")).await;
+    let log = t["content"].as_str().unwrap_or("");
+    let (hook, fetch) = (log.find("hook before the sources"), log.find("Fetching changes"));
+    assert!(hook.is_some(), "the hook did not run: {log}");
+    assert!(hook < fetch, "the hook ran after the fetch: {log}");
 
     // pick-up latency: job queued → claimed by the (waiting) runner
     let row: (f64,) = sqlx::query_as("SELECT extract(epoch FROM (started_at - queued_at))::float8 FROM ci_builds WHERE name = 'test'")

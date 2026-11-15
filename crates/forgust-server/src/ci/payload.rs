@@ -268,6 +268,12 @@ pub fn job_response(state: &AppState, c: &Context<'_>) -> anyhow::Result<Value> 
         "inputs": [],
         "variables": variables::to_runner(&c.variables),
         "steps": steps,
+        // run by the runner before it fetches the repository
+        "hooks": if job.pre_get_sources_script.is_empty() {
+            json!([])
+        } else {
+            json!([{ "name": "pre_get_sources_script", "script": job.pre_get_sources_script }])
+        },
         "image": image,
         "services": services,
         "artifacts": artifacts,
