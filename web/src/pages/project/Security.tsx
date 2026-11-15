@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, ShieldAlert, ShieldCheck } from "lucide-react";
-import { api, qs, timeAgo, type S } from "../../api/client";
+import { api, qs, refLink, timeAgo, type S } from "../../api/client";
 import { Empty, FilterTabs, ListHead, Q, SearchField, useDebounced } from "../../components/ui";
 import { Select } from "../../components/controls";
 import { useAct } from "../../shell/toast";
@@ -81,7 +81,7 @@ function Where({ ctx, f }: { ctx: Ctx; f: Finding }) {
   if (!f.file) return null;
   const lines = f.start_line ? `#L${f.start_line}${f.end_line && f.end_line !== f.start_line ? `-${f.end_line}` : ""}` : "";
   return (
-    <Link className="mono" to={`${ctx.web}/-/blob/${ref}/${f.file}${lines}`}>
+    <Link className="mono" to={`${refLink(ctx.web, "blob", ref, f.file)}${lines}`}>
       {f.file}
       {f.start_line ? `:${f.start_line}` : ""}
     </Link>

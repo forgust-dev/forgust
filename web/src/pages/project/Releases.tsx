@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen, ExternalLink, FileArchive, Image, Package, Paperclip, Pencil, Plus, Tag, Trash2, Wrench } from "lucide-react";
-import { api, bytes, enc, timeAgo, type S } from "../../api/client";
+import { api, bytes, enc, refLink, timeAgo, type S } from "../../api/client";
 import { AuthorLink, Empty, ErrorBox, Field, ListHead, Q } from "../../components/ui";
 import { MarkdownEditor } from "../../components/MarkdownEditor";
 import { useToast } from "../../shell/toast";
@@ -42,7 +42,7 @@ function ReleaseCard({ ctx, r, single }: { ctx: Ctx; r: S["ReleaseDto"]; single?
         <div className="grow" style={{ minWidth: 0 }}>
           <h2 className="release-title">{single ? r.name : <Link to={page}>{r.name}</Link>}</h2>
           <div className="row wrap small muted" style={{ gap: 10 }}>
-            <Link className="pill" to={`${ctx.web}/-/tree/${r.tag_name}`} title="The tag">
+            <Link className="pill" to={refLink(ctx.web, "tree", r.tag_name)} title="The tag">
               <Tag size={11} /> {r.tag_name}
             </Link>
             {r.commit && (

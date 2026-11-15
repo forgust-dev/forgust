@@ -253,11 +253,14 @@ function GroupSettings({ group }: { group: S["GroupDetail"] }) {
           <div>
             <button
               className="btn danger"
-              onClick={run(async () => {
-                if (!confirm(`Delete ${group.full_path}? It must be empty.`)) return;
-                await api.del(`/groups/${group.id}`);
-                nav("/");
-              }, "Deleted.")}
+              onClick={run(
+                async () => {
+                  await api.del(`/groups/${group.id}`);
+                  nav("/");
+                },
+                "Deleted.",
+                `Delete ${group.full_path}? It must be empty.`,
+              )}
             >
               Delete group
             </button>

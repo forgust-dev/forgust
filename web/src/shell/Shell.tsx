@@ -34,7 +34,7 @@ import {
   User,
   Users,
 } from "lucide-react";
-import { api, qs, type S } from "../api/client";
+import { api, qs, refLink, type S } from "../api/client";
 import { useSession } from "../session";
 import { useToast } from "./toast";
 import { usePref, useTheme } from "./theme";
@@ -116,7 +116,7 @@ function projectItems(p: S["ProjectDetail"], ref: string, mrCount?: number, issu
       match: code,
       children: [
         { to: web, label: "Files", match: files },
-        { to: `${web}/-/commits/${ref}`, label: "Commits", match: sec("commits?") },
+        { to: refLink(web, "commits", ref), label: "Commits", match: sec("commits?") },
         { to: `${web}/-/branches`, label: "Branches", match: sec("branches") },
         { to: `${web}/-/tags`, label: "Tags", match: sec("tags") },
         { to: `${web}/-/compare`, label: "Compare", match: sec("compare") },

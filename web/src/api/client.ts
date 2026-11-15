@@ -54,6 +54,13 @@ export const api = {
 export const enc = (p: string | number) => encodeURIComponent(String(p));
 /** A path whose slashes stay slashes (branch names, file paths), each segment encoded. */
 export const encPath = (p: string) => p.split("/").map(encodeURIComponent).join("/");
+/**
+ * A project page for a ref and a path in it (`<web>/-/blob/<ref>/<path>`), both
+ * encoded: a `#`, `?` or `%` in a branch or file name is part of the name, not
+ * of the URL.
+ */
+export const refLink = (web: string, kind: string, ref: string, path?: string) =>
+  `${web}/-/${kind}/${encPath(ref)}${path ? `/${encPath(path)}` : ""}`;
 
 export function qs(params: Record<string, string | number | boolean | undefined | null>): string {
   const u = new URLSearchParams();

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError, qs, timeAgo, type S } from "../../api/client";
+import { api, ApiError, qs, refLink, timeAgo, type S } from "../../api/client";
 import { useSession } from "../../session";
 import { AuthorLink, Avatar, Badge, Empty, ErrorBox, Field, FilterTabs, ImportedMark, ListHead, Q, SearchField, UserLink, authorOf, noteAuthor, useDebounced } from "../../components/ui";
 import { MarkdownEditor } from "../../components/MarkdownEditor";
@@ -284,6 +284,7 @@ export function MergeRequestPage({ ctx, iid, tab }: { ctx: Ctx; iid: number; tab
   useLiveUpdates(ctx.p.id);
   const q = useQuery({ queryKey: keys.mr(ctx.p.id, iid), queryFn: () => fetchers.mr(ctx.p.id, iid) });
   const base = `${ctx.web}/-/merge_requests/${iid}`;
+  const nav = useNavigate();
   const [panel, setPanel] = usePref("mr.panel", true);
   const [editing, setEditing] = useState(false);
   return (
@@ -318,7 +319,8 @@ export function MergeRequestPage({ ctx, iid, tab }: { ctx: Ctx; iid: number; tab
                     title="Edit title and description"
                     onClick={() => {
                       setEditing(true);
-                      if (tab !== "overview") window.history.pushState(null, "", base);
+                      // through the router: the overview, where the form is, shows
+                      if (tab !== "overview") nav(base);
                     }}
                   >
                     <Pencil size={15} />
@@ -326,7 +328,7 @@ export function MergeRequestPage({ ctx, iid, tab }: { ctx: Ctx; iid: number; tab
                 )}
               </div>
               <div className="mr-route">
-                <Link className="ref-chip" to={`${ctx.web}/-/tree/${m.source_branch}`}>
+                <Link className="ref-chip" to={refLink(ctx.web, "tree", m.source_branch)}>
                   <GitBranch size={13} />
                   {m.source_branch}
                 </Link>
@@ -335,7 +337,7 @@ export function MergeRequestPage({ ctx, iid, tab }: { ctx: Ctx; iid: number; tab
                   {v ? `${v.commits_count} commit${v.commits_count === 1 ? "" : "s"}` : ""}
                   <ArrowRight size={15} />
                 </span>
-                <Link className="ref-chip target" to={`${ctx.web}/-/tree/${m.target_branch}`}>
+                <Link className="ref-chip target" to={refLink(ctx.web, "tree", m.target_branch)}>
                   <GitBranch size={13} />
                   {m.target_branch}
                 </Link>

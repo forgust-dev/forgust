@@ -217,11 +217,14 @@ function GeneralSettings({ ctx }: { ctx: Ctx }) {
             <div className="row wrap" style={{ gap: 8, alignItems: "center" }}>
               <button
                 className="btn"
-                onClick={run(async () => {
-                  if (!confirm(`Archive ${p.full_path}? It becomes read-only for everyone (code, issues, merge requests, CI, settings) until you unarchive it.`)) return;
-                  await api.post(`/projects/${p.id}/archive`);
-                  nav(`/${p.full_path}`);
-                }, "Archived: the project is read-only.")}
+                onClick={run(
+                  async () => {
+                    await api.post(`/projects/${p.id}/archive`);
+                    nav(`/${p.full_path}`);
+                  },
+                  "Archived: the project is read-only.",
+                  `Archive ${p.full_path}? It becomes read-only for everyone (code, issues, merge requests, CI, settings) until you unarchive it.`,
+                )}
               >
                 Archive project
               </button>
@@ -230,11 +233,14 @@ function GeneralSettings({ ctx }: { ctx: Ctx }) {
             <div>
               <button
                 className="btn danger"
-                onClick={run(async () => {
-                  if (!confirm(`Delete ${p.full_path} and its repository? This cannot be undone.`)) return;
-                  await api.del(`/projects/${p.id}`);
-                  nav("/");
-                }, "Deleted.")}
+                onClick={run(
+                  async () => {
+                    await api.del(`/projects/${p.id}`);
+                    nav("/");
+                  },
+                  "Deleted.",
+                  `Delete ${p.full_path} and its repository? This cannot be undone.`,
+                )}
               >
                 Delete project
               </button>

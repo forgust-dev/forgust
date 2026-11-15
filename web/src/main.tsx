@@ -8,7 +8,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-route
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ApiError } from "./api/client";
 import { SessionProvider, useSession } from "./session";
-import { Spinner } from "./components/ui";
+import { PageErrorBoundary, Spinner } from "./components/ui";
 import { ForgotPassword, Login, ResetPassword, Setup, VerifyEmail } from "./pages/Auth";
 import { Dashboard, Explore } from "./pages/Dashboard";
 import { SearchPage } from "./pages/Search";
@@ -49,10 +49,12 @@ function RequireUser({ children }: { children: ReactElement }) {
 
 function App() {
   const { loading } = useSession();
+  const loc = useLocation();
   if (loading) return <Spinner />;
   return (
     <Shell>
       <PaletteHost />
+      <PageErrorBoundary resetKey={loc.pathname}>
       <Suspense fallback={<Spinner />}>
       <Routes>
         <Route path="/login" element={<Login />} />
@@ -75,6 +77,7 @@ function App() {
         <Route path="/*" element={<PathRoute />} />
       </Routes>
       </Suspense>
+      </PageErrorBoundary>
     </Shell>
   );
 }
