@@ -44,6 +44,10 @@ pub struct Artifacts {
     /// `reports:` type → paths (uploaded as typed artifacts; see ci-compat.md).
     #[serde(default)]
     pub reports: IndexMap<String, Vec<String>>,
+    /// Who may download them: `all` (anyone who reads the code, the default),
+    /// `developer`, `maintainer` or `none`; `public: false` is `developer`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub access: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
@@ -529,7 +533,21 @@ pub fn artifacts(job: &str, v: &Value) -> Result<Artifacts, ConfigError> {
                 a.when = Some(w);
             }
             "expire_in" => a.expire_in = opt_string(job, "artifacts:expire_in", Some(val))?,
-            "expose_as" | "public" | "access" => {}
+            "expose_as" => {}
+            "access" => {
+                let w = string(job, "artifacts:access", val)?;
+                if !["all", "developer", "maintainer", "none"].contains(&w.as_str()) {
+                    return Err(err(job, format!("`artifacts:access: {w}` must be all, developer, maintainer or none")));
+                }
+                a.access = Some(w);
+            }
+            // the older form of `access` (which wins when both are set)
+            "public" => {
+                let Value::Bool(public) = val else { return Err(err(job, "`artifacts:public` must be true or false")) };
+                if !m.contains_key("access") {
+                    a.access = Some(if *public { "all" } else { "developer" }.into());
+                }
+            }
             "reports" => {
                 let r = val.as_map().ok_or_else(|| err(job, "`artifacts:reports` must be a hash"))?;
                 for (rk, rv) in r {
@@ -1169,6 +1187,22 @@ mod tests {
         assert!(m(&format!("  - \n{huge}")).is_err(), "30^8 jobs");
         assert!(m(&format!("  - {{A: [{thirty}], B: [{thirty}]}}\n")).is_err(), "900 jobs");
         assert!(m("  - {A: [a, b], B: [c, d]}\n  - {C: [e]}\n").is_ok());
+    }
+
+    #[test]
+    fn artifacts_access() {
+        let access_of = |a: &str| {
+            crate::parse(&format!("build:\n  script: x\n  artifacts:\n    paths: [out]\n{a}"))
+                .map(|c| c.jobs.values().next().unwrap().artifacts.clone().unwrap().access)
+        };
+        assert_eq!(access_of("").unwrap(), None, "anyone who reads the code by default");
+        assert_eq!(access_of("    access: developer\n").unwrap().as_deref(), Some("developer"));
+        assert_eq!(access_of("    access: none\n").unwrap().as_deref(), Some("none"));
+        assert_eq!(access_of("    public: false\n").unwrap().as_deref(), Some("developer"), "the older keyword");
+        assert_eq!(access_of("    public: true\n").unwrap().as_deref(), Some("all"));
+        assert_eq!(access_of("    public: false\n    access: maintainer\n").unwrap().as_deref(), Some("maintainer"), "access wins");
+        assert!(access_of("    access: guests\n").is_err());
+        assert!(access_of("    public: nope\n").is_err());
     }
 
     #[test]

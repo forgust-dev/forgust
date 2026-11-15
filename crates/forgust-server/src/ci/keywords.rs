@@ -10,9 +10,10 @@ use crate::auth::Principal;
 use crate::ci::pipeline::StoredSpec;
 use crate::state::AppState;
 
-/// Called by `finish_job` once the job's final status is recorded.
-pub async fn after_job(state: &AppState, b: &Build, status: &str) {
-    if let Err(e) = after_job_inner(state, b, status).await {
+/// Called by `finish_job` once the job's final status is recorded;
+/// `retrying` when a new attempt of a failed job follows.
+pub async fn after_job(state: &AppState, b: &Build, status: &str, retrying: bool) {
+    if let Err(e) = after_job_inner(state, b, status, retrying).await {
         tracing::warn!(job = b.id, error = %e, "CI keywords after the job");
     }
 }
@@ -29,7 +30,7 @@ pub async fn release_resource(state: &AppState, build_id: i64) -> anyhow::Result
     Ok(())
 }
 
-async fn after_job_inner(state: &AppState, b: &Build, status: &str) -> anyhow::Result<()> {
+async fn after_job_inner(state: &AppState, b: &Build, status: &str, retrying: bool) -> anyhow::Result<()> {
     release_resource(state, b.id).await?;
     let Ok(spec) = StoredSpec::of(b) else { return Ok(()) };
     if let Some(re) = &spec.job.coverage
@@ -50,7 +51,8 @@ async fn after_job_inner(state: &AppState, b: &Build, status: &str) -> anyhow::R
     {
         tracing::warn!(job = b.id, error = %e, "release not created");
     }
-    if status == "failed" {
+    // a failed attempt that is retried cancels nothing: only the last one counts
+    if status == "failed" && !retrying {
         let fresh = forgust_db::ci::build(&state.db, b.id).await?;
         let blocking = fresh.is_some_and(|f| !f.allow_failure);
         if blocking

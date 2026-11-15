@@ -211,21 +211,63 @@ pub async fn on_pipeline_status(state: &AppState, pipeline: &Pipeline) {
     }
 }
 
+/// One CI sweep at a time, on any process (the lock of the transaction that
+/// holds it).
+const SWEEP_LOCK: &str = "ci-sweep";
+
 /// Periodic CI housekeeping: fail jobs whose runner went silent, retry log
-/// archiving, delete expired artifacts.
+/// archiving, delete expired artifacts. Waits for a sweep already running.
 pub async fn sweep(state: &AppState) -> anyhow::Result<()> {
+    let mut lock = state.db.begin().await?;
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))").bind(SWEEP_LOCK).execute(&mut *lock).await?;
+    sweep_locked(state).await;
+    Ok(())
+}
+
+/// The minute's sweep: skipped while the last one still runs (a slow one would
+/// otherwise run alongside, and start the same scans and Renovate runs twice).
+pub async fn sweep_unless_running(state: &AppState) -> anyhow::Result<()> {
+    let mut lock = state.db.begin().await?;
+    let free: bool =
+        sqlx::query_scalar("SELECT pg_try_advisory_xact_lock(hashtextextended($1, 0))").bind(SWEEP_LOCK).fetch_one(&mut *lock).await?;
+    if free {
+        sweep_locked(state).await;
+    } else {
+        tracing::info!("the last CI sweep still runs: this one is skipped");
+    }
+    Ok(())
+}
+
+/// The sweep's steps, each on its own: one that fails (a job that cannot
+/// finish, a schedule that cannot start) logs and leaves the others to run,
+/// rather than stopping them all every minute.
+async fn sweep_locked(state: &AppState) {
     let silence = state.cfg.ci.stuck_timeout_secs as f64;
-    for id in forgust_db::ci::stale_running(&state.db, silence, 600).await? {
-        // a canceling job ends canceled; finish_job keeps whatever another
-        // path (the runner's final update) recorded first
-        pipeline::finish_job(state, id, "failed", Some("stuck_or_timeout_failure"), None).await?;
-    }
-    for id in forgust_db::ci::unarchived_finished(&state.db, 100).await? {
-        if let Err(e) = trace::archive(state, id).await {
-            tracing::warn!(build_id = id, error = %e, "trace archiving failed");
+    match forgust_db::ci::stale_running(&state.db, silence, 600).await {
+        Ok(ids) => {
+            for id in ids {
+                // a canceling job ends canceled; finish_job keeps whatever another
+                // path (the runner's final update) recorded first
+                if let Err(e) = pipeline::finish_job(state, id, "failed", Some("stuck_or_timeout_failure"), None).await {
+                    tracing::warn!(build_id = id, error = %e, "silent job not failed");
+                }
+            }
         }
+        Err(e) => tracing::warn!(error = %e, "silent jobs not looked up"),
     }
-    schedule::run_due(state).await?;
+    match forgust_db::ci::unarchived_finished(&state.db, 100).await {
+        Ok(ids) => {
+            for id in ids {
+                if let Err(e) = trace::archive(state, id).await {
+                    tracing::warn!(build_id = id, error = %e, "trace archiving failed");
+                }
+            }
+        }
+        Err(e) => tracing::warn!(error = %e, "logs to archive not looked up"),
+    }
+    if let Err(e) = schedule::run_due(state).await {
+        tracing::warn!(error = %e, "scheduled pipelines not started");
+    }
     if let Err(e) = crate::services::renovate::run_due(state).await {
         tracing::warn!(error = %e, "renovate runs not started");
     }
@@ -233,20 +275,35 @@ pub async fn sweep(state: &AppState) -> anyhow::Result<()> {
         tracing::warn!(error = %e, "security scans not started");
     }
     // delayed jobs whose time came, environments to stop
-    for (id, _) in forgust_db::ci::due_scheduled(&state.db).await? {
-        if let Err(e) = pipeline::start_waiting(state, id).await {
-            tracing::warn!(build_id = id, error = %e, "delayed job not started");
+    match forgust_db::ci::due_scheduled(&state.db).await {
+        Ok(due) => {
+            for (id, _) in due {
+                if let Err(e) = pipeline::start_waiting(state, id).await {
+                    tracing::warn!(build_id = id, error = %e, "delayed job not started");
+                }
+            }
         }
+        Err(e) => tracing::warn!(error = %e, "delayed jobs not looked up"),
     }
     if let Err(e) = environments::sweep(state).await {
         tracing::warn!(error = %e, "environments sweep failed");
     }
     // expired artifacts: their rows go, a trigger queues their blobs
-    while !forgust_db::ci::take_expired_artifacts(&state.db, 500).await?.is_empty() {}
+    loop {
+        match forgust_db::ci::take_expired_artifacts(&state.db, 500).await {
+            Ok(taken) if taken.is_empty() => break,
+            Ok(_) => {}
+            Err(e) => {
+                tracing::warn!(error = %e, "expired artifacts not deleted");
+                break;
+            }
+        }
+    }
     // the registry's stale uploads, cleanup policies and garbage
     if let Err(e) = crate::registry::sweep(state).await {
         tracing::warn!(error = %e, "registry sweep failed");
     }
-    crate::services::uploads::drain_deletions(state).await?;
-    Ok(())
+    if let Err(e) = crate::services::uploads::drain_deletions(state).await {
+        tracing::warn!(error = %e, "deleted files not removed from storage");
+    }
 }
