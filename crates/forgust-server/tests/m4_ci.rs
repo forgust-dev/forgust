@@ -24,6 +24,8 @@ test:
   before_script: [echo before]
   script: [cat out.txt]
   after_script: [echo after]
+  hooks:
+    pre_get_sources_script: [echo hook]
 tagged:
   stage: test
   tags: [gpu]
@@ -210,6 +212,7 @@ async fn runner_protocol_end_to_end(pool: sqlx::PgPool) {
     assert_eq!(test["steps"][0]["script"], json!(["echo before", "cat out.txt"]));
     assert_eq!(test["steps"][1]["name"], "after_script");
     assert_eq!(test["steps"][1]["when"], "always");
+    assert_eq!(test["hooks"], json!([{ "name": "pre_get_sources_script", "script": ["echo hook"] }]));
     let dep = &test["dependencies"][0];
     assert_eq!(dep["name"], "build");
     assert_eq!(dep["artifacts_file"]["size"], zip.len());

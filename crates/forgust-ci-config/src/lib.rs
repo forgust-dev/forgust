@@ -127,9 +127,6 @@ fn build(root: value::Value) -> Result<Config, ConfigError> {
     let defaults = root.get("default").and_then(value::Value::as_map).cloned().unwrap_or_default();
     for k in defaults.keys() {
         if !job::DEFAULT_KEYWORDS.contains(&k.as_str()) {
-            if ["hooks", "id_tokens"].contains(&k.as_str()) {
-                return Err(ConfigError::Unsupported(format!("`default:{k}` is not supported yet")));
-            }
             return Err(ConfigError::Invalid(format!("unknown `default:{k}`")));
         }
     }
@@ -303,6 +300,21 @@ mod tests {
         assert_eq!(j.cache[0].key_files, vec!["go.sum"]);
         assert_eq!(j.retry.as_ref().unwrap().when, vec!["runner_system_failure"]);
         assert_eq!(j.allow_failure_exit_codes, vec![42]);
+    }
+
+    #[test]
+    fn hooks_run_before_the_sources() {
+        let c = parse(
+            "default:\n  hooks:\n    pre_get_sources_script: [echo default]\na:\n  script: x\nb:\n  hooks:\n    pre_get_sources_script:\n      - echo one\n      - [echo two]\n  script: x\nc:\n  inherit: {default: false}\n  script: x\nd:\n  trigger: {include: child.yml}\n",
+        )
+        .unwrap();
+        assert_eq!(c.jobs["a"].pre_get_sources_script, ["echo default"]);
+        assert_eq!(c.jobs["b"].pre_get_sources_script, ["echo one", "echo two"]);
+        assert!(c.jobs["c"].pre_get_sources_script.is_empty());
+        assert!(c.jobs["d"].pre_get_sources_script.is_empty(), "a trigger job runs nothing");
+        for bad in ["a:\n  hooks: [x]\n  script: x\n", "a:\n  hooks: {post_get_sources_script: [x]}\n  script: x\n"] {
+            assert!(parse(bad).is_err(), "{bad}");
+        }
     }
 
     struct Files(Vec<(&'static str, &'static str)>);
