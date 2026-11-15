@@ -55,6 +55,9 @@ pub struct StorageOverview {
     pub blob_backend: String,
     /// `s3://bucket` or the blobs directory.
     pub blob_location: String,
+    /// The directory of the Git repositories: always on this server's disk,
+    /// whatever the blob store is.
+    pub repositories_location: String,
     pub kinds: forgust_db::admin::StorageKinds,
     pub total: i64,
     /// Largest first: what each keeps, LFS objects and image layers counted for every project using them.
@@ -92,6 +95,7 @@ pub async fn storage(State(state): State<AppState>, Admin(..): Admin) -> ApiResu
     Ok(Json(StorageOverview {
         blob_backend: state.blobs.backend().into(),
         blob_location,
+        repositories_location: state.cfg.repos_dir().display().to_string(),
         kinds,
         total,
         projects,
