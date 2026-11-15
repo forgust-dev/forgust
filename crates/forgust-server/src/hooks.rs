@@ -173,11 +173,17 @@ fn check_secret(state: &AppState, headers: &HeaderMap) -> ApiResult<()> {
 /// Rebuild the principal from its `kind:id` encoding.
 pub async fn decode_principal(state: &AppState, encoded: &str) -> ApiResult<Principal> {
     let (kind, id) = encoded.split_once(':').ok_or_else(|| ApiError::bad("bad principal"))?;
+    let (id, by_token) = match id.strip_suffix(":token") {
+        Some(id) => (id, true),
+        None => (id, false),
+    };
     let id: i64 = id.parse().map_err(|_| ApiError::bad("bad principal"))?;
     Ok(match kind {
         "user" | "bot" => {
             let user = forgust_db::users::find(&state.db, id).await?.ok_or(ApiError::Unauthorized)?;
-            Principal::User { user, scopes: None }
+            // a token's push: what it may do already passed its scopes; what
+            // stays is that it carries no administrator's powers
+            Principal::User { user, scopes: by_token.then(|| vec!["api".to_string()]) }
         }
         "deploy_key" => Principal::DeployKey { key_id: id },
         "deploy_token" => {
@@ -241,7 +247,13 @@ pub async fn check_push(
     let level = match principal {
         // a CI job acts for its user (it creates tags through the releases API)
         Principal::User { user, .. } | Principal::Job { user, .. } => {
-            if user.is_admin {
+            // an administrator's session or admin_mode token, or a job of theirs
+            // in its own project; not their other tokens
+            let admin = match principal {
+                Principal::Job { project_id: own, .. } => user.is_admin && *own == project_id,
+                _ => principal.is_admin(),
+            };
+            if admin {
                 forgust_db::access::OWNER
             } else {
                 forgust_db::authz::project_level(&state.db, user.id, project_id).await?.unwrap_or(0)

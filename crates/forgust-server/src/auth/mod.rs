@@ -81,8 +81,12 @@ impl Principal {
         self.direct_user().is_some_and(|u| !u.is_bot() && !u.is_external)
     }
 
+    /// An administrator's powers over every project, group and user: from a
+    /// browser session, or a token made for it (`admin_mode`), as for the admin
+    /// API. A token with another scope (an `api` PAT, an MCP client) and a CI
+    /// job act with the administrator's memberships only.
     pub fn is_admin(&self) -> bool {
-        self.direct_user().is_some_and(|u| u.is_admin)
+        self.direct_user().is_some_and(|u| u.is_admin) && self.has_scope("admin_mode")
     }
 
     pub fn kind(&self) -> &'static str {
@@ -142,8 +146,15 @@ impl Principal {
     }
 
     /// Serialized for git hooks: `kind:id`.
+    /// A token's user is marked (`kind:id:token`): the hook then knows it acts
+    /// without an administrator's powers.
     pub fn encode(&self) -> String {
-        format!("{}:{}", self.kind(), self.id().unwrap_or(0))
+        match self {
+            Principal::User { scopes: Some(_), .. } if !self.has_scope("admin_mode") => {
+                format!("{}:{}:token", self.kind(), self.id().unwrap_or(0))
+            }
+            _ => format!("{}:{}", self.kind(), self.id().unwrap_or(0)),
+        }
     }
 }
 
