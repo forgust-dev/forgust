@@ -9,6 +9,27 @@ const UserProfilePage = lazy(() => import("./UserProfile").then((m) => ({ defaul
 import { useSession } from "../session";
 
 /**
+ * A URL path decoded; a malformed escape (a `%` typed or pasted as is) is
+ * kept as written rather than failing the page.
+ */
+export function decodePath(p: string): string {
+  try {
+    return decodeURIComponent(p);
+  } catch {
+    return p
+      .split("/")
+      .map((s) => {
+        try {
+          return decodeURIComponent(s);
+        } catch {
+          return s;
+        }
+      })
+      .join("/");
+  }
+}
+
+/**
  * GitLab-shaped URLs: `/<full/path>` and `/<full/path>/-/<rest>`. The path is
  * resolved through the API (which also reports old paths that moved).
  */
@@ -16,7 +37,7 @@ export function PathRoute() {
   const loc = useLocation();
   const nav = useNavigate();
   const { user } = useSession();
-  const raw = decodeURIComponent(loc.pathname).replace(/^\/+|\/+$/g, "");
+  const raw = decodePath(loc.pathname).replace(/^\/+|\/+$/g, "");
   const [base, rest = ""] = raw.split(/\/-\/(.*)/s);
   const q = useQuery({
     queryKey: keys.pathResolve(base),
@@ -33,7 +54,7 @@ export function PathRoute() {
   if (!base) return <NotFound />;
   if (q.isLoading) return <Spinner />;
   if (q.error) {
-    if (!user) return <Navigate to={`/login?next=${encodeURIComponent(loc.pathname)}`} replace />;
+    if (!user) return <Navigate to={`/login?next=${encodeURIComponent(loc.pathname + loc.search)}`} replace />;
     return <NotFound />;
   }
   if (!q.data || q.data.redirected) return <Spinner />;

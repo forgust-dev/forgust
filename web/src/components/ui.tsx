@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { Component, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Check, Copy, Search } from "lucide-react";
 import { Link, NavLink } from "react-router-dom";
 import { ApiError, LEVELS, bytes } from "../api/client";
@@ -37,6 +37,38 @@ export function NotFound() {
 
 export function Empty({ children }: { children: ReactNode }) {
   return <div className="empty">{children}</div>;
+}
+
+/**
+ * A page that fails to render shows what happened, in the app around it,
+ * instead of leaving the whole window blank; it tries again once `resetKey`
+ * (the address) changes. Not a React key: the pages keep their state.
+ */
+export class PageErrorBoundary extends Component<{ resetKey: string; children: ReactNode }, { error: unknown }> {
+  state: { error: unknown } = { error: null };
+
+  static getDerivedStateFromError(error: unknown) {
+    return { error };
+  }
+
+  componentDidCatch(error: unknown) {
+    console.error(error);
+  }
+
+  componentDidUpdate(prev: { resetKey: string }) {
+    if (this.state.error != null && prev.resetKey !== this.props.resetKey) this.setState({ error: null });
+  }
+
+  render() {
+    if (this.state.error == null) return this.props.children;
+    return (
+      <div className="empty">
+        <h2>This page could not be shown</h2>
+        <p>{this.state.error instanceof Error ? this.state.error.message : String(this.state.error)}</p>
+        <Link to="/">Back to your dashboard</Link>
+      </div>
+    );
+  }
 }
 
 export function Badge({ children, tone }: { children: ReactNode; tone?: "accent" | "ok" | "warn" }) {
@@ -139,13 +171,15 @@ export function VisibilitySelect({ value, onChange, label }: { value: string; on
 
 /**
  * A settings form's submit: clears the messages, runs `f`, then says `done`
- * and calls `onDone` (its cache refresh), or shows the error.
+ * and calls `onDone` (its cache refresh), or shows the error. With `ask`, it
+ * asks first: cancelling changes nothing and says nothing.
  */
 export function useFormRun(onDone: () => void = () => {}) {
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
-  const run = (f: () => Promise<unknown>, done: string) => async (e?: FormEvent) => {
+  const run = (f: () => Promise<unknown>, done: string, ask?: string) => async (e?: FormEvent) => {
     e?.preventDefault();
+    if (ask && !confirm(ask)) return;
     setError(null);
     setMsg(null);
     try {

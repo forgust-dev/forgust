@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FilePlus2, GitBranch, Pencil, Trash2 } from "lucide-react";
-import { api, ApiError, qs, type S } from "../../api/client";
+import { api, ApiError, qs, refLink, type S } from "../../api/client";
 import { useSession } from "../../session";
 import { ErrorBox, Field, ListHead, Q } from "../../components/ui";
 import { useResolved } from "./Code";
@@ -96,9 +96,9 @@ function Editor({ ctx, res, mode }: { ctx: Ctx; res: S["RefResolved"]; mode: Mod
         nav(`${ctx.web}/-/merge_requests/new${qs({ source: onBranch, target: t })}`);
       } else if (mode === "delete") {
         const dir = res.path.split("/").slice(0, -1).join("/");
-        nav(`${ctx.web}/-/tree/${onBranch}${dir ? `/${dir}` : ""}`);
+        nav(refLink(ctx.web, "tree", onBranch, dir));
       } else {
-        nav(`${ctx.web}/-/blob/${onBranch}/${action.file_path}`);
+        nav(refLink(ctx.web, "blob", onBranch, action.file_path));
       }
     } catch (err) {
       // a protected branch: offer the other way at once

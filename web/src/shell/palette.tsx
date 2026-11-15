@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { CircleDot, FileText, FolderGit2, GitMerge, Search, Users, CornerDownLeft } from "lucide-react";
 import { useDebounced } from "../components/ui";
-import { api, qs, type S } from "../api/client";
+import { api, qs, refLink, type S } from "../api/client";
 import { useSession } from "../session";
 import { useNav } from "./nav";
 import { useGroups } from "../prefetch";
@@ -130,7 +130,7 @@ function Palette({ mode, close }: { mode: Mode; close: () => void }) {
     if (project && files.data) {
       for (const f of files.data.paths) {
         const s = fuzzy(t, f);
-        if (s >= 0) out.push({ key: `f:${f}`, label: f, hint: "file", icon: <FileText size={15} />, to: `/${project.full_path}/-/blob/${ref}/${f}`, score: s + 10 });
+        if (s >= 0) out.push({ key: `f:${f}`, label: f, hint: "file", icon: <FileText size={15} />, to: refLink(`/${project.full_path}`, "blob", ref, f), score: s + 10 });
       }
     }
     if (mode === "all") {

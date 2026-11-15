@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { api, bytes, qs, timeAgo, type S } from "../../api/client";
+import { api, bytes, qs, refLink, timeAgo, type S } from "../../api/client";
 import { Avatar, Badge, CopyField, GitPerson, Q, useCopy } from "../../components/ui";
 import { Popover, Segmented, Select } from "../../components/controls";
 import { type Ctx } from "./Project";
@@ -118,13 +118,13 @@ export function PathCrumbs({ ctx, gitRef, path }: { ctx: Ctx; gitRef: string; pa
   const parts = path ? path.split("/") : [];
   return (
     <div className="crumbs" style={{ margin: 0 }}>
-      <Link to={`${ctx.web}/-/tree/${gitRef}`}>
+      <Link to={refLink(ctx.web, "tree", gitRef)}>
         <strong>{ctx.p.path}</strong>
       </Link>
       {parts.map((part, i) => (
         <span key={i} className="row" style={{ gap: 4 }}>
           <span className="sep">/</span>
-          {i === parts.length - 1 ? <strong>{part}</strong> : <Link to={`${ctx.web}/-/tree/${gitRef}/${parts.slice(0, i + 1).join("/")}`}>{part}</Link>}
+          {i === parts.length - 1 ? <strong>{part}</strong> : <Link to={refLink(ctx.web, "tree", gitRef, parts.slice(0, i + 1).join("/"))}>{part}</Link>}
         </span>
       ))}
     </div>
@@ -143,7 +143,7 @@ function TreeLink({ ctx, e, gitRef, selected }: { ctx: Ctx; e: S["TreeEntry"]; g
   const kind = e.kind === "tree" ? "tree" : "blob";
   const pf = usePrefetch({ kind, pid: ctx.p.id, refAndPath: `${gitRef}/${e.path}` });
   return (
-    <Link to={`${ctx.web}/-/${kind}/${gitRef}/${e.path}`} className="tree-name ellipsis" data-selected={selected || undefined} {...pf}>
+    <Link to={refLink(ctx.web, kind, gitRef, e.path)} className="tree-name ellipsis" data-selected={selected || undefined} {...pf}>
       {e.name}
     </Link>
   );
@@ -271,13 +271,13 @@ function TreeView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
       <Q q={tree}>
         {(t) => (
           <div className="list file-table" ref={listRef}>
-            {t.last_commit && <LastCommitBar ctx={ctx} c={t.last_commit} history={`${ctx.web}/-/commits/${res.ref}${res.path ? `/${res.path}` : ""}`} />}
+            {t.last_commit && <LastCommitBar ctx={ctx} c={t.last_commit} history={refLink(ctx.web, "commits", res.ref, res.path)} />}
             {res.path && (
               <div className="tree-row">
                 <span className="icon">
                   <CornerLeftUp size={16} />
                 </span>
-                <Link to={`${ctx.web}/-/tree/${res.ref}/${res.path.split("/").slice(0, -1).join("/")}`.replace(/\/$/, "")}>..</Link>
+                <Link to={refLink(ctx.web, "tree", res.ref, res.path.split("/").slice(0, -1).join("/"))}>..</Link>
               </div>
             )}
             {virtual ? (
@@ -424,7 +424,7 @@ function BlobView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
   const [view, setView] = useState<"preview" | "code">("preview");
   const [wrap, setWrap] = usePref("code.wrap", false);
   const [copied, copyText] = useCopy(1500);
-  const raw = `${ctx.web}/-/raw/${res.ref}/${res.path}`;
+  const raw = refLink(ctx.web, "raw", res.ref, res.path);
   const copy = () => copyText(() => fetch(raw, { credentials: "same-origin" }).then((r) => r.text()));
   const lastCommit = last.data?.[0];
   return (
@@ -439,7 +439,7 @@ function BlobView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
       </div>
       {lastCommit && (
         <div className="list file-table">
-          <LastCommitBar ctx={ctx} c={lastCommit} history={`${ctx.web}/-/commits/${res.ref}/${res.path}`} />
+          <LastCommitBar ctx={ctx} c={lastCommit} history={refLink(ctx.web, "commits", res.ref, res.path)} />
         </div>
       )}
       <Q q={b}>
@@ -481,11 +481,11 @@ function BlobView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
                     Raw
                   </a>
                   {!blob.binary && !blob.too_large && (
-                    <Link className="btn small" to={`${ctx.web}/-/blame/${res.ref}/${res.path}`}>
+                    <Link className="btn small" to={refLink(ctx.web, "blame", res.ref, res.path)}>
                       Blame
                     </Link>
                   )}
-                  <Link className="btn small hide-narrow" to={`${ctx.web}/-/commits/${res.ref}/${res.path}`}>
+                  <Link className="btn small hide-narrow" to={refLink(ctx.web, "commits", res.ref, res.path)}>
                     History
                   </Link>
                 </div>
@@ -558,7 +558,7 @@ function BlameView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
       <div className="row wrap">
         <PathCrumbs ctx={ctx} gitRef={res.ref} path={res.path} />
         <div className="spacer" />
-        <Link className="btn small" to={`${ctx.web}/-/blob/${res.ref}/${res.path}`}>
+        <Link className="btn small" to={refLink(ctx.web, "blob", res.ref, res.path)}>
           Normal view
         </Link>
       </div>

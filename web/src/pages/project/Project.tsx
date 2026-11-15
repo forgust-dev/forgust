@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Archive, BookOpen, Building2, CalendarDays, GitBranch, GitCommitHorizontal, Globe, Handshake, HardDrive, History as HistoryIcon, Lock, Scale, ShieldCheck, UserCheck, Users as UsersIcon } from "lucide-react";
-import { api, bytes, qs, timeAgo, type S, encPath } from "../../api/client";
+import { api, bytes, qs, timeAgo, type S, encPath, refLink } from "../../api/client";
 import { StatusIcon, statusLabel } from "./ci/Status";
 import { fetchers, keys } from "../../prefetch";
 import { Badge, CopyField, NotFound, Q, Spinner, Tile } from "../../components/ui";
@@ -85,7 +85,7 @@ function ProjectNav({ p, rest, gitRef }: { p: S["ProjectDetail"]; rest: string; 
   const web = `/${p.full_path}`;
   // the audit log is shown under Security
   if (section === "audit") crumbs.push({ label: "Security", to: `${web}/-/security` });
-  if (Object.hasOwn(SECTIONS, section)) crumbs.push({ label: SECTIONS[section], to: section === "commit" ? `${web}/-/commits/${gitRef ?? p.default_branch ?? "main"}` : section === "tree" || section === "blob" ? web : section === "jobs" ? `${web}/-/pipelines` : `${web}/-/${section}` });
+  if (Object.hasOwn(SECTIONS, section)) crumbs.push({ label: SECTIONS[section], to: section === "commit" ? refLink(web, "commits", gitRef ?? p.default_branch ?? "main") : section === "tree" || section === "blob" ? web : section === "jobs" ? `${web}/-/pipelines` : `${web}/-/${section}` });
   if (section === "merge_requests" && more[0]) crumbs.push({ label: more[0] === "new" ? "New" : `!${more[0]}` });
   if (section === "issues" && more[0]) crumbs.push({ label: more[0] === "new" ? "New" : `#${more[0]}` });
   if (section === "commit" && more[0]) crumbs.push({ label: more[0].slice(0, 8) });
@@ -173,13 +173,13 @@ export function ProjectPage({ id, fullPath, rest }: { id: number; fullPath: stri
                   {section === "merge_requests" && more.length === 0 && <MergeRequestList ctx={ctx} />}
                   {section === "merge_requests" && more[0] === "new" && <NewMergeRequest ctx={ctx} />}
                   {section === "merge_requests" && /^\d+$/.test(more[0] ?? "") && (
-                    <MergeRequestPage ctx={ctx} iid={Number(more[0])} tab={more[1] === "commits" ? "commits" : more[1] === "diffs" ? "diffs" : "overview"} />
+                    <MergeRequestPage key={more[0]} ctx={ctx} iid={Number(more[0])} tab={more[1] === "commits" ? "commits" : more[1] === "diffs" ? "diffs" : "overview"} />
                   )}
                   {section === "settings" && (p.can_admin && more.length <= 1 ? <ProjectSettings ctx={ctx} page={more[0] ?? ""} /> : <NotFound />)}
                   {section === "pipelines" && more.length === 0 && <PipelineList ctx={ctx} />}
                   {section === "pipelines" && more[0] === "new" && <RunPipeline ctx={ctx} />}
                   {section === "pipelines" && /^\d+$/.test(more[0] ?? "") && <PipelinePage ctx={ctx} iid={Number(more[0])} />}
-                  {section === "jobs" && /^\d+$/.test(more[0] ?? "") && !more[1] && <JobPage ctx={ctx} jobId={Number(more[0])} />}
+                  {section === "jobs" && /^\d+$/.test(more[0] ?? "") && !more[1] && <JobPage key={more[0]} ctx={ctx} jobId={Number(more[0])} />}
                   {section === "jobs" && /^\d+$/.test(more[0] ?? "") && more[1] === "artifacts" && <ArtifactBrowser ctx={ctx} jobId={Number(more[0])} />}
                   {section === "pipeline_schedules" && (p.can_push ? <Schedules ctx={ctx} /> : <NotFound />)}
                   {section === "environments" && <Environments ctx={ctx} stopped={more[0] === "stopped"} />}
@@ -391,13 +391,13 @@ function RepoAbout({ ctx }: { ctx: Ctx }) {
         {files.map((f) => (
           <li key={f.path}>
             {f.icon}
-            <Link to={`${ctx.web}/-/blob/${ref}/${f.path}`}>{f.kind === "license" && license.data ? license.data : f.label}</Link>
+            <Link to={refLink(ctx.web, "blob", ref, f.path)}>{f.kind === "license" && license.data ? license.data : f.label}</Link>
           </li>
         ))}
         {stats.data && (
           <li>
             <GitCommitHorizontal size={15} />
-            <Link to={`${ctx.web}/-/commits/${ref}`}>
+            <Link to={refLink(ctx.web, "commits", ref)}>
               {stats.data.commit_count.toLocaleString()} commit{stats.data.commit_count === 1 ? "" : "s"}
             </Link>
           </li>

@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, GitBranch, Play, RotateCcw, Square, Tag, Timer, Plus, X } from "lucide-react";
-import { api, qs, timeAgo, type S } from "../../../api/client";
+import { api, qs, refLink, timeAgo, type S } from "../../../api/client";
 import { Empty, ErrorBox, Field, FieldGroup, FilterTabs, ListHead, Q, SearchField } from "../../../components/ui";
 import { Select } from "../../../components/controls";
 import { useCiLive } from "../../../shell/live";
@@ -52,7 +52,7 @@ export function PipelineRow({ ctx, p }: { ctx: Ctx; p: S["PipelineSummary"] }) {
         </Link>
         <div className="row-meta">
           <span>#{p.iid}</span>
-          <Link to={`${ctx.web}/-/tree/${p.ref}`} className="ref-chip small">
+          <Link to={refLink(ctx.web, "tree", p.ref)} className="ref-chip small">
             {p.tag ? <Tag size={11} /> : <GitBranch size={11} />}
             {p.ref}
           </Link>
@@ -276,7 +276,7 @@ export function PipelineHeader({ ctx, p, tab }: { ctx: Ctx; p: S["PipelineDetail
         <div>
           <dt>Ref</dt>
           <dd className="mono">
-            {p.tag ? <Tag size={12} /> : <GitBranch size={12} />} <Link to={`${ctx.web}/-/tree/${p.ref}`}>{p.ref}</Link>{" "}
+            {p.tag ? <Tag size={12} /> : <GitBranch size={12} />} <Link to={refLink(ctx.web, "tree", p.ref)}>{p.ref}</Link>{" "}
             <Link to={`${ctx.web}/-/commit/${p.sha}`} className="muted">
               @{p.sha.slice(0, 8)}
             </Link>

@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeftRight, ArrowRight, Download, GitBranch, GitMerge, Package, Plus, Tag, Trash2 } from "lucide-react";
-import { api, qs, timeAgo, type S, encPath } from "../../api/client";
+import { api, qs, timeAgo, type S, encPath, refLink } from "../../api/client";
 import { Empty, ErrorBox, Field, ListHead, Q, SearchField, useDebounced } from "../../components/ui";
 import { useToast } from "../../shell/toast";
 import { PagedDiff } from "./Diff";
@@ -113,7 +113,7 @@ export function Branches({ ctx }: { ctx: Ctx }) {
                   </span>
                   <div className="grow" style={{ minWidth: 0 }}>
                     <div className="row-title">
-                      <Link to={`${ctx.web}/-/tree/${b.name}`} className="ref-name ellipsis">
+                      <Link to={refLink(ctx.web, "tree", b.name)} className="ref-name ellipsis">
                         {b.name}
                       </Link>
                       {b.default && <span className="pill accent">default</span>}
@@ -239,7 +239,7 @@ export function Tags({ ctx }: { ctx: Ctx }) {
                   </span>
                   <div className="grow" style={{ minWidth: 0 }}>
                     <div className="row-title">
-                      <Link to={`${ctx.web}/-/tree/${t.name}`} className="ref-name ellipsis">
+                      <Link to={refLink(ctx.web, "tree", t.name)} className="ref-name ellipsis">
                         {t.name}
                       </Link>
                       {t.annotated && <span className="pill">annotated</span>}

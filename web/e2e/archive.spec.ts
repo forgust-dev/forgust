@@ -24,3 +24,20 @@ test("archive a project, then unarchive it", async ({ page }) => {
     await remove();
   }
 });
+
+test("cancelling archive or delete changes nothing and says nothing", async ({ page }) => {
+  const { project, web, remove } = await freshProject(page, "keep", { "README.md": "# Keep me\n" });
+  try {
+    await page.goto(`${web}/-/settings`);
+    page.once("dialog", (d) => d.dismiss());
+    await page.getByRole("button", { name: "Archive project" }).click();
+    page.once("dialog", (d) => d.dismiss());
+    await page.getByRole("button", { name: "Delete project" }).click();
+    await expect(page.getByText("Archived: the project is read-only.")).toHaveCount(0);
+    await expect(page.getByText("Deleted.")).toHaveCount(0);
+    await expect(page.getByText("This project is archived")).toHaveCount(0);
+    expect((await page.request.get(`/api/v1/projects/${project.id}`)).ok()).toBe(true);
+  } finally {
+    await remove();
+  }
+});
