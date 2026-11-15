@@ -367,6 +367,14 @@ pub async fn lock(conn: &mut PgConnection, mr_id: i64) -> Result<()> {
     Ok(())
 }
 
+/// Serialize the MR's state changes (merge, close, reopen) for the rest of the
+/// transaction. An advisory lock rather than the row's: a merge holds it while
+/// git works and other code updates the row meanwhile (stack, versions).
+pub async fn lock_state(conn: &mut PgConnection, mr_id: i64) -> Result<()> {
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))").bind(format!("mr-state:{mr_id}")).execute(&mut *conn).await?;
+    Ok(())
+}
+
 // ------------------------------------------------------------------ notes
 
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]

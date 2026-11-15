@@ -119,8 +119,15 @@ fn detailed_status(m: &MergeRequest, s: &mr::MergeStatus) -> &'static str {
     if m.state != "opened" {
         return "not_open";
     }
+    if s.can_merge {
+        return "mergeable";
+    }
     if m.draft {
         return "draft_status";
+    }
+    // the push is still being processed: GitLab's state while it checks
+    if s.checking {
+        return "checking";
     }
     if !s.conflicts.is_empty() {
         return "conflict";
@@ -136,10 +143,10 @@ fn detailed_status(m: &MergeRequest, s: &mr::MergeStatus) -> &'static str {
     if s.approval_rules.iter().any(|r| !r.satisfied) {
         return "not_approved";
     }
-    if s.unresolved_threads > 0 {
-        return "discussions_not_resolved";
-    }
-    if s.can_merge { "mergeable" } else { "not_open" }
+    // unresolved threads never block a merge here, so they are not a reason;
+    // what is left (requested changes, a layer below, security findings, the
+    // viewer's rights) blocks it all the same
+    "merge_request_blocked"
 }
 
 #[derive(Deserialize)]
@@ -426,7 +433,7 @@ pub async fn merge(
             let opts = crate::services::merge_train::TrainOptions {
                 squash: req.squash.unwrap_or(m.squash),
                 rebase: false,
-                remove_source_branch: req.should_remove_source_branch.unwrap_or(m.remove_source_branch),
+                remove_source_branch: Some(req.should_remove_source_branch.unwrap_or(m.remove_source_branch)),
             };
             return match crate::services::merge_train::add(&state, &v, &p, &m, opts).await {
                 Ok(_) => {
@@ -749,11 +756,8 @@ pub async fn add_to_merge_train(
 ) -> ApiResult<Response> {
     let (p, m) = load(&state, &v, &id, iid).await?;
     let b = body.map(|Json(b)| b).unwrap_or_default();
-    let opts = crate::services::merge_train::TrainOptions {
-        squash: b.squash.unwrap_or(m.squash),
-        rebase: false,
-        remove_source_branch: m.remove_source_branch,
-    };
+    let opts =
+        crate::services::merge_train::TrainOptions { squash: b.squash.unwrap_or(m.squash), rebase: false, remove_source_branch: None };
     match crate::services::merge_train::add(&state, &v, &p, &m, opts).await {
         Ok(car) => {
             let cars = forgust_db::merge_trains::cars(&state.db, p.id, Some(&car.target_branch)).await?;

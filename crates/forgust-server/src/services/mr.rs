@@ -183,7 +183,16 @@ pub async fn update_details(state: &AppState, principal: &Principal, p: &Project
         return Err(ApiError::bad("the merge request is in a stack: remove it from the stack to change its target"));
     }
     let description = c.description.unwrap_or(&m.description);
-    mrdb::update_details(&state.db, m.id, title, description, draft, target).await?;
+    let mut tx = state.db.begin().await?;
+    if retarget {
+        // after any merge in progress, which may have merged it meanwhile
+        mrdb::lock_state(&mut tx, m.id).await?;
+        if mrdb::find(&mut *tx, p.id, m.iid).await?.is_none_or(|x| x.state != "opened") {
+            return Err(ApiError::conflict("the merge request is no longer open"));
+        }
+    }
+    mrdb::update_details(&mut *tx, m.id, title, description, draft, target).await?;
+    tx.commit().await?;
     if let Some(user) = principal.direct_user()
         && description != m.description
     {
@@ -192,6 +201,12 @@ pub async fn update_details(state: &AppState, principal: &Principal, p: &Project
         super::renovate::on_description_edit(state, p.id, m.author_id, user, &m.description, description).await;
     }
     if retarget {
+        // its car was built for the old target's train
+        if let Err(e) =
+            super::merge_train::drop_mr(state, p, m.id, "removed this merge request from the merge train: its target branch changed").await
+        {
+            tracing::warn!(mr = m.id, error = %e, "retargeted merge request not taken off its merge train");
+        }
         let head = state.storage.resolve(p.id, &head_ref(m.iid)).await?.unwrap_or_default();
         on_push(state, p.id, &[crate::jobs::RefUpdate { old: head.clone(), new: head, name: format!("refs/heads/{}", m.source_branch) }])
             .await
@@ -274,26 +289,45 @@ pub async fn on_push(state: &AppState, project_id: i64, updates: &[RefUpdate]) -
             }
         }
         for mr in mrdb::open_with_source(&state.db, project_id, branch).await? {
-            let Some(start) = branch_head(state, project_id, &mr.target_branch).await? else { continue };
-            // rebased onto the branch below by hand: its own commits start there now
-            if mr.stack_id.is_some()
-                && mr.stack_base_sha.as_deref() != Some(start.as_str())
-                && state.storage.is_ancestor(project_id, &start, &head).await?
-            {
-                mrdb::set_stack_base(&state.db, mr.id, &start).await?;
+            // one merge request that cannot follow (a force push of commits with
+            // no history in common with its target) leaves the others, and the
+            // push's merge trains, pipelines and webhooks, to go on
+            if let Err(e) = follow_push(state, project_id, &mr, &head, &mut project).await {
+                tracing::warn!(project_id, mr = mr.id, error = %e, "merge request not updated after a push");
             }
-            // new commits cancel a pending auto-merge (the check sees the new head)
-            super::auto_merge::poke(state, project_id, mr.iid).await;
-            if let Some(d) = add_version(state, project_id, mr.id, mr.iid, &start, &head).await? {
-                state.events.publish(Event::MergeRequest { project_id, iid: mr.iid });
-                // the project for the webhook: loaded once, at the first new version
-                if project.is_none() {
-                    project = forgust_db::projects::find(&state.db, project_id).await?;
-                }
-                if let Some(p) = &project {
-                    super::webhooks::emit(state, p, "merge_request", merge_request_payload(state, p, &mr, "update", None, Some(&d))).await;
-                }
-            }
+        }
+    }
+    Ok(())
+}
+
+/// [`on_push`] for one open merge request whose source branch is now at `head`.
+async fn follow_push(
+    state: &AppState,
+    project_id: i64,
+    mr: &MergeRequest,
+    head: &str,
+    project: &mut Option<forgust_db::projects::Project>,
+) -> anyhow::Result<()> {
+    let Some(start) = branch_head(state, project_id, &mr.target_branch).await? else { return Ok(()) };
+    // rebased onto the branch below by hand: its own commits start there now
+    if mr.stack_id.is_some()
+        && mr.stack_base_sha.as_deref() != Some(start.as_str())
+        && state.storage.is_ancestor(project_id, &start, head).await?
+    {
+        mrdb::set_stack_base(&state.db, mr.id, &start).await?;
+    }
+    let added = add_version(state, project_id, mr.id, mr.iid, &start, head).await;
+    // new commits cancel a pending auto-merge (the check, once the version is
+    // recorded, sees the new head and the reset approvals)
+    super::auto_merge::poke(state, project_id, mr.iid).await;
+    if let Some(d) = added? {
+        state.events.publish(Event::MergeRequest { project_id, iid: mr.iid });
+        // the project for the webhook: loaded once, at the first new version
+        if project.is_none() {
+            *project = forgust_db::projects::find(&state.db, project_id).await?;
+        }
+        if let Some(p) = project.as_ref() {
+            super::webhooks::emit(state, p, "merge_request", merge_request_payload(state, p, mr, "update", None, Some(&d))).await;
         }
     }
     Ok(())
@@ -332,6 +366,10 @@ pub struct MergeStatus {
     pub merge_trains_enabled: bool,
     /// Place on the merge train (1 merges next), when on one.
     pub train_position: Option<i64>,
+    /// The source head has no version yet (its push is still being processed):
+    /// approvals are not counted until it has (they are reset then).
+    #[serde(skip)]
+    pub checking: bool,
 }
 
 /// Whether `user` may merge into `target_branch` (protected-branch merge rules).
@@ -388,8 +426,14 @@ pub async fn merge_status(state: &AppState, principal: &Principal, p: &Project, 
             }
         }
     }
-
-    let approvals = mrdb::approvals(&state.db, mr.id, p.id).await?;
+    // approvals are for the latest version: commits the push worker has not
+    // recorded yet reset them once it does, so they do not count for these
+    // (merging records them first: see `merge`)
+    let checking = match &head {
+        Some(h) if mr.state == "opened" => mrdb::latest_diff(&state.db, mr.id).await?.is_none_or(|d| d.head_sha != *h),
+        _ => false,
+    };
+    let approvals = if checking { Vec::new() } else { mrdb::approvals(&state.db, mr.id, p.id).await? };
     let mut approval_rules = Vec::new();
     for r in mrdb::rules(&state.db, p.id).await? {
         let given = approvals.iter().filter(|a| a.access_level >= r.min_access_level).count() as i64;
@@ -410,7 +454,9 @@ pub async fn merge_status(state: &AppState, principal: &Principal, p: &Project, 
     if forgust_db::protected_branches::matching(&protected, &mr.target_branch).iter().any(|r| r.code_owner_approval_required) {
         for s in super::codeowners::for_merge_request(state, p, mr).await?.sections.into_iter().filter(|s| !s.optional) {
             let name = if s.name.is_empty() { "Code owners".to_string() } else { format!("Code owners: {}", s.name) };
-            if !s.satisfied {
+            // their approvals too are for the latest version
+            let satisfied = s.satisfied && !checking;
+            if !satisfied {
                 let who = s.owners.iter().map(|o| format!("@{o}")).collect::<Vec<_>>().join(", ");
                 blockers.push(format!("{name} must approve ({who})"));
             }
@@ -418,8 +464,8 @@ pub async fn merge_status(state: &AppState, principal: &Principal, p: &Project, 
                 name,
                 required: s.approvals_required as i16,
                 min_access_level: "code owner".into(),
-                given: s.approved_by.len() as i64,
-                satisfied: s.satisfied,
+                given: if checking { 0 } else { s.approved_by.len() as i64 },
+                satisfied,
             });
         }
     }
@@ -477,6 +523,7 @@ pub async fn merge_status(state: &AppState, principal: &Principal, p: &Project, 
         pipeline_required: settings.only_merge_if_pipeline_succeeds,
         merge_trains_enabled: settings.merge_trains_enabled,
         train_position,
+        checking,
         blockers,
         conflicts,
         fast_forward,
@@ -522,6 +569,20 @@ pub async fn merge(
     opts: MergeOptions<'_>,
 ) -> ApiResult<MergeRequest> {
     let user = principal.direct_user().ok_or(ApiError::Unauthorized)?.clone();
+    // commits the push worker has not recorded yet (it lags, or its job was
+    // lost): record them now, as it will, so the approvals they reset do not
+    // count for them and the version merged is one the page can show
+    if mr.state == "opened"
+        && let Some(h) = branch_head(state, p.id, &mr.source_branch).await?
+        && mrdb::latest_diff(&state.db, mr.id).await?.is_none_or(|d| d.head_sha != h)
+        && may_merge_into(state, principal, p, &mr.target_branch).await?
+    {
+        let update = RefUpdate { old: h.clone(), new: h, name: format!("refs/heads/{}", mr.source_branch) };
+        if let Err(e) = on_push(state, p.id, &[update]).await {
+            // still unrecorded: the status below does not count the approvals
+            tracing::warn!(mr = mr.id, error = %e, "merge: the source's new commits not recorded");
+        }
+    }
     let status = merge_status(state, principal, p, mr).await?;
     if !status.can_merge {
         return Err(ApiError::conflict(status.blockers.join("; ")));
@@ -533,6 +594,17 @@ pub async fn merge(
 
     // a merge is a push to the target: share the repo lock with pushes
     let _lock = state.repo_locks.get(p.id).read_owned().await;
+    // one state change at a time: a double click, or auto-merge racing a manual
+    // merge, must not merge twice, nor a close land in the middle of a merge
+    let mut guard = state.db.begin().await?;
+    mrdb::lock_state(&mut guard, mr.id).await?;
+    let current = mrdb::find(&state.db, p.id, mr.iid).await?.ok_or(ApiError::NotFound)?;
+    if current.state != "opened" {
+        return Err(ApiError::conflict(format!("the merge request is already {}", current.state)));
+    }
+    if current.source_branch != mr.source_branch || current.target_branch != mr.target_branch {
+        return Err(ApiError::conflict("the merge request's branches changed meanwhile: look at it again"));
+    }
     // the source may have moved between the status check and the lock
     if branch_head(state, p.id, &mr.source_branch).await?.as_deref() != Some(head.as_str()) {
         return Err(ApiError::conflict("the source branch changed while merging; review the new changes first"));
@@ -544,6 +616,8 @@ pub async fn merge(
     let default_msg =
         format!("Merge branch '{}' into '{}'\n\n{}\n\nSee merge request !{}", mr.source_branch, mr.target_branch, mr.title, mr.iid);
 
+    // set when a rebase-merge rewrites the source branch
+    let mut source_rewrite: Option<RefUpdate> = None;
     let new_target = if let Some((train, base)) = opts.train {
         if target_old != base {
             return Err(ApiError::conflict("the target branch moved: the merge train is rebuilt"));
@@ -585,22 +659,32 @@ pub async fn merge(
                     let rebased = state.storage.rebase(p.id, &target_old, &upstream, &head, &bot).await.map_err(conflict_error)?;
                     may_rewrite(state, principal, p, &mr.source_branch, &head, &rebased).await?;
                     // the source branch follows its rebased commits (CAS on what we reviewed)
-                    state
-                        .storage
-                        .update_ref(p.id, &format!("refs/heads/{}", mr.source_branch), &rebased, Some(&head))
-                        .await
-                        .map_err(conflict_error)?;
+                    let source_ref = format!("refs/heads/{}", mr.source_branch);
+                    state.storage.update_ref(p.id, &source_ref, &rebased, Some(&head)).await.map_err(conflict_error)?;
+                    source_rewrite = Some(RefUpdate { old: head.clone(), new: rebased.clone(), name: source_ref });
                     rebased
                 }
             }
         }
     };
 
-    state.storage.update_ref(p.id, &target_ref, &new_target, Some(&target_old)).await.map_err(conflict_error)?;
+    if let Err(e) = state.storage.update_ref(p.id, &target_ref, &new_target, Some(&target_old)).await {
+        // the source was rewritten all the same: it gets a push's follow-up (a
+        // version, its pipeline), or the merge request would show the old commits
+        if let Some(u) = source_rewrite {
+            let mut conn = state.db.acquire().await?;
+            let job = PostReceive { project_id: p.id, updates: vec![u], principal: Some(principal.encode()) };
+            state.jobs.enqueue(&mut conn, job.request()).await?;
+        }
+        return Err(conflict_error(e));
+    }
     pin(state, p.id, &head).await;
     // the next layer of a stack now targets the trunk (ADR-0019)
     let next = super::stack::after_merge(state, principal, p, mr, &head, &new_target).await;
-    let mut tx = state.db.begin().await?;
+    // in the transaction that holds the state lock (a second one would take
+    // another connection for the whole merge): committed, the next state
+    // change may look
+    let mut tx = guard;
     mrdb::set_merged(&mut *tx, mr.id, &new_target, user.id).await?;
     mrdb::add_note(
         &mut *tx,
@@ -613,6 +697,8 @@ pub async fn merge(
     )
     .await?;
     let mut updates = vec![RefUpdate { old: target_old.clone(), new: new_target.clone(), name: target_ref.clone() }];
+    // a rebase-merge rewrote the source: that is a push to it too
+    updates.extend(source_rewrite);
     if let Some((_, ups, _)) = &next {
         updates.extend(ups.iter().cloned());
     }
@@ -621,13 +707,17 @@ pub async fn merge(
         .await?
         .iter()
         .any(|o| next.as_ref().is_none_or(|(n, _, _)| n.id != o.id) && o.id != mr.id);
-    if opts.remove_source_branch && !still_used {
+    // nor is the default branch deleted (a merge request from it into another)
+    let is_default = p.default_branch.as_deref() == Some(mr.source_branch.as_str());
+    if opts.remove_source_branch && !still_used && !is_default {
         let source_ref = format!("refs/heads/{}", mr.source_branch);
         let current = branch_head(state, p.id, &mr.source_branch).await?;
         let protected = forgust_db::protected_branches::list(&state.db, p.id).await?.iter().any(|r| r.matches(&mr.source_branch));
         if let Some(cur) = current.filter(|_| !protected)
             && state.storage.delete_ref(p.id, &source_ref, Some(&cur)).await.is_ok()
         {
+            // gone: a rewrite of it just before is no push to follow up
+            updates.retain(|u| u.name != source_ref);
             updates.push(RefUpdate { old: cur, new: ZERO_OID.into(), name: source_ref });
         }
     }
@@ -723,14 +813,37 @@ pub async fn set_open(state: &AppState, principal: &Principal, p: &Project, mr: 
         return Err(ApiError::conflict("another merge request is open for these branches"));
     }
     let user = principal.direct_user().map(|u| u.id);
+    let mut tx = state.db.begin().await?;
+    // after any merge in progress: it may have merged it meanwhile
+    mrdb::lock_state(&mut tx, mr.id).await?;
+    let current = mrdb::find(&mut *tx, p.id, mr.iid).await?.ok_or(ApiError::NotFound)?;
+    if current.state == "merged" {
+        return Err(ApiError::conflict("the merge request is already merged"));
+    }
+    if current.state == if open { "opened" } else { "closed" } {
+        return Ok(current);
+    }
     if !open {
         // it and the layers above leave the stack (while it is still part of it)
-        super::stack::detach(state, p, mr, user).await?;
+        super::stack::detach(state, p, &current, user).await?;
     }
-    let mut tx = state.db.begin().await?;
     mrdb::set_state(&mut *tx, mr.id, if open { "opened" } else { "closed" }).await?;
     mrdb::add_note(&mut *tx, mr.id, user, None, if open { "reopened" } else { "closed" }, true, Position::default()).await?;
     tx.commit().await?;
+    if open {
+        // commits pushed while it was closed were never recorded (pushes skip
+        // closed MRs): a version for them, which also resets the approvals
+        if let (Some(start), Some(head)) =
+            (branch_head(state, p.id, &mr.target_branch).await?, branch_head(state, p.id, &mr.source_branch).await?)
+            && let Err(e) = add_version(state, p.id, mr.id, mr.iid, &start, &head).await
+        {
+            tracing::warn!(mr = mr.id, error = %e, "reopened merge request: no version for its current head");
+        }
+    } else if let Err(e) =
+        super::merge_train::drop_mr(state, p, mr.id, "removed this merge request from the merge train: it was closed").await
+    {
+        tracing::warn!(mr = mr.id, error = %e, "closed merge request not taken off its merge train");
+    }
     let mr = mrdb::find(&state.db, p.id, mr.iid).await?.ok_or(ApiError::NotFound)?;
     after_change(state, p, &mr, if open { "reopen" } else { "close" }, principal.direct_user()).await;
     Ok(mr)

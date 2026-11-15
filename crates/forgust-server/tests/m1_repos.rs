@@ -508,3 +508,37 @@ async fn password_guessing_limits(pool: sqlx::PgPool) {
     // others are not affected
     assert_eq!(refs("olivia", &password("olivia")).await.unwrap().status(), 200);
 }
+
+/// The default branch stays even unprotected, as the API keeps it: a push
+/// cannot delete it, nor can merging a merge request from it that deletes its
+/// source branch.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn the_default_branch_stays(pool: sqlx::PgPool) {
+    let srv = TestServer::start(pool).await;
+    let owner = srv.user("olivia", false).await;
+    let (_org, _sub, proj) = org_project(&owner).await;
+    let work = srv.work_dir("default-branch");
+    seed_repo(&work).await;
+    let url = srv.http_url("olivia", "acme/platform/api");
+    must(git(&work, &["push", "-q", &url, "main", "main:release"]).await);
+    wait_jobs(&srv.state).await;
+    let rules = owner.ok_get(&format!("/api/v1/projects/{proj}/protected_branches")).await;
+    for r in rules.as_array().unwrap() {
+        assert!(owner.delete(&format!("/api/v1/projects/{proj}/protected_branches/{}", r["id"])).await.0 < 300);
+    }
+    let del = git(&work, &["push", &url, ":main"]).await;
+    assert!(!del.ok && del.stderr.contains("cannot delete the default branch main"), "{}", del.stderr);
+    // other branches still go
+    must(git(&work, &["push", "-q", &url, "main:tmp"]).await);
+    must(git(&work, &["push", "-q", &url, ":tmp"]).await);
+
+    // a backport from main into release, merged with "delete the source branch"
+    commit_file(&work, "fix.txt", "fix\n", "fix").await;
+    must(git(&work, &["push", "-q", &url, "main"]).await);
+    wait_jobs(&srv.state).await;
+    let mrs = format!("/api/v1/projects/{proj}/merge_requests");
+    owner.ok_post(&mrs, json!({ "source_branch": "main", "target_branch": "release", "title": "Backport" })).await;
+    let merged = owner.ok_post(&format!("{mrs}/1/merge"), json!({ "remove_source_branch": true })).await;
+    assert_eq!(merged["state"], "merged");
+    assert!(srv.state.storage.resolve(proj, "refs/heads/main").await.unwrap().is_some(), "main stays");
+}

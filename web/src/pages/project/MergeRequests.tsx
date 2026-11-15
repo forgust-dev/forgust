@@ -892,11 +892,13 @@ function Readiness({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
                   {(() => {
                     const ffBlocked = method === "fast_forward" && !s.fast_forward;
                     const waiting = pstatus != null && isActive(pstatus);
-                    const merge = () => run(() => api.post(`${path}/merge`, { method, sha: s.head_sha, remove_source_branch: removeSource }), `Merged into ${m.target_branch}`);
+                    // the head of the version shown, not the live branch: the server refuses if they differ
+                    const reviewed = m.versions[0]?.head_sha ?? s.head_sha;
+                    const merge = () => run(() => api.post(`${path}/merge`, { method, sha: reviewed, remove_source_branch: removeSource }), `Merged into ${m.target_branch}`);
                     // waiting for a pipeline, approvals or threads: merge once they pass
                     const auto = () =>
                       run(async () => {
-                        const r = await api.post<S["AutoMergeResult"]>(`${path}/auto_merge`, { method, sha: s.head_sha, remove_source_branch: removeSource });
+                        const r = await api.post<S["AutoMergeResult"]>(`${path}/auto_merge`, { method, sha: reviewed, remove_source_branch: removeSource });
                         if (r.outcome === "merged") toast.ok(`Merged into ${m.target_branch}`);
                       }, "Set to auto-merge");
                     if (s.can_merge && !waiting) {

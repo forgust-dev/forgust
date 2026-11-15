@@ -513,3 +513,161 @@ async fn webhook_last_attempt_on_a_busy_hook(pool: sqlx::PgPool) {
     let status: String = sqlx::query_scalar("SELECT status FROM webhook_deliveries WHERE id = $1").bind(first).fetch_one(db).await.unwrap();
     assert_eq!(status, "failed");
 }
+
+async fn main_head(srv: &TestServer, proj: i64) -> String {
+    srv.state.storage.resolve(proj, "refs/heads/main").await.unwrap().unwrap()
+}
+
+/// A double click, or a close racing a merge: the MR changes state once, and
+/// what it says is what git did.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn a_merge_request_merges_or_closes_once(pool: sqlx::PgPool) {
+    let srv = TestServer::start(pool).await;
+    let (owner, _dev, proj, work) = setup(&srv).await;
+    let url = srv.http_url("olivia", REPO);
+    for b in ["twice", "race"] {
+        must(git(&work, &["checkout", "-q", "-b", b, "main"]).await);
+        commit_file(&work, &format!("{b}.txt"), "1\n", b).await;
+        must(git(&work, &["push", "-q", &url, b]).await);
+        wait_jobs(&srv.state).await;
+        owner.ok_post(&format!("/api/v1/projects/{proj}/merge_requests"), json!({ "source_branch": b, "title": b })).await;
+    }
+
+    // two merges at once: one merges, the other is refused
+    let path = mr_path(proj, 1);
+    let before = main_head(&srv, proj).await;
+    let merge = format!("{path}/merge");
+    let ((s1, b1), (s2, b2)) =
+        tokio::join!(owner.post(&merge, json!({ "method": "merge" })), owner.post(&merge, json!({ "method": "merge" })));
+    let mut codes = [s1, s2];
+    codes.sort_unstable();
+    assert_eq!(codes, [200, 409], "{b1} {b2}");
+    assert_eq!(owner.ok_get(&path).await["state"], "merged");
+    let after = main_head(&srv, proj).await;
+    let merge_commit = srv.state.storage.commit(proj, &after).await.unwrap().unwrap();
+    assert_eq!(merge_commit.parents[0], before, "one merge commit on main, not two");
+    let notes = owner.ok_get(&format!("{path}/notes")).await;
+    let merged_notes = notes.as_array().unwrap().iter().filter(|n| n["body"].as_str().unwrap_or("").starts_with("merged into")).count();
+    assert_eq!(merged_notes, 1, "{notes}");
+
+    // a merge and a close at once: whichever wins, the other is refused
+    let path = mr_path(proj, 2);
+    let before = main_head(&srv, proj).await;
+    let (merge, close) = (format!("{path}/merge"), format!("{path}/close"));
+    let ((sm, bm), (sc, bc)) = tokio::join!(owner.post(&merge, json!({ "method": "merge" })), owner.post(&close, json!({})));
+    let state = owner.ok_get(&path).await["state"].as_str().unwrap().to_string();
+    match state.as_str() {
+        "merged" => {
+            assert_eq!((sm, sc), (200, 409), "{bm} {bc}");
+            assert_ne!(main_head(&srv, proj).await, before);
+        }
+        "closed" => {
+            assert_eq!((sm, sc), (409, 200), "{bm} {bc}");
+            assert_eq!(main_head(&srv, proj).await, before, "a closed merge request did not merge");
+        }
+        other => panic!("{other}: {bm} {bc}"),
+    }
+}
+
+/// Approvals are for the version they were given on: commits the push worker
+/// has not recorded yet do not merge with them, a page showing the older
+/// version cannot merge the newer commits, and reopening records what was
+/// pushed while the merge request was closed.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn approvals_do_not_cover_commits_they_were_not_given_on(pool: sqlx::PgPool) {
+    let srv = TestServer::start(pool).await;
+    let (owner, dev, proj, work) = setup(&srv).await;
+    owner
+        .ok_post(
+            &format!("/api/v1/projects/{proj}/approval_rules"),
+            json!({ "name": "maintainers", "approvals_required": 1, "min_access_level": "maintainer" }),
+        )
+        .await;
+    let url = srv.http_url("dave", REPO);
+    must(git(&work, &["checkout", "-q", "-b", "topic"]).await);
+    commit_file(&work, "topic.txt", "1\n", "topic 1").await;
+    let v1 = must(git(&work, &["rev-parse", "HEAD"]).await);
+    must(git(&work, &["push", "-q", &url, "topic"]).await);
+    wait_jobs(&srv.state).await;
+    dev.ok_post(&format!("/api/v1/projects/{proj}/merge_requests"), json!({ "source_branch": "topic", "title": "Topic" })).await;
+    let path = mr_path(proj, 1);
+    owner.ok_post(&format!("{path}/approve"), json!({})).await;
+    assert_eq!(owner.ok_get(&format!("{path}/merge_status")).await["can_merge"], true);
+
+    // new commits on the branch, before the push worker records them (objects
+    // through a throwaway tag, the branch moved behind its back)
+    commit_file(&work, "topic.txt", "2\n", "topic 2").await;
+    let v2 = must(git(&work, &["rev-parse", "HEAD"]).await);
+    must(git(&work, &["push", "-q", &url, "HEAD:refs/tags/side"]).await);
+    wait_jobs(&srv.state).await;
+    srv.state.storage.update_ref(proj, "refs/heads/topic", &v2, Some(&v1)).await.unwrap();
+    let st = owner.ok_get(&format!("{path}/merge_status")).await;
+    assert_eq!(st["head_sha"], v2.as_str());
+    assert_eq!(st["can_merge"], false, "the approval was given on the commit before: {st}");
+    // the page still shows version 1: merging is refused, and the attempt
+    // records the new commits as the worker will (a version; approvals reset)
+    assert_eq!(owner.post(&format!("{path}/merge"), json!({ "sha": v1 })).await.0, 409);
+    let detail = owner.ok_get(&path).await;
+    assert_eq!(detail["versions"].as_array().unwrap().len(), 2, "{detail}");
+    assert_eq!(detail["versions"][0]["head_sha"], v2.as_str());
+    assert!(detail["approvals"].as_array().unwrap().is_empty(), "{detail}");
+    owner.ok_post(&format!("{path}/approve"), json!({})).await;
+    assert_eq!(owner.ok_post(&format!("{path}/merge"), json!({ "sha": v2 })).await["state"], "merged");
+
+    // closed, pushed to, reopened: the commits are a version, approvals reset
+    must(git(&work, &["checkout", "-q", "-b", "later"]).await);
+    commit_file(&work, "later.txt", "1\n", "later 1").await;
+    must(git(&work, &["push", "-q", &url, "later"]).await);
+    wait_jobs(&srv.state).await;
+    dev.ok_post(&format!("/api/v1/projects/{proj}/merge_requests"), json!({ "source_branch": "later", "title": "Later" })).await;
+    let path = mr_path(proj, 2);
+    owner.ok_post(&format!("{path}/approve"), json!({})).await;
+    dev.ok_post(&format!("{path}/close"), json!({})).await;
+    commit_file(&work, "later.txt", "2\n", "later 2").await;
+    let pushed = must(git(&work, &["rev-parse", "HEAD"]).await);
+    must(git(&work, &["push", "-q", &url, "later"]).await);
+    wait_jobs(&srv.state).await;
+    assert_eq!(owner.ok_get(&path).await["versions"].as_array().unwrap().len(), 1, "pushes skip closed merge requests");
+    let reopened = dev.ok_post(&format!("{path}/reopen"), json!({})).await;
+    assert_eq!(reopened["state"], "opened");
+    let detail = owner.ok_get(&path).await;
+    assert_eq!(detail["versions"].as_array().unwrap().len(), 2, "{detail}");
+    assert_eq!(detail["versions"][0]["head_sha"], pushed.as_str());
+    assert!(detail["approvals"].as_array().unwrap().is_empty(), "{detail}");
+    assert_eq!(owner.ok_get(&format!("{path}/merge_status")).await["can_merge"], false);
+}
+
+/// One merge request that cannot follow a push (its target was force-pushed
+/// to commits with no history in common) leaves the push's other merge
+/// requests, and its pipelines and webhooks, to go on.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn a_merge_request_that_cannot_follow_does_not_stop_the_push(pool: sqlx::PgPool) {
+    let srv = TestServer::start(pool).await;
+    let (owner, _dev, proj, work) = setup(&srv).await;
+    let url = srv.http_url("olivia", REPO);
+    must(git(&work, &["push", "-q", &url, "main:side"]).await);
+    must(git(&work, &["checkout", "-q", "-b", "topic"]).await);
+    commit_file(&work, "topic.txt", "1\n", "topic 1").await;
+    must(git(&work, &["push", "-q", &url, "topic"]).await);
+    wait_jobs(&srv.state).await;
+    let mrs = format!("/api/v1/projects/{proj}/merge_requests");
+    owner.ok_post(&mrs, json!({ "source_branch": "topic", "target_branch": "side", "title": "Into side" })).await;
+    owner.ok_post(&mrs, json!({ "source_branch": "topic", "target_branch": "main", "title": "Into main" })).await;
+    // side becomes unrelated history
+    must(git(&work, &["checkout", "-q", "--orphan", "lonely"]).await);
+    commit_file(&work, "lonely.txt", "x\n", "unrelated").await;
+    must(git(&work, &["push", "-q", "-f", &url, "lonely:side"]).await);
+    wait_jobs(&srv.state).await;
+
+    must(git(&work, &["checkout", "-q", "topic"]).await);
+    commit_file(&work, "topic.txt", "2\n", "topic 2").await;
+    let head = must(git(&work, &["rev-parse", "HEAD"]).await);
+    must(git(&work, &["push", "-q", &url, "topic"]).await);
+    wait_jobs(&srv.state).await;
+    let into_main = owner.ok_get(&format!("{mrs}/2")).await;
+    assert_eq!(into_main["versions"].as_array().unwrap().len(), 2, "{into_main}");
+    assert_eq!(into_main["versions"][0]["head_sha"], head.as_str());
+    // the push's follow-up succeeds as a whole
+    let update = forgust_server::jobs::RefUpdate { old: head.clone(), new: head.clone(), name: "refs/heads/topic".into() };
+    forgust_server::services::mr::on_push(&srv.state, proj, &[update]).await.expect("the push is followed up");
+}

@@ -224,9 +224,8 @@ pub async fn check_push(
     updates: &[HookUpdate],
     quarantine: Option<&Path>,
 ) -> ApiResult<HookResponse> {
-    if let Some(p) = forgust_db::projects::find(&state.db, project_id).await?
-        && p.archived()
-    {
+    let project = forgust_db::projects::find(&state.db, project_id).await?;
+    if project.as_ref().is_some_and(|p| p.archived()) {
         return Ok(HookResponse { allowed: false, message: crate::auth::authz::ARCHIVED.into() });
     }
     // storage quota: new objects must fit (a push that only moves or deletes refs
@@ -315,6 +314,14 @@ pub async fn check_push(
         let Some(branch) = u.name.strip_prefix("refs/heads/") else { continue };
         let matching = forgust_db::protected_branches::matching(&rules, branch);
         if matching.is_empty() {
+            // unprotected, the default branch still stays, as the API keeps it:
+            // without it the project has no home page, clone default or MR target
+            if u.new == ZERO_OID && project.as_ref().and_then(|p| p.default_branch.as_deref()) == Some(branch) {
+                return Ok(HookResponse {
+                    allowed: false,
+                    message: format!("You cannot delete the default branch {branch}: make another branch the default first."),
+                });
+            }
             continue;
         }
         if u.new == ZERO_OID {
