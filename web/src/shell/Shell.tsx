@@ -244,6 +244,7 @@ function Sidebar({ collapsed, setCollapsed, mobileOpen, closeMobile }: { collaps
         {collapsed ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
         {!c && <span>Collapse</span>}
       </button>
+      {!c && <SideVersion />}
     </aside>
   );
 }
@@ -379,6 +380,75 @@ function SiteBanner() {
   );
 }
 
+/** This server's version and the latest release, for administrators (Admin > Settings turns the check off). */
+function useUpdateStatus() {
+  const { user } = useSession();
+  const q = useQuery({
+    queryKey: ["admin-update"],
+    queryFn: () => api.get<S["UpdateStatus"]>("/admin/update"),
+    enabled: !!user?.is_admin,
+    staleTime: 3_600_000,
+  });
+  return user?.is_admin ? q.data : undefined;
+}
+
+/** For administrators: a newer Forgust release is out, in a notice that stays until dismissed (then until the next one). */
+function UpdateNotice() {
+  const status = useUpdateStatus();
+  const { announce, withdraw } = useToast();
+  const v = status?.available;
+  const url = status?.url;
+  useEffect(() => {
+    if (!v) return;
+    // remembered per release, as the site banner is per text: a notice left
+    // open in another tab, for an older release, cannot bring this one back
+    const seen = `forgust.update.dismissed:${v}`;
+    try {
+      if (localStorage.getItem(seen) === "1") return;
+    } catch {
+      // storage blocked: shown on each load
+    }
+    const key = `update:${v}`;
+    announce({
+      key,
+      title: "Update available",
+      text: `Forgust ${v} is available.`,
+      action: url ? { label: "View release notes", href: url } : undefined,
+      onDismiss: () => {
+        try {
+          localStorage.setItem(seen, "1");
+        } catch {
+          // not remembered: back on the next load
+        }
+      },
+    });
+    // gone with what it says: signed out, the check turned off, a newer release
+    return () => withdraw(key);
+  }, [v, url, announce, withdraw]);
+  return null;
+}
+
+/** The bottom of the sidebar, for administrators: this server's version, and a newer one. */
+function SideVersion() {
+  const status = useUpdateStatus();
+  if (!status) return null;
+  const title = `Forgust ${status.available} is available`;
+  return (
+    <div className="side-version">
+      <span>v{status.current}</span>
+      {status.available &&
+        (status.url ? (
+          <a href={status.url} target="_blank" rel="noreferrer" title={title}>
+            <span className="dot" />
+            Update available
+          </a>
+        ) : (
+          <span title={title}>Update available</span>
+        ))}
+    </div>
+  );
+}
+
 function EmailBanner() {
   const { user } = useSession();
   if (!user || user.email_verified !== false) return null;
@@ -482,6 +552,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} mobileOpen={mobileOpen} closeMobile={() => setMobileOpen(false)} />
       <main className="main">
         <ImpersonationBanner />
+        <UpdateNotice />
         <SiteBanner />
         <EmailBanner />
         {children}

@@ -77,3 +77,34 @@ test("admin: the banner", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByText(text)).toHaveCount(0);
 });
+
+// What the server keeps from GitHub is stood in for: the test server asks nobody.
+test("admin: a new release is announced until dismissed", async ({ page }) => {
+  const version = `99.0.${Date.now() % 100000}`;
+  await page.route("**/api/v1/admin/update", (route) =>
+    route.fulfill({ json: { current: "0.1.0", available: version, url: "https://example.com/release" } }),
+  );
+  await page.goto("/");
+  const notice = page.locator(".toast.info");
+  await expect(notice).toContainText("Update available");
+  await expect(notice).toContainText(`Forgust ${version} is available.`);
+  await expect(notice.getByRole("link", { name: "View release notes" })).toHaveAttribute("href", "https://example.com/release");
+  // the sidebar says so too, next to this server's version
+  const side = page.locator(".side-version");
+  if (!isMobile(page)) {
+    await expect(side).toContainText("v0.1.0");
+    await expect(side.getByRole("link", { name: "Update available" })).toHaveAttribute("href", "https://example.com/release");
+  }
+  // it stays (a toast would be gone by now), until dismissed: then not again for this release
+  await page.waitForTimeout(4000);
+  await expect(notice).toBeVisible();
+  await notice.getByRole("button", { name: "Dismiss" }).click();
+  await expect(notice).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("button", { name: /^Notifications/ })).toBeVisible();
+  await expect(notice).toHaveCount(0);
+  if (!isMobile(page)) await expect(side.getByRole("link", { name: "Update available" })).toBeVisible();
+  // administrators can turn the check off
+  await page.goto("/admin/settings");
+  await expect(page.getByRole("checkbox", { name: /Check for new releases/ })).toBeVisible();
+});

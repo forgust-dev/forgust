@@ -3660,8 +3660,10 @@ export interface components {
             allow_personal_projects: boolean;
             default_branch_name: string;
             /** @description The MCP server answers. */
-            mcp_enabled?: boolean;
+            mcp_enabled: boolean;
             signup_enabled: boolean;
+            /** @description Ask GitHub for new Forgust releases, to tell administrators. */
+            update_check_enabled: boolean;
         };
         Issue: {
             /** Format: int64 */
@@ -5625,6 +5627,17 @@ export interface components {
             name: string;
             visibility: string;
         };
+        /**
+         * @description The instance settings to save. A switch left out keeps its value: a client
+         *     that predates it (or a script) does not turn it back on.
+         */
+        UpdateInstanceSettings: {
+            allow_personal_projects: boolean;
+            default_branch_name: string;
+            mcp_enabled?: boolean | null;
+            signup_enabled: boolean;
+            update_check_enabled?: boolean | null;
+        };
         UpdateIssueBody: {
             /** @description Replace the assignees (user ids). */
             assignee_ids?: number[] | null;
@@ -5678,6 +5691,13 @@ export interface components {
             name?: string | null;
             /** Format: date-time */
             released_at?: string | null;
+        };
+        UpdateStatus: {
+            /** @description The latest release on GitHub, when it is newer than this one and the check is on. */
+            available?: string | null;
+            current: string;
+            /** @description Its release notes, when GitHub gave them. */
+            url?: string | null;
         };
         UpdateUser: {
             is_admin?: boolean | null;

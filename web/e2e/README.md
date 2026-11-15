@@ -18,6 +18,10 @@ FORGUST_E2E_URL=http://127.0.0.1:18491 npm run e2e
 and `git push` over HTTP. It reuses them when they exist, so point it at a scratch
 database: tests change state (they close and reopen the MR).
 
+Start that server with `FORGUST_SERVER__RELEASE_CHECK_URL=""`: what the pages show
+must not depend on GitHub's latest release (a notice would come up for the admin
+account once a newer one is out).
+
 Without a local browser, run the suite in the Playwright image:
 
 ```sh

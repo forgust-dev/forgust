@@ -245,6 +245,8 @@ jobs:
       FORGUST_SERVER__LISTEN: 127.0.0.1:18491
       FORGUST_SERVER__EXTERNAL_URL: http://127.0.0.1:18491
       FORGUST_SERVER__SSH_LISTEN: ""
+      # no release check: what the pages show must not depend on GitHub's latest release
+      FORGUST_SERVER__RELEASE_CHECK_URL: ""
       FORGUST_SERVER__DATA_DIR: /tmp/forgust-e2e
       FORGUST_SERVER__STATIC_DIR: web/dist
     steps:
