@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
-import { Route, Routes } from "react-router-dom";
-import { api, timeAgo, type S } from "../api/client";
+import { Route, Routes, useSearchParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { api, enc, timeAgo, type S } from "../api/client";
 import { useSession } from "../session";
 import { Avatar, Badge, Card, ErrorBox, Field, ListHead, NewSecret, Q, Tabs, Section, useFormRun } from "../components/ui";
 import { ScopePicker, useCrudList } from "../components/Tokens";
@@ -463,6 +464,60 @@ function Security() {
           </div>
         )}
       </Section>
+      <SignInProviders />
     </div>
+  );
+}
+
+/** Single sign-on providers linked to the account: link one (through its sign-in page) or unlink it. */
+function SignInProviders() {
+  const [params] = useSearchParams();
+  const providers = useQuery({ queryKey: ["identities"], queryFn: () => api.get<S["LinkedProvider"][]>("/user/identities") });
+  const [password, setPassword] = useState("");
+  const { run, msg, error } = useFormRun(() => providers.refetch());
+  if (!providers.data?.length) return null;
+  const linked = providers.data.find((p) => p.name === params.get("linked"));
+  return (
+    <Section id="sign-in-providers" title="Single sign-on" description="Sign in through a provider instead of your password. Linking takes you to the provider to sign in there.">
+      <div className="stack">
+        <ErrorBox error={error ?? params.get("link_error")} />
+        {msg ? <div className="alert ok">{msg}</div> : linked?.linked_at && !error && <div className="alert ok">{linked.display_name} is linked: you can sign in with it.</div>}
+        <Field label="Confirm with your password" hint="Needed to link or unlink (accounts without a password: leave empty within 10 minutes of signing in)">
+          <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+        </Field>
+        {providers.data.map((p) => (
+          <div key={p.name} className="row wrap">
+            <strong>{p.display_name}</strong>
+            {p.linked_at ? <Badge tone="ok">linked {timeAgo(p.linked_at)}</Badge> : <Badge>not linked</Badge>}
+            <span style={{ flex: 1 }} />
+            {p.linked_at ? (
+              <button
+                className="btn danger"
+                onClick={run(
+                  async () => {
+                    await api.post(`/user/identities/${enc(p.name)}/unlink`, { password });
+                    setPassword("");
+                  },
+                  `${p.display_name} unlinked.`,
+                  `Stop signing in with ${p.display_name}?`,
+                )}
+              >
+                Unlink
+              </button>
+            ) : (
+              <button
+                className="btn"
+                onClick={run(async () => {
+                  const { url } = await api.post<S["LinkStart"]>(`/user/identities/${enc(p.name)}/link`, { password });
+                  window.location.assign(url);
+                }, "")}
+              >
+                Link {p.display_name}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </Section>
   );
 }

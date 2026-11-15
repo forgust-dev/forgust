@@ -56,6 +56,9 @@ pub fn router() -> Router<AppState> {
         // the signed-in user
         .route("/user", get(user::me).put(user::update_me))
         .route("/user/password", put(user::change_password))
+        .route("/user/identities", get(user::list_identities))
+        .route("/user/identities/{name}/link", post(user::link_identity))
+        .route("/user/identities/{name}/unlink", post(user::unlink_identity))
         .route("/user/keys", get(user::list_keys).post(user::add_key))
         .route("/user/keys/{id}", delete(user::delete_key))
         .route("/user/gpg_keys", get(review::list_gpg_keys).post(review::add_gpg_key))
@@ -309,6 +312,8 @@ pub fn router() -> Router<AppState> {
         .route("/admin/users/{id}", put(admin::update_user).delete(admin::delete_user))
         .route("/admin/users/{id}/reset_two_factor", post(admin::reset_two_factor))
         .route("/admin/users/{id}/sign_out", post(admin::sign_out))
+        .route("/admin/users/{id}/identities", post(admin::link_identity))
+        .route("/admin/users/{id}/identities/{provider}", delete(admin::unlink_identity))
         .route("/admin/users/{id}/impersonate", post(auth::impersonate))
         .route("/auth/stop_impersonating", post(auth::stop_impersonating))
         .route("/admin/users/{id}/revoke_tokens", post(admin::revoke_tokens))

@@ -528,6 +528,8 @@ pub struct AdminUser {
     pub sessions: i64,
     /// Personal access tokens not revoked or expired.
     pub tokens: i64,
+    /// Sign-in providers linked to the account.
+    pub providers: Vec<String>,
 }
 
 /// `filter`: `all` (people), `admins`, `blocked`, `external`, `unconfirmed`, `two_factor_off` or `bots`.
@@ -539,7 +541,8 @@ pub async fn users(e: impl PgExecutor<'_>, search: &str, filter: &str, limit: i6
                   u.created_at, u.last_sign_in_at,
                   (SELECT count(*) FROM sessions s WHERE s.user_id = u.id AND s.expires_at > now()) AS "sessions!",
                   (SELECT count(*) FROM personal_access_tokens t WHERE t.user_id = u.id AND NOT t.revoked
-                     AND (t.expires_at IS NULL OR t.expires_at > now())) AS "tokens!"
+                     AND (t.expires_at IS NULL OR t.expires_at > now())) AS "tokens!",
+                  COALESCE((SELECT array_agg(DISTINCT i.provider) FROM identities i WHERE i.user_id = u.id), '{}') AS "providers!"
              FROM users u
             WHERE ($1 = '' OR u.username ILIKE '%' || $1 || '%' OR u.name ILIKE '%' || $1 || '%' OR u.email ILIKE '%' || $1 || '%')
               AND CASE $2

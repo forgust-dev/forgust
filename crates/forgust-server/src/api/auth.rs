@@ -104,8 +104,14 @@ pub async fn login(
     }
     if user.totp_enabled {
         let challenge = crypto::random_urlsafe(32);
-        forgust_db::sessions::create_challenge(&state.db, &crypto::token_hash(&challenge), user.id, Utc::now() + Duration::minutes(5))
-            .await?;
+        forgust_db::sessions::create_challenge(
+            &state.db,
+            &crypto::token_hash(&challenge),
+            user.id,
+            None,
+            Utc::now() + Duration::minutes(5),
+        )
+        .await?;
         return Ok((jar, Json(LoginResponse { session: None, two_factor_required: true, challenge: Some(challenge) })));
     }
     start_session(&state, jar, &headers, ip, &user).await
@@ -126,7 +132,7 @@ pub async fn login_totp(
     Json(req): Json<TotpLogin>,
 ) -> ApiResult<(CookieJar, Json<LoginResponse>)> {
     let hash = crypto::token_hash(&req.challenge);
-    let user_id = forgust_db::sessions::find_challenge(&state.db, &hash).await?.ok_or(ApiError::Unauthorized)?;
+    let (user_id, provider_sync) = forgust_db::sessions::find_challenge(&state.db, &hash).await?.ok_or(ApiError::Unauthorized)?;
     if !state.login_limiter.allow(&format!("totp|{user_id}")) {
         return Err(ApiError::forbidden("too many attempts, try again in a minute"));
     }
@@ -143,7 +149,23 @@ pub async fn login_totp(
         return Err(ApiError::Unauthorized);
     }
     forgust_db::sessions::delete_challenge(&state.db, &hash).await?;
+    // a sign-in through a provider, now complete: what it says about the account
+    let user = match provider_sync.map(serde_json::from_value::<PendingSync>) {
+        Some(Ok(s)) => sync_from_provider(&state, &s.provider, &s.identity, user, ip.text().as_deref()).await?,
+        Some(Err(e)) => {
+            tracing::warn!(user = user.id, error = %e, "what the provider said about the account could not be read: not applied");
+            user
+        }
+        None => user,
+    };
     start_session(&state, jar, &headers, ip, &user).await
+}
+
+/// A provider sign-in waiting for its second factor (`login_challenges.provider_sync`).
+#[derive(Serialize, Deserialize)]
+struct PendingSync {
+    provider: String,
+    identity: crate::auth::oidc::OidcIdentity,
 }
 
 /// An administrator signs in as someone else, for an hour (Admin > Users), to
@@ -274,17 +296,79 @@ pub async fn providers(State(state): State<AppState>) -> Json<Vec<Provider>> {
     Json(state.oidc.providers.iter().map(|(k, v)| Provider { name: k.clone(), display_name: v.display_name.clone() }).collect())
 }
 
-pub async fn oidc_start(State(state): State<AppState>, jar: CookieJar, Path(name): Path<String>) -> ApiResult<(CookieJar, Redirect)> {
-    let (url, login_state) = crate::auth::oidc::start(&state, &name).await?;
-    let cookie = axum_extra::extract::cookie::Cookie::build((crate::auth::oidc::STATE_COOKIE, login_state))
-        .path("/api/v1/auth/oidc/")
-        .http_only(true)
-        .secure(state.cfg.secure_cookies())
-        // the provider sends the browser back with a top-level GET: Lax carries it
-        .same_site(axum_extra::extract::cookie::SameSite::Lax)
-        .max_age(time::Duration::minutes(10))
-        .build();
-    Ok((jar.add(cookie), Redirect::to(&url)))
+/// A sign-in through a provider that did not work out: back to the sign-in
+/// page, which shows why (the browser is on a link, not in the app).
+fn sign_in_failed(e: ApiError) -> Redirect {
+    let why = match &e {
+        ApiError::Internal(cause) => {
+            tracing::error!(error = ?cause, "provider sign-in failed");
+            "signing in through the provider failed; try again, or tell an administrator".to_string()
+        }
+        e => e.to_string(),
+    };
+    Redirect::to(&format!("/login?error={}", query_value(&why)))
+}
+
+pub async fn oidc_start(State(state): State<AppState>, jar: CookieJar, Path(name): Path<String>) -> Response {
+    match crate::auth::oidc::start(&state, &name, None).await {
+        Ok((url, login_state)) => (jar.add(crate::auth::oidc::state_cookie(&state, login_state)), Redirect::to(&url)).into_response(),
+        Err(e) => sign_in_failed(e).into_response(),
+    }
+}
+
+/// What the provider says about the account, taken over at each sign-in:
+/// administrator rights (`admin_groups`), name and email (`sync_profile`).
+/// Only once the sign-in is complete: with two-factor authentication on, the
+/// provider alone must not be able to move the account to another inbox.
+async fn sync_from_provider(
+    state: &AppState,
+    provider_name: &str,
+    identity: &crate::auth::oidc::OidcIdentity,
+    user: forgust_db::users::User,
+    ip: Option<&str>,
+) -> ApiResult<forgust_db::users::User> {
+    let Some(provider) = state.oidc.providers.get(provider_name) else { return Ok(user) };
+    let me = Principal::User { user: user.clone(), scopes: None };
+    let mut changed = false;
+    if !provider.admin_groups.is_empty() && !user.is_bot() {
+        let admin = identity.groups.iter().any(|g| provider.admin_groups.contains(g));
+        // never an external one in, never the last administrator out
+        let allowed =
+            admin != user.is_admin && if admin { !user.is_external } else { forgust_db::admin::active_admins(&state.db).await? > 1 };
+        if allowed {
+            forgust_db::users::set_admin(&state.db, user.id, admin).await?;
+            let action = if admin { "admin_granted" } else { "admin_revoked" };
+            services::audit(state, &me, action, Some(("user", user.id)), json!({ "provider": provider_name }), ip).await;
+            changed = true;
+        }
+    }
+    if provider.sync_profile {
+        let name = identity.name.as_deref().map(str::trim).filter(|n| *n != user.name && services::paths::validate_name(n).is_ok());
+        let mut email =
+            identity.email.as_deref().filter(|e| !e.eq_ignore_ascii_case(&user.email) && services::paths::validate_email(e).is_ok());
+        if let Some(e) = email
+            && forgust_db::users::find_by_email(&state.db, e).await?.is_some()
+        {
+            tracing::warn!(user = user.id, provider = provider_name, "the provider's email belongs to another account: kept the old one");
+            email = None;
+        }
+        if let Some(n) = name {
+            forgust_db::users::update_profile(&state.db, user.id, n, &user.email).await?;
+        }
+        if let Some(e) = email {
+            // the provider returned it as verified
+            forgust_db::users::confirm_email(&state.db, user.id, e).await?;
+        }
+        if name.is_some() || email.is_some() {
+            let details = json!({ "provider": provider_name, "name": name.is_some(), "email": email.is_some() });
+            services::audit(state, &me, "profile_synced", Some(("user", user.id)), details, ip).await;
+            changed = true;
+        }
+    }
+    if !changed {
+        return Ok(user);
+    }
+    forgust_db::users::find(&state.db, user.id).await?.ok_or(ApiError::Unauthorized)
 }
 
 #[derive(Deserialize)]
@@ -294,6 +378,68 @@ pub struct OidcCallback {
     error: Option<String>,
 }
 
+fn query_value(s: &str) -> String {
+    percent_encoding::utf8_percent_encode(s, percent_encoding::NON_ALPHANUMERIC).to_string()
+}
+
+/// Where a link started from the settings ends, with its outcome.
+fn link_outcome(name: &str, done: ApiResult<()>) -> Redirect {
+    match done {
+        Ok(()) => Redirect::to(&format!("/profile/security?linked={}", query_value(name))),
+        Err(e) => {
+            if let ApiError::Internal(e) = &e {
+                tracing::error!(error = ?e, "linking a provider failed");
+            }
+            Redirect::to(&format!("/profile/security?link_error={}", query_value(&e.to_string())))
+        }
+    }
+}
+
+/// Link the provider identity to the account that asked for it in its settings.
+/// The browser must still be signed in as that account (not an administrator
+/// acting as it): the callback alone proves nothing about who is at the keyboard.
+async fn link_identity(
+    state: &AppState,
+    jar: &CookieJar,
+    name: &str,
+    code: &str,
+    pending: forgust_db::sessions::OidcState,
+    ip: Option<&str>,
+) -> ApiResult<()> {
+    let session = match session_cookie(&state.cfg, jar) {
+        Some(c) => session::lookup(state, c).await?,
+        None => None,
+    };
+    let user = match session {
+        Some((u, _, None)) if Some(u.id) == pending.link_user_id => u,
+        _ => return Err(ApiError::forbidden("you are no longer signed in as the account that started this; start again")),
+    };
+    let provider = state.oidc.providers.get(name).ok_or(ApiError::NotFound)?;
+    let identity = crate::auth::oidc::finish(state, name, code, pending).await?;
+    provider.admits(&identity)?;
+    use forgust_db::users::Linked;
+    match forgust_db::users::link_identity(&state.db, user.id, name, &identity.subject).await? {
+        Linked::Done => {}
+        Linked::AlreadyYours => return Ok(()),
+        Linked::IdentityTaken => {
+            return Err(ApiError::conflict(format!("this {} account is already linked to another account here", provider.display_name)));
+        }
+        Linked::ProviderTaken => {
+            return Err(ApiError::conflict(format!("another {} account is already linked; unlink it first", provider.display_name)));
+        }
+    }
+    services::audit(
+        state,
+        &Principal::User { user: user.clone(), scopes: None },
+        "identity_linked",
+        Some(("user", user.id)),
+        json!({ "provider": name }),
+        ip,
+    )
+    .await;
+    Ok(())
+}
+
 pub async fn oidc_callback(
     State(state): State<AppState>,
     Path(name): Path<String>,
@@ -301,22 +447,45 @@ pub async fn oidc_callback(
     headers: HeaderMap,
     ip: ClientIp,
     Query(q): Query<OidcCallback>,
+) -> Response {
+    finish_sign_in(state, name, jar, headers, ip, q).await.unwrap_or_else(|e| sign_in_failed(e).into_response())
+}
+
+async fn finish_sign_in(
+    state: AppState,
+    name: String,
+    jar: CookieJar,
+    headers: HeaderMap,
+    ip: ClientIp,
+    q: OidcCallback,
 ) -> ApiResult<Response> {
+    let started_here = |csrf: &str| jar.get(crate::auth::oidc::STATE_COOKIE).is_some_and(|c| crypto::eq_ct(c.value(), csrf));
+    let state_cookie = || crate::auth::oidc::spent_state_cookie(&state);
     if let Some(e) = q.error {
-        return Ok(Redirect::to(&format!(
-            "/login?error={}",
-            percent_encoding::utf8_percent_encode(&e, percent_encoding::NON_ALPHANUMERIC)
-        ))
-        .into_response());
+        // refused or cancelled at the provider: back to where it was started
+        if let Some(csrf) = q.state.as_deref().filter(|s| started_here(s))
+            && let Some(pending) = forgust_db::sessions::take_oidc_state(&state.db, csrf).await?
+            && pending.link_user_id.is_some()
+        {
+            let to = link_outcome(&name, Err(ApiError::bad(format!("the provider answered: {e}"))));
+            return Ok((jar.remove(state_cookie()), to).into_response());
+        }
+        return Err(ApiError::bad(e));
     }
-    let (code, csrf) = (q.code.ok_or_else(|| ApiError::bad("missing code"))?, q.state.ok_or_else(|| ApiError::bad("missing state"))?);
-    let started_here = jar.get(crate::auth::oidc::STATE_COOKIE).is_some_and(|c| crypto::eq_ct(c.value(), &csrf));
-    if !started_here {
+    let csrf = q.state.ok_or_else(|| ApiError::bad("missing state"))?;
+    let code = q.code.ok_or_else(|| ApiError::bad("missing code"))?;
+    if !started_here(&csrf) {
         return Err(ApiError::bad("this sign-in was not started in this browser; start it again"));
     }
-    let jar = jar.remove(axum_extra::extract::cookie::Cookie::build(crate::auth::oidc::STATE_COOKIE).path("/api/v1/auth/oidc/"));
-    let identity = crate::auth::oidc::finish(&state, &name, &code, &csrf).await?;
+    let pending = crate::auth::oidc::pending(&state, &csrf).await?;
+    let jar = jar.remove(state_cookie());
+    if pending.link_user_id.is_some() {
+        let done = link_identity(&state, &jar, &name, &code, pending, ip.text().as_deref()).await;
+        return Ok((jar, link_outcome(&name, done)).into_response());
+    }
+    let identity = crate::auth::oidc::finish(&state, &name, &code, pending).await?;
     let provider = state.oidc.providers.get(&name).ok_or(ApiError::NotFound)?;
+    provider.admits(&identity)?;
     let user = match forgust_db::users::find_identity(&state.db, &name, &identity.subject).await? {
         Some(uid) => forgust_db::users::find(&state.db, uid).await?.ok_or(ApiError::Unauthorized)?,
         None => {
@@ -330,9 +499,10 @@ pub async fn oidc_callback(
                 // whoever controls this email at the provider (account pre-hijacking)
                 Some(u) if provider.link_existing_by_email && u.email_verified() => u,
                 Some(_) => {
-                    return Err(ApiError::forbidden(
-                        "an account with this email already exists; sign in with it, or ask an administrator to link this provider",
-                    ));
+                    return Err(ApiError::forbidden(format!(
+                        "an account with this email already exists: sign in to it with your password, then link {} under Your settings > Password & 2FA",
+                        provider.display_name
+                    )));
                 }
                 None if provider.auto_create => {
                     let email =
@@ -362,7 +532,12 @@ pub async fn oidc_callback(
                     tx.commit().await?;
                     u
                 }
-                None => return Err(ApiError::forbidden("no account matches this identity; ask an administrator")),
+                None => {
+                    return Err(ApiError::forbidden(format!(
+                        "no account matches this identity: sign in to yours and link {} in your settings, or ask an administrator for an account",
+                        provider.display_name
+                    )));
+                }
             };
             forgust_db::users::add_identity(&state.db, user.id, &name, &identity.subject).await?;
             user
@@ -376,10 +551,19 @@ pub async fn oidc_callback(
     // (never sent to a server, never in a Referer).
     if user.totp_enabled {
         let challenge = crypto::random_urlsafe(32);
-        forgust_db::sessions::create_challenge(&state.db, &crypto::token_hash(&challenge), user.id, Utc::now() + Duration::minutes(5))
-            .await?;
+        // what the provider says about the account waits for the code too
+        let sync = serde_json::to_value(PendingSync { provider: name, identity }).map_err(|e| ApiError::Internal(e.into()))?;
+        forgust_db::sessions::create_challenge(
+            &state.db,
+            &crypto::token_hash(&challenge),
+            user.id,
+            Some(&sync),
+            Utc::now() + Duration::minutes(5),
+        )
+        .await?;
         return Ok((jar, Redirect::to(&format!("/login#totp={challenge}"))).into_response());
     }
+    let user = sync_from_provider(&state, &name, &identity, user, ip.text().as_deref()).await?;
     let (jar, _) = start_session(&state, jar, &headers, ip, &user).await?;
     Ok((jar, Redirect::to("/")).into_response())
 }

@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT user_id, provider_sync FROM login_challenges WHERE token_hash = $1 AND expires_at > now()",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "login_challenges",
+            "name": "user_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "provider_sync",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "login_challenges",
+            "name": "provider_sync"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "5b116c2f8015423a63f59e10fad1d80c8503d62e2a3475320de48aba7fd9304c"
+}

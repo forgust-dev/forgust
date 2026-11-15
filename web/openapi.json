@@ -4045,6 +4045,28 @@
         }
       }
     },
+    "/api/v1/user/identities": {
+      "get": {
+        "tags": [
+          "user"
+        ],
+        "operationId": "list_identities",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LinkedProvider"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/user/keys": {
       "get": {
         "tags": [
@@ -4804,7 +4826,8 @@
           "email_verified",
           "created_at",
           "sessions",
-          "tokens"
+          "tokens",
+          "providers"
         ],
         "properties": {
           "created_at": {
@@ -4836,6 +4859,13 @@
           },
           "name": {
             "type": "string"
+          },
+          "providers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Sign-in providers linked to the account."
           },
           "sessions": {
             "type": "integer",
@@ -6114,6 +6144,15 @@
         "properties": {
           "token": {
             "type": "string"
+          }
+        }
+      },
+      "ConfirmPassword": {
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string",
+            "description": "The account's password (accounts without one: empty, within 10 minutes of signing in)."
           }
         }
       },
@@ -9379,6 +9418,59 @@
             }
           }
         ]
+      },
+      "LinkIdentity": {
+        "type": "object",
+        "required": [
+          "provider",
+          "subject"
+        ],
+        "properties": {
+          "provider": {
+            "type": "string",
+            "description": "A configured provider (`[oidc.<name>]`)."
+          },
+          "subject": {
+            "type": "string",
+            "description": "Who they are there: the `sub` claim of the provider's ID tokens."
+          }
+        }
+      },
+      "LinkStart": {
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Send the browser here: the provider's sign-in page."
+          }
+        }
+      },
+      "LinkedProvider": {
+        "type": "object",
+        "description": "A configured sign-in provider, and whether this account is linked to it.",
+        "required": [
+          "name",
+          "display_name"
+        ],
+        "properties": {
+          "display_name": {
+            "type": "string"
+          },
+          "linked_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the account was linked (None: not linked)."
+          },
+          "name": {
+            "type": "string"
+          }
+        }
       },
       "Listed": {
         "type": "object",

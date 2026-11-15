@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "DELETE FROM oidc_states WHERE state = $1 AND expires_at > now() RETURNING provider, nonce, pkce_verifier",
+  "query": "DELETE FROM oidc_states WHERE state = $1 AND expires_at > now() RETURNING provider, nonce, pkce_verifier, link_user_id",
   "describe": {
     "columns": [
       {
@@ -35,6 +35,17 @@
             "name": "pkce_verifier"
           }
         }
+      },
+      {
+        "ordinal": 3,
+        "name": "link_user_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "oidc_states",
+            "name": "link_user_id"
+          }
+        }
       }
     ],
     "parameters": {
@@ -45,8 +56,9 @@
     "nullable": [
       false,
       false,
-      false
+      false,
+      true
     ]
   },
-  "hash": "a51290b2b10fa9d77e93e8b95ef4bccbe1e729663a2a855c610a1faa8f6c148a"
+  "hash": "db810ad655125a5a040703fcce608e630ad293b4326da6d20a9a5768ad164f09"
 }

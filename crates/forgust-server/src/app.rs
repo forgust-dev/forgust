@@ -94,7 +94,7 @@ pub async fn build_state(
     let blobs = ObjectStoreBlobs::from_config(&cfg)?;
     let secrets = secret_box(&cfg)?;
     let images = cfg.security.image_proxy.then(|| crate::render::ImageProxy::new(secrets.clone(), &cfg.server.external_url));
-    let oidc = OidcClients { providers: cfg.oidc.clone() };
+    let oidc = OidcClients::new(cfg.oidc.clone())?;
     let storage = storage_for(&cfg);
     let mailer: Arc<dyn crate::services::notify::Mailer> = if cfg.email.smtp_url.is_empty() {
         Arc::new(crate::services::notify::MemoryMailer::default())

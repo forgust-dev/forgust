@@ -319,3 +319,19 @@ pub async fn wait_jobs(state: &AppState) {
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
     }
 }
+
+/// Where a response redirects to ("" when it does not).
+pub fn location(r: &reqwest::Response) -> String {
+    r.headers().get("location").map(|l| l.to_str().unwrap().to_string()).unwrap_or_default()
+}
+
+pub fn totp_code(secret: &str) -> String {
+    totp_code_at(secret, 0)
+}
+
+/// The code `ahead` seconds from now (the server accepts the next step too).
+pub fn totp_code_at(secret: &str, ahead: u64) -> String {
+    let secret = totp_rs::Secret::try_from_base32(secret).unwrap();
+    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+    totp_rs::Builder::new().with_secret(secret).build().unwrap().generate(now + ahead).to_string()
+}

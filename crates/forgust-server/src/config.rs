@@ -380,10 +380,35 @@ pub struct OidcProvider {
     /// default: it trusts the provider's claim that the email is the user's.
     #[serde(default)]
     pub link_existing_by_email: bool,
+    /// Only members of one of these groups may sign in (or link their account)
+    /// through this provider; empty: anyone the provider lets through. Checked
+    /// at each sign-in, against the ID token's `groups_claim`. It does not end
+    /// the sessions, tokens or password of someone who left the group.
+    #[serde(default)]
+    pub allowed_groups: Vec<String>,
+    /// The ID token claim that lists the person's groups (a list of names, or
+    /// one name). Most providers only send it when asked for a scope such as
+    /// `groups`: add it to `scopes`.
+    #[serde(default = "default_groups_claim")]
+    pub groups_claim: String,
+    /// Members of one of these groups are administrators, and only them among
+    /// the people who sign in through this provider: set at each sign-in, both
+    /// ways (the last administrator keeps the rights). Empty: the provider says
+    /// nothing about administrators.
+    #[serde(default)]
+    pub admin_groups: Vec<String>,
+    /// Take the name and the verified email from the provider at each sign-in
+    /// (an address another account holds is left alone).
+    #[serde(default)]
+    pub sync_profile: bool,
 }
 
 fn default_scopes() -> Vec<String> {
     vec!["openid".into(), "email".into(), "profile".into()]
+}
+
+fn default_groups_claim() -> String {
+    "groups".into()
 }
 
 impl Default for ServerConfig {
