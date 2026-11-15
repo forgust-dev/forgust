@@ -365,11 +365,13 @@ pub async fn my_projects(
 /// User picker for member dialogs.
 pub async fn search_users(
     State(state): State<AppState>,
-    SignedIn(u, _): SignedIn,
+    SignedIn(_, p): SignedIn,
     Query(pg): Query<Paging>,
 ) -> ApiResult<Json<Vec<UserDto>>> {
-    let users = forgust_db::users::list(&state.db, &pg.search, false, u.is_admin, pg.limit(), pg.offset()).await?;
-    Ok(Json(users.iter().map(|x| UserDto::from(x, u.is_admin)).collect()))
+    // emails and blocked users for an administrator's session or admin_mode token only
+    let admin = p.is_admin();
+    let users = forgust_db::users::list(&state.db, &pg.search, false, admin, pg.limit(), pg.offset()).await?;
+    Ok(Json(users.iter().map(|x| UserDto::from(x, admin)).collect()))
 }
 
 #[derive(Serialize, ToSchema)]

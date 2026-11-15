@@ -465,11 +465,13 @@ async fn tokens_need_admin_mode_and_cannot_mint_credentials(pool: sqlx::PgPool) 
         let c = c.clone();
         async move { c.ok_post("/api/v1/user/tokens", json!({ "name": "t", "scopes": scopes })).await["token"].as_str().unwrap().to_string() }
     };
-    let api = Client::with_token(&srv.base, &tok(&admin, json!(["api"])).await);
+    let api_token = tok(&admin, json!(["api"])).await;
+    let api = Client::with_token(&srv.base, &api_token);
     let new_admin = json!({ "username": "eve", "email": "eve@example.com", "name": "", "password": "eve-password-123", "is_admin": true });
     assert_eq!(api.post("/api/v1/admin/users", new_admin.clone()).await.0, 403);
     assert_eq!(api.get("/api/v1/admin/users").await.0, 403);
-    let admin_mode = Client::with_token(&srv.base, &tok(&admin, json!(["api", "admin_mode"])).await);
+    let admin_mode_token = tok(&admin, json!(["api", "admin_mode"])).await;
+    let admin_mode = Client::with_token(&srv.base, &admin_mode_token);
     admin_mode.ok_post("/api/v1/admin/users", new_admin).await;
     assert_eq!(
         user.post("/api/v1/user/tokens", json!({ "name": "t", "scopes": ["api", "admin_mode"] })).await.0,
@@ -477,7 +479,16 @@ async fn tokens_need_admin_mode_and_cannot_mint_credentials(pool: sqlx::PgPool) 
         "admin_mode is for administrators"
     );
 
-    let p = user.ok_post("/api/v1/projects", json!({ "name": "P", "path": "p" })).await["id"].as_i64().unwrap();
+    let p = user.ok_post("/api/v1/projects", json!({ "name": "P", "path": "p", "visibility": "private" })).await["id"].as_i64().unwrap();
+    // nor do an administrator's other tokens get Owner on every project
+    assert_eq!(api.get(&format!("/api/v1/projects/{p}")).await.0, 404, "an api token: the administrator's memberships only");
+    assert_eq!(api.delete(&format!("/api/v1/projects/{p}")).await.0, 404);
+    admin_mode.ok_get(&format!("/api/v1/projects/{p}")).await;
+    admin.ok_get(&format!("/api/v1/projects/{p}")).await;
+    // over git too: an api token reads only what the administrator is a member of
+    let probe = srv.work_dir("admin-git");
+    assert!(!git(&probe, &["ls-remote", &srv.http_url_token(&api_token, "ursula/p")]).await.ok, "an api token");
+    assert!(git(&probe, &["ls-remote", &srv.http_url_token(&admin_mode_token, "ursula/p")]).await.ok, "an admin_mode token");
     let user_api = Client::with_token(&srv.base, &tok(&user, json!(["api"])).await);
     let key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl x";
     assert_eq!(
@@ -490,7 +501,38 @@ async fn tokens_need_admin_mode_and_cannot_mint_credentials(pool: sqlx::PgPool) 
     );
     assert_eq!(user_api.post(&format!("/api/v1/projects/{p}/runners"), json!({ "description": "r" })).await.0, 403);
     // from the browser session, fine
-    user.ok_post(&format!("/api/v1/projects/{p}/runners"), json!({ "description": "r" })).await;
+    let runner = user.ok_post(&format!("/api/v1/projects/{p}/runners"), json!({ "description": "r" })).await;
+    // a new token for a runner is a credential too
+    let reset = format!("/api/v1/runners/{}/reset_token", runner["id"]);
+    assert_eq!(user_api.post(&reset, json!({})).await.0, 403, "not with a token");
+    assert_ne!(user.ok_post(&reset, json!({})).await["token"], runner["token"]);
+    // nor an instance runner with an administrator's admin_mode token
+    assert_eq!(admin_mode.post("/api/v1/admin/runners", json!({ "description": "i" })).await.0, 403);
+    admin.ok_post("/api/v1/admin/runners", json!({ "description": "i" })).await;
+}
+
+/// A deleted project's access tokens stop working: their bots are blocked.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn a_deleted_projects_access_tokens_stop_working(pool: sqlx::PgPool) {
+    let srv = TestServer::start(pool).await;
+    let owner = srv.user("olivia", false).await;
+    let (_org, _sub, project) = org_project(&owner).await;
+    let t = owner
+        .ok_post(
+            &format!("/api/v1/projects/{project}/access_tokens"),
+            json!({ "name": "deploy", "access_level": "developer", "scopes": ["api"] }),
+        )
+        .await;
+    let bot = Client::with_token(&srv.base, t["token"].as_str().unwrap());
+    assert_eq!(bot.get("/api/v1/user").await.0, 200, "{t}");
+    assert_eq!(owner.delete(&format!("/api/v1/projects/{project}")).await.0, 200);
+    assert_eq!(bot.get("/api/v1/user").await.0, 401, "the token went with its project");
+    let left: i64 = sqlx::query_scalar("SELECT count(*) FROM members WHERE source_type = 'project' AND source_id = $1")
+        .bind(project)
+        .fetch_one(&srv.state.db)
+        .await
+        .unwrap();
+    assert_eq!(left, 0, "no memberships of the deleted project are left");
 }
 
 /// A membership with an end date ends on that date (access is materialised,

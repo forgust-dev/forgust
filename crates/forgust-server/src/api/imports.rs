@@ -220,7 +220,7 @@ pub async fn list(State(state): State<AppState>, SignedIn(_, p0): SignedIn) -> A
 async fn mine(state: &AppState, p0: &Principal, id: i64) -> ApiResult<Import> {
     let user = p0.direct_user().ok_or(ApiError::Unauthorized)?;
     let import = idb::find(&state.db, id).await?.ok_or(ApiError::NotFound)?;
-    if import.user_id != user.id && !user.is_admin {
+    if import.user_id != user.id && !p0.is_admin() {
         return Err(ApiError::NotFound);
     }
     Ok(import)

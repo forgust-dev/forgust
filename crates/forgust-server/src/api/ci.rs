@@ -145,9 +145,10 @@ pub async fn instance_runners(State(state): State<AppState>, Admin(..): Admin) -
 #[utoipa::path(post, path = "/api/v1/admin/runners", request_body = RunnerBody, responses((status = 200, body = NewRunnerToken)), tag = "ci")]
 pub async fn create_instance_runner(
     State(state): State<AppState>,
-    Admin(me, _): Admin,
+    Admin(me, p): Admin,
     Json(b): Json<RunnerBody>,
 ) -> ApiResult<Json<NewRunnerToken>> {
+    p.may_mint_credentials()?;
     Ok(Json(create_runner(&state, "instance", None, None, me.id, b).await?))
 }
 
@@ -289,6 +290,9 @@ pub async fn reset_runner_token(
     SignedIn(_, p): SignedIn,
     Path(id): Path<i64>,
 ) -> ApiResult<Json<NewRunnerToken>> {
+    // a new token is a new runner credential: from the person's own session,
+    // as creating the runner is
+    p.may_mint_credentials()?;
     let r = managed_runner(&state, &p, id).await?;
     let token = runner_api::rotate_token(&state, r.id).await?;
     Ok(Json(NewRunnerToken { id: r.id, token }))

@@ -72,8 +72,11 @@ pub async fn stop(
     let e = edb::find(&state.db, p.id, env_id).await?.ok_or(ApiError::NotFound)?;
     // stopping a protected environment is deploying to it
     let rules = edb::protected(&state.db, p.id).await?;
-    let level =
-        if me.is_admin { forgust_db::access::OWNER } else { forgust_db::authz::project_level(&state.db, me.id, p.id).await?.unwrap_or(0) };
+    let level = if principal.is_admin() {
+        forgust_db::access::OWNER
+    } else {
+        forgust_db::authz::project_level(&state.db, me.id, p.id).await?.unwrap_or(0)
+    };
     if rules.iter().any(|r| r.matches(&e.name) && level < r.deploy_access_level) {
         return Err(ApiError::forbidden("this environment is protected: you may not stop it"));
     }

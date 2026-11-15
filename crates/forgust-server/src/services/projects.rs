@@ -29,7 +29,7 @@ pub async fn create(state: &AppState, principal: &Principal, ns: &Namespace, req
     require_group(state, principal, GroupAction::CreateProject, ns).await?;
     if !ns.is_group() {
         let settings = forgust_db::settings::get(&state.db).await?;
-        if !settings.allow_personal_projects && !user.is_admin {
+        if !settings.allow_personal_projects && !principal.is_admin() {
             return Err(ApiError::forbidden("personal projects are disabled on this instance"));
         }
     }
@@ -143,10 +143,7 @@ pub async fn transfer(state: &AppState, principal: &Principal, p: &Project, targ
         return Ok(p.clone());
     }
     // the same rule as creating one there
-    if !target.is_group()
-        && !principal.direct_user().is_some_and(|u| u.is_admin)
-        && !forgust_db::settings::get(&state.db).await?.allow_personal_projects
-    {
+    if !target.is_group() && !principal.is_admin() && !forgust_db::settings::get(&state.db).await?.allow_personal_projects {
         return Err(ApiError::forbidden("personal projects are disabled on this instance"));
     }
     check_visibility(state, target, p.visibility).await?;
@@ -171,8 +168,16 @@ pub async fn transfer(state: &AppState, principal: &Principal, p: &Project, targ
 pub async fn delete(state: &AppState, principal: &Principal, p: &Project) -> ApiResult<()> {
     require_project(state, principal, ProjectAction::Own, p).await?;
     let mut tx = state.db.begin().await?;
+    // its access tokens go with it: their bots are blocked (a blocked user's
+    // tokens no longer sign in), and its memberships, which have no foreign
+    // key to it, are removed
+    for bot in forgust_db::users::bots_for(&mut *tx, "project", p.id).await?.iter().filter(|b| !b.is_builtin_bot()) {
+        forgust_db::users::set_state(&mut *tx, bot.id, "blocked").await?;
+    }
+    let affected = forgust_db::members::remove_all_for_source(&mut *tx, "project", p.id).await?;
     forgust_db::routes::delete_for(&mut tx, "project", p.id).await?;
     forgust_db::projects::delete(&mut *tx, p.id).await?;
+    forgust_db::members::refresh_authorizations(&mut tx, &affected).await?;
     tx.commit().await?;
     match state.storage.delete_repo(p.id).await {
         Ok(()) | Err(forgust_storage::StorageError::RepoNotFound(_)) => {}

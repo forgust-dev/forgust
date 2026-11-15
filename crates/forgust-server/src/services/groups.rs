@@ -260,7 +260,7 @@ pub async fn transfer(state: &AppState, principal: &Principal, ns: &Namespace, n
     // inherited owners any more)
     if let Some(user) = principal.direct_user() {
         let level = forgust_db::authz::namespace_level(&mut *tx, user.id, ns.id).await?.unwrap_or(0);
-        if level < OWNER && !user.is_admin {
+        if level < OWNER && !principal.is_admin() {
             forgust_db::members::upsert(&mut *tx, "namespace", ns.id, user.id, OWNER, None, Some(user.id)).await?;
             forgust_db::members::refresh_authorizations(&mut tx, &[user.id]).await?;
         }
@@ -281,6 +281,10 @@ pub async fn delete(state: &AppState, principal: &Principal, ns: &Namespace) -> 
     }
     let mut tx = state.db.begin().await?;
     let affected = forgust_db::members::affected_by_namespace(&mut *tx, ns.id).await?;
+    // its access tokens go with it: their bots are blocked
+    for bot in forgust_db::users::bots_for(&mut *tx, "namespace", ns.id).await?.iter().filter(|b| !b.is_builtin_bot()) {
+        forgust_db::users::set_state(&mut *tx, bot.id, "blocked").await?;
+    }
     forgust_db::members::remove_all_for_source(&mut *tx, "namespace", ns.id).await?;
     forgust_db::routes::delete_for(&mut tx, "namespace", ns.id).await?;
     forgust_db::namespaces::delete(&mut *tx, ns.id).await?;

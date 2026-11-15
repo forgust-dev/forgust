@@ -67,7 +67,7 @@ pub async fn project_role(state: &AppState, principal: &Principal, project: &Pro
                 return Err(ApiError::TwoFactorRequired);
             }
             role.level = level;
-            if user.is_admin && level < OWNER {
+            if principal.is_admin() && level < OWNER {
                 role.level = OWNER;
                 role.bypass = true;
             }
@@ -103,11 +103,15 @@ pub async fn project_role(state: &AppState, principal: &Principal, project: &Pro
         }
         Principal::Job { project_id, user, .. } => {
             // its own project, or one whose job token allowlist names it
-            // (read-only, and never more than the job's user may see)
-            if *project_id == project.id || forgust_db::ci::job_token_allowed(&state.db, project.id, *project_id).await? {
+            // (read-only, and never more than the job's user may see). An
+            // administrator's job keeps their powers in its own project only: a
+            // job runs whatever the repository says, so its token reaches other
+            // projects with the administrator's memberships alone.
+            let own = *project_id == project.id;
+            if own || forgust_db::ci::job_token_allowed(&state.db, project.id, *project_id).await? {
                 let level = forgust_db::authz::project_level(&state.db, user.id, project.id).await?.unwrap_or(0);
-                role.can_read = *project_id == project.id || level > 0 || open || user.is_admin;
-                role.can_read_code = level >= REPORTER || open || user.is_admin;
+                role.can_read = own || level > 0 || open;
+                role.can_read_code = level >= REPORTER || open || (own && user.is_admin);
             }
         }
     }
@@ -176,7 +180,7 @@ pub async fn group_level(state: &AppState, principal: &Principal, ns: &Namespace
     if level > 0 && require_2fa && !user.is_bot() && !user.totp_enabled && !user.is_admin {
         return Err(ApiError::TwoFactorRequired);
     }
-    if user.is_admin && level < OWNER {
+    if principal.is_admin() && level < OWNER {
         return Ok((OWNER, true));
     }
     Ok((level, false))
@@ -213,7 +217,7 @@ async fn group_allows(state: &AppState, principal: &Principal, action: GroupActi
         GroupAction::CreateProject => {
             if !ns.is_group() {
                 // personal namespace: only its owner
-                principal.direct_user().is_some_and(|u| ns.owner_id == Some(u.id) || u.is_admin)
+                principal.direct_user().is_some_and(|u| ns.owner_id == Some(u.id)) || principal.is_admin()
             } else {
                 level >= root_policy().await?.0.max(DEVELOPER)
             }
