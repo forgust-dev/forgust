@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT oid FROM lfs_objects WHERE unused_since <= now() - make_interval(secs => $1::bigint::double precision)\n          ORDER BY unused_since LIMIT $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "oid",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "lfs_objects",
+            "name": "oid"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9a79a88a7bb94e5e784788252905b9235665f8be18a70bd696968fea26e913d1"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM lfs_objects o WHERE o.oid = $1 AND o.unused_since IS NOT NULL\n            AND NOT EXISTS (SELECT 1 FROM lfs_objects_projects l WHERE l.oid = o.oid)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9ac74fd929f57a0dbbe296dffaa785e0ad9fc8601dc9feff10f3d864d64d4212"
+}
