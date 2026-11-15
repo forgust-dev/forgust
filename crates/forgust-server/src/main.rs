@@ -72,8 +72,15 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     }
     let cfg = Config::load(cli.config.as_deref())?;
+    let sentry = matches!(cli.command, Command::Serve).then(|| telemetry::init_sentry(&cfg.telemetry)).transpose()?.flatten();
     let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build()?;
-    rt.block_on(run(cli.command, cfg))
+    let result = rt.block_on(run(cli.command, cfg));
+    // what stops the server (no database, a taken port) is returned, never logged
+    if let (Err(e), Some(_)) = (&result, &sentry) {
+        let error: &(dyn std::error::Error + 'static) = e.as_ref();
+        sentry::capture_error(error);
+    }
+    result
 }
 
 async fn run(command: Command, cfg: Config) -> anyhow::Result<()> {
@@ -144,6 +151,9 @@ fn toml_like(cfg: &Config) -> String {
         *s = serde_json::Value::String("<redacted>".into());
     }
     if let Some(s) = v.pointer_mut("/blobs/s3_secret_access_key") {
+        *s = serde_json::Value::String("<redacted>".into());
+    }
+    if let Some(s) = v.pointer_mut("/telemetry/sentry_dsn").filter(|s| s.as_str().is_some_and(|d| !d.trim().is_empty())) {
         *s = serde_json::Value::String("<redacted>".into());
     }
     serde_json::to_string_pretty(&v).unwrap_or_default()

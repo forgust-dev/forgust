@@ -37,6 +37,11 @@ image_proxy = true
 [telemetry]
 log_format = "text"        # or "json"
 otlp_endpoint = ""         # e.g. "http://otel-collector:4317"
+# panics and error logs go to Sentry (or GlitchTip, or any server speaking its
+# protocol), with the Forgust version; empty: nothing is sent. An error's text
+# can name hosts, paths, users and repositories
+sentry_dsn = ""            # e.g. "https://<key>@sentry.example.com/1"
+sentry_environment = "production"
 metrics = true
 # set it to require "Authorization: Bearer <token>" on /metrics (else anyone who
 # can reach the server reads it)

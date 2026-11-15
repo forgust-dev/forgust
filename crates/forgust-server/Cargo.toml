@@ -51,6 +51,8 @@ opentelemetry = "0.33"
 opentelemetry_sdk = { version = "0.33", features = ["rt-tokio"] }
 opentelemetry-otlp = { version = "0.33", features = ["grpc-tonic", "trace"] }
 tracing-opentelemetry = "0.34"
+# errors and panics to Sentry (off without `telemetry.sentry_dsn`); no native-tls
+sentry = { version = "0.49", default-features = false, features = ["backtrace", "contexts", "panic", "reqwest", "rustls", "tracing"] }
 metrics = "0.24"
 metrics-exporter-prometheus = { version = "0.18", default-features = false }
 utoipa = { version = "6", features = ["chrono"] }
