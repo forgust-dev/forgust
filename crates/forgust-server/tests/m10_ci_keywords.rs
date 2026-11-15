@@ -653,3 +653,159 @@ async fn pages_sites(pool: sqlx::PgPool) {
     assert_eq!(fx.owner.delete(&format!("/api/v1/projects/{project}/pages")).await.0, 200);
     assert_eq!(get("acme.pages.test", "/platform/api/").await.status(), 404);
 }
+
+/// A job refused once it is ready (its user may not deploy to the protected
+/// environment) has ended: the jobs after it go on, skipped or, for
+/// `when: on_failure`, run, and the pipeline finishes instead of waiting.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn a_refused_deploy_does_not_strand_the_jobs_after_it(pool: sqlx::PgPool) {
+    let ci = "stages: [deploy, check]\ndeploy:\n  stage: deploy\n  script: [deploy]\n  environment: production\nsmoke:\n  stage: check\n  script: [smoke]\nalert:\n  stage: check\n  script: [alert]\n  when: on_failure\n";
+    let fx = fixture(pool, &[("README.md", "x\n")]).await;
+    fx.owner
+        .ok_post(
+            &format!("/api/v1/projects/{}/protected_environments", fx.project),
+            json!({ "name": "production", "deploy_access_level": "maintainer" }),
+        )
+        .await;
+    srv_member(&fx, "dave", "developer").await;
+    fx.owner
+        .ok_post(
+            &format!("/api/v1/projects/{}/protected_branches", fx.project),
+            json!({ "name": "main", "push_access_level": "developer" }),
+        )
+        .await;
+    std::fs::write(fx.work.join(".gitlab-ci.yml"), ci).unwrap();
+    must(git(&fx.work, &["add", "."]).await);
+    must(git(&fx.work, &["commit", "-q", "-m", "ci"]).await);
+    must(git(&fx.work, &["push", "-q", &fx.srv.http_url("dave", REPO), "main"]).await);
+    wait_jobs(&fx.srv.state).await;
+    let p = pipeline(&fx, 1).await;
+    assert_eq!(job_named(&p, "deploy")["failure_reason"], "protected_environment_failure", "{p}");
+    assert_eq!(job_named(&p, "smoke")["status"], "skipped", "{p}");
+    assert_eq!(job_named(&p, "alert")["status"], "pending", "{p}");
+    assert_eq!(p["status"], "running", "{p}");
+    // and it ends with the last of them
+    let alert = request(&fx).await.expect("the on_failure job runs");
+    assert_eq!(alert["job_info"]["name"], "alert");
+    finish(&fx, &alert, "success").await;
+    assert_eq!(pipeline(&fx, 1).await["status"], "failed");
+}
+
+/// The job next in a resource group's queue may be refused when its turn
+/// comes (its user may no longer deploy there): the group passes on to the
+/// job after it rather than staying with nobody.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn a_refused_job_passes_its_resource_group_on(pool: sqlx::PgPool) {
+    let ci = "deploy:\n  script: [deploy]\n  environment: production\n  resource_group: production\n";
+    let fx = fixture(pool, &[(".gitlab-ci.yml", ci)]).await;
+    let first = request(&fx).await.expect("the first deploy runs");
+    fx.owner
+        .ok_post(
+            &format!("/api/v1/projects/{}/protected_environments", fx.project),
+            json!({ "name": "production", "deploy_access_level": "maintainer" }),
+        )
+        .await;
+    srv_member(&fx, "dave", "maintainer").await;
+    // a deploy by dave, then one by olivia, wait for it (other branches: not redundant)
+    must(git(&fx.work, &["checkout", "-q", "-b", "by-dave"]).await);
+    commit_file(&fx.work, "d.txt", "d\n", "dave").await;
+    must(git(&fx.work, &["push", "-q", &fx.srv.http_url("dave", REPO), "by-dave"]).await);
+    wait_jobs(&fx.srv.state).await;
+    must(git(&fx.work, &["checkout", "-q", "-b", "by-olivia", "main"]).await);
+    commit_file(&fx.work, "o.txt", "o\n", "olivia").await;
+    must(git(&fx.work, &["push", "-q", &fx.srv.http_url("olivia", REPO), "by-olivia"]).await);
+    wait_jobs(&fx.srv.state).await;
+    assert_eq!(job_named(&pipeline(&fx, 2).await, "deploy")["status"], "waiting_for_resource");
+    assert_eq!(job_named(&pipeline(&fx, 3).await, "deploy")["status"], "waiting_for_resource");
+    // dave may no longer deploy there when his turn comes
+    fx.owner.ok_post(&format!("/api/v1/projects/{}/members", fx.project), json!({ "username": "dave", "access_level": "developer" })).await;
+    finish(&fx, &first, "success").await;
+    let p2 = pipeline(&fx, 2).await;
+    assert_eq!(job_named(&p2, "deploy")["failure_reason"], "protected_environment_failure", "{p2}");
+    assert_eq!(job_named(&pipeline(&fx, 3).await, "deploy")["status"], "pending", "the group went on to the next job");
+}
+
+async fn artifacts_status(c: &Client, project: i64, job: i64) -> u16 {
+    c.get_bytes(&format!("/api/v1/projects/{project}/jobs/{job}/artifacts")).await.0
+}
+
+/// `artifacts:access` (and the older `artifacts:public: false`): whoever may
+/// read the code sees the job, but downloads only what it allows; the job
+/// page does not offer an archive they cannot download.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn artifacts_access_limits_who_downloads(pool: sqlx::PgPool) {
+    let job = |name: &str, extra: &str| format!("{name}:\n  script: [make]\n  artifacts:\n    paths: [out/]\n{extra}");
+    let ci =
+        [job("open", ""), job("team", "    access: developer\n"), job("older", "    public: false\n"), job("nobody", "    access: none\n")]
+            .concat();
+    let fx = fixture(pool, &[(".gitlab-ci.yml", &ci)]).await;
+    for _ in 0..4 {
+        let j = request(&fx).await.expect("a job");
+        upload_archive(&fx, &j).await;
+        finish(&fx, &j, "success").await;
+    }
+    let rita = fx.srv.user("rita", false).await;
+    let dave = fx.srv.user("dave", false).await;
+    for (who, level) in [("rita", "reporter"), ("dave", "developer")] {
+        fx.owner.ok_post(&format!("/api/v1/projects/{}/members", fx.project), json!({ "username": who, "access_level": level })).await;
+    }
+    let p = pipeline(&fx, 1).await;
+    let id = |name: &str| job_named(&p, name)["id"].as_i64().unwrap();
+    for (name, reporter, developer, owner) in
+        [("open", 200, 200, 200), ("team", 403, 200, 200), ("older", 403, 200, 200), ("nobody", 403, 403, 403)]
+    {
+        assert_eq!(artifacts_status(&rita, fx.project, id(name)).await, reporter, "{name}, a Reporter");
+        assert_eq!(artifacts_status(&dave, fx.project, id(name)).await, developer, "{name}, a Developer");
+        assert_eq!(artifacts_status(&fx.owner, fx.project, id(name)).await, owner, "{name}, the Owner");
+    }
+    let offered = |v: &Value| v["artifacts"].as_array().unwrap().iter().any(|a| a["file_type"] == "archive");
+    let page = |name: &str| format!("/api/v1/projects/{}/jobs/{}", fx.project, id(name));
+    assert!(offered(&rita.ok_get(&page("open")).await));
+    assert!(!offered(&rita.ok_get(&page("team")).await), "not offered to a Reporter");
+    assert!(offered(&dave.ok_get(&page("team")).await));
+}
+
+async fn finish_with(fx: &Fx, job: &Value, state: &str, exit_code: i32) {
+    let r = reqwest::Client::new()
+        .put(format!("{}/api/v4/jobs/{}", fx.srv.base, job["id"]))
+        .json(&json!({ "token": job["token"], "state": state, "exit_code": exit_code }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::OK);
+    wait_jobs(&fx.srv.state).await;
+}
+
+/// A failed attempt that is retried is not the job's failure yet: it cancels
+/// nothing (`auto_cancel:on_job_failure`), and what its exit code allowed
+/// (`allow_failure:exit_codes`) does not carry over to the next attempt.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn a_retried_attempt_is_not_the_jobs_failure(pool: sqlx::PgPool) {
+    let ci = "workflow:\n  auto_cancel:\n    on_job_failure: all\nstages: [test, later]\nflaky:\n  stage: test\n  script: [x]\n  retry:\n    max: 1\n    exit_codes: [137]\nlater:\n  stage: later\n  script: [y]\n";
+    let fx = fixture(pool, &[(".gitlab-ci.yml", ci)]).await;
+    let first = request(&fx).await.expect("flaky runs");
+    finish_with(&fx, &first, "failed", 137).await;
+    let p = pipeline(&fx, 1).await;
+    assert_eq!(job_named(&p, "later")["status"], "created", "nothing canceled: {p}");
+    let second = request(&fx).await.expect("the retry runs");
+    assert_eq!(second["job_info"]["name"], "flaky");
+    finish(&fx, &second, "success").await;
+    assert_eq!(job_named(&pipeline(&fx, 1).await, "later")["status"], "pending");
+    let later = request(&fx).await.expect("later runs");
+    assert_eq!(later["job_info"]["name"], "later");
+    finish(&fx, &later, "success").await;
+    assert_eq!(pipeline(&fx, 1).await["status"], "success");
+
+    // killed (137), allowed to fail and retried; the retry fails otherwise: a failure
+    push_ci(&fx, "stages: [test, later]\nflaky:\n  stage: test\n  script: [x]\n  retry:\n    max: 1\n    exit_codes: [137]\n  allow_failure:\n    exit_codes: [137]\nlater:\n  stage: later\n  script: [y]\n").await;
+    let first = request(&fx).await.expect("flaky runs");
+    finish_with(&fx, &first, "failed", 137).await;
+    let second = request(&fx).await.expect("the retry runs");
+    assert_eq!(second["job_info"]["name"], "flaky");
+    finish_with(&fx, &second, "failed", 1).await;
+    let p = pipeline(&fx, 2).await;
+    let flaky = job_named(&p, "flaky");
+    assert_eq!((flaky["status"].as_str(), flaky["allow_failure"].as_bool()), (Some("failed"), Some(false)), "{p}");
+    assert_eq!(job_named(&p, "later")["status"], "skipped", "{p}");
+    assert_eq!(p["status"], "failed", "{p}");
+}

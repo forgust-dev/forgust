@@ -217,7 +217,7 @@ pub async fn create_project_runner(
 }
 
 async fn may_manage_runner(state: &AppState, p: &Principal, r: &Runner) -> ApiResult<bool> {
-    if p.user().is_some_and(|u| u.is_admin) {
+    if p.is_admin() {
         return Ok(true);
     }
     Ok(match (r.kind.as_str(), r.group_id, r.project_id) {
@@ -726,7 +726,14 @@ pub async fn show_job(
     let mut attempts: Vec<i64> =
         cidb::builds_of_pipeline(&state.db, b.pipeline_id).await?.into_iter().filter(|o| o.name == b.name).map(|o| o.id).collect();
     attempts.sort_unstable_by(|a, b| b.cmp(a));
-    let artifacts = cidb::artifacts_of_build(&state.db, b.id).await?.into_iter().filter(|a| a.file_type != "trace").collect();
+    // the archive only for whom `artifacts:access` lets download it (the page
+    // offers to browse and download it when listed); reports stay listed
+    let downloadable = may_download_artifacts(&state, &v, &proj, &b).await.is_ok();
+    let artifacts = cidb::artifacts_of_build(&state.db, b.id)
+        .await?
+        .into_iter()
+        .filter(|a| a.file_type != "trace" && (downloadable || a.file_type != "archive"))
+        .collect();
     let can_run = crate::ci::may_run(&state, &v, &proj, &pipeline.git_ref, pipeline.tag).await?;
     let image = pl::StoredSpec::of(&b).ok().and_then(|s| s.job.image).map(|i| i.name);
     let mut job = [JobDto::from(&b)];
@@ -892,7 +899,8 @@ pub async fn job_artifacts(
     Viewer(v): Viewer,
     Path((id, job_id)): Path<(String, i64)>,
 ) -> ApiResult<Response> {
-    let (_, b) = load_job(&state, &v, &id, job_id).await?;
+    let (p, b) = load_job(&state, &v, &id, job_id).await?;
+    may_download_artifacts(&state, &v, &p, &b).await?;
     let a = cidb::artifact(&state.db, b.id, "archive").await?.ok_or(ApiError::NotFound)?;
     let name = format!("{}-{}-artifacts.zip", b.name, b.id);
     let disposition = crate::blob::disposition(&name, false);
@@ -919,9 +927,41 @@ pub struct ArtifactListing {
     pub truncated: bool,
 }
 
+/// Refuse a job's artifacts to whom its `artifacts:access` leaves out (the
+/// pipeline's own jobs fetch them through the runner API, not here).
+pub(crate) async fn may_download_artifacts(state: &AppState, v: &Principal, p: &Project, b: &Build) -> ApiResult<()> {
+    let access = pl::StoredSpec::of(b).ok().and_then(|s| s.job.artifacts).and_then(|a| a.access);
+    let needed = match access.as_deref() {
+        None | Some("all") => return Ok(()),
+        Some("developer") => forgust_db::access::DEVELOPER,
+        Some("maintainer") => forgust_db::access::MAINTAINER,
+        _ => return Err(ApiError::forbidden("this job's artifacts cannot be downloaded (artifacts:access: none)")),
+    };
+    let level = match v {
+        // a job token reads with its user's role (an administrator's powers in
+        // its own project only, as for its code)
+        Principal::Job { user, project_id, .. } => {
+            if user.is_admin && *project_id == p.id {
+                forgust_db::access::OWNER
+            } else {
+                forgust_db::authz::project_level(&state.db, user.id, p.id).await?.unwrap_or(0)
+            }
+        }
+        _ => crate::auth::authz::project_role(state, v, p).await?.level,
+    };
+    if level < needed {
+        return Err(ApiError::forbidden(format!(
+            "this job's artifacts are for the project's {}s and above (artifacts:access)",
+            forgust_db::access::name(needed)
+        )));
+    }
+    Ok(())
+}
+
 /// The archive of a job, readable by the viewer and not expired.
 async fn job_archive(state: &AppState, v: &Principal, id: &str, job_id: i64) -> ApiResult<Artifact> {
-    let (_, b) = load_job(state, v, id, job_id).await?;
+    let (p, b) = load_job(state, v, id, job_id).await?;
+    may_download_artifacts(state, v, &p, &b).await?;
     cidb::artifact(&state.db, b.id, "archive").await?.filter(|a| a.file_format == "zip").ok_or(ApiError::NotFound)
 }
 

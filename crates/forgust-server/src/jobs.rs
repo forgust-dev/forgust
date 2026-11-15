@@ -622,7 +622,7 @@ impl TaskHandler for CiSweep {
 
     async fn run(self, ctx: WorkerContext) -> impl IntoTaskHandlerResult {
         let state = ctx.get_ext::<AppState>().ok_or("no app state")?;
-        crate::ci::sweep(state).await.map_err(|e| e.to_string())?;
+        crate::ci::sweep_unless_running(state).await.map_err(|e| e.to_string())?;
         crate::services::auto_merge::sweep(state).await.map_err(|e| e.to_string())
     }
 }

@@ -1,0 +1,10 @@
+build:
+  script: [make]
+  artifacts:
+    paths: [dist]
+    access: developer
+docs:
+  script: [make docs]
+  artifacts:
+    paths: [site]
+    public: false

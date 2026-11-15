@@ -96,6 +96,7 @@ pub async fn artifact_file(
 ) -> ApiResult<axum::response::Response> {
     let p = project_for(&state, &v, &id, ProjectAction::ReadCode).await?;
     let b = forgust_db::ci::build(&state.db, job_id).await?.filter(|b| b.project_id == p.id).ok_or(ApiError::NotFound)?;
+    crate::api::ci::may_download_artifacts(&state, &v, &p, &b).await?;
     let a = forgust_db::ci::artifact(&state.db, b.id, "archive").await?.filter(|a| a.file_format == "zip").ok_or(ApiError::NotFound)?;
     crate::api::ci::serve_artifact_file(&state, &a, path.trim_start_matches('/')).await
 }

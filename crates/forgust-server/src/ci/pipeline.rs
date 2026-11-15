@@ -523,34 +523,45 @@ pub async fn process(state: &AppState, pipeline_id: i64) -> anyhow::Result<()> {
     let mut queued = false;
     let mut changed: Vec<usize> = Vec::new();
 
+    // until nothing moves: a job that admission fails (a protected environment)
+    // is finished, so the jobs that need it move on in the next round
+    let mut written = 0;
     loop {
-        let mut progress = false;
-        for i in 0..builds.len() {
-            if builds[i].status != "created" {
+        loop {
+            let mut progress = false;
+            for i in 0..builds.len() {
+                if builds[i].status != "created" {
+                    continue;
+                }
+                let Some(next) = next_status(&builds, i) else { continue };
+                builds[i].status = next.to_string();
+                changed.push(i);
+                progress = true;
+            }
+            if !progress {
+                break;
+            }
+        }
+        let mut refused = false;
+        for &i in &changed[written..] {
+            if builds[i].status == "pending" {
+                let status = admit(state, &mut tx, &builds[i]).await?;
+                builds[i].status = if status == "bridge" { "pending".into() } else { status.to_string() };
+                queued |= status == "pending";
+                refused |= status == "failed";
                 continue;
             }
-            let Some(next) = next_status(&builds, i) else { continue };
-            builds[i].status = next.to_string();
-            changed.push(i);
-            progress = true;
+            let b = &builds[i];
+            if b.status == "scheduled" {
+                let secs = StoredSpec::of(b).ok().and_then(|s| s.job.start_in).as_deref().and_then(parse_duration).unwrap_or(0);
+                forgust_db::ci::set_scheduled_at(&mut *tx, b.id, Some(chrono::Utc::now() + chrono::Duration::seconds(secs))).await?;
+            }
+            forgust_db::ci::set_build_status(&mut *tx, b.id, &b.status, None).await?;
         }
-        if !progress {
+        written = changed.len();
+        if !refused {
             break;
         }
-    }
-    for &i in &changed {
-        if builds[i].status == "pending" {
-            let status = admit(state, &mut tx, &builds[i]).await?;
-            builds[i].status = if status == "bridge" { "pending".into() } else { status.to_string() };
-            queued |= status == "pending";
-            continue;
-        }
-        let b = &builds[i];
-        if b.status == "scheduled" {
-            let secs = StoredSpec::of(b).ok().and_then(|s| s.job.start_in).as_deref().and_then(parse_duration).unwrap_or(0);
-            forgust_db::ci::set_scheduled_at(&mut *tx, b.id, Some(chrono::Utc::now() + chrono::Duration::seconds(secs))).await?;
-        }
-        forgust_db::ci::set_build_status(&mut *tx, b.id, &b.status, None).await?;
     }
     let status = pipeline_status(&builds);
     let pipeline_changed = forgust_db::ci::set_pipeline_status(&mut *tx, pipeline_id, status).await?;
@@ -602,11 +613,18 @@ pub async fn admit(state: &AppState, tx: &mut sqlx::PgConnection, b: &Build) -> 
         forgust_db::ci::set_build_status(&mut *tx, b.id, "failed", Some("protected_environment_failure")).await?;
         return Ok("failed");
     }
-    if let Some((_, g)) = forgust_db::ci::resource_group_of(&mut *tx, b.id).await?
-        && forgust_db::ci::resource_busy(&mut *tx, b.project_id, &g, b.id).await?
-    {
-        forgust_db::ci::set_build_status(&mut *tx, b.id, "waiting_for_resource", None).await?;
-        return Ok("waiting_for_resource");
+    if let Some((_, g)) = forgust_db::ci::resource_group_of(&mut *tx, b.id).await? {
+        // one admission at a time into the project's resource groups (until
+        // this transaction ends): two pipelines processed at once must not both
+        // find the group free and both start, as two deploys of production
+        sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+            .bind(format!("ci-resource-groups:{}", b.project_id))
+            .execute(&mut *tx)
+            .await?;
+        if forgust_db::ci::resource_busy(&mut *tx, b.project_id, &g, b.id).await? {
+            forgust_db::ci::set_build_status(&mut *tx, b.id, "waiting_for_resource", None).await?;
+            return Ok("waiting_for_resource");
+        }
     }
     forgust_db::ci::set_build_status(&mut *tx, b.id, "pending", None).await?;
     if StoredSpec::of(b).is_ok_and(|s| s.job.trigger.is_some()) {
@@ -631,6 +649,11 @@ pub async fn start_waiting(state: &AppState, build_id: i64) -> anyhow::Result<()
     crate::ci::hooks::announce(state, &b, shown).await;
     if status == "pending" {
         state.events.publish(Event::JobsQueued { project_id: b.project_id });
+    }
+    if status == "failed" {
+        // refused (a protected environment): its resource group goes to the
+        // next job waiting for it, which would otherwise wait for good
+        Box::pin(crate::ci::keywords::release_resource(state, b.id)).await?;
     }
     process(state, b.pipeline_id).await
 }
@@ -798,8 +821,11 @@ pub async fn finish_job(state: &AppState, id: i64, status: &str, reason: Option<
     metrics::counter!("forgust_ci_jobs_finished_total", "status" => status.to_string()).increment(1);
     crate::ci::trace::archive_later(state, id);
     crate::ci::reports::after_job(state, id, b.project_id).await;
-    crate::ci::keywords::after_job(state, &b, status).await;
-    if status == "failed" && b.attempt <= b.retry_max && should_retry(&b.retry_when, reason.unwrap_or(""), exit_code) {
+    // decided first: a failure that is retried is no failure yet (for
+    // `workflow:auto_cancel:on_job_failure`, as in GitLab)
+    let retrying = status == "failed" && b.attempt <= b.retry_max && should_retry(&b.retry_when, reason.unwrap_or(""), exit_code);
+    crate::ci::keywords::after_job(state, &b, status, retrying).await;
+    if retrying {
         let ended = forgust_db::ci::build(&state.db, id).await?.context("job vanished")?;
         retry_job(state, &ended, None).await?;
     } else {
@@ -831,7 +857,9 @@ pub async fn retry_job(state: &AppState, build: &Build, user_id: Option<i64>) ->
             status: "created",
             // a manual job that was played runs again; one never played stays manual
             when_: if b.when_ == "manual" && b.queued_at.is_some() { "on_success" } else { &b.when_ },
-            allow_failure: b.allow_failure,
+            // as planned: `allow_failure:exit_codes` decides per attempt, so what
+            // the last attempt's exit code set does not carry over
+            allow_failure: StoredSpec::of(&b).ok().and_then(|s| s.job.allow_failure).unwrap_or(b.allow_failure),
             needs: b.needs.as_deref(),
             spec: &b.spec,
             retry_max: b.retry_max,
