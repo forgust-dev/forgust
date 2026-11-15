@@ -370,9 +370,17 @@ pub async fn store_verified(state: &AppState, project_id: i64, oid: &str, body: 
     if !valid_oid(oid) {
         return Err("invalid oid".into());
     }
-    let limit = state.cfg.limits.max_lfs_object_bytes;
+    // no bigger than an object may be, nor than the storage quota leaves (the
+    // sizes a batch request declares are the client's word only)
+    let max = state.cfg.limits.max_lfs_object_bytes;
+    let limit = match crate::services::quotas::cap(state, project_id, max).await {
+        Ok(Ok(limit)) => limit,
+        Ok(Err(full)) => return Err(full),
+        Err(e) => return Err(format!("upload failed: {e}")),
+    };
+    let too_large = if limit < max { "object larger than the project's storage quota leaves" } else { "object too large" };
     let tmp = format!("tmp/lfs-{}-{}", oid, crypto::random_urlsafe(8));
-    let (body, hashed) = crate::blob::hashing(body, Some(limit), "object too large");
+    let (body, hashed) = crate::blob::hashing(body, Some(limit), too_large);
     if let Err(e) = state.blobs.put_stream(&tmp, body).await {
         let _ = state.blobs.delete(&tmp).await;
         return Err(format!("upload failed: {e}"));

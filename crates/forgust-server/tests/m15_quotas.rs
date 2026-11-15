@@ -85,6 +85,26 @@ async fn a_full_project_takes_nothing_new(pool: sqlx::PgPool) {
     assert_eq!((st["total_bytes"].as_i64(), st["quota"]["quota"].as_i64()), (Some(u0 + 600), Some(u0 + 1000)), "{st}");
     assert!(st["namespace"].is_null(), "no namespace quota: {st}");
 
+    // an LFS object bigger than what is left: refused however small the batch
+    // request said it was (or with none), and nothing kept
+    let lfs_put = |data: Vec<u8>| {
+        let url = format!("{}/{REPO}.git/info/lfs/objects/{}", srv.base, hex::encode(<sha2::Sha256 as sha2::Digest>::digest(&data)));
+        async move {
+            reqwest::Client::new()
+                .put(url)
+                .basic_auth("olivia", Some(password("olivia")))
+                .header("content-type", "application/octet-stream")
+                .body(data)
+                .send()
+                .await
+                .unwrap()
+                .status()
+        }
+    };
+    assert!(!lfs_put(vec![b'l'; 1000]).await.is_success(), "1000 bytes, 400 left");
+    assert_eq!(used(&srv, p).await, u0 + 600, "nothing kept");
+    assert_eq!(lfs_put(vec![b's'; 100]).await, StatusCode::OK, "100 bytes fit");
+
     // a push with new objects that do not fit: refused, with the reason
     commit_file(&work, "big.txt", &noise(20_000, 1), "big").await;
     let pushed = git(&work, &["push", "-q", &srv.http_url("olivia", REPO), "main"]).await;
