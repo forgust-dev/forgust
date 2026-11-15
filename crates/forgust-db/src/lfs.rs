@@ -1,11 +1,13 @@
-use sqlx::PgExecutor;
+use sqlx::{PgConnection, PgExecutor};
 
 use crate::Result;
 
-/// Register an object (idempotent) and link it to the project.
+/// Register an object (idempotent) and link it to the project; an object the
+/// sweep had marked unused is in use again.
 pub async fn link(e: impl PgExecutor<'_>, project_id: i64, oid: &str, size: i64) -> Result<()> {
     sqlx::query!(
-        "WITH o AS (INSERT INTO lfs_objects (oid, size) VALUES ($2, $3) ON CONFLICT (oid) DO NOTHING)
+        "WITH o AS (INSERT INTO lfs_objects (oid, size) VALUES ($2, $3)
+                    ON CONFLICT (oid) DO UPDATE SET unused_since = NULL WHERE lfs_objects.unused_since IS NOT NULL)
          INSERT INTO lfs_objects_projects (project_id, oid)
          SELECT $1, $2 ON CONFLICT DO NOTHING",
         project_id,
@@ -54,4 +56,53 @@ pub async fn project_usage(e: impl PgExecutor<'_>, project_id: i64) -> Result<(i
     .fetch_one(e)
     .await?;
     Ok((r.n, r.bytes))
+}
+
+/// One object at a time for what stores its file and what deletes it (until the
+/// transaction ends): an upload and the sweep of unused objects must not cross.
+pub async fn lock(c: &mut PgConnection, oid: &str) -> Result<()> {
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))").bind(format!("lfs-object:{oid}")).execute(&mut *c).await?;
+    Ok(())
+}
+
+/// Mark the objects no project uses (any more), and unmark those used again.
+pub async fn mark_unused(c: &mut PgConnection) -> Result<()> {
+    sqlx::query!(
+        "UPDATE lfs_objects o SET unused_since = now()
+          WHERE o.unused_since IS NULL AND NOT EXISTS (SELECT 1 FROM lfs_objects_projects l WHERE l.oid = o.oid)"
+    )
+    .execute(&mut *c)
+    .await?;
+    sqlx::query!(
+        "UPDATE lfs_objects o SET unused_since = NULL
+          WHERE o.unused_since IS NOT NULL AND EXISTS (SELECT 1 FROM lfs_objects_projects l WHERE l.oid = o.oid)"
+    )
+    .execute(&mut *c)
+    .await?;
+    Ok(())
+}
+
+/// Objects marked unused for at least `seconds`.
+pub async fn unused_for(e: impl PgExecutor<'_>, seconds: i64, limit: i64) -> Result<Vec<String>> {
+    sqlx::query_scalar!(
+        "SELECT oid FROM lfs_objects WHERE unused_since <= now() - make_interval(secs => $1::bigint::double precision)
+          ORDER BY unused_since LIMIT $2",
+        seconds,
+        limit
+    )
+    .fetch_all(e)
+    .await
+}
+
+/// Delete an object's record if no project uses it; call with [`lock`] held.
+pub async fn delete_unused(e: impl PgExecutor<'_>, oid: &str) -> Result<bool> {
+    Ok(sqlx::query!(
+        "DELETE FROM lfs_objects o WHERE o.oid = $1 AND o.unused_since IS NOT NULL
+            AND NOT EXISTS (SELECT 1 FROM lfs_objects_projects l WHERE l.oid = o.oid)",
+        oid
+    )
+    .execute(e)
+    .await?
+    .rows_affected()
+        > 0)
 }

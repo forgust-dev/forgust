@@ -304,6 +304,10 @@ impl TaskHandler for MaintenanceSweep {
             state.jobs.enqueue(&mut tx, Maintenance { project_id, full: true }.request()).await.map_err(|e| e.to_string())?;
         }
         tx.commit().await.map_err(|e| e.to_string())?;
+        // LFS objects no project uses any more go a day after they were last used
+        if let Err(e) = crate::lfs::sweep_unused(state, crate::lfs::UNUSED_KEPT).await {
+            tracing::warn!(error = %e, "unused LFS objects not swept");
+        }
         Ok::<(), String>(())
     }
 }

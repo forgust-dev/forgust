@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH o AS (INSERT INTO lfs_objects (oid, size) VALUES ($2, $3)\n                    ON CONFLICT (oid) DO UPDATE SET unused_since = NULL WHERE lfs_objects.unused_since IS NOT NULL)\n         INSERT INTO lfs_objects_projects (project_id, oid)\n         SELECT $1, $2 ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1426e4e0b30990fd2016701b2db1b1b7663859bacf65aead9b549964f657bf55"
+}

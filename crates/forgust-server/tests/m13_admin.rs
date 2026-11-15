@@ -712,3 +712,72 @@ async fn a_release_check_run_now_reports_failure(pool: sqlx::PgPool) {
     assert_eq!(errors.len(), 1, "{errors:?}");
     assert!(errors[0].contains("release check failed"), "{errors:?}");
 }
+
+/// An LFS object no project uses any more is deleted a day later, record and
+/// file; one that is used again meanwhile stays.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn unused_lfs_objects_are_deleted_after_a_day(pool: sqlx::PgPool) {
+    use forgust_server::lfs::{UNUSED_KEPT, sweep_unused};
+    let srv = TestServer::start(pool).await;
+    let owner = srv.user("olivia", false).await;
+    let org = owner.ok_post("/api/v1/groups", json!({ "name": "Acme", "path": "acme" })).await;
+    let project = |path: &'static str| {
+        let (owner, org) = (&owner, &org);
+        async move {
+            owner.ok_post("/api/v1/projects", json!({ "name": path, "path": path, "namespace_id": org["id"] })).await["id"]
+                .as_i64()
+                .unwrap()
+        }
+    };
+    let (one, two, three) = (project("one").await, project("two").await, project("three").await);
+    let data = b"an lfs object".to_vec();
+    let oid = hex::encode(<sha2::Sha256 as sha2::Digest>::digest(&data));
+    let put = |path: &'static str| {
+        let url = format!("{}/acme/{path}.git/info/lfs/objects/{oid}", srv.base);
+        let data = data.clone();
+        async move {
+            let r = reqwest::Client::new()
+                .put(url)
+                .basic_auth("olivia", Some(password("olivia")))
+                .header("content-type", "application/octet-stream")
+                .body(data)
+                .send()
+                .await
+                .unwrap();
+            assert!(r.status().is_success(), "{}", r.status());
+        }
+    };
+    let file = srv.state.cfg.blobs_dir().join(format!("lfs/{}/{}/{oid}", &oid[..2], &oid[2..4]));
+    let record = || async { sqlx::query_scalar::<_, i64>("SELECT count(*) FROM lfs_objects").fetch_one(&srv.state.db).await.unwrap() };
+    let remove = |id: i64| {
+        let (owner, srv) = (&owner, &srv);
+        async move {
+            let (s, b) = owner.delete(&format!("/api/v1/projects/{id}")).await;
+            assert!(s < 300, "{s} {b}");
+            wait_jobs(&srv.state).await;
+        }
+    };
+
+    // two projects use the object: deleting one changes nothing
+    put("one").await;
+    put("two").await;
+    assert!(file.exists(), "{}", file.display());
+    remove(one).await;
+    assert_eq!(sweep_unused(&srv.state, std::time::Duration::ZERO).await.unwrap(), 0);
+    assert!(file.exists());
+
+    // no project left: kept for a day
+    remove(two).await;
+    assert_eq!(sweep_unused(&srv.state, UNUSED_KEPT).await.unwrap(), 0);
+    assert!(file.exists() && record().await == 1, "still there the first day");
+
+    // used again meanwhile: no longer a candidate
+    put("three").await;
+    assert_eq!(sweep_unused(&srv.state, std::time::Duration::ZERO).await.unwrap(), 0);
+    assert!(file.exists() && record().await == 1);
+
+    // unused for long enough: the record and the file go
+    remove(three).await;
+    assert_eq!(sweep_unused(&srv.state, std::time::Duration::ZERO).await.unwrap(), 1);
+    assert!(!file.exists() && record().await == 0);
+}

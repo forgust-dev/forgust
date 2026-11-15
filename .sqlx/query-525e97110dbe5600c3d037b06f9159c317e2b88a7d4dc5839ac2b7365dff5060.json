@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE lfs_objects o SET unused_since = now()\n          WHERE o.unused_since IS NULL AND NOT EXISTS (SELECT 1 FROM lfs_objects_projects l WHERE l.oid = o.oid)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "525e97110dbe5600c3d037b06f9159c317e2b88a7d4dc5839ac2b7365dff5060"
+}

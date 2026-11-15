@@ -390,10 +390,61 @@ pub async fn store_verified(state: &AppState, project_id: i64, oid: &str, body: 
         let _ = state.blobs.delete(&tmp).await;
         return Err("content does not match the object id".into());
     }
-    state.blobs.rename(&tmp, &lfs_key(oid)).await.map_err(|e| e.to_string())?;
-    forgust_db::lfs::link(&state.db, project_id, oid, size as i64).await.map_err(|e| e.to_string())?;
+    // the file and its link together, apart from the sweep of unused objects:
+    // it must not delete the file between the two
+    let stored: anyhow::Result<()> = async {
+        let mut tx = state.db.begin().await?;
+        forgust_db::lfs::lock(&mut tx, oid).await?;
+        state.blobs.rename(&tmp, &lfs_key(oid)).await?;
+        forgust_db::lfs::link(&mut *tx, project_id, oid, size as i64).await?;
+        Ok(tx.commit().await?)
+    }
+    .await;
+    if let Err(e) = stored {
+        let _ = state.blobs.delete(&tmp).await;
+        return Err(format!("upload failed: {e}"));
+    }
     metrics::counter!("forgust_lfs_uploaded_bytes_total").increment(size);
     Ok(size)
+}
+
+/// How long an object no project uses is kept.
+pub const UNUSED_KEPT: std::time::Duration = std::time::Duration::from_secs(24 * 3600);
+
+/// Mark the objects no project uses (their last project was deleted), and delete
+/// those unused for [`UNUSED_KEPT`], record and file. Returns how many went.
+pub async fn sweep_unused(state: &AppState, kept: std::time::Duration) -> anyhow::Result<usize> {
+    let mut conn = state.db.acquire().await?;
+    forgust_db::lfs::mark_unused(&mut conn).await?;
+    drop(conn);
+    let mut deleted = 0;
+    loop {
+        let oids = forgust_db::lfs::unused_for(&state.db, kept.as_secs() as i64, 500).await?;
+        let mut progress = false;
+        for oid in &oids {
+            let mut tx = state.db.begin().await?;
+            forgust_db::lfs::lock(&mut tx, oid).await?;
+            // used again since it was listed: kept
+            if !forgust_db::lfs::delete_unused(&mut *tx, oid).await? {
+                continue;
+            }
+            // the record only goes if the file did (else: again next time)
+            if let Err(e) = state.blobs.delete(&lfs_key(oid)).await {
+                tracing::warn!(oid, error = %e, "unused LFS object not deleted");
+                continue;
+            }
+            tx.commit().await?;
+            deleted += 1;
+            progress = true;
+        }
+        if oids.len() < 500 || !progress {
+            break;
+        }
+    }
+    if deleted > 0 {
+        tracing::info!(objects = deleted, "unused LFS objects deleted");
+    }
+    Ok(deleted)
 }
 
 /// For blob views: an LFS pointer file → (oid, size).

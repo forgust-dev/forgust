@@ -138,7 +138,7 @@ const KINDS: { key: keyof S["StorageKinds"]; label: string }[] = [
 /** What each family of unreferenced objects is (`blob_scan.rs`). */
 const ORPHANS: Record<string, string> = {
   lfs: "LFS objects without a record",
-  lfs_unused: "LFS objects no project uses (kept)",
+  lfs_unused: "LFS objects no project uses (deleted after a day)",
   registry: "Image layers and manifests without a record",
   registry_uploads: "Image uploads no longer in progress",
   ci: "CI artifacts and job logs without a job",
