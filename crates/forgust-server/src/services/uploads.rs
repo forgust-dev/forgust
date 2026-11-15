@@ -206,6 +206,20 @@ pub async fn drain_deletions(state: &AppState) -> anyhow::Result<()> {
             return Ok(());
         }
         for k in keys {
+            // a registry blob pushed again since its row went: the file (named
+            // by its content) is the new one's, kept
+            if let Some(digest) = registry_digest(&k) {
+                let mut tx = state.db.begin().await?;
+                forgust_db::registry::lock_blob(&mut tx, &digest).await?;
+                if forgust_db::registry::blob_exists(&mut *tx, &digest).await?.is_some() {
+                    continue;
+                }
+                if let Err(e) = state.blobs.delete(&k).await {
+                    tracing::warn!(key = %k, error = %e, "blob of a deleted row not deleted");
+                }
+                tx.commit().await?;
+                continue;
+            }
             if let Err(e) = state.blobs.delete(&k).await {
                 tracing::warn!(key = %k, error = %e, "blob of a deleted row not deleted");
             }
@@ -213,9 +227,22 @@ pub async fn drain_deletions(state: &AppState) -> anyhow::Result<()> {
     }
 }
 
+/// The digest of a registry blob's file key (`registry/blobs/sha256/<hex>`).
+fn registry_digest(key: &str) -> Option<String> {
+    let (algo, hex) = key.strip_prefix("registry/blobs/")?.split_once('/')?;
+    (!algo.is_empty() && !hex.is_empty() && !hex.contains('/')).then(|| format!("{algo}:{hex}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn registry_keys() {
+        assert_eq!(registry_digest("registry/blobs/sha256/ab12").as_deref(), Some("sha256:ab12"));
+        assert_eq!(registry_digest("registry/uploads/1/0"), None, "an upload's part");
+        assert_eq!(registry_digest("lfs/ab/cd"), None);
+    }
 
     #[test]
     fn names() {

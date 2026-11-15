@@ -447,3 +447,61 @@ async fn real_skopeo_copies_a_multi_arch_image(pool: sqlx::PgPool) {
     let info = owner.ok_get(&format!("/api/v1/projects/{project}/registry")).await;
     assert_eq!(info["repositories"][0]["tags_count"], 1);
 }
+
+async fn age_blob(srv: &TestServer, digest: &str) {
+    for q in [
+        "UPDATE registry_repository_blobs SET created_at = now() - interval '2 days' WHERE digest = $1",
+        "UPDATE registry_blobs SET created_at = now() - interval '2 days' WHERE digest = $1",
+    ] {
+        sqlx::query(q).bind(digest).execute(&srv.state.db).await.unwrap();
+    }
+}
+
+/// Garbage collection and the deletion queue spare what pushes use: layers an
+/// image no longer names but a new push just checked for (and so does not
+/// upload), and the file of a layer pushed again after its row was collected.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn garbage_collection_spares_what_pushes_use(pool: sqlx::PgPool) {
+    let srv = TestServer::start(pool).await;
+    let owner = srv.user("olivia", false).await;
+    org_project(&owner).await;
+    let reg = Reg::login(&srv.base, Some(("olivia", &password("olivia"))), IMAGE).await;
+    let config = b"{}".to_vec();
+    let (_, config_d) = reg.blob(IMAGE, &config).await;
+    let base = b"base layer".to_vec();
+    let (_, base_d) = reg.blob(IMAGE, &base).await;
+    let v1 = image_manifest(&(config_d.clone(), config.len()), &[(base_d.clone(), base.len())]);
+    assert_eq!(reg.put_manifest(IMAGE, "v1", OCI_MANIFEST, &v1).await.status(), 201);
+    for d in [&config_d, &base_d] {
+        age_blob(&srv, d).await;
+    }
+
+    // v1 is deleted; a push of v2 on the same base finds the old layers here
+    // and skips them; the collection runs before its manifest comes
+    let v1_d = digest(&serde_json::to_vec(&v1).unwrap());
+    assert_eq!(reg.req(Method::DELETE, &format!("/v2/{IMAGE}/manifests/{v1_d}")).send().await.unwrap().status(), 202);
+    for d in [&config_d, &base_d] {
+        assert_eq!(reg.req(Method::HEAD, &format!("/v2/{IMAGE}/blobs/{d}")).send().await.unwrap().status(), 200);
+    }
+    let top = b"top layer".to_vec();
+    let (_, top_d) = reg.blob(IMAGE, &top).await;
+    forgust_server::registry::sweep(&srv.state).await.unwrap();
+    let v2 = image_manifest(&(config_d.clone(), config.len()), &[(base_d.clone(), base.len()), (top_d, top.len())]);
+    let r = reg.put_manifest(IMAGE, "v2", OCI_MANIFEST, &v2).await;
+    let status = r.status();
+    assert_eq!(status, 201, "its layers are still here: {}", errors_code(r).await);
+    assert_eq!(reg.req(Method::GET, &format!("/v2/{IMAGE}/blobs/{base_d}")).send().await.unwrap().status(), 200);
+
+    // a layer nothing names is collected; pushed again before the deletion
+    // queue drains, its file (named by its content) is the new push's: kept
+    let old = b"old layer".to_vec();
+    let (_, old_d) = reg.blob(IMAGE, &old).await;
+    age_blob(&srv, &old_d).await;
+    forgust_server::registry::sweep(&srv.state).await.unwrap();
+    assert!(forgust_db::registry::blob_exists(&srv.state.db, &old_d).await.unwrap().is_none(), "collected");
+    assert_eq!(reg.blob(IMAGE, &old).await.0, 201);
+    forgust_server::services::uploads::drain_deletions(&srv.state).await.unwrap();
+    let r = reg.req(Method::GET, &format!("/v2/{IMAGE}/blobs/{old_d}")).send().await.unwrap();
+    assert_eq!(r.status(), 200);
+    assert_eq!(r.bytes().await.unwrap().to_vec(), old, "the file is there");
+}

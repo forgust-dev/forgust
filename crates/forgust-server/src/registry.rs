@@ -441,6 +441,9 @@ async fn get_blob(state: &AppState, t: &Target, digest: &str, head: bool) -> Reg
     }
     let repo = repository(state, t).await?.ok_or_else(RegError::blob_unknown)?;
     let size = rdb::linked_blob(&state.db, repo.id, digest).await?.ok_or_else(RegError::blob_unknown)?;
+    // a push that finds it here skips uploading it: it must still be here
+    // when the push's manifest comes
+    rdb::touch_link(&state.db, repo.id, digest).await?;
     let body = if head {
         Body::empty()
     } else {
@@ -617,13 +620,9 @@ async fn complete(state: &AppState, t: &Target, id: uuid::Uuid, repository_id: i
         return Err(bad(state).await);
     }
     let key = blob_key(digest);
-    let exists = rdb::blob_exists(&state.db, digest).await?.is_some() && state.blobs.size(&key).await?.is_some();
-    if u.parts == 1 && u.single_digest.as_deref() == Some(digest) {
-        if exists {
-            let _ = state.blobs.delete(&part_key(u.id, 0)).await;
-        } else {
-            state.blobs.rename(&part_key(u.id, 0), &key).await?;
-        }
+    // the content checked, ready to be the blob's file
+    let ready = if u.parts == 1 && u.single_digest.as_deref() == Some(digest) {
+        part_key(u.id, 0)
     } else {
         // several parts (or none): join them, hashing again
         let joined = format!("registry/uploads/{}/joined", u.id);
@@ -649,14 +648,21 @@ async fn complete(state: &AppState, t: &Target, id: uuid::Uuid, repository_id: i
             let _ = state.blobs.delete(&joined).await;
             return Err(bad(state).await);
         }
-        if exists {
-            let _ = state.blobs.delete(&joined).await;
-        } else {
-            state.blobs.rename(&joined, &key).await?;
-        }
         remove_parts(state, u.id, u.parts).await;
-    }
+        joined
+    };
+    // under the blob's lock: the deletion queue may be about to delete the
+    // file of this same content (its row gone); it checks the row under the
+    // same lock, so either it deletes first and the file is put back here, or
+    // it finds the row again and keeps the file
     let mut tx = state.db.begin().await?;
+    rdb::lock_blob(&mut tx, digest).await?;
+    let exists = rdb::blob_exists(&mut *tx, digest).await?.is_some() && state.blobs.size(&key).await?.is_some();
+    if exists {
+        let _ = state.blobs.delete(&ready).await;
+    } else {
+        state.blobs.rename(&ready, &key).await?;
+    }
     rdb::add_blob(&mut tx, repository_id, digest, u.size).await?;
     rdb::delete_upload(&mut *tx, u.id).await?;
     tx.commit().await?;
@@ -777,6 +783,11 @@ async fn put_manifest(state: &AppState, t: &Target, reference: &str, headers: &H
     };
     let subject = doc["subject"]["digest"].as_str().map(str::to_string);
     let mut tx = state.db.begin().await?;
+    // checked above, held now: a garbage collection between the check and this
+    // commit would otherwise leave the manifest naming deleted layers
+    if let Some(missing) = rdb::hold_links(&mut tx, repo.id, &blob_digests).await?.first() {
+        return Err(RegError::new(StatusCode::BAD_REQUEST, "MANIFEST_BLOB_UNKNOWN", format!("blob {missing} is not in this repository")));
+    }
     let id = rdb::put_manifest(
         &mut *tx,
         rdb::NewManifest {
