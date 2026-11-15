@@ -284,6 +284,14 @@ pub struct TelemetryConfig {
     pub log_filter: String,
     /// OTLP gRPC endpoint (`http://collector:4317`); empty disables tracing export.
     pub otlp_endpoint: String,
+    /// Sentry DSN (`https://<key>@<host>/<project>`); empty disables Sentry.
+    /// Panics, the error that stops the server and `error` logs (failed requests
+    /// and jobs; those `log_filter` lets through) are sent, with the log's
+    /// fields: an error's text can name hosts, paths, users and repositories.
+    /// No other logs, no request bodies.
+    pub sentry_dsn: String,
+    /// Shown as the environment in Sentry (`production`, `staging`...).
+    pub sentry_environment: String,
     pub metrics: bool,
     /// When set, `/metrics` answers only to `Authorization: Bearer <token>`
     /// (Prometheus `authorization.credentials`). Empty: open to anyone who can
@@ -426,12 +434,20 @@ impl Default for SecurityConfig {
     }
 }
 
+impl TelemetryConfig {
+    pub fn sentry_enabled(&self) -> bool {
+        !self.sentry_dsn.trim().is_empty()
+    }
+}
+
 impl Default for TelemetryConfig {
     fn default() -> Self {
         TelemetryConfig {
             log_format: "text".into(),
             log_filter: "info,sqlx=warn,graphile_worker=warn,russh=warn,tower_http=info".into(),
             otlp_endpoint: String::new(),
+            sentry_dsn: String::new(),
+            sentry_environment: "production".into(),
             metrics: true,
             metrics_token: String::new(),
         }

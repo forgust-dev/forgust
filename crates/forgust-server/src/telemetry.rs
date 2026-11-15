@@ -1,4 +1,4 @@
-//! Logging, OpenTelemetry tracing and Prometheus metrics (ADR-0001).
+//! Logging, OpenTelemetry tracing, Sentry errors and Prometheus metrics (ADR-0001).
 
 use metrics_exporter_prometheus::{PrometheusBuilder, PrometheusHandle};
 use opentelemetry::trace::TracerProvider as _;
@@ -32,6 +32,22 @@ pub fn init_cli() {
         .try_init();
 }
 
+/// Call it before the async runtime starts its threads; the guard sends what is
+/// still pending when dropped.
+pub fn init_sentry(cfg: &TelemetryConfig) -> anyhow::Result<Option<sentry::ClientInitGuard>> {
+    if !cfg.sentry_enabled() {
+        return Ok(None);
+    }
+    let dsn: sentry::types::Dsn = cfg.sentry_dsn.trim().parse().map_err(|e| anyhow::anyhow!("telemetry.sentry_dsn: {e}"))?;
+    let mut options = sentry::ClientOptions::new().release(concat!("forgust@", env!("CARGO_PKG_VERSION")));
+    options.dsn = Some(dsn);
+    let environment = cfg.sentry_environment.trim();
+    if !environment.is_empty() {
+        options = options.environment(environment.to_string());
+    }
+    Ok(Some(sentry::init(options)))
+}
+
 pub fn init(cfg: &TelemetryConfig) -> anyhow::Result<Telemetry> {
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(&cfg.log_filter));
     let fmt = if cfg.log_format == "json" {
@@ -54,7 +70,20 @@ pub fn init(cfg: &TelemetryConfig) -> anyhow::Result<Telemetry> {
         Some(tracing_opentelemetry::layer().with_tracer(tracer))
     };
 
-    tracing_subscriber::registry().with(filter).with(fmt).with(otel).try_init()?;
+    // `error` logs only: warnings can hold secrets (the first-start setup link),
+    // and traces go to OTLP. Not tower_http's: its "response failed" repeats, for
+    // every 5xx, what the handler logged (or a 503 that was the right answer).
+    // Not the sending thread's: a failed delivery (an untrusted certificate) logs
+    // an error, which would be sent in turn, without end
+    let sentry = cfg.sentry_enabled().then(|| {
+        sentry::integrations::tracing::ErrorLayer::new().with_filter(tracing_subscriber::filter::dynamic_filter_fn(|md, _| {
+            *md.level() == tracing::Level::ERROR
+                && !md.target().starts_with("tower_http")
+                && std::thread::current().name() != Some("sentry-transport")
+        }))
+    });
+
+    tracing_subscriber::registry().with(filter).with(fmt).with(otel).with(sentry).try_init()?;
 
     let metrics = if cfg.metrics {
         let handle =

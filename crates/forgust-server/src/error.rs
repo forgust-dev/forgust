@@ -61,7 +61,10 @@ impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, code) = self.code();
         if let ApiError::Internal(e) = &self {
-            tracing::error!(error = ?e, "internal error");
+            // as an error (not its Debug text): Sentry reads its type and causes,
+            // and files each kind of failure as its own issue
+            let error: &(dyn std::error::Error + 'static) = e.as_ref();
+            tracing::error!(error, "internal error");
         }
         (status, Json(json!({ "error": code, "message": self.to_string() }))).into_response()
     }
