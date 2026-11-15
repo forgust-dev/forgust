@@ -34,9 +34,10 @@ pub struct TrainOptions {
     /// rebase and fast-forward methods), instead of a merge commit.
     #[serde(default)]
     pub rebase: bool,
-    /// Delete the source branch once merged.
+    /// Delete the source branch once merged (default: the merge request's
+    /// own choice).
     #[serde(default)]
-    pub remove_source_branch: bool,
+    pub remove_source_branch: Option<bool>,
 }
 
 /// Put a merge request on its target's train.
@@ -69,7 +70,11 @@ pub async fn add(state: &AppState, principal: &Principal, p: &Project, m: &Merge
         m.id,
         user.id,
         head,
-        tdb::CarOptions { squash: opts.squash, rebase: opts.rebase, remove_source_branch: opts.remove_source_branch },
+        tdb::CarOptions {
+            squash: opts.squash,
+            rebase: opts.rebase,
+            remove_source_branch: opts.remove_source_branch.unwrap_or(m.remove_source_branch),
+        },
     )
     .await?
     {
@@ -97,6 +102,15 @@ pub async fn remove(state: &AppState, principal: &Principal, p: &Project, m: &Me
         return Err(ApiError::forbidden("only who added it, or someone who may merge, removes it from the train"));
     }
     leave(state, p, &car, Some(user.id), "removed this merge request from the merge train").await.map_err(ApiError::Internal)
+}
+
+/// The MR was closed or retargeted: its car (if any) leaves, and the cars
+/// behind it are rebuilt on what is really ahead of them.
+pub async fn drop_mr(state: &AppState, p: &Project, mr_id: i64, why: &str) -> anyhow::Result<()> {
+    match tdb::of_mr(&state.db, mr_id).await? {
+        Some(car) => leave(state, p, &car, None, why).await,
+        None => Ok(()),
+    }
 }
 
 async fn note(state: &AppState, mr_id: i64, user_id: Option<i64>, body: &str) {
@@ -140,6 +154,12 @@ pub async fn refresh(state: &AppState, p: &Project, target: &str) -> anyhow::Res
             let Some(m) = mrdb::find_by_id(&mut *tx, car.merge_request_id).await? else { continue };
             if m.state != "opened" {
                 tdb::remove(&mut *tx, m.id).await?;
+                // what it tested will not merge
+                if let Some(old) = car.pipeline_id
+                    && car.pipeline_status.as_deref().is_some_and(|s| !crate::ci::pipeline::is_complete(s))
+                {
+                    stale_pipelines.push(old);
+                }
                 continue;
             }
             let Some(head) = state.storage.resolve(p.id, &format!("refs/heads/{}", m.source_branch)).await? else {
@@ -298,8 +318,8 @@ async fn merge_ready(state: &AppState, p: &Project, target: &str) -> anyhow::Res
         };
         let Some(m) = mrdb::find_by_id(&state.db, car.merge_request_id).await? else { return Ok(None) };
         if m.state != "opened" {
-            tdb::remove(&state.db, m.id).await?;
-            continue;
+            // the cars behind were built on its train commit: leaving rebuilds them
+            return Ok(Some((car, "removed this merge request from the merge train: it is no longer open".into())));
         }
         let user = match car.user_id {
             Some(u) => forgust_db::users::find(&state.db, u).await?,
@@ -323,7 +343,8 @@ async fn merge_ready(state: &AppState, p: &Project, target: &str) -> anyhow::Res
                 MergeMethod::Merge
             },
             expected_head: Some(&head),
-            remove_source_branch: car.remove_source_branch || m.remove_source_branch,
+            // the choice made when it joined (unticking the box keeps the branch)
+            remove_source_branch: car.remove_source_branch,
             message: None,
             train: Some((&train, &base)),
         };

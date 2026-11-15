@@ -364,3 +364,73 @@ async fn a_car_without_a_train_pipeline_waits_for_the_branch_pipeline(pool: sqlx
     let notes = owner.ok_get(&format!("{mr2}/notes")).await;
     assert!(notes.as_array().unwrap().iter().any(|n| n["body"].as_str().unwrap_or("").contains("source branch was updated")), "{notes}");
 }
+
+/// A car whose merge request is closed leaves the train at once: the car
+/// behind it, built on its commit, is rebuilt on the target and merges
+/// without it (instead of failing when it comes to merge).
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn closing_a_car_takes_it_off_the_train(pool: sqlx::PgPool) {
+    let srv = TestServer::start_with(pool, |c| c.ci.long_poll_secs = 1).await;
+    let owner = srv.user("olivia", false).await;
+    let (_org, _sub, project) = org_project(&owner).await;
+    let runner = owner.ok_post(&format!("/api/v1/projects/{project}/runners"), json!({ "description": "r" })).await["token"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let work = srv.work_dir("mt-close");
+    must(git(&work, &["init", "-q", "-b", "main"]).await);
+    std::fs::write(work.join(".gitlab-ci.yml"), CI).unwrap();
+    std::fs::write(work.join("README.md"), "x\n").unwrap();
+    must(git(&work, &["add", "."]).await);
+    must(git(&work, &["commit", "-q", "-m", "init"]).await);
+    let url = srv.http_url("olivia", REPO);
+    must(git(&work, &["push", "-q", &url, "main"]).await);
+    wait_jobs(&srv.state).await;
+    let (s, body) = owner
+        .put(
+            &format!("/api/v1/projects/{project}/ci/settings"),
+            json!({ "ci_config_path": ".gitlab-ci.yml", "instance_runners_enabled": true, "default_timeout_secs": 3600, "default_git_depth": 20,
+                    "only_merge_if_pipeline_succeeds": true, "job_token_scope_enabled": true, "auto_cancel_redundant": false,
+                    "merge_trains_enabled": true }),
+        )
+        .await;
+    assert_eq!(s, 200, "{body}");
+    for b in ["a", "b"] {
+        must(git(&work, &["checkout", "-q", "-b", b, "main"]).await);
+        commit_file(&work, &format!("{b}.txt"), &format!("{b}\n"), &format!("add {b}")).await;
+        must(git(&work, &["push", "-q", &url, b]).await);
+        wait_jobs(&srv.state).await;
+        owner
+            .ok_post(
+                &format!("/api/v1/projects/{project}/merge_requests"),
+                json!({ "source_branch": b, "title": format!("Add {b}"), "remove_source_branch": true }),
+            )
+            .await;
+    }
+    wait_jobs(&srv.state).await;
+    let mrp = |iid: i64| format!("/api/v1/projects/{project}/merge_requests/{iid}");
+    owner.ok_post(&format!("{}/merge_train", mrp(1)), json!({})).await;
+    // the box unticked when joining: the branch stays, whatever the MR said
+    let car = owner.ok_post(&format!("{}/merge_train", mrp(2)), json!({ "remove_source_branch": false })).await;
+    assert_eq!(car["remove_source_branch"], false, "{car}");
+    let cars = owner.ok_get(&format!("/api/v1/projects/{project}/merge_trains?target_branch=main")).await;
+    assert_eq!(cars[1]["base_sha"], cars[0]["train_sha"], "car 2 is built on car 1");
+
+    // closing 1 takes it off, and 2 is rebuilt on main
+    owner.ok_post(&format!("{}/close", mrp(1)), json!({})).await;
+    let main = srv.state.storage.resolve(project, "refs/heads/main").await.unwrap().unwrap();
+    let after = owner.ok_get(&format!("/api/v1/projects/{project}/merge_trains")).await;
+    assert_eq!(after.as_array().unwrap().len(), 1, "{after}");
+    assert_eq!(after[0]["iid"], 2, "{after}");
+    assert_eq!(after[0]["base_sha"], main.as_str(), "rebuilt on main: {after}");
+    let notes = owner.ok_get(&format!("{}/notes", mrp(1))).await;
+    assert!(notes.as_array().unwrap().iter().any(|n| n["body"].as_str().unwrap_or("").contains("it was closed")), "{notes}");
+    // 2 merges, without 1's changes
+    let j2 = train_job(&srv, &runner, 2).await;
+    finish(&srv, &j2, "success").await;
+    assert_eq!(owner.ok_get(&mrp(2)).await["state"], "merged");
+    must(git(&work, &["fetch", "-q", &url, "main"]).await);
+    let files = must(git(&work, &["ls-tree", "--name-only", "FETCH_HEAD"]).await);
+    assert!(files.lines().any(|f| f == "b.txt") && !files.lines().any(|f| f == "a.txt"), "{files}");
+    assert!(srv.state.storage.resolve(project, "refs/heads/b").await.unwrap().is_some(), "its source branch was kept");
+}
