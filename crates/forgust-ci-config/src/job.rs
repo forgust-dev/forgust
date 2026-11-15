@@ -231,6 +231,10 @@ pub struct Rule {
     pub allow_failure: Option<bool>,
     #[serde(default)]
     pub variables: IndexMap<String, String>,
+    /// `rules:needs`: replaces the job's `needs` when this rule matches
+    /// (an empty list: no needs at all). Job rules only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub needs: Option<Vec<Need>>,
 }
 
 /// `only:` / `except:` (legacy, still common).
@@ -334,6 +338,16 @@ pub struct Job {
 pub struct Pages {
     /// The folder of the artifacts served as the site (`public` by default).
     pub publish: String,
+}
+
+impl Job {
+    /// Every `needs` the job can end up with: its own (when it has no rules, or
+    /// a rule that keeps them; empty when it has none) and each `rules:needs`.
+    pub fn possible_needs(&self) -> impl Iterator<Item = &[Need]> {
+        let rules = || self.rules.iter().flatten().filter(|r| r.when.as_deref() != Some("never"));
+        let own = self.rules.is_none() || rules().any(|r| r.needs.is_none());
+        own.then(|| self.needs.as_deref().unwrap_or_default()).into_iter().chain(rules().filter_map(|r| r.needs.as_deref()))
+    }
 }
 
 fn on_success() -> String {
@@ -756,7 +770,9 @@ fn rule_paths(owner: &str, key: &str, v: &Value, extra: &[&str]) -> Result<(Vec<
     }
 }
 
-pub fn rules(owner: &str, v: &Value, allowed_when: &[&str]) -> Result<Vec<Rule>, ConfigError> {
+/// `job`: the job these rules belong to (None for `workflow` and `include`
+/// rules, which have no needs to replace).
+pub fn rules(owner: &str, job: Option<&str>, v: &Value, allowed_when: &[&str]) -> Result<Vec<Rule>, ConfigError> {
     let Value::Seq(items) = v else { return Err(ConfigError::Invalid(format!("{owner}: `rules` must be an array"))) };
     let mut out = Vec::new();
     for item in items {
@@ -792,7 +808,12 @@ pub fn rules(owner: &str, v: &Value, allowed_when: &[&str]) -> Result<Vec<Rule>,
                 }
                 "allow_failure" => r.allow_failure = Some(matches!(val, Value::Bool(true))),
                 "variables" => r.variables = variables(owner, val)?.0,
-                "needs" => return Err(ConfigError::Invalid(format!("{owner}: `rules:needs` is not supported yet"))),
+                "needs" => {
+                    let Some(job) = job else {
+                        return Err(ConfigError::Invalid(format!("{owner}: `rules:needs` is for the rules of a job")));
+                    };
+                    r.needs = Some(needs(job, val)?);
+                }
                 "start_in" => r.start_in = Some(string(owner, "rules:start_in", val)?),
                 other => return Err(ConfigError::Invalid(format!("{owner}: `rules:{other}` is not supported"))),
             }
@@ -1129,7 +1150,7 @@ pub fn build(name: &str, m: &Map, defaults: &Map) -> Result<Job, ConfigError> {
     job.coverage = m.get("coverage").map(|v| string(name, "coverage", v)).transpose()?;
     job.rules = m
         .get("rules")
-        .map(|v| rules(&format!("job `{name}`"), v, &["on_success", "on_failure", "always", "manual", "never", "delayed"]))
+        .map(|v| rules(&format!("job `{name}`"), Some(name), v, &["on_success", "on_failure", "always", "manual", "never", "delayed"]))
         .transpose()?;
     job.only = m.get("only").map(|v| filter(name, "only", v)).transpose()?;
     job.except = m.get("except").map(|v| filter(name, "except", v)).transpose()?;

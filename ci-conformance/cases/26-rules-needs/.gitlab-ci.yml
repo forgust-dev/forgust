@@ -1,0 +1,28 @@
+stages: [build, test]
+fast:
+  stage: build
+  script: fast
+full:
+  stage: build
+  script: full
+test:
+  stage: test
+  needs: [full]
+  script: test
+  rules:
+    - if: $CI_COMMIT_BRANCH == "dev"
+      needs: [fast]
+    - when: on_success
+lint:
+  stage: test
+  needs: [full]
+  script: lint
+  rules:
+    - if: $CI_COMMIT_BRANCH == "dev"
+      needs: []
+docs:
+  stage: test
+  needs: [full]
+  script: docs
+  rules:
+    - if: $CI_COMMIT_BRANCH == "dev"

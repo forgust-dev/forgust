@@ -190,8 +190,16 @@ fn filter_matches(f: &Filter, ctx: &Context<'_>, vars: &HashMap<String, String>)
 }
 
 /// A job that is part of the pipeline: its `when`, `allow_failure`, and rule variables.
-/// (when, allow_failure, rule variables, start_in for `when: delayed`)
-type Selected = (String, bool, IndexMap<String, String>, Option<String>);
+struct Selected {
+    when: String,
+    allow_failure: bool,
+    /// Variables of the matching rule.
+    variables: IndexMap<String, String>,
+    /// For `when: delayed`.
+    start_in: Option<String>,
+    /// `rules:needs` of the matching rule: replaces the job's `needs`.
+    needs: Option<Vec<Need>>,
+}
 
 /// Evaluate one job: None if it is not part of this pipeline.
 /// `yaml`: top-level (and workflow) YAML variables; job variables override
@@ -214,9 +222,9 @@ fn evaluate(job: &Job, ctx: &Context<'_>, yaml: &HashMap<String, String>) -> Res
                 return Ok(None);
             }
             // manual jobs from rules default to blocking (allow_failure: false)
-            let allow = r.allow_failure.or(job.allow_failure).unwrap_or(false);
+            let allow_failure = r.allow_failure.or(job.allow_failure).unwrap_or(false);
             let start_in = if when == "delayed" { r.start_in.clone().or_else(|| job.start_in.clone()) } else { None };
-            return Ok(Some((when, allow, r.variables.clone(), start_in)));
+            return Ok(Some(Selected { when, allow_failure, variables: r.variables.clone(), start_in, needs: r.needs.clone() }));
         }
         return Ok(None);
     }
@@ -230,8 +238,39 @@ fn evaluate(job: &Job, ctx: &Context<'_>, yaml: &HashMap<String, String>) -> Res
     {
         return Ok(None);
     }
-    let allow = job.allow_failure.unwrap_or(job.when == "manual");
-    Ok(Some((job.when.clone(), allow, IndexMap::new(), job.start_in.clone())))
+    let allow_failure = job.allow_failure.unwrap_or(job.when == "manual");
+    Ok(Some(Selected { when: job.when.clone(), allow_failure, variables: IndexMap::new(), start_in: job.start_in.clone(), needs: None }))
+}
+
+/// A job that waits for itself through `needs` (possible within one stage),
+/// which would never start.
+fn needs_cycle(jobs: &[PlannedJob]) -> Option<&str> {
+    #[derive(Clone, Copy, PartialEq)]
+    enum Seen {
+        No,
+        OnPath,
+        Done,
+    }
+    // at most MAX_JOBS deep
+    fn visit(at: usize, jobs: &[PlannedJob], index: &HashMap<&str, usize>, seen: &mut [Seen]) -> Option<usize> {
+        seen[at] = Seen::OnPath;
+        for n in jobs[at].needs.iter().flatten() {
+            let Some(&to) = index.get(n.as_str()) else { continue };
+            let found = match seen[to] {
+                Seen::OnPath => Some(to),
+                Seen::No => visit(to, jobs, index, seen),
+                Seen::Done => None,
+            };
+            if found.is_some() {
+                return found;
+            }
+        }
+        seen[at] = Seen::Done;
+        None
+    }
+    let index: HashMap<&str, usize> = jobs.iter().enumerate().map(|(i, j)| (j.name.as_str(), i)).collect();
+    let mut seen = vec![Seen::No; jobs.len()];
+    (0..jobs.len()).find_map(|i| if seen[i] == Seen::No { visit(i, jobs, &index, &mut seen) } else { None }).map(|i| jobs[i].name.as_str())
 }
 
 /// Jobs in one pipeline, counting every `parallel` instance.
@@ -313,13 +352,15 @@ pub fn plan(cfg: &Config, ctx: &Context<'_>) -> Result<Outcome, ConfigError> {
     // evaluate jobs
     let mut chosen: Vec<(String, Job, String, bool)> = Vec::new();
     for (name, job) in &cfg.jobs {
-        if let Some((when, allow, rule_vars, start_in)) = evaluate(job, ctx, &yaml)? {
+        if let Some(sel) = evaluate(job, ctx, &yaml)? {
             let mut j = job.clone();
-            for (k, v) in rule_vars {
-                j.variables.insert(k, v);
+            j.variables.extend(sel.variables);
+            j.start_in = sel.start_in;
+            // `rules:needs` replaces the job's `needs` (even with an empty list)
+            if let Some(needs) = sel.needs {
+                j.needs = Some(needs);
             }
-            j.start_in = start_in;
-            chosen.push((name.clone(), j, when, allow));
+            chosen.push((name.clone(), j, sel.when, sel.allow_failure));
         }
     }
     if chosen.is_empty() {
@@ -423,6 +464,9 @@ pub fn plan(cfg: &Config, ctx: &Context<'_>) -> Result<Outcome, ConfigError> {
                 }
             }
         }
+    }
+    if let Some(name) = needs_cycle(&jobs) {
+        return Err(ConfigError::Invalid(format!("job `{name}` needs itself, directly or through other jobs")));
     }
     let stages = cfg.stages.iter().filter(|s| jobs.iter().any(|j| &j.stage == *s)).cloned().collect();
     Ok(Outcome::Run(Plan { stages, jobs, workflow_variables }))
@@ -535,6 +579,73 @@ mod tests {
         // a required need that rules removed is an error
         let c = cfg("a:\n  script: x\n  rules: [{when: never}]\nb:\n  needs: [a]\n  script: x\n");
         assert!(plan(&c, &ctx(&vars, "push", "main", None)).is_err());
+    }
+
+    #[test]
+    fn rules_needs_replace_the_needs_of_the_job() {
+        let src = "stages: [build, test]\nfast:\n  stage: build\n  script: x\nfull:\n  stage: build\n  script: x\n\
+                   test:\n  stage: test\n  script: x\n  needs: [full]\n  rules:\n\
+                   \x20   - if: $CI_COMMIT_BRANCH == 'dev'\n      needs: [{job: fast, artifacts: false}]\n\
+                   \x20   - if: $CI_COMMIT_BRANCH == 'docs'\n      needs: []\n\
+                   \x20   - when: on_success\n";
+        let c = cfg(src);
+        let test = |branch: &str| {
+            let vars = v(&[("CI_COMMIT_BRANCH", branch)]);
+            let Outcome::Run(p) = plan(&c, &ctx(&vars, "push", branch, None)).unwrap() else { panic!() };
+            p.jobs.into_iter().find(|j| j.name == "test").unwrap()
+        };
+        // the matching rule's needs win, with their options
+        let dev = test("dev");
+        assert_eq!(dev.needs.as_deref().unwrap(), ["fast"]);
+        assert!(!dev.job.needs.as_ref().unwrap()[0].artifacts);
+        // an empty list: no needs (the job does not wait for its stage)
+        assert_eq!(test("docs").needs.as_deref().unwrap(), [] as [&str; 0]);
+        // a rule without `needs` keeps the job's
+        assert_eq!(test("main").needs.as_deref().unwrap(), ["full"]);
+
+        // a job without `needs` gets them from the rule
+        let c = cfg("a:\n  script: x\nb:\n  script: x\n  rules:\n    - needs: [a]\n");
+        let none = v(&[]);
+        let Outcome::Run(p) = plan(&c, &ctx(&none, "push", "main", None)).unwrap() else { panic!() };
+        assert_eq!(p.jobs[1].needs.as_deref().unwrap(), ["a"]);
+
+        // a needed job that is not in the pipeline is the usual error
+        let c = cfg("a:\n  script: x\n  rules: [{when: never}]\nb:\n  script: x\n  rules:\n    - needs: [a]\n");
+        assert!(plan(&c, &ctx(&none, "push", "main", None)).is_err());
+
+        // a job cannot wait for itself
+        for cycle in [
+            "a:\n  script: x\n  rules:\n    - needs: [a]\n",
+            "a:\n  script: x\n  needs: [b]\nb:\n  script: x\n  rules:\n    - needs: [a]\n",
+        ] {
+            let e = plan(&cfg(cycle), &ctx(&none, "push", "main", None)).err().expect(cycle);
+            assert!(e.to_string().contains("needs itself"), "{e}");
+        }
+
+        // `dependencies` must be waited for whichever needs apply
+        for (src, ok) in [
+            ("a:\n  script: x\nb:\n  script: x\n  dependencies: [a]\n  rules:\n    - needs: [a]\n", true),
+            (
+                "a:\n  script: x\nb:\n  script: x\n  needs: [a]\n  dependencies: [a]\n  rules:\n    - if: $X\n      needs: []\n    - when: on_success\n",
+                false,
+            ),
+            (
+                "a:\n  script: x\nb:\n  script: x\n  dependencies: [a]\n  rules:\n    - if: $X\n      needs: [a]\n    - when: on_success\n",
+                false,
+            ),
+        ] {
+            assert_eq!(crate::parse(src).is_ok(), ok, "{src}");
+        }
+
+        // not in workflow:rules, and the same checks as `needs`
+        for bad in [
+            "workflow:\n  rules:\n    - needs: [a]\na:\n  script: x\n",
+            "a:\n  script: x\n  rules:\n    - needs: a\n",
+            "a:\n  script: x\n  rules:\n    - if: $NEVER_SET\n      needs: [typo]\n",
+            "a:\n  script: x\n  rules:\n    - needs: [{job: b, ref: main}]\n",
+        ] {
+            assert!(crate::parse(bad).is_err(), "{bad}");
+        }
     }
 
     #[test]

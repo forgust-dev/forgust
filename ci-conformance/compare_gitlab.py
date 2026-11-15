@@ -53,8 +53,11 @@ def gitlab_result(case, ctx):
             return {"error": errors}
         if not lint.get("jobs"):
             return {"skipped": True}
+        # `needs`: GitLab lists `{name, artifacts, optional}` per needed job, and
+        # nothing for a job without the keyword
         return {"jobs": [{"name": j["name"], "stage": j["stage"], "when": j.get("when"),
-                          "allow_failure": bool(j.get("allow_failure"))} for j in lint["jobs"]]}
+                          "allow_failure": bool(j.get("allow_failure")),
+                          "needs": sorted(n["name"] for n in j.get("needs") or [] if "name" in n)} for j in lint["jobs"]]}
     finally:
         api("DELETE", f"/projects/{pid}")
 
@@ -68,7 +71,11 @@ def check(expected, got):
     have = {j["name"]: j for j in got.get("jobs", [])}
     if set(want) != set(have):
         return False
-    return all(have[n].get(k) == w[k] for n, w in want.items() for k in ("stage", "when", "allow_failure") if k in w)
+    # `needs` only where the case states them (an empty list also matches a job
+    # GitLab gives none: its dry run does not tell the two apart)
+    def same(key, a, b):
+        return sorted(a) == b if key == "needs" else a == b
+    return all(same(k, w[k], have[n].get(k)) for n, w in want.items() for k in ("stage", "when", "allow_failure", "needs") if k in w)
 
 
 def main():

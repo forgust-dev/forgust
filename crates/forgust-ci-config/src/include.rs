@@ -99,7 +99,7 @@ fn component_address(addr: &str, host: &str) -> Result<(String, String, String),
 /// Whether an `include:rules` list keeps the entry (`if` and `exists`; with
 /// `changes` the entry is kept, the changes are not known yet).
 async fn include_rules_keep(rules: &Value, resolver: &dyn Resolver) -> Result<bool, ConfigError> {
-    let list = crate::job::rules("include", rules, &["always", "never"])?;
+    let list = crate::job::rules("include", None, rules, &["always", "never"])?;
     let vars = resolver.variables();
     for r in &list {
         if let Some(cond) = &r.if_

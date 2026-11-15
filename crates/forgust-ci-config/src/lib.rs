@@ -95,7 +95,7 @@ fn build(root: value::Value) -> Result<Config, ConfigError> {
                     return Err(ConfigError::Invalid(format!("unknown `workflow:{k}`")));
                 }
             }
-            let rules = w.get("rules").map(|r| job::rules("workflow", r, &["always", "never"])).transpose()?;
+            let rules = w.get("rules").map(|r| job::rules("workflow", None, r, &["always", "never"])).transpose()?;
             if let Some(ac) = w.get("auto_cancel") {
                 let m = ac.as_map().ok_or_else(|| ConfigError::Invalid("`workflow:auto_cancel` must be a hash".into()))?;
                 for (k, v) in m {
@@ -153,11 +153,18 @@ fn build(root: value::Value) -> Result<Config, ConfigError> {
         for d in j.dependencies.iter().flatten() {
             let dj = jobs.get(d).ok_or_else(|| ConfigError::Invalid(format!("job `{name}` depends on unknown job `{d}`")))?;
             let (a, b) = (stages.iter().position(|s| *s == dj.stage), stages.iter().position(|s| *s == j.stage));
-            if a >= b && j.needs.is_none() {
-                return Err(ConfigError::Invalid(format!("job `{name}` depends on `{d}`, which is not in an earlier stage")));
+            // without `needs` the job only waits for earlier stages; with `needs`
+            // (its own, or a rule's) it must wait for what it downloads from
+            if a >= b && j.possible_needs().any(|needs| !needs.iter().any(|n| n.from.is_none() && n.job == *d)) {
+                let why = if j.possible_needs().all(<[_]>::is_empty) {
+                    "which is not in an earlier stage"
+                } else {
+                    "which is not in an earlier stage and not in every `needs` the job can have"
+                };
+                return Err(ConfigError::Invalid(format!("job `{name}` depends on `{d}`, {why}")));
             }
         }
-        for n in j.needs.iter().flatten().filter(|n| n.from.is_none()) {
+        for n in j.possible_needs().flatten().filter(|n| n.from.is_none()) {
             if !jobs.contains_key(&n.job) && !n.optional {
                 return Err(ConfigError::Invalid(format!("job `{name}` needs unknown job `{}`", n.job)));
             }
