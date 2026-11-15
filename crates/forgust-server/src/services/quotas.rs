@@ -1,7 +1,9 @@
 //! Storage quotas. Every path that adds bytes asks [`room`] first and
 //! writes at most what is left: git push (pre-receive), LFS uploads, CI
-//! artifacts, registry blobs, uploads. Reading and deleting stay open when
-//! full, and so do pushes that bring no new objects.
+//! artifacts, registry blobs, uploads, and what the server writes itself
+//! ([`check_write`]: commits made in the browser, merges, rebases, imports).
+//! Reading and deleting stay open when full, and so do pushes that bring no
+//! new objects.
 
 use forgust_db::quotas::{Crossed, Limits};
 
@@ -67,6 +69,16 @@ pub async fn cap(state: &AppState, project_id: i64, limit: u64) -> anyhow::Resul
     })
 }
 
+/// Before the server writes into a repository itself (a commit made in the
+/// browser, a merge, a rebase): refused when the quota is reached, or when
+/// `new_bytes` (what is known of the size; 0 when it cannot be) does not fit.
+pub async fn check_write(state: &AppState, project_id: i64, new_bytes: u64) -> crate::error::ApiResult<()> {
+    match room(state, project_id).await? {
+        Some(r) if r.full() || new_bytes > r.left => Err(crate::error::ApiError::TooLarge(r.message())),
+        _ => Ok(()),
+    }
+}
+
 /// Bytes under a directory (a push's quarantined objects).
 pub fn dir_bytes(dir: &std::path::Path) -> u64 {
     let mut n = 0;
@@ -111,9 +123,9 @@ async fn tell_owners(state: &AppState, c: &Crossed) {
     let Ok(owners) = owners else { return };
     let subject = if c.level >= 100 { "Storage quota reached" } else { "Storage quota almost reached" };
     let then = if c.level >= 100 {
-        "New pushes, LFS files, CI artifacts, images and uploads are refused until something is deleted or the quota is raised."
+        "New pushes, commits, merges, LFS files, CI artifacts, images and uploads are refused until something is deleted or the quota is raised."
     } else {
-        "Once it is full, new pushes, LFS files, CI artifacts, images and uploads are refused."
+        "Once it is full, new pushes, commits, merges, LFS files, CI artifacts, images and uploads are refused."
     };
     let body = format!("{what} uses {} of its {} storage quota ({} %).\n\n{then}\n\n{url}\n", bytes(c.used), bytes(c.quota), c.level);
     for id in owners {

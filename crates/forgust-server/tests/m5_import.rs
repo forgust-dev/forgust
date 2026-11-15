@@ -822,6 +822,80 @@ async fn a_failed_import_keeps_the_numbers_it_reserved(pool: sqlx::PgPool) {
     assert_eq!(next["iid"], 8, "after every number the source used: {next}");
 }
 
+/// An import is not a push: its fetch asks the storage quota itself.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn import_stops_at_the_storage_quota(pool: sqlx::PgPool) {
+    let srv = TestServer::start_with(pool, |c| c.features.imports_allow_local = true).await;
+    let admin = srv.user("root", true).await;
+    let owner = srv.user("olivia", false).await;
+    let org = owner.ok_post("/api/v1/groups", json!({ "name": "Acme", "path": "acme" })).await;
+    owner.ok_post("/api/v1/projects", json!({ "name": "Origin", "path": "origin", "namespace_id": org["id"] })).await;
+    let work = srv.work_dir("quota-origin");
+    seed_repo(&work).await;
+    must(git(&work, &["push", "-q", &srv.http_url("olivia", "acme/origin"), "main"]).await);
+    wait_jobs(&srv.state).await;
+    let token = owner.ok_post("/api/v1/user/tokens", json!({ "name": "import", "scopes": ["read_repository"] })).await["token"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let project = |id: i64, path: &str, size: i64| {
+        json!({
+            "id": id, "path_with_namespace": format!("team/{path}"), "name": path, "path": path, "visibility": "private", "default_branch": "main",
+            "http_url_to_repo": format!("{}/acme/origin.git", srv.base), "web_url": format!("https://gitlab.example/team/{path}"),
+            "issues_enabled": false, "statistics": { "repository_size": size, "lfs_objects_size": 0 }
+        })
+    };
+    let routes: HashMap<String, Value> = [
+        ("/api/v4/user", json!({ "id": 1, "username": "importer", "name": "Importer" })),
+        // the source says 50 MB for one, and far too little for the others
+        ("/api/v4/projects/1", project(1, "huge", 50 << 20)),
+        ("/api/v4/projects/2", project(2, "first", 10)),
+        ("/api/v4/projects/3", project(3, "second", 10)),
+    ]
+    .into_iter()
+    .map(|(k, v)| (k.to_string(), v))
+    .collect();
+    let gitlab = mock_gitlab(routes).await;
+    let target = owner.ok_post("/api/v1/groups", json!({ "name": "Imported", "path": "imported" })).await;
+    // 1 MB for everything in the group
+    admin.ok_put(&format!("/api/v1/admin/namespaces/{}/quota", target["id"]), json!({ "bytes": 1 << 20 })).await;
+    let run = |projects: Value| {
+        let (owner, srv, gitlab, token, target) = (&owner, &srv, &gitlab, &token, &target);
+        async move {
+            let body =
+                json!({ "source": "gitlab", "url": gitlab, "token": token, "target_namespace_id": target["id"], "projects": projects });
+            let id = owner.ok_post("/api/v1/imports", body).await["id"].as_i64().unwrap();
+            wait_jobs(&srv.state).await;
+            owner.ok_post(&format!("/api/v1/imports/{id}/start"), json!({})).await;
+            wait_jobs(&srv.state).await;
+            owner.ok_get(&format!("/api/v1/imports/{id}")).await
+        }
+    };
+
+    // too large by the source's own word: refused before anything is fetched
+    let done = run(json!([{ "source_id": "1", "source_path": "team/huge", "target_path": "huge" }])).await;
+    let row = &done["projects"][0];
+    assert_eq!(row["status"], "failed", "{done}");
+    assert!(row["error"].as_str().unwrap().contains("does not fit in the storage quota: the group imported"), "{done}");
+    let pid = row["project_id"].as_i64().unwrap();
+    assert!(
+        owner.ok_get(&format!("/api/v1/projects/{pid}/repository/branches")).await.as_array().is_some_and(|b| b.is_empty()),
+        "nothing fetched"
+    );
+
+    // the group's quota is shared: what the first project brought counts for
+    // the second at once (and going past the quota is said)
+    let one = run(json!([{ "source_id": "2", "source_path": "team/first", "target_path": "first" }])).await;
+    assert_eq!(one["projects"][0]["status"], "finished", "{one}");
+    let brought = forgust_db::quotas::namespace_used(&srv.state.db, target["id"].as_i64().unwrap()).await.unwrap();
+    assert!(brought > 0, "counted without waiting for the daily measure");
+    admin.ok_put(&format!("/api/v1/admin/namespaces/{}/quota", target["id"]), json!({ "bytes": brought })).await;
+    let two = run(json!([{ "source_id": "3", "source_path": "team/second", "target_path": "second" }])).await;
+    let row = &two["projects"][0];
+    assert_eq!(row["status"], "failed", "{two}");
+    assert!(row["error"].as_str().unwrap().contains("Storage quota reached: the group imported"), "{two}");
+}
+
 #[sqlx::test(migrator = "forgust_db::MIGRATOR")]
 async fn import_copies_lfs_objects(pool: sqlx::PgPool) {
     if !has("git-lfs") {

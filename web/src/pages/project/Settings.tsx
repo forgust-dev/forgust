@@ -692,7 +692,7 @@ function StorageUse({ ctx }: { ctx: Ctx }) {
           </dl>
           {(u.quota || u.namespace) && (
             <p className="small muted" style={{ margin: 0 }}>
-              Once a quota is full, new pushes, LFS files, CI artifacts, images and uploads are refused; reading, deleting and CI jobs carry on. Administrators set quotas.
+              Once a quota is full, new pushes, commits, merges, LFS files, CI artifacts, images and uploads are refused; reading, deleting and CI jobs carry on. Administrators set quotas.
             </p>
           )}
         </div>

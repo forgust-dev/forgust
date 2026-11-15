@@ -359,11 +359,16 @@ pub async fn commit(state: &AppState, principal: &Principal, p: &Project, req: C
     };
 
     let mut changes = Vec::new();
+    // what the request brings (a move without content adds nothing new)
+    let mut new_bytes = 0u64;
     for a in req.actions {
         if !validate_path(&a.file_path) {
             return Err(ApiError::bad(format!("`{}` is not a valid path", a.file_path)));
         }
         let content = decode(a)?;
+        if !matches!(a.action, ActionKind::Delete) {
+            new_bytes += content.as_ref().map_or(0, |c| c.len() as u64);
+        }
         let here = exists(state, p.id, &base, &a.file_path).await?;
         match a.action {
             ActionKind::Create => {
@@ -409,6 +414,10 @@ pub async fn commit(state: &AppState, principal: &Principal, p: &Project, req: C
         }
     }
 
+    // a commit that only deletes or moves files stays possible when full
+    if new_bytes > 0 {
+        crate::services::quotas::check_write(state, p.id, new_bytes).await?;
+    }
     let tree = state.storage.tree_with_changes(p.id, &base, &changes).await?;
     let sha = state.storage.commit_tree(p.id, &tree, std::slice::from_ref(&base), message, &identity(&user), &committer(state)).await?;
     // an empty commit (content unchanged) is refused; the object is left for gc

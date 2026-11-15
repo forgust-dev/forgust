@@ -238,8 +238,8 @@ function StorageBanner({ p }: { p: S["ProjectDetail"] }) {
       <span className="grow small">
         {what} is {w.level >= 100 ? <strong>full</strong> : <>{w.level} % full</>}
         {w.level >= 100
-          ? ": new pushes, LFS files, CI artifacts, images and uploads are refused until something is deleted or the quota is raised."
-          : ": once it is full, new pushes, LFS files, CI artifacts, images and uploads are refused."}
+          ? ": new pushes, commits, merges, LFS files, CI artifacts, images and uploads are refused until something is deleted or the quota is raised."
+          : ": once it is full, new pushes, commits, merges, LFS files, CI artifacts, images and uploads are refused."}
         {p.can_admin && (
           <>
             {" "}
