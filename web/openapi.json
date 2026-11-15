@@ -14059,6 +14059,7 @@
             ],
             "format": "int64",
             "description": "The storage quota of every top-level group and personal namespace\nwithout its own."
+          "repositories_location",
           },
           "kinds": {
             "$ref": "#/components/schemas/StorageKinds"
@@ -14099,6 +14100,10 @@
           }
         }
       },
+          "repositories_location": {
+            "type": "string",
+            "description": "The directory of the Git repositories: always on this server's disk,\nwhatever the blob store is."
+          },
       "StorageUse": {
         "type": "object",
         "required": [

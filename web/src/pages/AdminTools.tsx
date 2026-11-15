@@ -125,14 +125,15 @@ function PipelinesChart({ days }: { days: S["PipelineDay"][] }) {
   );
 }
 
-const KINDS: { key: keyof S["StorageKinds"]; label: string }[] = [
-  { key: "repositories", label: "Git repositories" },
-  { key: "lfs", label: "Git LFS" },
-  { key: "artifacts", label: "CI artifacts" },
-  { key: "job_logs_archived", label: "Job logs (archived)" },
+/** What is kept, and where: on the server's disk, in the blob store, or in the database. */
+const KINDS: { key: keyof S["StorageKinds"]; label: string; store?: "disk" | "blobs" }[] = [
+  { key: "repositories", label: "Git repositories", store: "disk" },
+  { key: "lfs", label: "Git LFS", store: "blobs" },
+  { key: "artifacts", label: "CI artifacts", store: "blobs" },
+  { key: "job_logs_archived", label: "Job logs (archived)", store: "blobs" },
   { key: "job_logs_live", label: "Job logs (in the database)" },
-  { key: "registry", label: "Container registry" },
-  { key: "uploads", label: "Uploads" },
+  { key: "registry", label: "Container registry", store: "blobs" },
+  { key: "uploads", label: "Uploads", store: "blobs" },
 ];
 
 /** What each family of unreferenced objects is (`blob_scan.rs`). */
@@ -168,13 +169,14 @@ export function AdminStorage() {
       {(s) => (
         <div className="stack" style={{ gap: 20 }}>
           <div className="stat-grid">
-            <Stat label="Total" value={bytes(s.total)} hint={`${s.blob_backend} · ${s.blob_location}`} />
+            <Stat label="Total" value={bytes(s.total)} />
             {KINDS.map((k) => (
-              <Stat key={k.key} label={k.label} value={bytes(s.kinds[k.key])} />
+              <Stat key={k.key} label={k.label} value={bytes(s.kinds[k.key])} hint={k.store === "disk" ? "on this server's disk" : k.store === "blobs" ? `in ${s.blob_backend === "s3" ? "S3" : "the blob store"}` : undefined} />
             ))}
           </div>
           <p className="small muted" style={{ margin: 0 }}>
-            Repositories are measured after each push and once a day
+            Git repositories are always on this server's disk (<span className="mono">{s.repositories_location}</span>), never in the blob store; LFS objects, CI artifacts, archived job logs, image
+            layers and uploads are in <span className="mono">{s.blob_location}</span>. Repositories are measured after each push and once a day
             {s.repositories_unmeasured > 0 && <> ({s.repositories_unmeasured} not measured in the last day: measuring them now)</>}. LFS objects and image layers count once here, and for each project that
             uses them below.
           </p>

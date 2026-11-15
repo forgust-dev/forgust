@@ -5482,6 +5482,11 @@ export interface components {
             /**
              * Format: int64
              * @description Container images: the distinct blobs its repositories use.
+            /**
+             * @description The directory of the Git repositories: always on this server's disk,
+             *     whatever the blob store is.
+             */
+            repositories_location: string;
              */
             registry_bytes: number;
             /** Format: int64 */
