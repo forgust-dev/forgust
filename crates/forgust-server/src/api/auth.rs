@@ -29,6 +29,9 @@ pub struct SessionInfo {
     pub csrf_token: String,
     /// The administrator signed in as `user` (impersonation), if any.
     pub impersonator: Option<UserDto>,
+    /// Whether the instance sends email: without it, nothing promises or
+    /// waits for an emailed link.
+    pub email_enabled: bool,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -65,7 +68,12 @@ async fn start_session(
     Ok((
         jar.add(s.cookie),
         Json(LoginResponse {
-            session: Some(SessionInfo { user: UserDto::from(user, true), csrf_token: s.csrf, impersonator: None }),
+            session: Some(SessionInfo {
+                user: UserDto::from(user, true),
+                csrf_token: s.csrf,
+                impersonator: None,
+                email_enabled: state.cfg.email.enabled(),
+            }),
             two_factor_required: false,
             challenge: None,
         }),
@@ -283,7 +291,7 @@ pub async fn session(State(state): State<AppState>, jar: CookieJar) -> ApiResult
         Some(id) => forgust_db::users::find(&state.db, id).await?.map(|a| UserDto::from(&a, false)),
         None => None,
     };
-    Ok(Json(SessionInfo { user: UserDto::from(&user, true), csrf_token: csrf, impersonator }))
+    Ok(Json(SessionInfo { user: UserDto::from(&user, true), csrf_token: csrf, impersonator, email_enabled: state.cfg.email.enabled() }))
 }
 
 #[derive(Serialize, ToSchema)]
@@ -571,10 +579,13 @@ async fn finish_sign_in(
 #[derive(Serialize, ToSchema)]
 pub struct SetupStatus {
     pub needs_setup: bool,
+    /// Whether the instance sends email (confirmation and reset links,
+    /// notifications). Without it, nothing should promise or wait for one.
+    pub email_enabled: bool,
 }
 
 pub async fn setup_status(State(state): State<AppState>) -> ApiResult<Json<SetupStatus>> {
-    Ok(Json(SetupStatus { needs_setup: forgust_db::users::count_humans(&state.db).await? == 0 }))
+    Ok(Json(SetupStatus { needs_setup: forgust_db::users::count_humans(&state.db).await? == 0, email_enabled: state.cfg.email.enabled() }))
 }
 
 #[derive(Deserialize, ToSchema)]

@@ -385,9 +385,7 @@ pub async fn test_email(
     Admin(me, p): Admin,
     Json(b): Json<TestEmail>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    if state.cfg.email.smtp_url.is_empty() {
-        return Err(ApiError::conflict("email is not configured (email.smtp_url)"));
-    }
+    services::accounts::require_email(&state)?;
     let to = b.to.map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).unwrap_or_else(|| me.email.clone());
     crate::services::paths::validate_email(&to)?;
     let email = crate::services::notify::Email {
@@ -777,6 +775,7 @@ pub async fn resend_confirmation(
     Admin(_, p): Admin,
     Path(id): Path<i64>,
 ) -> ApiResult<Json<serde_json::Value>> {
+    services::accounts::require_email(&state)?;
     let u = person(&state, id).await?;
     let to = match (&u.unconfirmed_email, u.email_verified_at) {
         (Some(new), _) => new.clone(),
@@ -785,6 +784,39 @@ pub async fn resend_confirmation(
     };
     crate::services::accounts::send_confirmation(&state, &u, &to).await?;
     services::audit(&state, &p, "confirmation_resent", Some(("user", u.id)), json!({}), None).await;
+    Ok(Json(json!({ "ok": true })))
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct ConfirmUserEmail {
+    /// The address the administrator saw and vouches for: refused when the
+    /// account's is another one by now.
+    pub email: String,
+}
+
+/// Confirm the account's address without a link: the administrator vouches
+/// that it is the user's (an instance without email has no other way).
+pub async fn confirm_email(
+    State(state): State<AppState>,
+    Admin(_, p): Admin,
+    Path(id): Path<i64>,
+    Json(req): Json<ConfirmUserEmail>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let u = person(&state, id).await?;
+    if !u.email.eq_ignore_ascii_case(req.email.trim()) {
+        return Err(ApiError::conflict(format!("their address is now {}: look again before confirming it", u.email)));
+    }
+    if u.email_verified() {
+        return Err(ApiError::conflict("this address is already confirmed"));
+    }
+    let mut tx = state.db.begin().await?;
+    forgust_db::users::set_email_verified(&mut *tx, u.id).await?;
+    // a link sent for it has nothing left to confirm (one for a new address stays)
+    if u.unconfirmed_email.is_none() {
+        forgust_db::users::delete_tokens(&mut *tx, u.id, "email").await?;
+    }
+    tx.commit().await?;
+    services::audit(&state, &p, "email_confirmed", Some(("user", u.id)), json!({ "email": u.email, "by": "administrator" }), None).await;
     Ok(Json(json!({ "ok": true })))
 }
 
@@ -826,6 +858,9 @@ pub struct UpdateUser {
     /// `active` or `blocked`.
     pub state: Option<String>,
     pub password: Option<String>,
+    /// A new address, confirmed at once: the administrator vouches for it
+    /// (the only way to a confirmed address on an instance without email).
+    pub email: Option<String>,
 }
 
 pub async fn update_user(
@@ -869,6 +904,26 @@ pub async fn update_user(
         forgust_db::admin::set_external(&state.db, id, ext).await?;
         services::audit(&state, &p, if ext { "user_made_external" } else { "user_made_internal" }, Some(("user", id)), json!({}), None)
             .await;
+    }
+    if let Some(email) = req.email.as_deref().map(str::trim) {
+        if u.is_bot() {
+            return Err(ApiError::bad("bots have no address of their own"));
+        }
+        services::paths::validate_email(email)?;
+        services::accounts::set_email(&state, &p, &u, email, true).await?;
+        if !email.eq_ignore_ascii_case(&u.email) {
+            // the old inbox hears of it (nothing is sent without email)
+            services::notify::send_to(
+                &state,
+                &u.email,
+                "Your email address was changed",
+                &format!(
+                    "Hello {},\n\nAn administrator moved your Forgust account to {email}. Emails go there from now on.\n\nIf you did not expect this, ask an administrator.\n",
+                    u.username
+                ),
+            )
+            .await;
+        }
     }
     if let Some(pw) = req.password.as_deref() {
         users::validate_password(pw)?;

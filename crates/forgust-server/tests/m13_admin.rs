@@ -56,7 +56,7 @@ async fn admin_views_are_for_admins(pool: sqlx::PgPool) {
     assert_eq!(status("Database"), "ok");
     assert_eq!(status("Blob store"), "ok");
     assert_eq!(status("Git"), "ok");
-    assert_eq!(status("Email"), "warn", "not configured in tests");
+    assert_eq!(status("Email"), "ok", "the tests' in-memory mailer");
 }
 
 #[sqlx::test(migrator = "forgust_db::MIGRATOR")]
@@ -206,6 +206,27 @@ async fn admin_actions(pool: sqlx::PgPool) {
     wait_jobs(&srv.state).await;
     assert!(srv.state.mailer.sent().iter().any(|m| m.to == vec!["rita@example.com".to_string()] && m.subject.contains("Confirm")));
 
+    // an administrator vouches for an address: confirmed with no link, or changed (confirmed too)
+    let confirm = format!("{u}/confirm_email");
+    assert_eq!(admin.post(&confirm, json!({ "email": "other@example.com" })).await.0, 409, "not the address they have now");
+    admin.ok_post(&confirm, json!({ "email": "rita@example.com" })).await;
+    assert_eq!(find(&admin.ok_get("/api/v1/admin/users").await).unwrap()["email_verified"], true);
+    assert_eq!(admin.post(&confirm, json!({ "email": "rita@example.com" })).await.0, 409);
+    assert_eq!(admin.put(&u, json!({ "email": "not-an-address" })).await.0, 400);
+    assert_eq!(admin.put(&u, json!({ "email": "root@example.com" })).await.0, 409, "someone else's");
+    sqlx::query("UPDATE users SET email_verified_at = NULL, unconfirmed_email = 'waiting@example.com' WHERE id = $1")
+        .bind(rid)
+        .execute(&srv.state.db)
+        .await
+        .unwrap();
+    let (code, body) = admin.put(&u, json!({ "email": "rita@new.example" })).await;
+    assert_eq!(code, 200, "{body}");
+    assert_eq!(body["email"], "rita@new.example");
+    assert_eq!(body["email_verified"], true);
+    assert!(body["unconfirmed_email"].is_null(), "{body}");
+    wait_jobs(&srv.state).await;
+    assert!(srv.state.mailer.sent().iter().any(|m| m.to == vec!["rita@example.com".to_string()] && m.subject.contains("was changed")));
+
     // failed jobs: retried (it runs again) or dropped; not running ones
     let add = r#"SELECT (graphile_worker.add_job('ping', '{"marker": "admin-test"}'::json, max_attempts => 1, run_at => now() + interval '1 day')).id"#;
     let a: i64 = sqlx::query_scalar(add).fetch_one(&srv.state.db).await.unwrap();
@@ -222,7 +243,7 @@ async fn admin_actions(pool: sqlx::PgPool) {
     let jobs = admin.ok_get("/api/v1/admin/jobs").await;
     assert!(jobs["failed"].as_array().unwrap().is_empty(), "a ran again, b is gone: {jobs}");
 
-    // scheduled tasks run now; email not configured here
+    // scheduled tasks run now
     assert!(admin.ok_get("/api/v1/admin/tasks").await.as_array().unwrap().iter().any(|t| t["task"] == "ci_sweep"));
     for t in ["cleanup", "measure_repositories", "ci_sweep", "maintenance_sweep"] {
         admin.ok_post(&format!("/api/v1/admin/tasks/{t}"), json!({})).await;
@@ -231,7 +252,9 @@ async fn admin_actions(pool: sqlx::PgPool) {
     let jobs = admin.ok_get("/api/v1/admin/jobs").await;
     assert!(jobs["failed"].as_array().unwrap().is_empty(), "the tasks ran: {jobs}");
     assert_eq!(admin.post("/api/v1/admin/tasks/drop_database", json!({})).await.0, 404);
-    assert_eq!(admin.post("/api/v1/admin/health/email", json!({})).await.0, 409);
+    // a test email leaves at once (here: into the tests' in-memory mailer)
+    admin.ok_post("/api/v1/admin/health/email", json!({})).await;
+    assert!(srv.state.mailer.sent().iter().any(|m| m.subject == "Forgust test email"));
 
     // the banner: everyone sees it, signed out too, until it ends
     let anon = Client::new(&srv.base);

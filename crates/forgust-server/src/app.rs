@@ -96,7 +96,9 @@ pub async fn build_state(
     let images = cfg.security.image_proxy.then(|| crate::render::ImageProxy::new(secrets.clone(), &cfg.server.external_url));
     let oidc = OidcClients::new(cfg.oidc.clone())?;
     let storage = storage_for(&cfg);
-    let mailer: Arc<dyn crate::services::notify::Mailer> = if cfg.email.smtp_url.is_empty() {
+    let mailer: Arc<dyn crate::services::notify::Mailer> = if !cfg.email.enabled() {
+        Arc::new(crate::services::notify::NoMailer)
+    } else if cfg.email.smtp_url == "memory:" {
         Arc::new(crate::services::notify::MemoryMailer::default())
     } else {
         Arc::new(crate::services::notify::SmtpMailer::new(&cfg.email.smtp_url, &cfg.email.from)?)

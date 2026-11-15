@@ -6156,6 +6156,18 @@
           }
         }
       },
+      "ConfirmUserEmail": {
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The address the administrator saw and vouches for: refused when the\naccount's is another one by now."
+          }
+        }
+      },
       "ConnectBody": {
         "type": "object",
         "required": [
@@ -13569,12 +13581,17 @@
         "type": "object",
         "required": [
           "user",
-          "csrf_token"
+          "csrf_token",
+          "email_enabled"
         ],
         "properties": {
           "csrf_token": {
             "type": "string",
             "description": "Send back as `X-CSRF-Token` on POST/PUT/DELETE."
+          },
+          "email_enabled": {
+            "type": "boolean",
+            "description": "Whether the instance sends email: without it, nothing promises or\nwaits for an emailed link."
           },
           "impersonator": {
             "oneOf": [
@@ -13632,9 +13649,14 @@
       "SetupStatus": {
         "type": "object",
         "required": [
-          "needs_setup"
+          "needs_setup",
+          "email_enabled"
         ],
         "properties": {
+          "email_enabled": {
+            "type": "boolean",
+            "description": "Whether the instance sends email (confirmation and reset links,\nnotifications). Without it, nothing should promise or wait for one."
+          },
           "needs_setup": {
             "type": "boolean"
           }
@@ -14037,6 +14059,7 @@
         "required": [
           "blob_backend",
           "blob_location",
+          "repositories_location",
           "kinds",
           "total",
           "projects",
@@ -14059,7 +14082,6 @@
             ],
             "format": "int64",
             "description": "The storage quota of every top-level group and personal namespace\nwithout its own."
-          "repositories_location",
           },
           "kinds": {
             "$ref": "#/components/schemas/StorageKinds"
@@ -14077,6 +14099,10 @@
               "$ref": "#/components/schemas/ProjectStorage"
             },
             "description": "Largest first: what each keeps, LFS objects and image layers counted for every project using them."
+          },
+          "repositories_location": {
+            "type": "string",
+            "description": "The directory of the Git repositories: always on this server's disk,\nwhatever the blob store is."
           },
           "repositories_unmeasured": {
             "type": "integer",
@@ -14100,10 +14126,6 @@
           }
         }
       },
-          "repositories_location": {
-            "type": "string",
-            "description": "The directory of the Git repositories: always on this server's disk,\nwhatever the blob store is."
-          },
       "StorageUse": {
         "type": "object",
         "required": [
@@ -14916,6 +14938,13 @@
       "UpdateUser": {
         "type": "object",
         "properties": {
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A new address, confirmed at once: the administrator vouches for it\n(the only way to a confirmed address on an instance without email)."
+          },
           "is_admin": {
             "type": [
               "boolean",

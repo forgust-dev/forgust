@@ -36,12 +36,21 @@ export function Profile() {
 }
 
 function ProfileForm() {
-  const { user, setSession, refresh } = useSession();
+  const { user, emailEnabled, setSession, refresh } = useSession();
   const [name, setName] = useState(user?.name ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
   const [password, setPassword] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
-  const emailChanges = email.trim().toLowerCase() !== (user?.email ?? "").toLowerCase() && email.trim().toLowerCase() !== (user?.unconfirmed_email ?? "").toLowerCase();
+  // without email the address changes at once: nothing waits for a link
+  const pending = emailEnabled ? user?.unconfirmed_email : undefined;
+  const emailChanges = email.trim().toLowerCase() !== (user?.email ?? "").toLowerCase() && email.trim().toLowerCase() !== (pending ?? "").toLowerCase();
+  const emailHint = !emailEnabled
+    ? "This instance sends no email: a new address takes effect at once, with no confirmation link."
+    : pending
+      ? undefined
+      : user?.email_verified === false
+        ? "Not confirmed yet: emails wait until you open the link we sent."
+        : "Changing it sends a confirmation link to the new address; the current one stays until then.";
   const [error, setError] = useState<unknown>(null);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -50,7 +59,7 @@ function ProfileForm() {
       setPassword("");
       const s = await api.get<S["SessionInfo"]>("/session");
       setSession(s);
-      setMsg(s.user.unconfirmed_email ? `Saved. We sent a confirmation link to ${s.user.unconfirmed_email}.` : "Saved.");
+      setMsg(emailEnabled && s.user.unconfirmed_email ? `Saved. We sent a confirmation link to ${s.user.unconfirmed_email}.` : "Saved.");
     } catch (err) {
       setError(err);
     }
@@ -76,16 +85,7 @@ function ProfileForm() {
           <Field label="Name">
             <input value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
-          <Field
-            label="Email"
-            hint={
-              user?.unconfirmed_email
-                ? undefined
-                : user?.email_verified === false
-                  ? "Not confirmed yet: emails wait until you open the link we sent."
-                  : "Changing it sends a confirmation link to the new address; the current one stays until then."
-            }
-          >
+          <Field label="Email" hint={emailHint}>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </Field>
           {emailChanges && (
@@ -93,9 +93,9 @@ function ProfileForm() {
               <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
             </Field>
           )}
-          {user?.unconfirmed_email && (
+          {pending && (
             <div className="alert">
-              <strong>{user.unconfirmed_email}</strong> is waiting for confirmation: open the link we sent there. Until then, {user.email} stays your
+              <strong>{pending}</strong> is waiting for confirmation: open the link we sent there. Until then, {user?.email} stays your
               address. <ResendLink />
             </div>
           )}

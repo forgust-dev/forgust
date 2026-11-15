@@ -450,8 +450,9 @@ function SideVersion() {
 }
 
 function EmailBanner() {
-  const { user } = useSession();
-  if (!user || user.email_verified !== false) return null;
+  const { user, emailEnabled } = useSession();
+  // no email here: no link was sent, and none can be
+  if (!user || user.email_verified !== false || !emailEnabled) return null;
   return (
     <div className="banner email-banner" role="status">
       <span className="grow">

@@ -18,6 +18,9 @@ export const useNotificationChannels = () =>
 /** The sign-in providers configured here (the sign-in page, and who is linked to which). */
 export const useProviders = () => useQuery({ queryKey: ["providers"], queryFn: () => api.get<S["Provider"][]>("/auth/providers") });
 
+/** What a signed-out page needs to know of the instance: whether it still waits for its first administrator, whether it sends email. */
+export const useSetup = () => useQuery({ queryKey: ["setup"], queryFn: () => api.get<S["SetupStatus"]>("/setup") });
+
 export const keys = {
   project: (id: number) => ["project", id] as const,
   pathResolve: (path: string) => ["resolve", path] as const,

@@ -93,11 +93,18 @@ function Users() {
     await run(f, done);
   };
   const providers = useProviders();
+  const { emailEnabled } = useSession();
   // for someone who cannot do it from their own settings: by who they are at the provider
   const linkProvider = async (u: S["AdminUser"], pr: S["Provider"]) => {
     const subject = window.prompt(`Link ${u.username} to ${pr.display_name}.\n\nTheir identifier at the provider (the "sub" claim of its ID tokens):`);
     if (!subject?.trim()) return;
     await run(() => api.post(`/admin/users/${u.id}/identities`, { provider: pr.name, subject: subject.trim() }), `${pr.display_name} linked`);
+  };
+  // confirmed at once: the administrator vouches for it (no link, so it works without email too)
+  const changeEmail = async (u: S["AdminUser"]) => {
+    const email = window.prompt(`A new email address for ${u.username}.\n\nIt is theirs at once, confirmed: enter it only if you know it is their address.`, u.email);
+    if (!email?.trim() || email.trim() === u.email) return;
+    await run(() => api.put(`/admin/users/${u.id}`, { email: email.trim() }), "Email address changed");
   };
   const [form, setForm] = useState({ username: "", email: "", password: "", is_admin: false });
   const [error, setError] = useState<unknown>(null);
@@ -173,7 +180,9 @@ function Users() {
                             window.location.assign("/");
                           }, `Signed in as ${u.username}`),
                       },
-                      { label: "Resend the confirmation email", disabled: u.email_verified, onSelect: () => act(() => api.post(`${path}/resend_confirmation`), "Confirmation email sent") },
+                      { label: "Change the email address…", onSelect: () => changeEmail(u) },
+                      { label: "Confirm the email address", disabled: u.email_verified, onSelect: () => act(() => api.post(`${path}/confirm_email`, { email: u.email }), "Email address confirmed", `Confirm ${u.email} as ${u.username}'s address without a link? Do it only if you know it is theirs: a confirmed address is trusted for verified commits and code owners.`) },
+                      { label: "Resend the confirmation email", disabled: u.email_verified || !emailEnabled, onSelect: () => act(() => api.post(`${path}/resend_confirmation`), "Confirmation email sent") },
                       ...(providers.data ?? []).map(
                         (pr): MenuItem =>
                           u.providers.includes(pr.name)
