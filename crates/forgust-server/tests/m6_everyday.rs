@@ -935,9 +935,11 @@ async fn oidc_callbacks_need_the_starting_browser(pool: sqlx::PgPool) {
     })
     .await;
     let anon = Client::new(&srv.base);
-    let (code, body) = anon.get("/api/v1/auth/oidc/corp/callback?code=attackers-code&state=attackers-state").await;
-    assert_eq!(code, 400, "{body}");
-    assert!(body.to_string().contains("not started in this browser"), "{body}");
+    // refusals go back to the sign-in page, which shows them
+    let r =
+        anon.req(reqwest::Method::GET, "/api/v1/auth/oidc/corp/callback?code=attackers-code&state=attackers-state").send().await.unwrap();
+    let to = location(&r);
+    assert!(to.starts_with("/login?error=") && to.contains("not%20started%20in%20this%20browser"), "{to}");
     // the browser that started it gets past that check (to the state lookup)
     let r = anon
         .req(reqwest::Method::GET, "/api/v1/auth/oidc/corp/callback?code=c&state=its-state")
@@ -945,7 +947,6 @@ async fn oidc_callbacks_need_the_starting_browser(pool: sqlx::PgPool) {
         .send()
         .await
         .unwrap();
-    assert_eq!(r.status(), 400);
-    let text = r.text().await.unwrap();
-    assert!(text.contains("unknown or expired login state"), "{text}");
+    let to = location(&r);
+    assert!(to.contains("unknown%20or%20expired%20login%20state"), "{to}");
 }

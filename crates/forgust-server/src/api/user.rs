@@ -158,6 +158,91 @@ pub async fn change_password(
     Ok(Json(json!({ "ok": true })))
 }
 
+// ------------------------------------------------------------------ sign-in providers
+
+/// A configured sign-in provider, and whether this account is linked to it.
+#[derive(Serialize, ToSchema)]
+pub struct LinkedProvider {
+    pub name: String,
+    pub display_name: String,
+    /// When the account was linked (None: not linked).
+    pub linked_at: Option<DateTime<Utc>>,
+}
+
+#[utoipa::path(get, path = "/api/v1/user/identities", responses((status = 200, body = [LinkedProvider])), tag = "user")]
+pub async fn list_identities(State(state): State<AppState>, SignedIn(u, _): SignedIn) -> ApiResult<Json<Vec<LinkedProvider>>> {
+    let linked = forgust_db::users::identities(&state.db, u.id).await?;
+    Ok(Json(
+        state
+            .oidc
+            .providers
+            .iter()
+            .map(|(name, p)| LinkedProvider {
+                name: name.clone(),
+                display_name: p.display_name.clone(),
+                linked_at: linked.iter().find(|i| &i.provider == name).map(|i| i.created_at),
+            })
+            .collect(),
+    ))
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct ConfirmPassword {
+    /// The account's password (accounts without one: empty, within 10 minutes of signing in).
+    #[serde(default)]
+    pub password: String,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct LinkStart {
+    /// Send the browser here: the provider's sign-in page.
+    pub url: String,
+}
+
+/// Start linking a provider to the signed-in account: the provider's sign-in,
+/// whose callback adds the identity to this account. Asked for with the
+/// password, like any new way into the account.
+pub async fn link_identity(
+    State(state): State<AppState>,
+    SignedIn(u, p): SignedIn,
+    jar: axum_extra::extract::CookieJar,
+    Path(name): Path<String>,
+    Json(req): Json<ConfirmPassword>,
+) -> ApiResult<(axum_extra::extract::CookieJar, Json<LinkStart>)> {
+    require_interactive(&u, &p)?;
+    require_confirmed(&state, &u)?;
+    if !state.oidc.providers.contains_key(&name) {
+        return Err(ApiError::NotFound);
+    }
+    reauth(&state, &jar, u.id, &req.password).await?;
+    let (url, login_state) = crate::auth::oidc::start(&state, &name, Some(u.id)).await?;
+    Ok((jar.add(crate::auth::oidc::state_cookie(&state, login_state)), Json(LinkStart { url })))
+}
+
+/// Unlink a provider. Never the last way in: an account without a password
+/// keeps at least one provider.
+pub async fn unlink_identity(
+    State(state): State<AppState>,
+    SignedIn(u, p): SignedIn,
+    jar: axum_extra::extract::CookieJar,
+    Path(name): Path<String>,
+    Json(req): Json<ConfirmPassword>,
+) -> ApiResult<Json<Value>> {
+    require_interactive(&u, &p)?;
+    reauth(&state, &jar, u.id, &req.password).await?;
+    let linked = forgust_db::users::identities(&state.db, u.id).await?;
+    if !linked.iter().any(|i| i.provider == name) {
+        return Err(ApiError::NotFound);
+    }
+    let other_way_in = forgust_db::users::password_hash(&state.db, u.id).await?.is_some() || linked.iter().any(|i| i.provider != name);
+    if !other_way_in {
+        return Err(ApiError::forbidden("this is the only way into your account: set a password first"));
+    }
+    forgust_db::users::remove_identities(&state.db, u.id, &name).await?;
+    services::audit(&state, &p, "identity_unlinked", Some(("user", u.id)), json!({ "provider": name }), None).await;
+    Ok(Json(json!({ "ok": true })))
+}
+
 // ------------------------------------------------------------------ SSH keys
 
 /// Parse an OpenSSH public key line; returns (normalized key, SHA256 fingerprint).

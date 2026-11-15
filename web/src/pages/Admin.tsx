@@ -3,7 +3,8 @@ import { AuditEvents } from "../components/AuditEvents";
 import { useState, type FormEvent } from "react";
 import { Route, Routes } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError, qs, timeAgo, type S } from "../api/client";
+import { api, ApiError, enc, qs, timeAgo, type S } from "../api/client";
+import { useProviders } from "../prefetch";
 import { useSession } from "../session";
 import { Avatar, Badge, Card, ErrorBox, Field, FilterTabs, NotFound, Q, SearchField, Tabs, UserLink, useDebounced } from "../components/ui";
 import { Menu, type MenuItem } from "../components/controls";
@@ -91,6 +92,13 @@ function Users() {
     if (confirmText && !window.confirm(confirmText)) return;
     await run(f, done);
   };
+  const providers = useProviders();
+  // for someone who cannot do it from their own settings: by who they are at the provider
+  const linkProvider = async (u: S["AdminUser"], pr: S["Provider"]) => {
+    const subject = window.prompt(`Link ${u.username} to ${pr.display_name}.\n\nTheir identifier at the provider (the "sub" claim of its ID tokens):`);
+    if (!subject?.trim()) return;
+    await run(() => api.post(`/admin/users/${u.id}/identities`, { provider: pr.name, subject: subject.trim() }), `${pr.display_name} linked`);
+  };
   const [form, setForm] = useState({ username: "", email: "", password: "", is_admin: false });
   const [error, setError] = useState<unknown>(null);
   const create = useMutation({
@@ -166,6 +174,12 @@ function Users() {
                           }, `Signed in as ${u.username}`),
                       },
                       { label: "Resend the confirmation email", disabled: u.email_verified, onSelect: () => act(() => api.post(`${path}/resend_confirmation`), "Confirmation email sent") },
+                      ...(providers.data ?? []).map(
+                        (pr): MenuItem =>
+                          u.providers.includes(pr.name)
+                            ? { label: `Unlink ${pr.display_name}`, onSelect: () => act(() => api.del(`${path}/identities/${enc(pr.name)}`), `${pr.display_name} unlinked`, `Stop ${u.username} signing in with ${pr.display_name}?`) }
+                            : { label: `Link ${pr.display_name}…`, onSelect: () => linkProvider(u, pr) },
+                      ),
                       "separator",
                       { label: "Delete account…", danger: true, onSelect: () => deleteUser(u) },
                       {
@@ -187,6 +201,9 @@ function Users() {
                         {u.state === "blocked" && <Badge tone="warn">blocked</Badge>}
                         {!human && <Badge>{u.user_type.replace("_", " ")}</Badge>}
                         {human && u.two_factor_enabled && <Badge tone="ok">2FA</Badge>}
+                        {u.providers.map((name) => (
+                          <Badge key={name}>{providers.data?.find((pr) => pr.name === name)?.display_name ?? name}</Badge>
+                        ))}
                       </div>
                       <div className="small muted ellipsis">
                         {u.email} {human && !u.email_verified && <span className="warn-text">· not confirmed</span>}

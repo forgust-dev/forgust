@@ -113,3 +113,13 @@ pg_restore = "pg_restore"
 # client_secret = "..."
 # auto_create = true
 # link_existing_by_email = false   # only safe when admins manage accounts and sign-up is off
+# Someone with a local account links it themselves, signed in: Your settings > Password & 2FA.
+# Only members of these groups may come in through this provider (empty: anyone it lets through).
+# The ID token must carry the claim: most providers want a scope for it.
+# allowed_groups = ["engineering"]
+# groups_claim = "groups"
+# scopes = ["openid", "email", "profile", "groups"]
+# Members of these groups are administrators, the others who sign in through the provider are not
+# (set at each sign-in; the last administrator keeps the rights).
+# admin_groups = ["forgust-admins"]
+# sync_profile = false             # take name and verified email from the provider at each sign-in

@@ -15,6 +15,9 @@ export const useWork = (enabled = true) => useQuery({ queryKey: ["work"], queryF
 export const useNotificationChannels = () =>
   useQuery({ queryKey: ["notifications", "channels"], queryFn: () => api.get<S["ChannelDto"][]>("/user/notification_channels"), staleTime: 60_000 });
 
+/** The sign-in providers configured here (the sign-in page, and who is linked to which). */
+export const useProviders = () => useQuery({ queryKey: ["providers"], queryFn: () => api.get<S["Provider"][]>("/auth/providers") });
+
 export const keys = {
   project: (id: number) => ["project", id] as const,
   pathResolve: (path: string) => ["resolve", path] as const,

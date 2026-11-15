@@ -235,17 +235,6 @@ async fn tokens_deploy_keys_and_two_factor(pool: sqlx::PgPool) {
     assert!(!git(&work, &["ls-remote", &srv.http_url("dave", "acme/platform/api")]).await.ok);
 }
 
-fn totp_code(secret: &str) -> String {
-    totp_code_at(secret, 0)
-}
-
-/// The code `ahead` seconds from now (the server accepts the next step too).
-fn totp_code_at(secret: &str, ahead: u64) -> String {
-    let secret = totp_rs::Secret::try_from_base32(secret).unwrap();
-    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-    totp_rs::Builder::new().with_secret(secret).build().unwrap().generate(now + ahead).to_string()
-}
-
 #[sqlx::test(migrator = "forgust_db::MIGRATOR")]
 async fn git_over_ssh_with_user_and_deploy_keys(pool: sqlx::PgPool) {
     if !has("ssh") && !std::path::Path::new("/usr/bin/ssh").exists() {

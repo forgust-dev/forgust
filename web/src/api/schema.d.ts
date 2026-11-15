@@ -2224,6 +2224,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/user/identities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_identities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/user/keys": {
         parameters: {
             query?: never;
@@ -2578,6 +2594,8 @@ export interface components {
             /** Format: date-time */
             last_sign_in_at?: string | null;
             name: string;
+            /** @description Sign-in providers linked to the account. */
+            providers: string[];
             /**
              * Format: int64
              * @description Sessions not expired.
@@ -2987,6 +3005,10 @@ export interface components {
         };
         ConfirmEmail: {
             token: string;
+        };
+        ConfirmPassword: {
+            /** @description The account's password (accounts without one: empty, within 10 minutes of signing in). */
+            password?: string;
         };
         ConnectBody: {
             /** @description Only projects under this group (GitLab) or owner (GitHub). */
@@ -3943,6 +3965,26 @@ export interface components {
             direct_asset_url?: string | null;
             /** @description The link's URL, absolute. */
             href: string;
+        };
+        LinkIdentity: {
+            /** @description A configured provider (`[oidc.<name>]`). */
+            provider: string;
+            /** @description Who they are there: the `sub` claim of the provider's ID tokens. */
+            subject: string;
+        };
+        LinkStart: {
+            /** @description Send the browser here: the provider's sign-in page. */
+            url: string;
+        };
+        /** @description A configured sign-in provider, and whether this account is linked to it. */
+        LinkedProvider: {
+            display_name: string;
+            /**
+             * Format: date-time
+             * @description When the account was linked (None: not linked).
+             */
+            linked_at?: string | null;
+            name: string;
         };
         Listed: {
             dir: boolean;
@@ -9543,6 +9585,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GpgKey"];
+                };
+            };
+        };
+    };
+    list_identities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkedProvider"][];
                 };
             };
         };

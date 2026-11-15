@@ -70,18 +70,34 @@ pub async fn delete_expired(pool: &sqlx::PgPool) -> Result<u64> {
     Ok(n)
 }
 
-pub async fn create_challenge(e: impl PgExecutor<'_>, token_hash: &[u8], user_id: i64, expires_at: DateTime<Utc>) -> Result<()> {
-    sqlx::query!("INSERT INTO login_challenges (token_hash, user_id, expires_at) VALUES ($1, $2, $3)", token_hash, user_id, expires_at)
-        .execute(e)
-        .await?;
+/// `provider_sync`: what the provider sign-in behind this challenge says about
+/// the account, to apply once the second factor is given (never before).
+pub async fn create_challenge(
+    e: impl PgExecutor<'_>,
+    token_hash: &[u8],
+    user_id: i64,
+    provider_sync: Option<&serde_json::Value>,
+    expires_at: DateTime<Utc>,
+) -> Result<()> {
+    sqlx::query!(
+        "INSERT INTO login_challenges (token_hash, user_id, provider_sync, expires_at) VALUES ($1, $2, $3, $4)",
+        token_hash,
+        user_id,
+        provider_sync,
+        expires_at
+    )
+    .execute(e)
+    .await?;
     Ok(())
 }
 
-/// Look up (without consuming) a pending second-factor challenge.
-pub async fn find_challenge(e: impl PgExecutor<'_>, token_hash: &[u8]) -> Result<Option<i64>> {
-    sqlx::query_scalar!("SELECT user_id FROM login_challenges WHERE token_hash = $1 AND expires_at > now()", token_hash)
+/// Look up (without consuming) a pending second-factor challenge: whose it
+/// is, and what its provider sign-in left to apply.
+pub async fn find_challenge(e: impl PgExecutor<'_>, token_hash: &[u8]) -> Result<Option<(i64, Option<serde_json::Value>)>> {
+    let r = sqlx::query!("SELECT user_id, provider_sync FROM login_challenges WHERE token_hash = $1 AND expires_at > now()", token_hash)
         .fetch_optional(e)
-        .await
+        .await?;
+    Ok(r.map(|r| (r.user_id, r.provider_sync)))
 }
 
 pub async fn delete_challenge(e: impl PgExecutor<'_>, token_hash: &[u8]) -> Result<()> {
@@ -95,14 +111,16 @@ pub async fn save_oidc_state(
     provider: &str,
     nonce: &str,
     pkce: &str,
+    link_user_id: Option<i64>,
     expires_at: DateTime<Utc>,
 ) -> Result<()> {
     sqlx::query!(
-        "INSERT INTO oidc_states (state, provider, nonce, pkce_verifier, expires_at) VALUES ($1, $2, $3, $4, $5)",
+        "INSERT INTO oidc_states (state, provider, nonce, pkce_verifier, link_user_id, expires_at) VALUES ($1, $2, $3, $4, $5, $6)",
         state,
         provider,
         nonce,
         pkce,
+        link_user_id,
         expires_at
     )
     .execute(e)
@@ -110,12 +128,25 @@ pub async fn save_oidc_state(
     Ok(())
 }
 
-/// Consume an OIDC state: returns (provider, nonce, pkce verifier).
-pub async fn take_oidc_state(e: impl PgExecutor<'_>, state: &str) -> Result<Option<(String, String, String)>> {
-    let r = sqlx::query!("DELETE FROM oidc_states WHERE state = $1 AND expires_at > now() RETURNING provider, nonce, pkce_verifier", state)
-        .fetch_optional(e)
-        .await?;
-    Ok(r.map(|r| (r.provider, r.nonce, r.pkce_verifier)))
+/// What a provider sign-in remembered between its redirect and its callback.
+pub struct OidcState {
+    pub provider: String,
+    pub nonce: String,
+    pub pkce_verifier: String,
+    /// The account that started it from its settings, to link the identity to
+    /// (None: a sign-in).
+    pub link_user_id: Option<i64>,
+}
+
+/// Consume an OIDC state.
+pub async fn take_oidc_state(e: impl PgExecutor<'_>, state: &str) -> Result<Option<OidcState>> {
+    sqlx::query_as!(
+        OidcState,
+        "DELETE FROM oidc_states WHERE state = $1 AND expires_at > now() RETURNING provider, nonce, pkce_verifier, link_user_id",
+        state
+    )
+    .fetch_optional(e)
+    .await
 }
 
 /// The account has a session from this address (its owner's usual places).

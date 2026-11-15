@@ -240,8 +240,10 @@ pub async fn find_identity(e: impl PgExecutor<'_>, provider: &str, subject: &str
     sqlx::query_scalar!("SELECT user_id FROM identities WHERE provider = $1 AND subject = $2", provider, subject).fetch_optional(e).await
 }
 
-pub async fn add_identity(e: impl PgExecutor<'_>, user_id: i64, provider: &str, subject: &str) -> Result<()> {
-    sqlx::query!(
+/// Link a provider identity to an account; false when that identity already
+/// belongs to an account (this one or another).
+pub async fn add_identity(e: impl PgExecutor<'_>, user_id: i64, provider: &str, subject: &str) -> Result<bool> {
+    let r = sqlx::query!(
         "INSERT INTO identities (user_id, provider, subject) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
         user_id,
         provider,
@@ -249,7 +251,51 @@ pub async fn add_identity(e: impl PgExecutor<'_>, user_id: i64, provider: &str, 
     )
     .execute(e)
     .await?;
-    Ok(())
+    Ok(r.rows_affected() > 0)
+}
+
+/// How linking a provider identity to an account went.
+pub enum Linked {
+    Done,
+    /// That identity is this account's already.
+    AlreadyYours,
+    /// That identity belongs to another account.
+    IdentityTaken,
+    /// The account has another identity at this provider.
+    ProviderTaken,
+}
+
+/// Link a provider identity to an account that asks for it (or whose
+/// administrator does): one account per identity, one identity per provider
+/// and account.
+pub async fn link_identity(pool: &sqlx::PgPool, user_id: i64, provider: &str, subject: &str) -> Result<Linked> {
+    match find_identity(pool, provider, subject).await? {
+        Some(owner) if owner == user_id => return Ok(Linked::AlreadyYours),
+        Some(_) => return Ok(Linked::IdentityTaken),
+        None => {}
+    }
+    if identities(pool, user_id).await?.iter().any(|i| i.provider == provider) {
+        return Ok(Linked::ProviderTaken);
+    }
+    // someone else took it meanwhile
+    Ok(if add_identity(pool, user_id, provider, subject).await? { Linked::Done } else { Linked::IdentityTaken })
+}
+
+/// A provider the account can sign in through, and since when.
+pub struct Identity {
+    pub provider: String,
+    pub created_at: DateTime<Utc>,
+}
+
+pub async fn identities(e: impl PgExecutor<'_>, user_id: i64) -> Result<Vec<Identity>> {
+    sqlx::query_as!(Identity, "SELECT provider, created_at FROM identities WHERE user_id = $1 ORDER BY created_at", user_id)
+        .fetch_all(e)
+        .await
+}
+
+/// Unlink a provider from an account; how many identities went.
+pub async fn remove_identities(e: impl PgExecutor<'_>, user_id: i64, provider: &str) -> Result<u64> {
+    Ok(sqlx::query!("DELETE FROM identities WHERE user_id = $1 AND provider = $2", user_id, provider).execute(e).await?.rows_affected())
 }
 
 /// Bot users created for a project or namespace access token.

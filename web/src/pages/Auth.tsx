@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api, type S } from "../api/client";
+import { useProviders } from "../prefetch";
 import { useSession } from "../session";
 import { ErrorBox, Field } from "../components/ui";
 
@@ -27,7 +28,7 @@ export function Login() {
   const [code, setCode] = useState("");
   const [error, setError] = useState<unknown>(params.get("error"));
   const [busy, setBusy] = useState(false);
-  const providers = useQuery({ queryKey: ["providers"], queryFn: () => api.get<S["Provider"][]>("/auth/providers") });
+  const providers = useProviders();
   const setup = useQuery({ queryKey: ["setup"], queryFn: () => api.get<S["SetupStatus"]>("/setup") });
 
   const finish = (r: S["LoginResponse"]) => {

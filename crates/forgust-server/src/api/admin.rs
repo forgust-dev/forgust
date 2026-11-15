@@ -717,6 +717,56 @@ pub async fn revoke_tokens(State(state): State<AppState>, Admin(_, p): Admin, Pa
     Ok(Json(json!({ "revoked": n })))
 }
 
+#[derive(Deserialize, ToSchema)]
+pub struct LinkIdentity {
+    /// A configured provider (`[oidc.<name>]`).
+    pub provider: String,
+    /// Who they are there: the `sub` claim of the provider's ID tokens.
+    pub subject: String,
+}
+
+/// Link a provider identity to someone's account, for them (they can also do
+/// it themselves, from their settings).
+pub async fn link_identity(
+    State(state): State<AppState>,
+    Admin(_, p): Admin,
+    Path(id): Path<i64>,
+    Json(req): Json<LinkIdentity>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let u = person(&state, id).await?;
+    let subject = req.subject.trim();
+    if !state.oidc.providers.contains_key(&req.provider) {
+        return Err(ApiError::bad("no such sign-in provider"));
+    }
+    if subject.is_empty() || subject.len() > 255 {
+        return Err(ApiError::bad("the subject is the provider's identifier of the person (its `sub` claim)"));
+    }
+    use forgust_db::users::Linked;
+    match forgust_db::users::link_identity(&state.db, u.id, &req.provider, subject).await? {
+        Linked::Done => {}
+        Linked::AlreadyYours | Linked::ProviderTaken => {
+            return Err(ApiError::conflict(format!("{} is already linked to this provider; unlink it first", u.username)));
+        }
+        Linked::IdentityTaken => return Err(ApiError::conflict("this identity is already linked to an account")),
+    }
+    services::audit(&state, &p, "identity_linked", Some(("user", u.id)), json!({ "provider": req.provider }), None).await;
+    Ok(Json(json!({ "ok": true })))
+}
+
+/// Unlink a provider from someone's account: they no longer sign in through it.
+pub async fn unlink_identity(
+    State(state): State<AppState>,
+    Admin(_, p): Admin,
+    Path((id, provider)): Path<(i64, String)>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let u = person(&state, id).await?;
+    if forgust_db::users::remove_identities(&state.db, u.id, &provider).await? == 0 {
+        return Err(ApiError::NotFound);
+    }
+    services::audit(&state, &p, "identity_unlinked", Some(("user", u.id)), json!({ "provider": provider }), None).await;
+    Ok(Json(json!({ "ok": true })))
+}
+
 /// Email the confirmation link again (to the new address when one waits).
 pub async fn resend_confirmation(
     State(state): State<AppState>,
