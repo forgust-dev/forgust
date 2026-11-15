@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
-use forgust_server::{app, backup, config::Config, services, telemetry};
+use forgust_server::{app, backup, config::Config, services, telemetry, tls};
 
 #[derive(Parser)]
 #[command(name = "forgust", version, about = "Forgust: a fast, self-hosted code forge")]
@@ -72,6 +72,7 @@ fn main() -> anyhow::Result<()> {
         return Ok(());
     }
     let cfg = Config::load(cli.config.as_deref())?;
+    tls::init(&cfg)?;
     let sentry = matches!(cli.command, Command::Serve).then(|| telemetry::init_sentry(&cfg.telemetry)).transpose()?.flatten();
     let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build()?;
     let result = rt.block_on(run(cli.command, cfg));

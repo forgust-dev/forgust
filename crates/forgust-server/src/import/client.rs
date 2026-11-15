@@ -47,7 +47,7 @@ impl Http {
         let mut headers = auth;
         headers.insert(reqwest::header::USER_AGENT, HeaderValue::from_static("Forgust-importer"));
         headers.insert(reqwest::header::ACCEPT, HeaderValue::from_static("application/json"));
-        let client = reqwest::Client::builder()
+        let client = crate::tls::http_client()
             .resolve_to_addrs(&host, &addrs)
             .redirect(reqwest::redirect::Policy::none())
             .connect_timeout(Duration::from_secs(15))

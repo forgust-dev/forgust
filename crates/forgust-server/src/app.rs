@@ -23,11 +23,28 @@ use crate::jobs::GraphileQueue;
 use crate::state::{AppState, HookConfig, Inner, RateLimiter, RepoLocks, ResponseCache};
 
 pub async fn connect(cfg: &Config) -> anyhow::Result<sqlx::PgPool> {
-    Ok(PgPoolOptions::new()
-        .max_connections(cfg.database.max_connections)
-        .acquire_timeout(Duration::from_secs(10))
-        .connect(&cfg.database.url)
-        .await?)
+    let pool = PgPoolOptions::new().max_connections(cfg.database.max_connections).acquire_timeout(Duration::from_secs(10));
+    Ok(match with_ca(&cfg.database.url, crate::tls::pem())? {
+        Some(options) => pool.connect_with(options).await?,
+        None => pool.connect(&cfg.database.url).await?,
+    })
+}
+
+/// The connection with `security.ca_file` trusted, unless the URL or
+/// `PGSSLROOTCERT` already names the authorities to trust; `None` leaves the
+/// URL as it is.
+fn with_ca(url: &str, ca_pem: Option<Vec<u8>>) -> anyhow::Result<Option<sqlx::postgres::PgConnectOptions>> {
+    let Some(pem) = ca_pem else { return Ok(None) };
+    if names_root_cert(url) {
+        return Ok(None);
+    }
+    Ok(Some(url.parse::<sqlx::postgres::PgConnectOptions>()?.ssl_root_cert_from_pem(pem)))
+}
+
+/// Whether a database URL, or the environment, already says which authorities to trust.
+pub(crate) fn names_root_cert(url: &str) -> bool {
+    std::env::var_os("PGSSLROOTCERT").is_some()
+        || url::Url::parse(url).is_ok_and(|u| u.query_pairs().any(|(k, _)| k == "sslrootcert" || k == "ssl-root-cert" || k == "ssl-ca"))
 }
 
 pub async fn migrate(pool: &sqlx::PgPool) -> anyhow::Result<()> {
@@ -66,6 +83,7 @@ pub async fn build_state(
     pool: sqlx::PgPool,
     metrics: Option<metrics_exporter_prometheus::PrometheusHandle>,
 ) -> anyhow::Result<AppState> {
+    crate::tls::init(&cfg)?;
     std::fs::create_dir_all(&cfg.server.data_dir)?;
     std::fs::create_dir_all(cfg.repos_dir())?;
     let run_dir = cfg.server.data_dir.join("run");
@@ -278,4 +296,17 @@ pub async fn start(state: AppState) -> anyhow::Result<Running> {
         }
     });
     Ok(Running { http, addr, ssh_addr })
+}
+
+#[cfg(test)]
+mod tls_tests {
+    use super::*;
+
+    #[test]
+    fn the_database_trusts_ca_file_unless_it_names_its_own() {
+        let pem = || Some(b"-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----\n".to_vec());
+        assert!(with_ca("postgres://u:p@db/forgust?sslmode=verify-full", None).unwrap().is_none());
+        assert!(with_ca("postgres://u:p@db/forgust?sslmode=verify-full", pem()).unwrap().is_some());
+        assert!(with_ca("postgres://u:p@db/forgust?sslmode=verify-full&sslrootcert=/etc/db-ca.pem", pem()).unwrap().is_none());
+    }
 }

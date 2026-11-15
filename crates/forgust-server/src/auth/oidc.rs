@@ -27,10 +27,12 @@ pub struct OidcIdentity {
 }
 
 fn http_client() -> ApiResult<openidconnect::reqwest::Client> {
-    openidconnect::reqwest::ClientBuilder::new()
-        .redirect(openidconnect::reqwest::redirect::Policy::none())
-        .build()
-        .map_err(|e| ApiError::Internal(e.into()))
+    let mut builder = openidconnect::reqwest::ClientBuilder::new().redirect(openidconnect::reqwest::redirect::Policy::none());
+    for cert in crate::tls::certs() {
+        builder =
+            builder.add_root_certificate(openidconnect::reqwest::Certificate::from_der(cert).map_err(|e| ApiError::Internal(e.into()))?);
+    }
+    builder.build().map_err(|e| ApiError::Internal(e.into()))
 }
 
 fn redirect_url(state: &AppState, name: &str) -> String {

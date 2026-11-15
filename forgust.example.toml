@@ -33,6 +33,11 @@ cookie_secure = false   # cookies are Secure anyway when external_url is https
 # Markdown images from other sites load through /-/image/ (viewers' addresses
 # stay private, and the page's CSP allows images from this server only)
 image_proxy = true
+# PEM file of certificate authorities to trust on top of the usual ones (an
+# in-house CA), for every TLS connection the server opens: webhooks, the image
+# proxy, imports, OIDC, SMTP, S3, Sentry, the database and its backups. Not for
+# what runs outside the server (CI jobs, Renovate)
+ca_file = ""            # e.g. "/etc/forgust/ca.pem"
 
 [telemetry]
 log_format = "text"        # or "json"

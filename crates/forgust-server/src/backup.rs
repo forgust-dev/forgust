@@ -45,6 +45,7 @@ pub async fn backup(cfg: &Config, storage: &dyn Storage, pool: &sqlx::PgPool, ou
     let mut cmd = command(&cfg.backup.pg_dump)?;
     let (url, password) = split_password(&backup_db_url(cfg));
     cmd.arg("--format=custom").arg("--no-owner").arg(format!("--dbname={url}")).stdout(Stdio::piped()).stderr(Stdio::piped());
+    trust_ca(&mut cmd, &url)?;
     if let Some(pw) = &password {
         cmd.env("PGPASSWORD", pw);
     }
@@ -86,6 +87,21 @@ fn split_password(url: &str) -> (String, Option<String>) {
     }
 }
 
+/// `security.ca_file` for pg_dump and pg_restore, only where the URL asks for a
+/// verified server and names no authorities: with a root file, libpq verifies
+/// even under `sslmode=require`, which would break a connection that worked.
+fn trust_ca(cmd: &mut tokio::process::Command, url: &str) -> anyhow::Result<()> {
+    let verifies =
+        url::Url::parse(url).is_ok_and(|u| u.query_pairs().any(|(k, v)| k == "sslmode" && (v == "verify-ca" || v == "verify-full")));
+    if verifies
+        && !crate::app::names_root_cert(url)
+        && let Some(bundle) = crate::tls::bundle_file()?
+    {
+        cmd.env("PGSSLROOTCERT", bundle);
+    }
+    Ok(())
+}
+
 fn backup_db_url(cfg: &Config) -> String {
     std::env::var("FORGUST_BACKUP_DATABASE_URL").unwrap_or_else(|_| cfg.database.url.clone())
 }
@@ -98,6 +114,7 @@ pub async fn restore(cfg: &Config, storage: &dyn Storage, input: &Path) -> anyho
     let mut cmd = command(&cfg.backup.pg_restore)?;
     let (url, password) = split_password(&backup_db_url(cfg));
     cmd.arg("--no-owner").arg("--exit-on-error").arg(format!("--dbname={url}")).stdin(Stdio::piped()).stderr(Stdio::piped());
+    trust_ca(&mut cmd, &url)?;
     if let Some(pw) = &password {
         cmd.env("PGPASSWORD", pw);
     }

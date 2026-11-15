@@ -111,7 +111,11 @@ impl ObjectStoreBlobs {
             }
             "s3" => {
                 let b = &cfg.blobs;
-                let mut builder = AmazonS3Builder::from_env().with_bucket_name(&b.s3_bucket).with_region(&b.s3_region);
+                let mut builder = AmazonS3Builder::from_env();
+                if !crate::tls::certs().is_empty() {
+                    builder = builder.with_client_options(client_options(crate::tls::certs())?);
+                }
+                builder = builder.with_bucket_name(&b.s3_bucket).with_region(&b.s3_region);
                 if !b.s3_endpoint.is_empty() {
                     builder = builder.with_endpoint(&b.s3_endpoint).with_virtual_hosted_style_request(false);
                 }
@@ -241,6 +245,26 @@ impl BlobStore for ObjectStoreBlobs {
 }
 
 /// `lfs/ab/cd/abcd…` — fan out so no directory holds millions of files.
+/// The S3 client's options with `security.ca_file` trusted. Setting them on the
+/// builder replaces those it read from `AWS_*` variables (a proxy, timeouts):
+/// they are read again here.
+fn client_options(certs: &[rustls_pki_types::CertificateDer<'_>]) -> anyhow::Result<object_store::ClientOptions> {
+    let mut options = object_store::ClientOptions::new();
+    for (key, value) in std::env::vars_os() {
+        let (Some(key), Some(value)) = (key.to_str(), value.to_str()) else { continue };
+        if !key.starts_with("AWS_") {
+            continue;
+        }
+        if let Ok(object_store::aws::AmazonS3ConfigKey::Client(key)) = key.to_ascii_lowercase().parse() {
+            options = options.with_config(key, value);
+        }
+    }
+    for cert in certs {
+        options = options.with_root_certificate(object_store::Certificate::from_der(cert)?);
+    }
+    Ok(options)
+}
+
 pub fn lfs_key(oid: &str) -> String {
     format!("lfs/{}/{}/{}", &oid[0..2], &oid[2..4], oid)
 }

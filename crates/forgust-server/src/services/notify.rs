@@ -9,6 +9,7 @@ use forgust_db::merge_requests::{MergeRequest, Note};
 use forgust_db::projects::Project;
 use forgust_db::users::User;
 use lettre::message::Mailbox;
+use lettre::transport::smtp::client::{Certificate, Tls, TlsParameters};
 use lettre::{AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor};
 use serde::{Deserialize, Serialize};
 
@@ -49,8 +50,33 @@ pub struct SmtpMailer {
 
 impl SmtpMailer {
     pub fn new(url: &str, from: &str) -> anyhow::Result<Self> {
-        Ok(SmtpMailer { transport: AsyncSmtpTransport::<Tokio1Executor>::from_url(url)?.build(), from: from.parse()? })
+        let mut builder = AsyncSmtpTransport::<Tokio1Executor>::from_url(url)?;
+        if let Some(tls) = smtp_tls(url, crate::tls::certs())? {
+            builder = builder.tls(tls);
+        }
+        Ok(SmtpMailer { transport: builder.build(), from: from.parse()? })
     }
+}
+
+/// The TLS lettre reads from an SMTP URL, with `security.ca_file` trusted too.
+/// `None` leaves lettre's own: no extra authority, or a URL without TLS.
+fn smtp_tls(url: &str, certs: &[rustls_pki_types::CertificateDer<'_>]) -> anyhow::Result<Option<Tls>> {
+    if certs.is_empty() {
+        return Ok(None);
+    }
+    let url = url::Url::parse(url)?;
+    let mode = url.query_pairs().find(|(k, _)| k == "tls").map(|(_, v)| v.into_owned());
+    let kind: fn(TlsParameters) -> Tls = match (url.scheme(), mode.as_deref()) {
+        ("smtps", _) => Tls::Wrapper,
+        ("smtp", Some("required")) => Tls::Required,
+        ("smtp", Some("opportunistic")) => Tls::Opportunistic,
+        _ => return Ok(None),
+    };
+    let mut params = TlsParameters::builder(url.host_str().unwrap_or_default().to_string());
+    for cert in certs {
+        params = params.add_root_certificate(Certificate::from_der(cert.to_vec())?);
+    }
+    Ok(Some(kind(params.build()?)))
 }
 
 #[async_trait]
@@ -619,4 +645,20 @@ pub async fn pipeline_finished(state: &AppState, pipeline: &forgust_db::ci::Pipe
 /// confirmations).
 pub async fn send_to(state: &AppState, to: &str, subject: &str, body: &str) {
     queue(state, Email { to: vec![to.to_string()], subject: subject.into(), body: body.into(), ..Email::default() }).await;
+}
+
+#[cfg(test)]
+mod tls_tests {
+    use super::*;
+
+    #[test]
+    fn smtp_urls_keep_their_tls_mode() {
+        let ca = crate::tls::test_ca();
+        assert!(smtp_tls("smtps://mail.example", &[]).unwrap().is_none());
+        // plain text stays plain text
+        assert!(smtp_tls("smtp://mail.example:25", &ca).unwrap().is_none());
+        assert!(matches!(smtp_tls("smtps://u:p@mail.example", &ca).unwrap(), Some(Tls::Wrapper(_))));
+        assert!(matches!(smtp_tls("smtp://mail.example:587?tls=required", &ca).unwrap(), Some(Tls::Required(_))));
+        assert!(matches!(smtp_tls("smtp://mail.example?tls=opportunistic", &ca).unwrap(), Some(Tls::Opportunistic(_))));
+    }
 }

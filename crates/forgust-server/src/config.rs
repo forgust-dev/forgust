@@ -274,6 +274,11 @@ pub struct SecurityConfig {
     /// Serve Markdown images from other sites through this server (on), or let
     /// browsers load them directly (off; the page's CSP then allows any image).
     pub image_proxy: bool,
+    /// PEM file of certificate authorities to trust on top of the usual ones, for
+    /// every TLS connection the server opens: webhooks, the image proxy, imports,
+    /// OIDC, SMTP, S3, Sentry, the database and its backups. Empty: none. A
+    /// webhook or an import can then reach the hosts they vouch for.
+    pub ca_file: PathBuf,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -430,7 +435,13 @@ impl Default for BlobConfig {
 
 impl Default for SecurityConfig {
     fn default() -> Self {
-        SecurityConfig { secret_key: String::new(), session_ttl_hours: 24 * 14, cookie_secure: false, image_proxy: true }
+        SecurityConfig {
+            secret_key: String::new(),
+            session_ttl_hours: 24 * 14,
+            cookie_secure: false,
+            image_proxy: true,
+            ca_file: PathBuf::new(),
+        }
     }
 }
 

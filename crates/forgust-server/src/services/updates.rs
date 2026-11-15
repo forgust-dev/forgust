@@ -35,7 +35,7 @@ pub async fn check(state: &AppState) -> anyhow::Result<()> {
         tag_name: String,
         html_url: Option<String>,
     }
-    let client = reqwest::Client::builder().timeout(Duration::from_secs(15)).build()?;
+    let client = crate::tls::http_client().timeout(Duration::from_secs(15)).build()?;
     let release: Release = client
         .get(&state.cfg.server.release_check_url)
         .header("user-agent", concat!("Forgust/", env!("CARGO_PKG_VERSION")))

@@ -580,6 +580,9 @@ impl<'a> Runner<'a> {
         let (url, addrs) = client::checked_url(&sp.http_url, self.state.cfg.features.imports_allow_local).await?;
         let mut cfg: Vec<(String, String)> = self.src.git_auth().into_iter().filter(|(k, _)| k != "http.curloptResolve").collect();
         cfg.extend(gitlab::pin(&url, &addrs));
+        if let Some(bundle) = crate::tls::bundle_file().map_err(other)? {
+            cfg.push(("http.sslCAInfo".into(), bundle.display().to_string()));
+        }
         Ok((url, cfg))
     }
 
@@ -1593,7 +1596,7 @@ struct LfsError {
 
 /// A client pinned to the checked addresses of one host, without redirects.
 fn lfs_client(url: &url::Url, addrs: &[std::net::SocketAddr]) -> Result<reqwest::Client> {
-    reqwest::Client::builder()
+    crate::tls::http_client()
         .resolve_to_addrs(url.host_str().unwrap_or_default(), addrs)
         .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(std::time::Duration::from_secs(15))
