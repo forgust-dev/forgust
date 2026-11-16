@@ -4,7 +4,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { CaseSensitive, FileCode, Regex, X } from "lucide-react";
 import { api, qs, refLink, type S } from "../api/client";
 import { Empty, ErrorBox, Spinner, useDebounced } from "../components/ui";
-import { Select } from "../components/controls";
+import { Combobox } from "../components/controls";
 
 const PER_PAGE = 20;
 
@@ -91,7 +91,7 @@ export function CodeSearch({ params, set }: { params: URLSearchParams; set: (k: 
           <Regex size={14} /> Regular expression
         </button>
         <FilterInput value={path} onChange={(v) => set("path", v)} placeholder="Path contains…" width={170} />
-        <Select
+        <Combobox
           label="Language"
           value={lang}
           onChange={(v) => set("lang", v)}

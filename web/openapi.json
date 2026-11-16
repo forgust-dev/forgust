@@ -14251,7 +14251,7 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/CodeIndexStorage",
-                "description": "The code search index on this server's disk (None: code search is off).\nIt is rebuilt from the repositories, so it is not part of `total`."
+                "description": "The code search index on this server's disk (None: code search is off).\nCounted in `total`."
               },
               {
                 "type": "null"

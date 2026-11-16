@@ -61,7 +61,7 @@ pub struct StorageOverview {
     pub kinds: forgust_db::admin::StorageKinds,
     pub total: i64,
     /// The code search index on this server's disk (None: code search is off).
-    /// It is rebuilt from the repositories, so it is not part of `total`.
+    /// Counted in `total`.
     pub code_index: Option<CodeIndexStorage>,
     /// Largest first: what each keeps, LFS objects and image layers counted for every project using them.
     pub projects: Vec<forgust_db::admin::ProjectStorage>,
@@ -115,6 +115,7 @@ pub async fn storage(State(state): State<AppState>, Admin(..): Admin) -> ApiResu
         let mut conn = state.db.acquire().await?;
         state.jobs.enqueue(&mut conn, crate::jobs::MeasureRepositories.request()).await.map_err(ApiError::Internal)?;
     }
+    let code_index = code_index_storage(&state).await?;
     let k = &kinds;
     let total = k.repositories + k.lfs + k.artifacts + k.job_logs_archived + k.job_logs_live + k.registry + k.uploads;
     let b = &state.cfg.blobs;
@@ -125,8 +126,8 @@ pub async fn storage(State(state): State<AppState>, Admin(..): Admin) -> ApiResu
         blob_location,
         repositories_location: state.cfg.repos_dir().display().to_string(),
         kinds,
-        total,
-        code_index: code_index_storage(&state).await?,
+        total: total + code_index.as_ref().map_or(0, |c| c.bytes),
+        code_index,
         projects,
         namespaces,
         repositories_unmeasured: unmeasured,

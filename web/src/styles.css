@@ -6357,6 +6357,29 @@ button.test-case-row:hover {
   min-width: 110px;
 }
 
+/* a select box with a filter (Combobox) */
+.popover:has(> .combo) {
+  padding: 6px;
+}
+.combo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 220px;
+  max-width: 80vw;
+}
+.combo input {
+  height: 30px;
+}
+.combo-list {
+  max-height: 280px;
+  overflow-y: auto;
+}
+.combo-empty {
+  padding: 6px 10px;
+  color: var(--text-faint);
+}
+
 /* reduced motion: what moves stops moving; fades that explain a change stay */
 @media (prefers-reduced-motion: reduce) {
   .sidebar,

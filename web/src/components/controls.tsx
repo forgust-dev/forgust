@@ -1,6 +1,6 @@
 // Form controls on Base UI primitives (keyboard, focus and ARIA handled there),
 // styled by `styles.css` (`.select`, `.switch`, `.segmented`, `.dropdown`).
-import type { CSSProperties, ReactElement, ReactNode } from "react";
+import { useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import { Menu as BMenu } from "@base-ui/react/menu";
 import { Popover as BPopover } from "@base-ui/react/popover";
 import { Radio } from "@base-ui/react/radio";
@@ -84,6 +84,99 @@ export function Select({
         </BSelect.Positioner>
       </BSelect.Portal>
     </BSelect.Root>
+  );
+}
+
+/**
+ * A select box with a filter: for lists too long to scan. Typing narrows the
+ * options, the arrows move, Enter takes the highlighted one.
+ */
+export function Combobox({
+  value,
+  onChange,
+  options,
+  label,
+  style,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+  label: string;
+  style?: CSSProperties;
+}) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const [active, setActive] = useState(0);
+  const term = text.trim().toLowerCase();
+  const shown = options.filter((o) => o.label.toLowerCase().includes(term));
+  const pick = (v: string) => {
+    onChange(v);
+    setOpen(false);
+  };
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        setText("");
+        setActive(0);
+      }}
+      align="start"
+      label={label}
+      trigger={
+        <button type="button" className="select" role="combobox" aria-label={label} aria-expanded={open} style={style}>
+          <span className="select-value">{options.find((o) => o.value === value)?.label ?? value}</span>
+          <span className="select-icon">
+            <ChevronDown size={14} />
+          </span>
+        </button>
+      }
+    >
+      <div className="combo">
+        <input
+          type="search"
+          autoFocus
+          value={text}
+          placeholder="Filter…"
+          aria-label={`Filter: ${label}`}
+          onChange={(e) => {
+            setText(e.target.value);
+            setActive(0);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+              e.preventDefault();
+              setActive((a) => Math.max(0, Math.min(shown.length - 1, a + (e.key === "ArrowDown" ? 1 : -1))));
+            } else if (e.key === "Enter" && shown[active]) {
+              e.preventDefault();
+              pick(shown[active].value);
+            }
+          }}
+        />
+        <div className="combo-list" role="listbox" aria-label={label}>
+          {shown.map((o, i) => (
+            <div
+              key={o.value}
+              role="option"
+              aria-selected={o.value === value}
+              data-highlighted={i === active ? "" : undefined}
+              ref={i === active ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
+              className="select-item"
+              onMouseMove={() => setActive(i)}
+              onClick={() => pick(o.value)}
+            >
+              {o.value === value && (
+                <span className="select-check">
+                  <Check size={14} />
+                </span>
+              )}
+              {o.label}
+            </div>
+          ))}
+          {shown.length === 0 && <div className="combo-empty">Nothing matches</div>}
+        </div>
+      </div>
+    </Popover>
   );
 }
 
