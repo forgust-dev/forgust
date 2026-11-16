@@ -301,10 +301,21 @@ function Breadcrumbs() {
 
 function ThemeButton() {
   const { theme, setTheme } = useTheme();
+  // the icon a change brings turns in (styles.css); the one shown on load just shows
+  const [changed, setChanged] = useState(false);
   const next = theme === "system" ? "light" : theme === "light" ? "dark" : "system";
-  const icon = theme === "light" ? <Sun size={16} /> : theme === "dark" ? <Moon size={16} /> : <Monitor size={16} />;
+  const cls = changed ? "theme-icon" : undefined;
+  const icon = theme === "light" ? <Sun size={16} className={cls} /> : theme === "dark" ? <Moon size={16} className={cls} /> : <Monitor size={16} className={cls} />;
   return (
-    <button className="icon-btn" onClick={() => setTheme(next)} title={`Theme: ${theme} (click for ${next})`} aria-label={`Theme: ${theme}`}>
+    <button
+      className="icon-btn"
+      onClick={() => {
+        setChanged(true);
+        setTheme(next);
+      }}
+      title={`Theme: ${theme} (click for ${next})`}
+      aria-label={`Theme: ${theme}`}
+    >
       {icon}
     </button>
   );

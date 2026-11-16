@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Container } from "lucide-react";
 import { api, bytes, timeAgo, type S } from "../../api/client";
-import { Badge, Empty, ErrorBox, Field, ListHead, Q, Section, useCopy } from "../../components/ui";
+import { Badge, CopyLabel, Empty, ErrorBox, Field, ListHead, Q, Section, useCopy } from "../../components/ui";
 import type { Ctx } from "./Project";
 
 /** The project's container images (ADR-0022): how to push, images, tags, cleanup. */
@@ -51,7 +51,7 @@ function HowTo({ info }: { info: S["RegistryInfo"] }) {
       </p>
       <pre className="mono small">{lines.join("\n")}</pre>
       <button className="btn small" onClick={() => copy(lines.join("\n"))}>
-        {copied ? "Copied" : "Copy"}
+        <CopyLabel copied={copied} />
       </button>
     </details>
   );

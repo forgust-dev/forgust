@@ -855,6 +855,22 @@ form.stack {
   font-family: var(--mono);
   font-size: 12px;
 }
+/* "Copy" and "Copied" share one cell: the button is as wide as the longer one
+   and keeps that width (ui.tsx) */
+.copy-label {
+  display: inline-grid;
+}
+.copy-label > span {
+  grid-area: 1 / 1;
+  text-align: center;
+}
+.copy-label > span:last-child,
+.copy-label[data-copied] > span:first-child {
+  visibility: hidden;
+}
+.copy-label[data-copied] > span:last-child {
+  visibility: visible;
+}
 .tree-row {
   display: flex;
   align-items: center;
@@ -1377,6 +1393,32 @@ kbd {
 .icon-btn:hover {
   background: var(--bg-hover);
   color: var(--text);
+}
+/* a theme change: the page crossfades to the new colours (theme.tsx), and the
+   button's new icon turns in (Shell.tsx), the button itself stays put */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 200ms;
+  animation-timing-function: var(--ease-out);
+}
+/* while it switches (theme.tsx), colours change at once: the crossfade is the
+   transition, and an element easing its own colour would trail behind the rest
+   (the one !important: it has to win over every transition) */
+.theme-switching *:not(.theme-icon),
+.theme-switching *::before,
+.theme-switching *::after {
+  transition: none !important;
+}
+.theme-icon {
+  transition:
+    opacity 250ms var(--ease-out),
+    transform 250ms var(--ease-out);
+}
+@starting-style {
+  .theme-icon {
+    opacity: 0;
+    transform: rotate(-90deg) scale(0.8);
+  }
 }
 .icon-btn:focus-visible,
 .search-btn:focus-visible,
@@ -1992,6 +2034,15 @@ kbd {
     opacity: 0;
     transform: translateY(100%);
   }
+}
+/* going: out through the edge it came in by, quicker than it came (toast.tsx
+   keeps it this long) */
+.toast.leaving {
+  opacity: 0;
+  transform: translateY(100%);
+  transition-duration: 200ms;
+  transition-timing-function: var(--ease-out);
+  pointer-events: none;
 }
 .banner {
   display: flex;
@@ -4223,6 +4274,18 @@ a.row-title:hover,
   width: 26px;
   height: 26px;
 }
+/* the check after a copy comes in: the click did something */
+.copied-icon {
+  transition:
+    opacity 150ms var(--ease-out),
+    transform 150ms var(--ease-out);
+}
+@starting-style {
+  .copied-icon {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+}
 .pager {
   display: flex;
   align-items: center;
@@ -5706,6 +5769,16 @@ a.item.import-row:hover {
   font-weight: 600;
   line-height: 16px;
   text-align: center;
+  transition:
+    opacity 200ms var(--ease-out),
+    transform 200ms var(--ease-out);
+}
+/* a first unread notification: the count comes in (not each time it changes) */
+@starting-style {
+  .inbox-count {
+    opacity: 0;
+    transform: scale(0.8);
+  }
 }
 .inbox {
   width: min(380px, calc(100vw - 48px));
@@ -6260,9 +6333,15 @@ button.test-case-row:hover {
   }
   @starting-style {
     .menu,
-    .toast {
+    .toast,
+    .theme-icon,
+    .copied-icon,
+    .inbox-count {
       transform: none;
     }
+  }
+  .toast.leaving {
+    transform: none;
   }
   .hover-card {
     animation: none;
