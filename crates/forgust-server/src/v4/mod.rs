@@ -14,6 +14,7 @@ mod mrs;
 mod projects;
 mod registry;
 mod releases;
+mod search;
 
 use axum::Router;
 use axum::http::{HeaderValue, Uri};
@@ -30,6 +31,9 @@ pub const VERSION: &str = "17.11.0";
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/version", get(projects::version))
+        .route("/search", get(search::instance))
+        .route("/projects/{id}/search", get(search::project))
+        .route("/groups/{id}/search", get(search::group))
         .route("/metadata", get(projects::version))
         .route("/user", get(projects::me))
         .route("/users", get(projects::users))

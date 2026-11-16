@@ -788,6 +788,10 @@ pub fn redact_error(err: &str) -> String {
     if out.chars().count() > 240 { format!("{}…", out.chars().take(240).collect::<String>()) } else { out }
 }
 
+pub async fn project_count(e: impl PgExecutor<'_>) -> Result<i64> {
+    sqlx::query_scalar!(r#"SELECT count(*) AS "n!" FROM projects"#).fetch_one(e).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::redact_error;

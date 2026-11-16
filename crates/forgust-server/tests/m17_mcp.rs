@@ -116,6 +116,20 @@ async fn tools_act_as_the_token_user(pool: sqlx::PgPool) {
     assert!(text.contains("# Demo"), "the README: {text}");
     let text = read.ok("list_repository_tree", json!({ "project_id": p, "recursive": true })).await;
     assert!(text.contains("src/main.rs"), "{text}");
+    // code search: the matching lines with their numbers; a Guest of the
+    // private project finds nothing in it
+    let text = read.ok("search_code", json!({ "query": "HELLO, world" })).await;
+    assert!(text.contains(r#"2:     println!(\"hello, world\");"#) && text.contains("src/main.rs") && text.contains("untrusted"), "{text}");
+    assert!(text.contains(&format!("/{REPO}/-/blob/main/src/main.rs")), "{text}");
+    let text = read.ok("search_code", json!({ "query": r"print\w+!", "regex": true, "project_id": REPO, "language": "rust" })).await;
+    assert!(text.contains("\"matching_lines\": 1"), "{text}");
+    let (err, text) = read.call("search_code", json!({ "query": "he" })).await;
+    assert!(err && text.contains("at least 3"), "{text}");
+    let as_guest = Mcp::new(&srv, Some(&token(&guest, "g", &["read_api"]).await));
+    let text = as_guest.ok("search_code", json!({ "query": "hello, world" })).await;
+    assert!(text.contains("\"files\": []"), "{text}");
+    let (err, _) = as_guest.call("search_code", json!({ "query": "hello, world", "project_id": REPO })).await;
+    assert!(err);
     let text = read.ok("list_commits", json!({ "project_id": p })).await;
     assert!(text.contains("greet the world"), "{text}");
     let head: Value = serde_json::from_str(text.split("<forgust-data>").nth(1).unwrap().split("</forgust-data>").next().unwrap()).unwrap();

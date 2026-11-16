@@ -60,6 +60,9 @@ pub struct StorageOverview {
     pub repositories_location: String,
     pub kinds: forgust_db::admin::StorageKinds,
     pub total: i64,
+    /// The code search index on this server's disk (None: code search is off).
+    /// It is rebuilt from the repositories, so it is not part of `total`.
+    pub code_index: Option<CodeIndexStorage>,
     /// Largest first: what each keeps, LFS objects and image layers counted for every project using them.
     pub projects: Vec<forgust_db::admin::ProjectStorage>,
     /// Top-level groups and personal namespaces, largest first.
@@ -71,6 +74,31 @@ pub struct StorageOverview {
     /// The storage quota of every top-level group and personal namespace
     /// without its own.
     pub default_quota: Option<i64>,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct CodeIndexStorage {
+    pub location: String,
+    pub bytes: i64,
+    pub files: i64,
+    /// Projects in the index, of `projects_total`: the rest is waiting.
+    pub projects: i64,
+    pub projects_total: i64,
+}
+
+async fn code_index_storage(state: &AppState) -> ApiResult<Option<CodeIndexStorage>> {
+    let Some(index) = state.code_index.clone() else { return Ok(None) };
+    let projects = forgust_db::code_search::indexed_projects(&state.db, index.generation()).await?;
+    let projects_total = forgust_db::admin::project_count(&state.db).await?;
+    let (bytes, files) =
+        tokio::task::spawn_blocking(move || (index.disk_bytes(), index.files().unwrap_or(0))).await.map_err(anyhow::Error::from)?;
+    Ok(Some(CodeIndexStorage {
+        location: state.cfg.code_index_dir().display().to_string(),
+        bytes: bytes as i64,
+        files: files as i64,
+        projects,
+        projects_total,
+    }))
 }
 
 /// What the instance keeps, by kind and by project.
@@ -98,6 +126,7 @@ pub async fn storage(State(state): State<AppState>, Admin(..): Admin) -> ApiResu
         repositories_location: state.cfg.repos_dir().display().to_string(),
         kinds,
         total,
+        code_index: code_index_storage(&state).await?,
         projects,
         namespaces,
         repositories_unmeasured: unmeasured,

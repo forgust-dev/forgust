@@ -170,6 +170,21 @@ fn build_defs() -> Vec<Def> {
             ),
         },
         Def {
+            name: "search_code",
+            title: "Search code",
+            description: "Find text in the files of default branches: every project the user can read, or one `project_id`, or one `group` and its subgroups. `query` is plain text of at least 3 characters (any case unless `case_sensitive`), or a regular expression with `regex: true`. `path`, `filename` and `language` narrow the files. Returns the matching lines per file; `next` (when present) is the `after` of the following call.",
+            write: false,
+            schema: object(
+                json!({ "query": { "type": "string" }, "project_id": project(), "group": { "type": "string", "description": "A group: its id or path" },
+                        "regex": { "type": "boolean" }, "case_sensitive": { "type": "boolean" },
+                        "path": { "type": "string", "description": "Text the file's path contains" },
+                        "filename": { "type": "string", "description": "The exact file name" },
+                        "language": { "type": "string", "description": "A language name, as `Rust` or `Python`" },
+                        "after": { "type": "string" } }),
+                &["query"],
+            ),
+        },
+        Def {
             name: "search_labels",
             title: "List labels",
             description: "The project's labels with how many open issues and merge requests use them.",
@@ -786,6 +801,38 @@ async fn run(c: &Caller, name: &str, a: &Value) -> R {
                 );
             }
             Ok(out)
+        }
+        "search_code" => {
+            use crate::code_search::search as code;
+            let project = s(a, "project_id").or_else(|| s(a, "url").as_deref().and_then(from_url).map(|(p, _)| p));
+            let params = code::Params {
+                text: s(a, "query").ok_or("query is required")?,
+                regex: a["regex"] == true,
+                case_sensitive: a["case_sensitive"] == true,
+                path: s(a, "path"),
+                filename: s(a, "filename"),
+                language: s(a, "language"),
+                limit: 20,
+                ..code::Params::scoped(&c.state, &c.principal, project.as_deref(), s(a, "group").as_deref(), s(a, "after").as_deref())
+                    .await
+                    .map_err(|e| e.to_string())?
+            };
+            let found = code::search(&c.state, &c.principal, params).await.map_err(|e| e.to_string())?;
+            let files: Vec<Value> = found
+                .files
+                .iter()
+                .map(|f| {
+                    // `12: text` per line, chunks apart
+                    let lines: Vec<String> = f
+                        .chunks
+                        .iter()
+                        .map(|ch| ch.lines.iter().enumerate().map(|(n, l)| format!("{}: {}", ch.start + n, l.text)).collect::<Vec<_>>().join("\n"))
+                        .collect();
+                    json!({ "project": f.project_path, "path": f.path, "ref": f.branch, "matching_lines": f.matches, "lines": lines.join("\n...\n"),
+                            "web_url": format!("{}/-/blob/{}/{}", c.state.cfg.web_url(&f.project_path), f.branch, f.path) })
+                })
+                .collect();
+            Ok(json!({ "files": files, "next": found.next.as_ref().map(code::encode_cursor), "partial": found.partial }))
         }
         "search_labels" => {
             let v = call_api(api::issues::labels(st(c), viewer(c), Path(project_arg(a)?)).await).await?;

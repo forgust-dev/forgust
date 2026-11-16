@@ -206,6 +206,7 @@ pub fn router() -> Router<AppState> {
         .route("/unsubscribe/{user_id}/{project_id}/{sig}", get(notifications::unsubscribe_info).post(notifications::unsubscribe))
         .route("/projects/{id}/notification_settings", get(notifications::project).put(notifications::set_project))
         .route("/search", get(search::search))
+        .route("/search/code", get(search::code))
         .route("/projects/{id}/pipelines/{iid}/test_report", get(tests::pipeline_tests))
         .route("/projects/{id}/pipelines/{iid}/test_cases", get(tests::pipeline_test_cases))
         .route("/projects/{id}/merge_requests/{iid}/test_summary", get(tests::mr_tests))

@@ -2,11 +2,12 @@
 //!
 //! `index` keeps the trigram index on disk, `indexer` fills it from the
 //! repositories, `query` turns a search into what to ask it and how to check
-//! a line.
+//! a line, `search` answers one for a caller.
 
 pub mod index;
 pub mod indexer;
 pub mod query;
+pub mod search;
 
 pub use index::CodeIndex;
 

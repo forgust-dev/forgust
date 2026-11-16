@@ -2154,6 +2154,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/search/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Text inside the files of default branches: exact text (3 characters or
+         *     more) or a regular expression, in the code the caller may read.
+         */
+        get: operations["code"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/session": {
         parameters: {
             query?: never;
@@ -2936,6 +2956,40 @@ export interface components {
              */
             older_than_days?: number | null;
         };
+        CodeChunk: {
+            /** @description One HTML string per line, syntax highlighted, the matches in `<mark>`. */
+            lines: string[];
+            /** @description Number of the first line. */
+            start: number;
+        };
+        CodeHit: {
+            chunks: components["schemas"]["CodeChunk"][];
+            /** @description The commit the lines are from. */
+            commit: string;
+            language?: string | null;
+            /** @description Lines that match in the whole file; `chunks` shows the first ones. */
+            matches: number;
+            path: string;
+            /** Format: int64 */
+            project_id: number;
+            project_path: string;
+            /** @description The default branch. */
+            ref: string;
+        };
+        CodeIndexStorage: {
+            /** Format: int64 */
+            bytes: number;
+            /** Format: int64 */
+            files: number;
+            location: string;
+            /**
+             * Format: int64
+             * @description Projects in the index, of `projects_total`: the rest is waiting.
+             */
+            projects: number;
+            /** Format: int64 */
+            projects_total: number;
+        };
         CodeOwners: {
             /** @description The target branch requires their approval (a protected branch setting). */
             approval_required: boolean;
@@ -2948,6 +3002,20 @@ export interface components {
             sections: components["schemas"]["SectionReport"][];
             /** @description Owners who are not reviewers yet (nor the author). */
             suggested_reviewers: components["schemas"]["UserBrief"][];
+        };
+        /**
+         * @description Files of default branches whose text matches. There is no count: files
+         *     are read until the page is full.
+         */
+        CodeResults: {
+            files: components["schemas"]["CodeHit"][];
+            /** @description Pass it as `after` for the following files; absent at the end. */
+            next?: string | null;
+            /**
+             * @description The search stopped early (too many candidate files, or out of time):
+             *     a narrower search may find more.
+             */
+            partial: boolean;
         };
         CommitBody: {
             actions: components["schemas"]["FileAction"][];
@@ -5471,6 +5539,7 @@ export interface components {
             blob_backend: string;
             /** @description `s3://bucket` or the blobs directory. */
             blob_location: string;
+            code_index?: components["schemas"]["CodeIndexStorage"] | null;
             /**
              * Format: int64
              * @description The storage quota of every top-level group and personal namespace
@@ -9494,6 +9563,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SearchResults"];
+                };
+            };
+        };
+    };
+    code: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodeResults"];
                 };
             };
         };

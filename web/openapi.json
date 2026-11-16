@@ -3919,6 +3919,26 @@
         }
       }
     },
+    "/api/v1/search/code": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Text inside the files of default branches: exact text (3 characters or\nmore) or a regular expression, in the code the caller may read.",
+        "operationId": "code",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodeResults"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/session": {
       "get": {
         "tags": [
@@ -5884,6 +5904,108 @@
           }
         }
       },
+      "CodeChunk": {
+        "type": "object",
+        "required": [
+          "start",
+          "lines"
+        ],
+        "properties": {
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "One HTML string per line, syntax highlighted, the matches in `<mark>`."
+          },
+          "start": {
+            "type": "integer",
+            "description": "Number of the first line.",
+            "minimum": 0
+          }
+        }
+      },
+      "CodeHit": {
+        "type": "object",
+        "required": [
+          "project_id",
+          "project_path",
+          "path",
+          "ref",
+          "commit",
+          "matches",
+          "chunks"
+        ],
+        "properties": {
+          "chunks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CodeChunk"
+            }
+          },
+          "commit": {
+            "type": "string",
+            "description": "The commit the lines are from."
+          },
+          "language": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "matches": {
+            "type": "integer",
+            "description": "Lines that match in the whole file; `chunks` shows the first ones.",
+            "minimum": 0
+          },
+          "path": {
+            "type": "string"
+          },
+          "project_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "project_path": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string",
+            "description": "The default branch."
+          }
+        }
+      },
+      "CodeIndexStorage": {
+        "type": "object",
+        "required": [
+          "location",
+          "bytes",
+          "files",
+          "projects",
+          "projects_total"
+        ],
+        "properties": {
+          "bytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "files": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "location": {
+            "type": "string"
+          },
+          "projects": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Projects in the index, of `projects_total`: the rest is waiting."
+          },
+          "projects_total": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
       "CodeOwners": {
         "type": "object",
         "required": [
@@ -5929,6 +6051,33 @@
               "$ref": "#/components/schemas/UserBrief"
             },
             "description": "Owners who are not reviewers yet (nor the author)."
+          }
+        }
+      },
+      "CodeResults": {
+        "type": "object",
+        "description": "Files of default branches whose text matches. There is no count: files\nare read until the page is full.",
+        "required": [
+          "files",
+          "partial"
+        ],
+        "properties": {
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CodeHit"
+            }
+          },
+          "next": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pass it as `after` for the following files; absent at the end."
+          },
+          "partial": {
+            "type": "boolean",
+            "description": "The search stopped early (too many candidate files, or out of time):\na narrower search may find more."
           }
         }
       },
@@ -14074,6 +14223,17 @@
           "blob_location": {
             "type": "string",
             "description": "`s3://bucket` or the blobs directory."
+          },
+          "code_index": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CodeIndexStorage",
+                "description": "The code search index on this server's disk (None: code search is off).\nIt is rebuilt from the repositories, so it is not part of `total`."
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "default_quota": {
             "type": [
