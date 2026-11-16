@@ -832,7 +832,8 @@ async fn run(c: &Caller, name: &str, a: &Value) -> R {
                             "web_url": format!("{}/-/blob/{}/{}", c.state.cfg.web_url(&f.project_path), f.branch, f.path) })
                 })
                 .collect();
-            Ok(json!({ "files": files, "next": found.next.as_ref().map(code::encode_cursor), "partial": found.partial }))
+            Ok(json!({ "files": files, "next": found.next.as_ref().map(code::encode_cursor), "partial": found.partial,
+                       "projects_not_indexed_yet": found.not_indexed }))
         }
         "search_labels" => {
             let v = call_api(api::issues::labels(st(c), viewer(c), Path(project_arg(a)?)).await).await?;

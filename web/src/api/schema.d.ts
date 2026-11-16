@@ -2182,8 +2182,9 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * The languages a code search can be limited to (`language`): a file's
-         *     language comes from its extension or name.
+         * What a code search can be limited to with `language`: programming
+         *     languages and kinds of data, markup and prose, from a file's extension
+         *     or name.
          */
         get: operations["code_languages"];
         put?: never;
@@ -3031,6 +3032,12 @@ export interface components {
             files: components["schemas"]["CodeHit"][];
             /** @description Pass it as `after` for the following files; absent at the end. */
             next?: string | null;
+            /**
+             * Format: int64
+             * @description Projects of this search whose code is not indexed yet (on the first
+             *     page): their files cannot be found for now.
+             */
+            not_indexed: number;
             /**
              * @description The search stopped early (too many candidate files, or out of time):
              *     a narrower search may find more.

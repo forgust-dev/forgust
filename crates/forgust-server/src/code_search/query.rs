@@ -41,7 +41,9 @@ pub enum QueryError {
     LineBreak,
     #[error("not a valid regular expression: {0}")]
     BadRegex(String),
-    #[error("the regular expression must contain at least {MIN_CHARS} characters of plain text that every match has")]
+    #[error(
+        "the regular expression must contain at least {MIN_CHARS} characters of plain text that every match has, unless the search is in one project"
+    )]
     NoLiteral,
 }
 
@@ -122,11 +124,9 @@ pub fn plan(text: &str, is_regex: bool, case_sensitive: bool) -> Result<(Need, M
         // parsed without the case switch, so literals stay literals: the index
         // is folded anyway, and an inline `(?i)` only makes us filter less
         let hir = regex_syntax::ParserBuilder::new().build().parse(text).map_err(|e| QueryError::BadRegex(e.to_string()))?;
-        let need = hir_need(&hir);
-        if need == Need::Any {
-            return Err(QueryError::NoLiteral);
-        }
-        (text.to_string(), need)
+        // `Need::Any` when nothing in it is required text: the caller decides
+        // whether reading every file is affordable
+        (text.to_string(), hir_need(&hir))
     } else {
         if text.chars().count() < MIN_CHARS {
             return Err(QueryError::TooShort);
@@ -186,9 +186,6 @@ mod tests {
         assert_eq!(plan("ab", false, false).unwrap_err(), QueryError::TooShort);
         assert_eq!(plan("a\nbc", false, false).unwrap_err(), QueryError::LineBreak);
         assert_eq!(plan(&"x".repeat(MAX_CHARS + 1), false, false).unwrap_err(), QueryError::TooLong);
-        assert_eq!(plan(r"\w+", true, false).unwrap_err(), QueryError::NoLiteral);
-        assert_eq!(plan("ab.*cd", true, false).unwrap_err(), QueryError::NoLiteral);
-        assert_eq!(plan("(foo)?bar|x", true, false).unwrap_err(), QueryError::NoLiteral);
         assert!(matches!(plan("foo(", true, false).unwrap_err(), QueryError::BadRegex(_)));
         assert!(matches!(plan(r"foo\d{1000}{1000}", true, false).unwrap_err(), QueryError::BadRegex(_)));
     }
@@ -207,7 +204,9 @@ mod tests {
         assert_eq!(m.find("foodd1 FOOD2"), vec![(0, 6)]);
         let (_, m) = plan(r"food+\d", true, false).unwrap();
         assert_eq!(m.find("foodd1 FOOD2"), vec![(0, 6), (7, 12)]);
-        // too little plain text in one piece to filter on
-        assert_eq!(plan(r"fo+\d", true, false).unwrap_err(), QueryError::NoLiteral);
+        // too little plain text in one piece to filter on: every file may match
+        for pattern in [r"fo+\d", r"\w+", "ab.*cd", "(foo)?bar|x"] {
+            assert_eq!(plan(pattern, true, false).unwrap().0, Need::Any, "{pattern}");
+        }
     }
 }

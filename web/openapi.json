@@ -3944,7 +3944,7 @@
         "tags": [
           "projects"
         ],
-        "summary": "The languages a code search can be limited to (`language`): a file's\nlanguage comes from its extension or name.",
+        "summary": "What a code search can be limited to with `language`: programming\nlanguages and kinds of data, markup and prose, from a file's extension\nor name.",
         "operationId": "code_languages",
         "responses": {
           "200": {
@@ -6082,7 +6082,8 @@
         "description": "Files of default branches whose text matches. There is no count: files\nare read until the page is full.",
         "required": [
           "files",
-          "partial"
+          "partial",
+          "not_indexed"
         ],
         "properties": {
           "files": {
@@ -6097,6 +6098,11 @@
               "null"
             ],
             "description": "Pass it as `after` for the following files; absent at the end."
+          },
+          "not_indexed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Projects of this search whose code is not indexed yet (on the first\npage): their files cannot be found for now."
           },
           "partial": {
             "type": "boolean",

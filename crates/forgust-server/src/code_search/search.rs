@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use forgust_db::code_search::SearchedProject;
 
 use super::index::{Candidate, Filter};
-use super::query::{Matcher, QueryError, plan};
+use super::query::{Matcher, Need, QueryError, plan};
 use super::searchable_text;
 use crate::api::{group_for, project_for};
 use crate::auth::Principal;
@@ -42,6 +42,9 @@ pub struct Params {
     pub path: Option<String>,
     /// Exact file name, any case.
     pub filename: Option<String>,
+    /// File extension without the dot, any case.
+    pub extension: Option<String>,
+    /// Language or file type (`languages::file_type_of`), any case.
     pub language: Option<String>,
     /// Only this project.
     pub project_id: Option<i64>,
@@ -49,8 +52,6 @@ pub struct Params {
     pub group_path: Option<String>,
     /// Files to return.
     pub limit: usize,
-    /// Matching files to pass over first (page numbers).
-    pub skip: usize,
     /// Start after this file (`next` of the previous answer).
     pub after: Option<(i64, String)>,
 }
@@ -114,6 +115,9 @@ pub struct Found {
     pub next: Option<(i64, String)>,
     /// Not everything was looked at: too many candidate files, or out of time.
     pub partial: bool,
+    /// Projects of this search that are not indexed yet (counted on the
+    /// first page only).
+    pub not_indexed: i64,
 }
 
 impl From<QueryError> for ApiError {
@@ -178,25 +182,36 @@ pub async fn search(state: &AppState, principal: &Principal, params: Params) -> 
         return Err(ApiError::Unavailable("code search is turned off on this instance".into()));
     };
     let (need, matcher) = plan(params.text.trim(), params.regex, params.case_sensitive)?;
+    // a pattern the index cannot narrow reads every file: only inside one project
+    if need == Need::Any && params.project_id.is_none() {
+        return Err(QueryError::NoLiteral.into());
+    }
+    let viewer = principal.search_viewer();
+    let not_indexed = if params.after.is_none() {
+        forgust_db::code_search::not_indexed(&state.db, viewer, index.generation(), params.project_id, params.group_path.as_deref()).await?
+    } else {
+        0
+    };
     let projects = forgust_db::code_search::readable_projects(
         &state.db,
-        principal.search_viewer(),
+        viewer,
         index.generation(),
         params.project_id,
         params.group_path.as_deref(),
         MAX_PROJECTS,
     )
     .await?;
-    let mut found = Found { partial: projects.len() as i64 == MAX_PROJECTS, ..Found::default() };
+    let mut found = Found { partial: projects.len() as i64 == MAX_PROJECTS, not_indexed, ..Found::default() };
     if projects.is_empty() || params.limit == 0 {
         return Ok(found);
     }
     let given = |filter: &Option<String>| filter.as_deref().map(str::trim).filter(|f| !f.is_empty()).map(str::to_string);
     let path_filter = given(&params.path).map(|p| p.to_lowercase());
+    let suffix = given(&params.extension).map(|e| format!(".{}", e.trim_start_matches('.').to_lowercase()));
     let filter = Filter {
         need,
         projects: Some(projects.iter().map(|p| p.id).collect()),
-        path: path_filter.clone(),
+        path: path_filter.iter().chain(&suffix).cloned().collect(),
         filename: given(&params.filename),
         lang: given(&params.language),
     };
@@ -207,12 +222,11 @@ pub async fn search(state: &AppState, principal: &Principal, params: Params) -> 
         .into_iter()
         .filter(|c| params.after.as_ref().is_none_or(|(id, path)| (c.project_id, c.path.as_str()) > (*id, path.as_str())))
         .filter(|c| path_filter.as_ref().is_none_or(|p| c.path.to_lowercase().contains(p)))
+        .filter(|c| suffix.as_ref().is_none_or(|s| c.path.to_lowercase().ends_with(s)))
         .collect();
 
     let deadline = Instant::now() + Duration::from_millis(state.cfg.code_search.query_timeout_ms);
     let max_bytes = state.cfg.code_search.max_file_bytes;
-    let wanted = params.skip + params.limit;
-    let mut seen = 0; // matching files so far, with the skipped ones
     // whether the caller may read each project that had a match
     let mut allowed: HashMap<i64, bool> = HashMap::new();
     let mut at = 0;
@@ -256,21 +270,17 @@ pub async fn search(state: &AppState, principal: &Principal, params: Params) -> 
             if !allowed[&project_id] {
                 break;
             }
-            seen += 1;
-            if seen <= params.skip {
-                continue;
-            }
             found.files.push(FileHit {
                 project_id,
                 project_path: project.full_path.clone(),
                 path: candidate.path.clone(),
                 branch: project.default_branch.clone().unwrap_or_default(),
                 commit: project.indexed_commit.clone().unwrap_or_default(),
-                language: crate::languages::language_of(&candidate.path).map(|(l, _)| l),
+                language: crate::languages::file_type_of(&candidate.path),
                 matches,
                 chunks,
             });
-            if seen == wanted {
+            if found.files.len() == params.limit {
                 // more may follow: the rest of this batch, or of the candidates
                 if at < candidates.len() || i + 1 < batch.len() {
                     found.next = Some((project_id, candidate.path.clone()));

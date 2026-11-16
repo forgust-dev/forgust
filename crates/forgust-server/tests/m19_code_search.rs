@@ -10,7 +10,7 @@ use serde_json::json;
 /// Paths the index holds for `text`, as `project:path`.
 fn indexed(srv: &TestServer, text: &str) -> Vec<String> {
     let index = srv.state.code_index.as_ref().expect("code search is on");
-    let filter = Filter { need: plan(text, false, false).unwrap().0, projects: None, path: None, filename: None, lang: None };
+    let filter = Filter { need: plan(text, false, false).unwrap().0, projects: None, path: vec![], filename: None, lang: None };
     index.candidates(&filter).unwrap().0.into_iter().map(|c| format!("{}:{}", c.project_id, c.path)).collect()
 }
 
@@ -280,6 +280,10 @@ async fn code_search_text_regex_filters_and_pages(pool: sqlx::PgPool) {
         files(&get("q=%5E(def|pub%20fn)%20launch&regex=true").await),
         vec!["acme/platform/api:scripts/deploy.py", "acme/platform/api:src/lib.rs"]
     );
+    // a pattern with no plain text to look up reads every file: in one project only
+    let (code, body) = owner.get("/api/v1/search/code?q=%5E%23%20\\w%2B%24&regex=true").await;
+    assert!(code == 400 && body.to_string().contains("in one project"), "{code} {body}");
+    assert_eq!(files(&get("q=%5E%23%20\\w%2B%24&regex=true&project_id=acme/platform/api").await), vec!["acme/platform/api:docs/Launch.md"]);
     // plain text is not a pattern
     assert!(files(&get("q=launch_\\w%2B").await).is_empty());
 
@@ -289,6 +293,11 @@ async fn code_search_text_regex_filters_and_pages(pool: sqlx::PgPool) {
     assert_eq!(languages.as_array().unwrap().iter().filter(|l| *l == "Rust").count(), 1);
     assert_eq!(files(&get("q=launch_rocket&language=python").await), vec!["acme/platform/api:scripts/deploy.py"]);
     assert_eq!(files(&get("q=launch_rocket&filename=LAUNCH.md").await), vec!["acme/platform/api:docs/Launch.md"]);
+    // data and prose have a type too
+    let md = get("q=launch_rocket&language=markdown").await;
+    assert_eq!(files(&md), vec!["acme/platform/api:docs/Launch.md"]);
+    assert_eq!(md["files"][0]["language"], "Markdown");
+    assert!(languages.as_array().unwrap().iter().any(|l| l == "Markdown"));
     assert_eq!(
         files(&get("q=launch_rocket&path=s/").await),
         vec!["acme/platform/api:docs/Launch.md", "acme/platform/api:scripts/deploy.py"]
@@ -311,6 +320,14 @@ async fn code_search_text_regex_filters_and_pages(pool: sqlx::PgPool) {
     assert_eq!(seen, ALL);
     // exactly a page: no `next` that leads to nothing
     assert_eq!(get("q=launch_rocket&per_page=4").await["next"], json!(null));
+
+    // a project that is not indexed yet is announced to those who may read it
+    assert_eq!(get("q=launch_rocket").await["not_indexed"], 0);
+    let group = owner.ok_get(&format!("/api/v1/projects/{private}")).await["namespace_id"].as_i64().unwrap();
+    owner.ok_post("/api/v1/projects", json!({ "name": "Later", "path": "later", "namespace_id": group })).await;
+    assert_eq!(get("q=launch_rocket").await["not_indexed"], 1);
+    assert_eq!(get("q=launch_rocket&project_id=open/site").await["not_indexed"], 0);
+    assert_eq!(Client::new(&srv.base).ok_get("/api/v1/search/code?q=launch_rocket").await["not_indexed"], 0);
 
     // refused searches say why; the other scopes are unchanged
     for (bad, why) in [
@@ -375,6 +392,11 @@ async fn gitlab_api_searches_blobs(pool: sqlx::PgPool) {
     );
     assert_eq!(lib["data"], "// line 18\n// line 19\npub fn launch_rocket() {}\n// line 21\n// line 22\n");
     assert_eq!(lib["id"], json!(null));
+    // one entry per matching chunk of a file, as GitLab answers
+    let lines = owner.ok_get(&format!("/api/v4/projects/{private}/search?scope=blobs&search=//%20line%201")).await;
+    let starts: Vec<_> =
+        lines.as_array().unwrap().iter().map(|b| (b["path"].as_str().unwrap(), b["startline"].as_i64().unwrap())).collect();
+    assert_eq!(starts, vec![("src/lib.rs", 1), ("src/lib.rs", 8)], "{lines}");
 
     // by project and by group, with GitLab's pages
     assert_eq!(
@@ -393,6 +415,20 @@ async fn gitlab_api_searches_blobs(pool: sqlx::PgPool) {
         .await
         .unwrap();
     assert_eq!(r.headers()["x-next-page"], "2");
+
+    // GitLab's filters inside the search text, its regex switch, and `ref`
+    let by = |search: &'static str| {
+        let owner = owner.clone();
+        async move { owner.ok_get(&format!("/api/v4/search?scope=blobs&search={search}")).await }
+    };
+    assert_eq!(paths(&by("launch_rocket%20extension:py").await), vec!["scripts/deploy.py"]);
+    assert_eq!(paths(&by("launch_rocket%20filename:*.md").await), vec!["docs/Launch.md"]);
+    assert_eq!(paths(&by("launch_rocket%20path:scripts/*").await), vec!["scripts/deploy.py"]);
+    assert_eq!(paths(&by("fn%20launch_\\w%2B&regex=true").await), vec!["src/lib.rs"]);
+    assert!(paths(&by("fn%20launch_\\w%2B").await).is_empty());
+    let on = |r: &'static str| format!("/api/v4/projects/{public}/search?scope=blobs&search=launch_rocket&ref={r}");
+    assert_eq!(paths(&owner.ok_get(&on("main")).await), vec!["index.html"]);
+    assert_eq!(owner.get(&on("other")).await.0, 400);
 
     // only what the caller may read
     assert_eq!(paths(&stranger.ok_get("/api/v4/search?scope=blobs&search=launch_rocket").await), vec!["index.html"]);

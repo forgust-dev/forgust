@@ -106,7 +106,7 @@ pub async fn index_project(state: &AppState, project_id: i64) -> anyhow::Result<
                 }
             }
             for (path, oid, text) in &put {
-                w.put_file(project_id, path, oid, crate::languages::language_of(path).map(|(l, _)| l), text)?;
+                w.put_file(project_id, path, oid, crate::languages::file_type_of(path), text)?;
             }
             Ok(())
         })

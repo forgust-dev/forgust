@@ -80,7 +80,8 @@ pub struct CodeQuery {
     path: Option<String>,
     /// Only files with exactly this name.
     filename: Option<String>,
-    /// Only files in this language (`Rust`, `Python`...).
+    /// Only files in this language or of this type (`Rust`, `Markdown`...):
+    /// one of `/search/code/languages`.
     language: Option<String>,
     /// Only this project (id or full path).
     project_id: Option<String>,
@@ -101,6 +102,9 @@ pub struct CodeResults {
     /// The search stopped early (too many candidate files, or out of time):
     /// a narrower search may find more.
     pub partial: bool,
+    /// Projects of this search whose code is not indexed yet (on the first
+    /// page): their files cannot be found for now.
+    pub not_indexed: i64,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -162,11 +166,17 @@ pub async fn code(
             matches: f.matches,
         })
         .collect();
-    Ok(Json(CodeResults { files, next: found.next.as_ref().map(code::encode_cursor), partial: found.partial }))
+    Ok(Json(CodeResults {
+        files,
+        next: found.next.as_ref().map(code::encode_cursor),
+        partial: found.partial,
+        not_indexed: found.not_indexed,
+    }))
 }
 
-/// The languages a code search can be limited to (`language`): a file's
-/// language comes from its extension or name.
+/// What a code search can be limited to with `language`: programming
+/// languages and kinds of data, markup and prose, from a file's extension
+/// or name.
 #[utoipa::path(get, path = "/api/v1/search/code/languages", responses((status = 200, body = Vec<String>)), tag = "projects")]
 pub async fn code_languages() -> Json<Vec<&'static str>> {
     Json(crate::languages::names())

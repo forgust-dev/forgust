@@ -25,7 +25,7 @@ use super::query::{Need, fold, grams};
 
 /// Bumped when the fields or the way trigrams are cut change: older indexes
 /// are thrown away and rebuilt.
-const FORMAT: &str = "1";
+const FORMAT: &str = "2";
 const GENERATION_FILE: &str = "GENERATION";
 /// Memory the writer may use before it flushes a segment.
 const WRITER_BYTES: usize = 64 << 20;
@@ -41,7 +41,7 @@ struct Fields {
     oid: Field,
     /// Lower-cased last path segment.
     filename: Field,
-    /// Lower-cased language name (`languages::language_of`).
+    /// Lower-cased language or file type (`languages::file_type_of`).
     lang: Field,
     path_grams: Field,
     content_grams: Field,
@@ -86,8 +86,8 @@ pub struct Filter {
     pub need: Need,
     /// Only these projects (`None`: every project).
     pub projects: Option<Vec<i64>>,
-    /// Text the path contains, any case.
-    pub path: Option<String>,
+    /// Texts the path contains, any case.
+    pub path: Vec<String>,
     /// Exact file name, any case.
     pub filename: Option<String>,
     /// Language name, any case.
@@ -202,7 +202,7 @@ impl CodeIndex {
         if let Some(ids) = &filter.projects {
             must.push(Box::new(TermSetQuery::new(ids.iter().map(|id| Term::from_field_u64(f.project_id, *id as u64)))));
         }
-        if let Some(path) = &filter.path {
+        for path in &filter.path {
             let folded = fold(path);
             let grams = grams(&folded);
             if !grams.is_empty() {
@@ -287,7 +287,7 @@ mod tests {
     use super::*;
 
     fn filter(text: &str) -> Filter {
-        Filter { need: plan(text, false, false).unwrap().0, projects: None, path: None, filename: None, lang: None }
+        Filter { need: plan(text, false, false).unwrap().0, projects: None, path: vec![], filename: None, lang: None }
     }
 
     fn paths(index: &CodeIndex, f: &Filter) -> Vec<(i64, String)> {
@@ -329,7 +329,7 @@ mod tests {
         assert_eq!(with(|_| {}), vec![(1, "src/main.rs".into()), (2, "lib/Main.py".into())]);
         assert_eq!(with(|f| f.projects = Some(vec![2, 9])), vec![(2, "lib/Main.py".into())]);
         assert!(with(|f| f.projects = Some(vec![])).is_empty());
-        assert_eq!(with(|f| f.path = Some("SRC/".into())), vec![(1, "src/main.rs".into())]);
+        assert_eq!(with(|f| f.path = vec!["SRC/".into()]), vec![(1, "src/main.rs".into())]);
         assert_eq!(with(|f| f.filename = Some("main.py".into())), vec![(2, "lib/Main.py".into())]);
         assert_eq!(with(|f| f.lang = Some("rust".into())), vec![(1, "src/main.rs".into())]);
     }

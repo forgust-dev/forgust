@@ -39,11 +39,18 @@ test("code is found from the repository page, the search page and the palette", 
     await expect(notes).toHaveCount(0);
     // a match that spans syntax colours is marked piece by piece
     await expect.poll(async () => (await python.locator("mark").allTextContents()).join("")).toBe(`return "${word}"`);
-    // a pattern with nothing to look up says why
-    await page.getByRole("searchbox", { name: "Search…" }).fill("\\w+");
-    await expect(page.getByText(/plain text that every match has/)).toBeVisible();
+    // inside one project, a pattern with no plain text to look up still runs
+    await page.getByRole("searchbox", { name: "Search…" }).fill("^# \\w+$");
+    await expect.poll(async () => (await page.getByRole("region", { name: /README\.md/ }).locator("mark").allTextContents()).join("")).toBe("# Code");
+    await expect(python).toHaveCount(0);
     await page.getByRole("button", { name: "Regular expression" }).click();
     await page.getByRole("searchbox", { name: "Search…" }).fill(word);
+    // by file name
+    await page.getByRole("searchbox", { name: "File name" }).fill("notes.txt");
+    await expect(python).toHaveCount(0);
+    await expect(notes).toBeVisible();
+    await page.getByRole("searchbox", { name: "File name" }).fill("");
+    await expect(python).toBeVisible();
     // the language list has a filter: typing narrows it, Enter takes the first
     await page.getByRole("combobox", { name: "Language" }).click();
     await page.getByRole("searchbox", { name: "Filter: Language" }).fill("typ");

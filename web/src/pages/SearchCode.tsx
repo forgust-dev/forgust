@@ -55,7 +55,7 @@ function FilterInput({ value, onChange, placeholder, width }: { value: string; o
 
 /**
  * Text inside the files of default branches. `params` is the address: `q`,
- * `regex`, `case`, `path`, `lang`, and `project_id` or `group_id` to search one
+ * `regex`, `case`, `path`, `file`, `lang`, and `project_id` or `group_id` to search one
  * place. `set` changes one of them ("" removes it).
  */
 export function CodeSearch({ params, set }: { params: URLSearchParams; set: (k: string, v: string) => void }) {
@@ -63,14 +63,15 @@ export function CodeSearch({ params, set }: { params: URLSearchParams; set: (k: 
   const regex = params.get("regex") === "1";
   const exact = params.get("case") === "1";
   const path = params.get("path") ?? "";
+  const file = params.get("file") ?? "";
   const lang = params.get("lang") ?? "";
   const project = params.get("project_id") ?? "";
   const group = params.get("group_id") ?? "";
   const r = useInfiniteQuery({
-    queryKey: ["search-code", q, regex, exact, path, lang, project, group],
+    queryKey: ["search-code", q, regex, exact, path, file, lang, project, group],
     queryFn: ({ pageParam }) =>
       api.get<S["CodeResults"]>(
-        `/search/code${qs({ q, regex: regex || undefined, case_sensitive: exact || undefined, path, language: lang, project_id: project, group_id: group, after: pageParam, per_page: PER_PAGE })}`,
+        `/search/code${qs({ q, regex: regex || undefined, case_sensitive: exact || undefined, path, filename: file, language: lang, project_id: project, group_id: group, after: pageParam, per_page: PER_PAGE })}`,
       ),
     initialPageParam: "",
     getNextPageParam: (last) => last.next ?? undefined,
@@ -81,6 +82,7 @@ export function CodeSearch({ params, set }: { params: URLSearchParams; set: (k: 
   const languages = useQuery({ queryKey: ["search-code-languages"], queryFn: () => api.get<string[]>("/search/code/languages"), staleTime: Infinity });
   const files = r.data?.pages.flatMap((p) => p.files) ?? [];
   const partial = r.data?.pages.some((p) => p.partial) ?? false;
+  const notIndexed = r.data?.pages[0]?.not_indexed ?? 0;
   return (
     <div className="stack" style={{ gap: 12 }}>
       <div className="row wrap code-search-filters">
@@ -91,6 +93,7 @@ export function CodeSearch({ params, set }: { params: URLSearchParams; set: (k: 
           <Regex size={14} /> Regular expression
         </button>
         <FilterInput value={path} onChange={(v) => set("path", v)} placeholder="Path contains…" width={170} />
+        <FilterInput value={file} onChange={(v) => set("file", v)} placeholder="File name" width={130} />
         <Combobox
           label="Language"
           value={lang}
@@ -107,6 +110,11 @@ export function CodeSearch({ params, set }: { params: URLSearchParams; set: (k: 
           </span>
         )}
       </div>
+      {notIndexed > 0 && (
+        <p className="small muted" style={{ margin: 0 }}>
+          {notIndexed === 1 ? "1 project is" : `${notIndexed} projects are`} not indexed yet: {notIndexed === 1 ? "its" : "their"} code will be found once the index has caught up.
+        </p>
+      )}
       {r.isLoading ? (
         <Spinner />
       ) : r.error ? (

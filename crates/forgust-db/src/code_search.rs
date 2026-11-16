@@ -123,3 +123,25 @@ pub async fn readable_projects(
     .fetch_all(e)
     .await
 }
+
+/// How many projects of the same search (`readable_projects`) are not in the
+/// index yet: their code cannot be found for now.
+pub async fn not_indexed(e: impl PgExecutor<'_>, v: Viewer, generation: &str, only: Option<i64>, group_path: Option<&str>) -> Result<i64> {
+    sqlx::query_scalar!(
+        r#"SELECT count(*) AS "n!"
+             FROM projects p JOIN routes r ON r.source_type = 'project' AND r.source_id = p.id
+            WHERE NOT EXISTS (SELECT 1 FROM code_index_state s WHERE s.project_id = p.id AND s.generation = $4)
+              AND ($5::bigint IS NULL OR p.id = $5)
+              AND ($6::text IS NULL OR lower(r.path) LIKE lower($6) || '/%' ESCAPE '\')
+              AND ($2 OR p.visibility = 20 OR (p.visibility = 10 AND $3)
+                   OR EXISTS (SELECT 1 FROM listed_project_authorizations a WHERE a.project_id = p.id AND a.user_id = $1 AND a.access_level >= 20))"#,
+        v.user_id,
+        v.admin,
+        v.internal,
+        generation,
+        only,
+        group_path.map(crate::like_escape)
+    )
+    .fetch_one(e)
+    .await
+}
