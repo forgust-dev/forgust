@@ -6307,6 +6307,56 @@ button.test-case-row:hover {
   overflow-wrap: anywhere;
 }
 
+/* code search results */
+.code-search-filters input {
+  height: 28px;
+  max-width: 100%;
+}
+.code-search-filters .btn[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.code-hit {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.code-hit-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  padding: 8px 12px;
+  background: var(--bg-subtle);
+  border-bottom: 1px solid var(--border);
+}
+.code-hit-path {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+.code-hit-count {
+  margin-left: auto;
+}
+.code-hit-chunk {
+  padding: 4px 0;
+}
+.code-hit-chunk + .code-hit-chunk {
+  border-top: 1px dashed var(--border);
+}
+.code-hit mark {
+  border-radius: 2px;
+  background: var(--warn-soft);
+  color: inherit;
+  box-shadow: 0 0 0 1px var(--warn-soft);
+}
+.repo-code-search {
+  flex: 0 1 150px;
+  width: auto;
+  min-width: 110px;
+}
+
 /* reduced motion: what moves stops moving; fades that explain a change stay */
 @media (prefers-reduced-motion: reduce) {
   .sidebar,

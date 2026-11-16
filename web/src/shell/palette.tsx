@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { CircleDot, FileText, FolderGit2, GitMerge, Search, Users, CornerDownLeft } from "lucide-react";
+import { CircleDot, FileSearch, FileText, FolderGit2, GitMerge, Search, Users, CornerDownLeft } from "lucide-react";
 import { useDebounced } from "../components/ui";
 import { api, qs, refLink, type S } from "../api/client";
 import { useSession } from "../session";
@@ -151,6 +151,11 @@ function Palette({ mode, close }: { mode: Mode; close: () => void }) {
       for (const m of found.data?.merge_requests ?? [])
         top.push({ key: `m:${m.project_id}:${m.iid}`, label: `${m.title}`, hint: `${m.project_path}!${m.iid}`, icon: <GitMerge size={15} />, to: `/${m.project_path}/-/merge_requests/${m.iid}`, score: 0 });
       top.push({ key: "search", label: `Search everything for “${t}”`, hint: "search", icon: <Search size={15} />, to: `/search${qs({ q: t })}`, score: 0 });
+      if (t.length >= 3) {
+        // in a project: its code first
+        if (project) top.push({ key: "code-here", label: `Search this project's code for “${t}”`, hint: "code", icon: <FileSearch size={15} />, to: `/search${qs({ q: t, scope: "code", project_id: project.full_path })}`, score: 0 });
+        top.push({ key: "code", label: `Search all code for “${t}”`, hint: "code", icon: <FileSearch size={15} />, to: `/search${qs({ q: t, scope: "code" })}`, score: 0 });
+      }
     }
     return top;
   }, [term, files.data, projects.data, groups.data, found.data, project, ref, mode]);

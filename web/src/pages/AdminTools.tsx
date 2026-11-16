@@ -179,6 +179,13 @@ export function AdminStorage() {
             layers and uploads are in <span className="mono">{s.blob_location}</span>. Repositories are measured after each push and once a day
             {s.repositories_unmeasured > 0 && <> ({s.repositories_unmeasured} not measured in the last day: measuring them now)</>}. LFS objects and image layers count once here, and for each project that
             uses them below.
+            {s.code_index && (
+              <>
+                {" "}
+                The code search index takes {bytes(s.code_index.bytes)} more in <span className="mono">{s.code_index.location}</span> ({s.code_index.files} files of {s.code_index.projects} of{" "}
+                {s.code_index.projects_total} projects); it is rebuilt from the repositories, so it is not in the total.
+              </>
+            )}
           </p>
 
           <Card

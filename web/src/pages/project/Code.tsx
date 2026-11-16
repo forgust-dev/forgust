@@ -195,6 +195,25 @@ function LastCommitBar({ ctx, c, history }: { ctx: Ctx; c: S["CommitInfo"]; hist
   );
 }
 
+/** Search the text of this project's files (its default branch). */
+function CodeSearchBox({ ctx }: { ctx: Ctx }) {
+  const navigate = useNavigate();
+  const [text, setText] = useState("");
+  return (
+    <form
+      className="search-field repo-code-search"
+      role="search"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (text.trim()) navigate(`/search${qs({ q: text.trim(), scope: "code", project_id: ctx.p.full_path })}`);
+      }}
+    >
+      <Search size={14} aria-hidden />
+      <input type="search" value={text} placeholder="Search code…" aria-label="Search this project's code" onChange={(e) => setText(e.target.value)} />
+    </form>
+  );
+}
+
 export function Tree({ ctx, refAndPath }: { ctx: Ctx; refAndPath: string }) {
   const r = useResolved(ctx, refAndPath);
   return <Q q={r}>{(res) => <TreeView ctx={ctx} res={res} />}</Q>;
@@ -261,6 +280,7 @@ function TreeView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
         <button className="btn" onClick={() => openPalette("files")} title="Find a file (t)">
           <Search size={14} /> Go to file <kbd>t</kbd>
         </button>
+        <CodeSearchBox ctx={ctx} />
         {ctx.p.can_push && (
           <Link className="btn" to={`${ctx.web}/-/new/${res.ref}${res.path ? `/${res.path}` : ""}`} title="Create a file here" aria-label="New file">
             <FilePlus2 size={14} /> <span className="hide-narrow">New file</span>
