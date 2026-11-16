@@ -287,6 +287,10 @@ async fn import_a_gitlab_project(pool: sqlx::PgPool) {
     assert_eq!(p["full_path"], "imported/apps/origin");
     assert_eq!(p["visibility"], "internal");
     assert_eq!(p["description"], "From GitLab");
+    // its code is searchable: an import runs no post-receive, it queues the index itself
+    wait_jobs(&srv.state).await;
+    let found = owner.ok_get(&format!("/api/v1/search/code?q=hello,%20world&project_id={pid}")).await;
+    assert_eq!(found["files"][0]["path"], "src/main.rs", "{found}");
 
     // repository: branches (the deleted one stays gone), and no leftover import refs
     let branches = owner.ok_get(&format!("/api/v1/projects/{pid}/repository/branches")).await;

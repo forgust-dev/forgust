@@ -777,6 +777,17 @@ pub async fn start_worker(state: AppState, concurrency: usize) -> anyhow::Result
         .add_extension(state)
         .init()
         .await?;
+    // code search: projects not indexed yet (an upgrade, a new or restored
+    // index) start now rather than at the next hourly sweep
+    // (not awaited: the listeners do not wait for it)
+    let sweep_state = check_state.clone();
+    tokio::spawn(async move {
+        match crate::code_search::indexer::queue_due(&sweep_state).await {
+            Ok(0) => {}
+            Ok(n) => tracing::info!(projects = n, "code search: indexing"),
+            Err(e) => tracing::warn!(error = %e, "code index jobs not queued"),
+        }
+    });
     // a fresh install, or one that was down, hears of a release now rather than in up to 6 hours
     if let Err(e) = crate::services::updates::queue_check(&check_state).await {
         tracing::warn!(error = %e, "could not queue the release check");

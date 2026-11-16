@@ -103,23 +103,38 @@ pub struct CodeIndex {
 }
 
 impl CodeIndex {
-    /// Open the index in `dir`, creating it when missing. An index that cannot
-    /// be opened, or of another format, is thrown away: it is rebuilt from the
-    /// repositories.
+    /// Open the index in `dir`, creating it when missing. An index of ours
+    /// that cannot be opened, or of another format, is thrown away: it is
+    /// rebuilt from the repositories. A directory that holds anything else is
+    /// never touched: `index_dir` pointing at the wrong place is an error.
     pub fn open(dir: &Path) -> anyhow::Result<Self> {
         match Self::try_open(dir) {
             Ok(Some(index)) => return Ok(index),
             Ok(None) => {}
             Err(e) => tracing::warn!(error = %e, dir = %dir.display(), "the code search index cannot be opened; rebuilding it"),
         }
-        if dir.exists() {
-            std::fs::remove_dir_all(dir)?;
-        }
+        Self::remove(dir)?;
         std::fs::create_dir_all(dir)?;
+        // the marker first: a crash right after leaves a directory we know is ours
+        std::fs::write(dir.join(GENERATION_FILE), format!("{FORMAT}:{}", crate::crypto::random_urlsafe(12)))?;
         let (schema, _) = schema();
         Index::create_in_dir(dir, schema)?;
-        std::fs::write(dir.join(GENERATION_FILE), format!("{FORMAT}:{}", crate::crypto::random_urlsafe(12)))?;
         Self::try_open(dir)?.ok_or_else(|| anyhow::anyhow!("the code search index was not created"))
+    }
+
+    /// Delete the index in `dir`, if there is one (it is rebuilt when next
+    /// opened). Refuses a directory that is not empty and not an index of ours.
+    pub fn remove(dir: &Path) -> anyhow::Result<()> {
+        let Ok(mut entries) = std::fs::read_dir(dir) else { return Ok(()) };
+        if dir.join(GENERATION_FILE).is_file() {
+            std::fs::remove_dir_all(dir)?;
+        } else if entries.next().is_some() {
+            anyhow::bail!(
+                "{} is not empty and is not a code search index (no {GENERATION_FILE} file): set code_search.index_dir to a directory of its own",
+                dir.display()
+            );
+        }
+        Ok(())
     }
 
     /// `None`: nothing usable there (missing, or another format).
@@ -352,5 +367,21 @@ mod tests {
         // another format: thrown away too
         std::fs::write(dir.path().join(GENERATION_FILE), "0:old").unwrap();
         assert_eq!(CodeIndex::open(dir.path()).unwrap().files().unwrap(), 0);
+    }
+
+    #[test]
+    fn a_directory_that_is_not_an_index_is_left_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("precious.txt"), "keep me").unwrap();
+        let err = CodeIndex::open(dir.path()).err().expect("refused").to_string();
+        assert!(err.contains("not a code search index"), "{err}");
+        assert!(CodeIndex::remove(dir.path()).is_err());
+        assert_eq!(std::fs::read_to_string(dir.path().join("precious.txt")).unwrap(), "keep me");
+        // an empty directory, or none, is fine
+        let empty = tempfile::tempdir().unwrap();
+        assert_eq!(CodeIndex::open(empty.path()).unwrap().files().unwrap(), 0);
+        CodeIndex::remove(empty.path()).unwrap();
+        assert!(!empty.path().exists());
+        CodeIndex::remove(&empty.path().join("missing")).unwrap();
     }
 }

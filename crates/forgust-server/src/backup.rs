@@ -137,6 +137,11 @@ pub async fn restore(cfg: &Config, storage: &dyn Storage, input: &Path) -> anyho
             .await
             .with_context(|| format!("restoring project {}", p.id))?;
     }
+    // a code search index left on this disk describes other repositories: it
+    // goes, and the server fills a new one from what was restored
+    if cfg.code_search.enabled {
+        crate::code_search::CodeIndex::remove(&cfg.code_index_dir())?;
+    }
     Ok(manifest.projects.len())
 }
 
