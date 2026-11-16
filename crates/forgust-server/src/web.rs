@@ -164,7 +164,7 @@ fn app_csp(html: &str, proxied_images: bool) -> String {
 async fn spa(state: AppState, req: Request) -> Response {
     let dir = &state.cfg.server.static_dir;
     let index = dir.join("index.html");
-    if req.uri().path().starts_with("/assets/") || req.uri().path() == "/favicon.svg" {
+    if req.uri().path().starts_with("/assets/") {
         let mut resp = match ServeDir::new(dir).oneshot(req).await {
             Ok(r) => r.into_response(),
             Err(_) => StatusCode::NOT_FOUND.into_response(),

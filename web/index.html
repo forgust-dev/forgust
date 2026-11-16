@@ -3,7 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- the tab icon follows the browser's color scheme; without media support the last one wins -->
+    <link rel="icon" href="/src/assets/brand/favicon-dark.ico" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="/src/assets/brand/favicon-light.ico" media="(prefers-color-scheme: light)" />
+    <link rel="apple-touch-icon" href="/src/assets/brand/apple-touch-icon.png" />
     <link rel="stylesheet" href="/api/v1/highlight.css" />
     <script>
       // apply the stored theme before first paint (no light flash for dark users)

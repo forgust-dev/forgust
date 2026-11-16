@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api, type S } from "../api/client";
 import { useSession } from "../session";
 import { ErrorBox, Q } from "../components/ui";
+import { Logo } from "../components/Logo";
 
 // ADR-0025: an MCP client (an AI assistant) asks to act as you. The
 // server checked the client and its redirect address; you allow reading, and
@@ -34,7 +35,7 @@ export function OAuthAuthorize() {
   };
   return (
     <div className="page narrow auth-page">
-      <img src="/favicon.svg" width={36} height={36} alt="" className="auth-logo" />
+      <Logo size={36} className="auth-logo" />
       <Q q={info}>
         {(i) => (
           <div className="stack">

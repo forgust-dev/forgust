@@ -43,6 +43,7 @@ import { useNav } from "./nav";
 import { HoverCards } from "../components/HoverCards";
 import { Avatar, Tile } from "../components/ui";
 import { ResendLink } from "../components/ResendLink";
+import { Logo } from "../components/Logo";
 import { useWork } from "../prefetch";
 import { SETTINGS_PAGES } from "../pages/project/settingsPages";
 import { InboxBell } from "../components/Inbox";
@@ -512,7 +513,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <>
         <header className="topbar">
           <Link to="/" className="brand">
-            <img src="/favicon.svg" width={24} height={24} alt="" />
+            <Logo size={24} />
             Forgust
           </Link>
           <div className="grow" />
@@ -535,7 +536,7 @@ export function Shell({ children }: { children: ReactNode }) {
           <Menu size={18} />
         </button>
         <Link to="/" className="brand">
-          <img src="/favicon.svg" width={24} height={24} alt="" />
+          <Logo size={24} />
           <span className="brand-name">Forgust</span>
         </Link>
         <Breadcrumbs />

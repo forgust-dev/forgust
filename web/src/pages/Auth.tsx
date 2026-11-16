@@ -4,6 +4,7 @@ import { api, type S } from "../api/client";
 import { useProviders, useSetup } from "../prefetch";
 import { useSession } from "../session";
 import { ErrorBox, Field } from "../components/ui";
+import { Logo } from "../components/Logo";
 
 /** `?next=` only ever leads to a path on this site (no `//host`, no `/\host`). */
 export function safeNext(next: string | null): string {
@@ -69,7 +70,7 @@ export function Login() {
 
   return (
     <div className="page narrow auth-page">
-      <img src="/favicon.svg" width={36} height={36} alt="" className="auth-logo" />
+      <Logo size={36} className="auth-logo" />
       <h1>Sign in to Forgust</h1>
       <form className="stack" onSubmit={submit}>
         <ErrorBox error={error} />
@@ -123,7 +124,7 @@ export function Setup() {
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [k]: e.target.value });
   return (
     <div className="page narrow auth-page">
-      <img src="/favicon.svg" width={36} height={36} alt="" className="auth-logo" />
+      <Logo size={36} className="auth-logo" />
       <h1>Create the first administrator</h1>
       <form className="stack" onSubmit={submit}>
         <ErrorBox error={error} />
@@ -155,7 +156,7 @@ export function ForgotPassword() {
   const setup = useSetup();
   return (
     <div className="page narrow auth-page">
-      <img src="/favicon.svg" width={36} height={36} alt="" className="auth-logo" />
+      <Logo size={36} className="auth-logo" />
       <h1>Reset your password</h1>
       {setup.data?.email_enabled === false ? (
         <div className="stack">
@@ -213,7 +214,7 @@ export function ResetPassword() {
   const mismatch = again !== "" && again !== password;
   return (
     <div className="page narrow auth-page">
-      <img src="/favicon.svg" width={36} height={36} alt="" className="auth-logo" />
+      <Logo size={36} className="auth-logo" />
       <h1>Choose a new password</h1>
       {done ? (
         <div className="stack">
@@ -279,7 +280,7 @@ export function VerifyEmail() {
   const back = `/login?next=${encodeURIComponent(`/verify-email?token=${token}`)}`;
   return (
     <div className="page narrow auth-page">
-      <img src="/favicon.svg" width={36} height={36} alt="" className="auth-logo" />
+      <Logo size={36} className="auth-logo" />
       <h1>Confirm your email</h1>
       {!token ? (
         <p className="muted">This page needs the link from your email.</p>

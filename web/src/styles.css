@@ -1083,6 +1083,27 @@ form.stack {
   color: var(--text);
   padding-right: 4px;
 }
+/* The mark comes in two colorways (components/Logo.tsx); show the one that suits the theme. */
+.logo {
+  display: block;
+}
+.logo.logo-dark {
+  display: none;
+}
+:root[data-theme="dark"] .logo.logo-light {
+  display: none;
+}
+:root[data-theme="dark"] .logo.logo-dark {
+  display: block;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .logo.logo-light {
+    display: none;
+  }
+  :root:not([data-theme="light"]) .logo.logo-dark {
+    display: block;
+  }
+}
 .brand:hover {
   text-decoration: none;
 }
