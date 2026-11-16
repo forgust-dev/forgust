@@ -284,6 +284,9 @@ async fn code_search_text_regex_filters_and_pages(pool: sqlx::PgPool) {
     assert!(files(&get("q=launch_\\w%2B").await).is_empty());
 
     // filters
+    let languages = owner.ok_get("/api/v1/search/code/languages").await;
+    assert!(languages.as_array().unwrap().iter().any(|l| l == "Python"), "{languages}");
+    assert_eq!(languages.as_array().unwrap().iter().filter(|l| *l == "Rust").count(), 1);
     assert_eq!(files(&get("q=launch_rocket&language=python").await), vec!["acme/platform/api:scripts/deploy.py"]);
     assert_eq!(files(&get("q=launch_rocket&filename=LAUNCH.md").await), vec!["acme/platform/api:docs/Launch.md"]);
     assert_eq!(

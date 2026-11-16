@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { CaseSensitive, FileCode, Regex, X } from "lucide-react";
 import { api, qs, refLink, type S } from "../api/client";
 import { Empty, ErrorBox, Spinner, useDebounced } from "../components/ui";
+import { Select } from "../components/controls";
 
 const PER_PAGE = 20;
 
@@ -76,6 +77,8 @@ export function CodeSearch({ params, set }: { params: URLSearchParams; set: (k: 
     enabled: !!q,
     retry: false,
   });
+  // a file's language comes from its extension: the list is what the server knows
+  const languages = useQuery({ queryKey: ["search-code-languages"], queryFn: () => api.get<string[]>("/search/code/languages"), staleTime: Infinity });
   const files = r.data?.pages.flatMap((p) => p.files) ?? [];
   const partial = r.data?.pages.some((p) => p.partial) ?? false;
   return (
@@ -88,7 +91,13 @@ export function CodeSearch({ params, set }: { params: URLSearchParams; set: (k: 
           <Regex size={14} /> Regular expression
         </button>
         <FilterInput value={path} onChange={(v) => set("path", v)} placeholder="Path contains…" width={170} />
-        <FilterInput value={lang} onChange={(v) => set("lang", v)} placeholder="Language" width={120} />
+        <Select
+          label="Language"
+          value={lang}
+          onChange={(v) => set("lang", v)}
+          style={{ width: 170, height: 28 }}
+          options={[{ value: "", label: "Any language" }, ...(languages.data ?? []).map((l) => ({ value: l.toLowerCase(), label: l }))]}
+        />
         {(project || group) && (
           <span className="pill">
             in {project || group}

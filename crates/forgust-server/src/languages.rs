@@ -55,6 +55,14 @@ const TABLE: &[(&[&str], &str, &str)] = &[
     (&["tf"], "HCL", "#844fba"),
 ];
 
+/// Every language the table knows, in alphabetical order.
+pub fn names() -> Vec<&'static str> {
+    let mut names: Vec<&str> = TABLE.iter().map(|(_, name, _)| *name).collect();
+    names.sort_unstable_by_key(|n| n.to_lowercase());
+    names.dedup();
+    names
+}
+
 /// Binary content: a NUL byte near the start, as git decides it.
 pub fn is_binary(data: &[u8]) -> bool {
     data.iter().take(8000).any(|&b| b == 0)

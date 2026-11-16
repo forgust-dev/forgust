@@ -2174,6 +2174,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/search/code/languages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The languages a code search can be limited to (`language`): a file's
+         *     language comes from its extension or name.
+         */
+        get: operations["code_languages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/session": {
         parameters: {
             query?: never;
@@ -9582,6 +9602,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CodeResults"];
+                };
+            };
+        };
+    };
+    code_languages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
                 };
             };
         };

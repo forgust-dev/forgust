@@ -164,3 +164,10 @@ pub async fn code(
         .collect();
     Ok(Json(CodeResults { files, next: found.next.as_ref().map(code::encode_cursor), partial: found.partial }))
 }
+
+/// The languages a code search can be limited to (`language`): a file's
+/// language comes from its extension or name.
+#[utoipa::path(get, path = "/api/v1/search/code/languages", responses((status = 200, body = Vec<String>)), tag = "projects")]
+pub async fn code_languages() -> Json<Vec<&'static str>> {
+    Json(crate::languages::names())
+}

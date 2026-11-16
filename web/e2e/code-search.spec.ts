@@ -44,7 +44,9 @@ test("code is found from the repository page, the search page and the palette", 
     await expect(page.getByText(/plain text that every match has/)).toBeVisible();
     await page.getByRole("button", { name: "Regular expression" }).click();
     await page.getByRole("searchbox", { name: "Search…" }).fill(word);
-    await page.getByRole("searchbox", { name: "Language" }).fill("python");
+    await page.getByRole("combobox", { name: "Language" }).click();
+    await page.getByRole("option", { name: "Python" }).click();
+    await expect(page).toHaveURL(/lang=python/);
     await expect(notes).toHaveCount(0);
     await expect(python).toBeVisible();
 
