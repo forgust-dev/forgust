@@ -554,6 +554,11 @@ impl Storage for LocalStorage {
     }
 
     async fn tree_sizes(&self, repo: i64, commit: &str, max: usize) -> Result<(Vec<(String, u64)>, bool)> {
+        let (blobs, truncated) = self.tree_blobs(repo, commit, max).await?;
+        Ok((blobs.into_iter().map(|b| (b.path, b.size)).collect(), truncated))
+    }
+
+    async fn tree_blobs(&self, repo: i64, commit: &str, max: usize) -> Result<(Vec<TreeBlob>, bool)> {
         self.ensure(repo).await?;
         if !validate_rev(commit) {
             return Err(StorageError::Invalid("bad revision".into()));
@@ -567,15 +572,71 @@ impl Storage for LocalStorage {
             let Some(tab) = rec.iter().position(|&b| b == b'\t') else { continue };
             let meta = String::from_utf8_lossy(&rec[..tab]);
             let mut f = meta.split_whitespace();
-            if f.nth(1) != Some("blob") {
+            let (Some(mode), Some("blob"), Some(oid), Some(size)) =
+                (f.next().and_then(|m| u32::from_str_radix(m, 8).ok()), f.next(), f.next(), f.next().and_then(|s| s.parse::<u64>().ok()))
+            else {
                 continue;
-            }
-            let Some(size) = f.nth(1).and_then(|s| s.parse::<u64>().ok()) else { continue };
-            files.push((String::from_utf8_lossy(&rec[tab + 1..]).into_owned(), size));
+            };
+            files.push(TreeBlob { path: String::from_utf8_lossy(&rec[tab + 1..]).into_owned(), mode, oid: oid.to_string(), size });
         }
         let truncated = files.len() > max || out.truncated;
         files.truncate(max);
         Ok((files, truncated))
+    }
+
+    async fn changed_blobs(&self, repo: i64, old: &str, new: &str) -> Result<Vec<BlobChange>> {
+        self.ensure(repo).await?;
+        if !is_valid_oid(old) || !is_valid_oid(new) {
+            return Err(StorageError::Invalid("bad object id".into()));
+        }
+        let mut c = self.git(repo);
+        c.args(["diff-tree", "-r", "--raw", "-z", "--no-renames", "--no-abbrev", old, new]);
+        let out = cli::run(c, 512 << 20, LONG).await?;
+        if out.truncated {
+            return Err(StorageError::Git("too many changed paths".into()));
+        }
+        // `:<old mode> <new mode> <old oid> <new oid> <status> NUL <path> NUL`
+        let mut changes = Vec::new();
+        let mut recs = out.stdout.split(|&b| b == 0);
+        while let Some(meta) = recs.next() {
+            if meta.is_empty() {
+                continue;
+            }
+            let Some(path) = recs.next() else { break };
+            let meta = String::from_utf8_lossy(meta);
+            let mut f = meta.trim_start_matches(':').split(' ');
+            let (Some(_), Some(mode), Some(_), Some(oid), Some(status)) = (f.next(), f.next(), f.next(), f.next(), f.next()) else {
+                return Err(StorageError::Git(format!("bad diff-tree record: {meta}")));
+            };
+            let gone = status.starts_with('D');
+            changes.push(BlobChange {
+                path: String::from_utf8_lossy(path).into_owned(),
+                mode: if gone { 0 } else { u32::from_str_radix(mode, 8).unwrap_or(0) },
+                oid: (!gone).then(|| oid.to_string()),
+            });
+        }
+        Ok(changes)
+    }
+
+    async fn blobs_by_id(&self, repo: i64, oids: &[String], max_bytes: usize) -> Result<Vec<Option<(u64, Vec<u8>)>>> {
+        let path = self.ensure(repo).await?;
+        if oids.iter().any(|o| !is_valid_oid(o)) {
+            return Err(StorageError::Invalid("bad object id".into()));
+        }
+        let mut found = Vec::with_capacity(oids.len());
+        // one request at a time on the repo's long-lived process: a failed
+        // process is respawned for the object it failed on, not the whole list
+        for oid in oids {
+            let res = self
+                .catfile
+                .with(&path, |cf| {
+                    let oid = oid.clone();
+                    Box::pin(async move { cf.contents(&oid, max_bytes).await })
+                })
+                .await?;
+            found.push(res.filter(|(h, _)| h.kind == "blob").map(|(h, data)| (h.size, data)));
+        }
+        Ok(found)
     }
 
     async fn disk_size(&self, repo: i64) -> Result<u64> {

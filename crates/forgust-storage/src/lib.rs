@@ -64,6 +64,14 @@ pub trait Storage: Send + Sync + 'static {
     async fn list_paths(&self, repo: i64, commit: &str, max: usize) -> Result<(Vec<String>, bool)>;
     /// Every blob at `commit` with its size (at most `max`); the bool says it was cut short.
     async fn tree_sizes(&self, repo: i64, commit: &str, max: usize) -> Result<(Vec<(String, u64)>, bool)>;
+    /// Every file at `commit` with its mode, object id and size (at most `max`);
+    /// the bool says it was cut short. Submodules are left out, symlinks are not.
+    async fn tree_blobs(&self, repo: i64, commit: &str, max: usize) -> Result<(Vec<TreeBlob>, bool)>;
+    /// Paths that differ between two commits, with the new object of each.
+    async fn changed_blobs(&self, repo: i64, old: &str, new: &str) -> Result<Vec<BlobChange>>;
+    /// Blobs by id, in the order asked: the full size and up to `max_bytes` of
+    /// content each; `None` for an id that is missing or not a blob.
+    async fn blobs_by_id(&self, repo: i64, oids: &[String], max_bytes: usize) -> Result<Vec<Option<(u64, Vec<u8>)>>>;
     /// Bytes the repository's objects take on disk (loose and packed).
     async fn disk_size(&self, repo: i64) -> Result<u64>;
     async fn blob(&self, repo: i64, commit: &str, path: &str, max_bytes: usize) -> Result<Blob>;
