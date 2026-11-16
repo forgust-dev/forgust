@@ -623,6 +623,24 @@ impl Storage for LocalStorage {
         if oids.iter().any(|o| !is_valid_oid(o)) {
             return Err(StorageError::Invalid("bad object id".into()));
         }
+        // gitoxide reads in this thread pool: many searches read one repository
+        // at once, where the repo's single cat-file process serves one at a time
+        if let Some(r) = self.gix_repo(repo, &path) {
+            let oids = oids.to_vec();
+            return tokio::task::spawn_blocking(move || {
+                oids.iter()
+                    .map(|oid| {
+                        let id = gix::ObjectId::from_hex(oid.as_bytes()).map_err(|e| StorageError::Invalid(e.to_string()))?;
+                        let object = r.try_find_object(id).map_err(|e| StorageError::Git(e.to_string()))?;
+                        Ok(object
+                            .filter(|o| o.kind == gix::object::Kind::Blob)
+                            .map(|o| (o.data.len() as u64, o.data[..o.data.len().min(max_bytes)].to_vec())))
+                    })
+                    .collect()
+            })
+            .await
+            .map_err(|e| StorageError::Git(e.to_string()))?;
+        }
         let mut found = Vec::with_capacity(oids.len());
         // one request at a time on the repo's long-lived process: a failed
         // process is respawned for the object it failed on, not the whole list

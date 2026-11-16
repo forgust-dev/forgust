@@ -161,7 +161,8 @@ Measured on an 8-vCPU development machine, p95 with one client, release build:
 | Repository tree, highlighted 2,000-line file, commit diff, blame | 7–11 ms |
 | Merge request page and first diff page of a 1,000-file merge request | 9 ms |
 | `ls-refs` with a prefix on a repository with 1M refs | 13 ms |
-| Code search in a 2,000-file repository (text one file has, text every file has) | 20–24 ms |
+| Code search in a 2,000-file repository (text one file has, text every file has) | 15–25 ms |
+| Code search in the Linux kernel, 97,000 files (plain text, a regular expression) | 40–250 ms |
 | Pipeline created → job picked up by a runner | 24–40 ms |
 
 Pushing one branch to a 1M-ref repository is the one speed target still missed (7 s

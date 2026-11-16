@@ -10,6 +10,10 @@ runs `forgust-bench run`:
 - **regression gate**: fail when a p95 is more than 15 % (and more than 5 ms) above
   the stored baseline; `UPDATE_BASELINE=1` writes a new baseline.
 
+With `LINUX_BUNDLE`, code search is also timed in linux (about 100,000 files): text few
+files have, text thousands have, and a regular expression. The bundle must hold the
+full history or a single commit: a push from a shallow clone is refused.
+
 HTTP timings are taken by the client over loopback, a close proxy for the
 server-side span timings ADR-0008 names. Git targets (1M refs) are timed around the
 `git` command, so they include client start-up.

@@ -65,6 +65,9 @@ struct RunArgs {
     /// Project path holding the 1M-ref repo (optional).
     #[arg(long)]
     refs_project: Option<String>,
+    /// Project path holding a large repository (linux), for code search (optional).
+    #[arg(long)]
+    large_project: Option<String>,
     /// Merge request `<project path>!<iid>` with ~1,000 changed files (optional).
     #[arg(long)]
     mr: Option<String>,
@@ -311,6 +314,39 @@ async fn run(a: RunArgs) -> Result<()> {
             anyhow::bail!("the code index did not get {} within 5 minutes", a.project);
         }
         tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+    // code search in a large repository (linux: about 100,000 files): text
+    // few files have, text thousands have, and a regular expression
+    if let Some(lp) = &a.large_project {
+        let code = format!("{}/api/v1/search/code?project_id={}", a.url, enc(lp));
+        let rare = format!("{code}&q=sched_setaffinity(");
+        // its first index takes minutes
+        let indexed = Instant::now();
+        loop {
+            let found: serde_json::Value =
+                client.get(&rare).header("private-token", &a.token).send().await?.error_for_status()?.json().await?;
+            if found["not_indexed"] == 0 && found["files"].as_array().is_some_and(|f| !f.is_empty()) {
+                break;
+            }
+            if indexed.elapsed() > Duration::from_secs(3600) {
+                anyhow::bail!("the code index did not get {lp} within an hour");
+            }
+            tokio::time::sleep(Duration::from_secs(2)).await;
+        }
+        println!("{lp} indexed after {:.0} s of waiting", indexed.elapsed().as_secs_f64());
+        targets.push(Target { name: "code_search_large_rare", path: rare, target_single: 150.0, target_concurrent: 300.0 });
+        targets.push(Target {
+            name: "code_search_large_common",
+            path: format!("{code}&q=static%20int"),
+            target_single: 250.0,
+            target_concurrent: 750.0,
+        });
+        targets.push(Target {
+            name: "code_search_large_regex",
+            path: format!("{code}&q=EXPORT_SYMBOL_GPL%5C(%5Cw%2B_init%5C)&regex=true"),
+            target_single: 250.0,
+            target_concurrent: 750.0,
+        });
     }
     if let Some(spec) = &a.mr {
         let (mp, iid) = spec.split_once('!').context("--mr is <project>!<iid>")?;
