@@ -2,9 +2,9 @@ import { Suspense, lazy, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { Archive, BookOpen, Building2, CalendarDays, GitBranch, GitCommitHorizontal, Globe, Handshake, HardDrive, History as HistoryIcon, Lock, Scale, ShieldCheck, UserCheck, Users as UsersIcon } from "lucide-react";
+import { Archive, ArrowRight, BookOpen, Building2, CalendarDays, GitBranch, GitCommitHorizontal, Globe, Handshake, HardDrive, History as HistoryIcon, Lock, Scale, ShieldCheck, UserCheck, Users as UsersIcon } from "lucide-react";
 import { api, bytes, qs, timeAgo, type S, encPath, refLink } from "../../api/client";
-import { StatusIcon, statusLabel } from "./ci/Status";
+import { StatusBadge } from "./ci/Status";
 import { fetchers, keys } from "../../prefetch";
 import { Badge, CopyField, NotFound, Q, Spinner, Tile } from "../../components/ui";
 import { useSetNav } from "../../shell/nav";
@@ -272,6 +272,7 @@ function ProjectHeader({ p }: { p: S["ProjectDetail"] }) {
         {p.access_level !== "none" && <Badge tone="accent">{p.access_level}</Badge>}
         {user && <NotificationBell projectId={p.id} />}
       </div>
+      {p.description && <p className="repo-desc">{p.description}</p>}
     </div>
   );
 }
@@ -287,7 +288,7 @@ function Languages({ langs }: { langs: S["LanguageShare"][] }) {
     return v >= 10 ? v.toFixed(0) : v.toFixed(1);
   };
   return (
-    <section className="languages">
+    <section className="side-card languages">
       <h2>Languages</h2>
       <div className="lang-bar" role="img" aria-label={rows.map((r) => `${r.name} ${pct(r.bytes)}%`).join(", ")}>
         {rows.map((r) => (
@@ -381,55 +382,69 @@ function RepoAbout({ ctx }: { ctx: Ctx }) {
   });
   return (
     <aside className="repo-about" aria-label="About this project">
-      <h2>About</h2>
-      <p className={p.description ? "" : "muted"}>{p.description || "No description."}</p>
-      <ul>
-        <li>
-          <BookOpen size={15} />
-          <a href="#readme">Readme</a>
-        </li>
-        {files.map((f) => (
-          <li key={f.path}>
-            {f.icon}
-            <Link to={refLink(ctx.web, "blob", ref, f.path)}>{f.kind === "license" && license.data ? license.data : f.label}</Link>
-          </li>
-        ))}
-        {stats.data && (
-          <li>
-            <GitCommitHorizontal size={15} />
-            <Link to={refLink(ctx.web, "commits", ref)}>
-              {stats.data.commit_count.toLocaleString()} commit{stats.data.commit_count === 1 ? "" : "s"}
-            </Link>
-          </li>
-        )}
-        {last && (
-          <li>
-            <StatusIcon status={last.status} size={15} />
-            <Link to={`${ctx.web}/-/pipelines/${last.iid}`}>
-              Pipeline {statusLabel(last.status)} on <code>{ref}</code>
-            </Link>
-          </li>
-        )}
-        <li>
-          <GitBranch size={15} />
-          <span>
-            Default branch <code>{ref}</code>
-          </span>
-        </li>
-        <li>
-          <CalendarDays size={15} />
-          <span>Created {timeAgo(p.created_at)}</span>
-        </li>
-        {stats.data && (
-          <li>
-            <HardDrive size={15} />
+      {last && (
+        <section className="side-card ci-card" aria-label={`Latest pipeline on ${ref}`}>
+          <h2>
             <span>
-              {bytes(stats.data.repository_bytes)}
-              {stats.data.lfs_objects > 0 && ` · LFS ${bytes(stats.data.lfs_bytes)}`}
+              Pipeline on <code>{ref}</code>
+            </span>
+            <StatusBadge status={last.status} />
+          </h2>
+          <p>
+            Last run on{" "}
+            <Link className="mono" to={`${ctx.web}/-/commit/${last.sha}`}>
+              {last.sha.slice(0, 8)}
+            </Link>
+            {last.commit_title && <> · {last.commit_title}</>}
+          </p>
+          <Link className="ci-link" to={`${ctx.web}/-/pipelines/${last.iid}`}>
+            Pipeline #{last.iid} <ArrowRight size={14} />
+          </Link>
+        </section>
+      )}
+      <section className="side-card">
+        <h2>About</h2>
+        {/* the description is under the project's name, in the header */}
+        <ul>
+          <li>
+            <BookOpen size={15} />
+            <a href="#readme">Readme</a>
+          </li>
+          {files.map((f) => (
+            <li key={f.path}>
+              {f.icon}
+              <Link to={refLink(ctx.web, "blob", ref, f.path)}>{f.kind === "license" && license.data ? license.data : f.label}</Link>
+            </li>
+          ))}
+          {stats.data && (
+            <li>
+              <GitCommitHorizontal size={15} />
+              <Link to={refLink(ctx.web, "commits", ref)}>
+                {stats.data.commit_count.toLocaleString()} commit{stats.data.commit_count === 1 ? "" : "s"}
+              </Link>
+            </li>
+          )}
+          <li>
+            <GitBranch size={15} />
+            <span>
+              Default branch <code>{ref}</code>
             </span>
           </li>
-        )}
-      </ul>
+          <li>
+            <CalendarDays size={15} />
+            <span>Created {timeAgo(p.created_at)}</span>
+          </li>
+          {stats.data && (
+            <li>
+              <HardDrive size={15} />
+              <span>
+                {bytes(stats.data.repository_bytes)}
+                {stats.data.lfs_objects > 0 && ` · LFS ${bytes(stats.data.lfs_bytes)}`}
+              </span>
+            </li>
+          )}
+        </ul>
+      </section>
       {stats.data && stats.data.languages.length > 0 && <Languages langs={stats.data.languages} />}
     </aside>
   );

@@ -1,4 +1,4 @@
-import { Fragment, forwardRef, useState, type ComponentPropsWithoutRef, type ReactNode } from "react";
+import { Fragment, forwardRef, useState, type ComponentPropsWithoutRef, type CSSProperties, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Milestone, Settings2, Tag } from "lucide-react";
@@ -32,20 +32,37 @@ export function useLabels(projectId: number) {
   });
 }
 
-/** A label: its color as a dot, its name; links to the filtered list when `to` is set. */
+/** A label: tinted with its color, a dot of it, its name; links to the filtered list when `to` is set.
+ *  A scoped one (`priority::high`) shows its scope, then its value. */
 export function LabelChip({ label, to }: { label: Pick<S["Label"], "name" | "color" | "description">; to?: string }) {
-  const inner = (
+  const cut = label.name.lastIndexOf("::");
+  const scoped = cut > 0 && cut < label.name.length - 2;
+  const dot = <span className="label-dot" style={{ background: label.color }} />;
+  const inner = scoped ? (
     <>
-      <span className="label-dot" style={{ background: label.color }} />
+      <span className="label-scope">{label.name.slice(0, cut)}</span>
+      {/* read out (and matched) as the whole name */}
+      <span className="label-sep">::</span>
+      <span className="label-value">
+        {dot}
+        {label.name.slice(cut + 2)}
+      </span>
+    </>
+  ) : (
+    <>
+      {dot}
       {label.name}
     </>
   );
+  const className = scoped ? "label-chip scoped" : "label-chip";
+  // the chip's tint and text color mix from it (styles.css)
+  const style = { "--lc": label.color } as CSSProperties;
   return to ? (
-    <Link className="label-chip" to={to} title={label.description || label.name}>
+    <Link className={className} style={style} to={to} title={label.description || label.name}>
       {inner}
     </Link>
   ) : (
-    <span className="label-chip" title={label.description || label.name}>
+    <span className={className} style={style} title={label.description || label.name}>
       {inner}
     </span>
   );

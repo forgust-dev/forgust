@@ -205,7 +205,12 @@ function Sidebar({ collapsed, setCollapsed, mobileOpen, closeMobile }: { collaps
     header = (
       <Link to={`/${nav.project.full_path}`} className="side-context" title={nav.project.full_path} onClick={closeMobile}>
         <Tile name={nav.project.name} src={nav.project.avatar_url} />
-        {!c && <span className="ellipsis">{nav.project.name}</span>}
+        {!c && (
+          <span className="side-context-text">
+            <span className="ellipsis">{nav.project.name}</span>
+            {nav.project.ancestors.length > 0 && <span className="side-context-ns ellipsis">{nav.project.ancestors.map((a) => a.name).join(" / ")}</span>}
+          </span>
+        )}
       </Link>
     );
     items = projectItems(nav.project, nav.ref ?? nav.project.default_branch ?? "main", mrs.data?.opened, issues.data?.opened);
