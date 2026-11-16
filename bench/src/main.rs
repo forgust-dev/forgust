@@ -289,6 +289,29 @@ async fn run(a: RunArgs) -> Result<()> {
     ];
 
     let mut targets = targets;
+    // code search in the fixture project: text one file has (the index narrows
+    // 2,000 files to a few), and text every file has (a page of 20 files read)
+    let code = format!("{}/api/v1/search/code?project_id={}", a.url, enc(&a.project));
+    let rare = format!("{code}&q=f_1234_7(x");
+    targets.push(Target { name: "code_search_rare", path: rare.clone(), target_single: 50.0, target_concurrent: 150.0 });
+    targets.push(Target {
+        name: "code_search_common",
+        path: format!("{code}&q=wrapping_mul"),
+        target_single: 100.0,
+        target_concurrent: 300.0,
+    });
+    // the index is filled in the background after the push: wait for it
+    let indexed = Instant::now();
+    loop {
+        let found: serde_json::Value = client.get(&rare).header("private-token", &a.token).send().await?.error_for_status()?.json().await?;
+        if found["files"].as_array().is_some_and(|f| !f.is_empty()) {
+            break;
+        }
+        if indexed.elapsed() > Duration::from_secs(300) {
+            anyhow::bail!("the code index did not get {} within 5 minutes", a.project);
+        }
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
     if let Some(spec) = &a.mr {
         let (mp, iid) = spec.split_once('!').context("--mr is <project>!<iid>")?;
         let mr_api = format!("{}/api/v1/projects/{}/merge_requests/{iid}", a.url, enc(mp));

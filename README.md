@@ -105,6 +105,8 @@ volumes: { forgust-data: {}, db-data: {} }
 ### 📦 Code
 - Git over HTTP and SSH, Git LFS with file locking
 - Fast code browsing: tree, blame, history, compare, syntax highlighting
+- Code search across projects: exact text or regular expressions, filters by path,
+  file name and language, only in code you can read
 - Markdown with diagrams (Mermaid), math and alerts
 - Edit files, create branches and tags from the browser
 - Protected branches and tags, push rules, signed-commit verification (GPG and SSH)
@@ -159,6 +161,7 @@ Measured on an 8-vCPU development machine, p95 with one client, release build:
 | Repository tree, highlighted 2,000-line file, commit diff, blame | 7–11 ms |
 | Merge request page and first diff page of a 1,000-file merge request | 9 ms |
 | `ls-refs` with a prefix on a repository with 1M refs | 13 ms |
+| Code search in a 2,000-file repository (text one file has, text every file has) | 20–24 ms |
 | Pipeline created → job picked up by a runner | 24–40 ms |
 
 Pushing one branch to a 1M-ref repository is the one speed target still missed (7 s
@@ -168,8 +171,9 @@ against 300 ms).
 
 Forgust is young (0.1) and built for private teams first. Not there yet: forks and
 merge requests from forks, wikis, snippets, package registries, push and pull
-mirroring, issue boards, confidential issues, code search (search covers titles),
-system hooks, and WebAuthn, SAML or LDAP sign-in.
+mirroring, issue boards, confidential issues, system hooks, and WebAuthn, SAML or
+LDAP sign-in. Code search covers each project's default branch, not other branches
+or tags.
 
 ## Tech Stack
 | Layer | Technology |
