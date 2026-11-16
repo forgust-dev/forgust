@@ -1488,6 +1488,8 @@ kbd {
 .side-sub {
   display: grid;
   grid-template-rows: 1fr;
+  /* cancels the list's gap above it: folded, it takes no room at all */
+  margin-top: -2px;
   transition:
     grid-template-rows 220ms var(--ease-out),
     opacity 180ms var(--ease-out);
@@ -1501,6 +1503,11 @@ kbd {
 .side-sub.folded {
   grid-template-rows: 0fr;
   opacity: 0;
+  /* on the sidebar's own curve: scrolled down, it goes back to its top in step
+     with the fold, not all at once */
+  transition:
+    grid-template-rows 240ms var(--ease-in-out),
+    opacity 120ms var(--ease-out);
 }
 .side-sub-inner {
   display: flex;
@@ -1508,7 +1515,14 @@ kbd {
   gap: 1px;
   min-height: 0;
   overflow: hidden;
-  padding: 1px 0 6px 26px;
+  /* no padding above or below: it would stay when the list folds to nothing */
+  padding-left: 26px;
+}
+.side-sub-inner > :first-child {
+  margin-top: 3px;
+}
+.side-sub-inner > :last-child {
+  margin-bottom: 6px;
 }
 .side-link {
   display: flex;
@@ -1603,6 +1617,9 @@ kbd {
   font-size: 15px;
   letter-spacing: -0.01em;
   width: 100%;
+  /* the sidebar scrolls instead: folded, it hides its overflow, and that would let
+     it shrink while the list under it still overflows (it jumped as it folded) */
+  flex-shrink: 0;
   transition: background-color 160ms ease, border-color 160ms ease, width 0s;
 }
 .side-context:hover {
@@ -1630,6 +1647,15 @@ kbd {
 }
 .sidebar.collapsed .side-context .tile {
   transform: translateX(-8px);
+}
+/* one line, folded too: there each entry is a 36px square, and a label that
+   wraps in it makes its entry taller than the others */
+.side-label {
+  white-space: nowrap;
+}
+.side-label.grow {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .side-label,
 .side-context-text,
@@ -5949,6 +5975,9 @@ button.test-case-row:hover {
 .tip.above {
   transform: translate(-50%, -100%);
 }
+.tip.right {
+  transform: translateY(-50%);
+}
 .hover-card-status {
   display: inline-flex;
   align-items: center;
@@ -6201,6 +6230,7 @@ button.test-case-row:hover {
   .side-link,
   .side-context .tile,
   .side-sub,
+  .side-sub.folded,
   .scrim,
   .ready-ring .done {
     transition: none;

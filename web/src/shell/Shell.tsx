@@ -252,7 +252,8 @@ function Sidebar({ collapsed, setCollapsed, mobileOpen, closeMobile }: { collaps
   }
 
   return (
-    <aside className={`sidebar ${c ? "collapsed" : ""} ${mobileOpen ? "open" : ""}`} aria-label="Navigation">
+    // folded, its icons' tips show beside the rail rather than over the page
+    <aside className={`sidebar ${c ? "collapsed" : ""} ${mobileOpen ? "open" : ""}`} aria-label="Navigation" data-tip-side={c ? "right" : undefined}>
       {nav.kind !== "global" && (
         <Link to="/" className="side-link back" onClick={closeMobile} title="Your work">
           <Home size={16} />
