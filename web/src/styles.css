@@ -353,7 +353,7 @@ h3 {
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
-  transition: transform 160ms var(--ease-out), background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 .btn:hover {
   background: var(--bg-hover);
@@ -397,12 +397,6 @@ h3 {
 .btn.ghost {
   border-color: transparent;
 }
-/* a press reads as a press */
-.btn:active:not(:disabled),
-.icon-btn:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
 input,
 select,
 textarea {
@@ -1361,7 +1355,7 @@ kbd {
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  transition: transform 160ms var(--ease-out), background-color 120ms ease, color 120ms ease;
+  transition: background-color 120ms ease, color 120ms ease;
 }
 .icon-btn:hover {
   background: var(--bg-hover);
@@ -1851,6 +1845,8 @@ kbd {
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
 }
 .palette-input {
+  /* a long list scrolls under it: it does not squeeze it */
+  flex: none;
   height: 48px;
   padding: 0 16px;
   border: 0;
@@ -6234,10 +6230,6 @@ button.test-case-row:hover {
   .scrim,
   .ready-ring .done {
     transition: none;
-  }
-  .btn:active:not(:disabled),
-  .icon-btn:active:not(:disabled) {
-    transform: none;
   }
   .select-menu,
   .dropdown,

@@ -321,10 +321,11 @@ function UserMenu() {
       </button>
       {open && (
         <div className="menu" role="menu">
-          <Link role="menuitem" className="menu-head" to={`/${user.username}`} onClick={() => setOpen(false)} title="Your profile">
+          {/* who is signed in; "Your profile" below goes to their page */}
+          <div className="menu-head" role="presentation">
             <strong>{user.name || user.username}</strong>
             <span className="faint small">@{user.username}</span>
-          </Link>
+          </div>
           <Link role="menuitem" to={`/${user.username}`} onClick={() => setOpen(false)}>
             <User size={15} /> Your profile
           </Link>
