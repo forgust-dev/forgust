@@ -55,7 +55,13 @@ const TABLE: &[(&[&str], &str, &str)] = &[
     (&["tf"], "HCL", "#844fba"),
 ];
 
-fn language_of(path: &str) -> Option<(&'static str, &'static str)> {
+/// Binary content: a NUL byte near the start, as git decides it.
+pub fn is_binary(data: &[u8]) -> bool {
+    data.iter().take(8000).any(|&b| b == 0)
+}
+
+/// The language of a file, from its name: (name, colour).
+pub fn language_of(path: &str) -> Option<(&'static str, &'static str)> {
     let name = path.rsplit('/').next().unwrap_or(path);
     let ext = name.rsplit_once('.').map(|(_, e)| e);
     TABLE.iter().find(|(keys, _, _)| keys.iter().any(|k| *k == name || Some(*k) == ext)).map(|(_, l, c)| (*l, *c))

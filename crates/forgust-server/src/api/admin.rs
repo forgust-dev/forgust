@@ -343,6 +343,7 @@ const RUNNABLE: &[(&str, &str)] = &[
     ("maintenance_sweep", "Repository maintenance (full repack of repositories pushed to) and repository sizes"),
     ("cleanup", "Expired sessions and tokens, idle git processes"),
     ("measure_repositories", "Repository sizes for Storage"),
+    ("reindex_code", "Code search: index every project again from its repository"),
     ("update_check", "Ask GitHub for the latest Forgust release (unless turned off in Settings)"),
 ];
 

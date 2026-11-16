@@ -24,6 +24,7 @@ pub struct Config {
     pub email: EmailConfig,
     pub ci: CiConfig,
     pub registry: RegistryConfig,
+    pub code_search: CodeSearchConfig,
     pub renovate: RenovateConfig,
     pub pages: PagesConfig,
     pub security_scanning: SecurityScanningConfig,
@@ -157,6 +158,28 @@ pub struct RegistryConfig {
 impl Default for RegistryConfig {
     fn default() -> Self {
         RegistryConfig { enabled: true, max_blob_bytes: 10 << 30, token_ttl_secs: 900 }
+    }
+}
+
+/// Code search: an index of the text of each project's default branch, on
+/// local disk. It can be deleted at any time; it is rebuilt in the background.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CodeSearchConfig {
+    pub enabled: bool,
+    /// Where the index lives (default: `<data_dir>/code-index`). Every process
+    /// of the instance must see the same directory.
+    pub index_dir: Option<PathBuf>,
+    /// Larger files are not indexed.
+    pub max_file_bytes: u64,
+    /// Time one search may spend reading files; it then answers with what it
+    /// found and says there is more.
+    pub query_timeout_ms: u64,
+}
+
+impl Default for CodeSearchConfig {
+    fn default() -> Self {
+        CodeSearchConfig { enabled: true, index_dir: None, max_file_bytes: 1 << 20, query_timeout_ms: 2000 }
     }
 }
 
@@ -579,6 +602,10 @@ impl Config {
 
     pub fn repos_dir(&self) -> PathBuf {
         self.storage.repos_dir.clone().unwrap_or_else(|| self.server.data_dir.join("repositories"))
+    }
+
+    pub fn code_index_dir(&self) -> PathBuf {
+        self.code_search.index_dir.clone().unwrap_or_else(|| self.server.data_dir.join("code-index"))
     }
 
     /// Where backups made from the admin area go.

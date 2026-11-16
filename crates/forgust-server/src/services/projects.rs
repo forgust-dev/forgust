@@ -113,6 +113,8 @@ pub async fn update(
         }
         state.storage.set_default_branch(p.id, b).await?;
         forgust_db::projects::set_default_branch(&state.db, p.id, b).await?;
+        // code search covers the default branch
+        crate::code_search::indexer::queue(state, p.id).await;
     }
     forgust_db::projects::update_details(&state.db, p.id, name, description, visibility).await?;
     audit(state, principal, "project_updated", Some(("project", p.id)), json!({ "visibility": visibility }), None).await;
@@ -184,6 +186,7 @@ pub async fn delete(state: &AppState, principal: &Principal, p: &Project) -> Api
         Err(e) => tracing::error!(project = p.id, error = %e, "repo files not removed"),
     }
     state.events.publish(Event::ProjectDeleted { project_id: p.id });
+    crate::code_search::indexer::queue(state, p.id).await;
     audit(state, principal, "project_deleted", Some(("project", p.id)), json!({ "path": p.full_path }), None).await;
     Ok(())
 }

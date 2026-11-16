@@ -33,6 +33,8 @@ pub struct Inner {
     pub hooks: HookConfig,
     pub metrics: Option<PrometheusHandle>,
     pub highlighter: crate::render::Highlighter,
+    /// The code search index (None: `code_search.enabled` is off).
+    pub code_index: Option<Arc<crate::code_search::CodeIndex>>,
     /// Proxy for Markdown images from other sites (None: `security.image_proxy` off).
     pub images: Option<crate::render::ImageProxy>,
     pub oidc: crate::auth::oidc::OidcClients,

@@ -649,6 +649,8 @@ impl<'a> Runner<'a> {
         {
             self.state.storage.set_default_branch(p.id, b).await.map_err(other)?;
         }
+        // an import runs no post-receive: code search is told here
+        crate::code_search::indexer::queue(self.state, p.id).await;
         Ok(())
     }
 

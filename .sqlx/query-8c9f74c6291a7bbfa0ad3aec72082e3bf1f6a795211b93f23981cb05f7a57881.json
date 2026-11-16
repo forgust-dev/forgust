@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM code_index_state",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "8c9f74c6291a7bbfa0ad3aec72082e3bf1f6a795211b93f23981cb05f7a57881"
+}
