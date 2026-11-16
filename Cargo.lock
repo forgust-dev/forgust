@@ -2193,7 +2193,7 @@ checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
 name = "forgust-bench"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2206,7 +2206,7 @@ dependencies = [
 
 [[package]]
 name = "forgust-ci-config"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "async-trait",
  "globset",
@@ -2222,7 +2222,7 @@ dependencies = [
 
 [[package]]
 name = "forgust-db"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "chrono",
  "globset",
@@ -2237,7 +2237,7 @@ dependencies = [
 
 [[package]]
 name = "forgust-server"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "aes-gcm 0.11.1",
  "ammonia",
@@ -2314,7 +2314,7 @@ dependencies = [
 
 [[package]]
 name = "forgust-storage"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "async-trait",
