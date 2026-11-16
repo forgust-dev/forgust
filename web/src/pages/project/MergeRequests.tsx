@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, qs, refLink, timeAgo, type S } from "../../api/client";
@@ -945,7 +945,21 @@ function ReadyRing({ passed, total }: { passed: number; total: number }) {
   return (
     <svg className="ready-ring" width="56" height="56" viewBox="0 0 56 56" role="img" aria-label={`${passed} of ${total} checks pass`}>
       <circle className="track" cx="28" cy="28" r={r} fill="none" strokeWidth="6" />
-      {done > 0 && <circle className="done" cx="28" cy="28" r={r} fill="none" strokeWidth="6" strokeLinecap="round" strokeDasharray={`${done} ${around}`} transform="rotate(-90 28 28)" />}
+      {done > 0 && (
+        <circle
+          className="done"
+          cx="28"
+          cy="28"
+          r={r}
+          fill="none"
+          strokeWidth="6"
+          strokeLinecap="round"
+          strokeDasharray={around}
+          // fills from empty on arrival, and moves when a check changes (styles.css)
+          style={{ strokeDashoffset: around - done, "--around": `${around}px` } as CSSProperties}
+          transform="rotate(-90 28 28)"
+        />
+      )}
       <text x="28" y="33" textAnchor="middle" aria-hidden="true">
         {passed}/{total}
       </text>
