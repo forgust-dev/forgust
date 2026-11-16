@@ -46,6 +46,7 @@ import { ResendLink } from "../components/ResendLink";
 import { Logo } from "../components/Logo";
 import { useWork } from "../prefetch";
 import { SETTINGS_PAGES } from "../pages/project/settingsPages";
+import { ADMIN_PAGES } from "../pages/adminPages";
 import { InboxBell } from "../components/Inbox";
 
 /** A nav entry; `children` show under it while its section is active. */
@@ -227,7 +228,22 @@ function Sidebar({ collapsed, setCollapsed, mobileOpen, closeMobile }: { collaps
       { to: "/", label: "Your work", icon: <Inbox size={16} />, end: true, count: waiting },
       { to: "/dashboard/projects", label: "Projects", icon: <FolderGit2 size={16} /> },
       { to: "/explore", label: "Explore", icon: <Compass size={16} /> },
-      ...(user?.is_admin ? [{ to: "/admin", label: "Admin area", icon: <Shield size={16} /> }] : []),
+      ...(user?.is_admin
+        ? [
+            {
+              to: "/admin",
+              label: "Admin area",
+              icon: <Shield size={16} />,
+              match: /^\/admin(\/|$)/,
+              // the area's pages, under it while one of them is open
+              children: ADMIN_PAGES.map(({ path, label }) => ({
+                to: path ? `/admin/${path}` : "/admin",
+                label,
+                match: path ? new RegExp(`^/admin/${path}(/|$)`) : /^\/admin\/?$/,
+              })),
+            },
+          ]
+        : []),
     ];
   }
 

@@ -1,4 +1,11 @@
 import { test, expect, P, isMobile } from "./fixtures";
+import type { Page } from "@playwright/test";
+
+/** An admin page from the sidebar, where the area lists them (on a phone, through its menu). */
+async function adminNav(page: Page, name: string) {
+  if (isMobile(page)) await page.getByLabel("Open navigation").click();
+  await page.locator(".sidebar").getByRole("link", { name, exact: true }).click();
+}
 
 // The administrator's views of the instance.
 
@@ -7,7 +14,7 @@ test("admin: overview, storage, jobs and health", async ({ page }) => {
   await expect(page.locator(".stat-label", { hasText: /^Projects$/ })).toBeVisible();
   await expect(page.getByLabel(/Pipelines per day/)).toBeVisible();
 
-  await page.getByRole("link", { name: "Storage" }).click();
+  await adminNav(page, "Storage");
   await expect(page.locator(".stat-label", { hasText: /^Git repositories$/ })).toBeVisible();
   // every project is listed (the seed's among them)
   await expect(page.getByRole("link", { name: P.slice(1), exact: true }).first()).toBeVisible();
@@ -22,10 +29,10 @@ test("admin: overview, storage, jobs and health", async ({ page }) => {
   await page.getByRole("radio", { name: "Groups" }).click();
   await expect(page.getByRole("table").getByRole("link", { name: P.slice(1).split("/")[0], exact: true })).toBeVisible();
 
-  await page.getByRole("link", { name: "Jobs" }).click();
+  await adminNav(page, "Jobs");
   await expect(page.getByText("Failed jobs")).toBeVisible();
 
-  await page.getByRole("link", { name: "Health", exact: true }).first().click();
+  await adminNav(page, "Health");
   for (const name of ["Database", "Blob store", "Git"]) {
     await expect(page.locator(".item", { hasText: name }).getByLabel("OK")).toBeVisible();
   }
