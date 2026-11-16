@@ -1,4 +1,4 @@
-import { Fragment, forwardRef, useState, type ComponentPropsWithoutRef, type CSSProperties, type ReactNode } from "react";
+import { Fragment, forwardRef, useState, type ComponentPropsWithoutRef, type CSSProperties, type ReactElement } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Check, Milestone, Settings2, Tag } from "lucide-react";
@@ -83,7 +83,7 @@ export function LabelList({ labels, to }: { labels: S["Label"][]; to?: (l: S["La
  * Checkboxes over the project's labels; `onChange` gets the new set of names.
  * Changes apply as they are clicked, like GitLab's sidebar.
  */
-export function LabelPicker({ projectId, manage, value, onChange, trigger }: { projectId: number; manage: string; value: string[]; onChange: (names: string[]) => void; trigger: ReactNode }) {
+export function LabelPicker({ projectId, manage, value, onChange, trigger }: { projectId: number; manage: string; value: string[]; onChange: (names: string[]) => void; trigger: ReactElement }) {
   const labels = useLabels(projectId);
   const [filter, setFilter] = useState("");
   const list = (labels.data ?? []).filter((l) => l.name.toLowerCase().includes(filter.toLowerCase()));

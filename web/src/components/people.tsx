@@ -1,4 +1,4 @@
-import { forwardRef, useState, type ComponentPropsWithoutRef, type ReactNode } from "react";
+import { forwardRef, useState, type ComponentPropsWithoutRef, type ReactElement, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Check, CircleCheck, CircleDot, Clock, MessageSquare, RotateCcw, UserPlus } from "lucide-react";
 import { api, qs, type S } from "../api/client";
@@ -103,7 +103,7 @@ export function ReviewerList({ reviewers, onRerequest }: { reviewers: Reviewer[]
  * Pick people of a project; changes apply as they are clicked, like the label
  * picker. `selected` are shown first so they can be removed without searching.
  */
-export function PeoplePicker({ projectId, label, selected, onChange, trigger }: { projectId: number; label: string; selected: Person[]; onChange: (ids: number[]) => void; trigger: ReactNode }) {
+export function PeoplePicker({ projectId, label, selected, onChange, trigger }: { projectId: number; label: string; selected: Person[]; onChange: (ids: number[]) => void; trigger: ReactElement }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const users = useProjectUsers(projectId, search.trim(), open);

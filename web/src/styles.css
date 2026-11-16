@@ -432,7 +432,7 @@ input[type="radio"] {
   accent-color: var(--accent);
 }
 
-/* Radix select (components/controls.tsx) */
+/* select, menus and popovers: Base UI (components/controls.tsx) */
 .select {
   display: inline-flex;
   align-items: center;
@@ -471,11 +471,14 @@ input[type="radio"] {
   display: inline-flex;
   color: var(--text-muted);
 }
+/* the positioner places a popup and is its layer: above the top bar, under dialogs */
+.positioner {
+  z-index: 60;
+}
 .select-menu,
 .dropdown {
-  z-index: 60;
-  min-width: var(--radix-select-trigger-width, 180px);
-  max-height: min(360px, var(--radix-select-content-available-height, 360px));
+  min-width: 180px;
+  max-height: min(360px, var(--available-height, 360px));
   overflow-y: auto;
   padding: 4px;
   border: 1px solid var(--border);
@@ -517,12 +520,14 @@ input[type="radio"] {
   margin: 4px 0;
   background: var(--border);
 }
-/* menus and popovers grow out of what opened them */
+/* a select's list is as wide as its box, at least */
 .select-menu {
-  transform-origin: var(--radix-select-content-transform-origin, top);
+  min-width: var(--anchor-width, 180px);
 }
+/* menus and popovers grow out of what opened them */
+.select-menu,
 .dropdown {
-  transform-origin: var(--radix-dropdown-menu-content-transform-origin, top);
+  transform-origin: var(--transform-origin, top);
 }
 .select-menu,
 .dropdown,
@@ -532,10 +537,16 @@ input[type="radio"] {
     opacity 150ms var(--ease-out),
     transform 150ms var(--ease-out);
 }
+/* where they grow from. Base UI marks its popups' first frame, with transitions
+   off for that frame (so @starting-style would do nothing there); the user and
+   "new" menus are plain elements */
+.select-menu[data-starting-style],
+.dropdown[data-starting-style],
+.popover[data-starting-style] {
+  opacity: 0;
+  transform: scale(0.97);
+}
 @starting-style {
-  .select-menu,
-  .dropdown,
-  .popover,
   .menu {
     opacity: 0;
     transform: scale(0.97);
@@ -575,6 +586,9 @@ input[type="radio"] {
 .switch {
   position: relative;
   flex: none;
+  /* a span (Base UI), not a button: the thumb is centred here */
+  display: inline-flex;
+  align-items: center;
   width: 32px;
   height: 18px;
   padding: 0;
@@ -584,7 +598,7 @@ input[type="radio"] {
   cursor: pointer;
   transition: background 0.12s;
 }
-.switch[data-state="checked"] {
+.switch[data-checked] {
   background: var(--accent);
 }
 .switch:focus-visible {
@@ -600,7 +614,7 @@ input[type="radio"] {
   transform: translateX(2px);
   transition: transform 0.12s;
 }
-.switch[data-state="checked"] .switch-thumb {
+.switch[data-checked] .switch-thumb {
   transform: translateX(16px);
 }
 
@@ -622,15 +636,18 @@ input[type="radio"] {
   font: inherit;
   font-size: 13px;
   white-space: nowrap;
+  /* a span (Base UI's radio), not a button: centred, and not selected as text */
+  text-align: center;
+  user-select: none;
   cursor: pointer;
 }
-.segment[data-state="on"] {
+.segment[data-checked] {
   background: var(--bg);
   color: var(--text);
   font-weight: 600;
   box-shadow: 0 1px 2px rgba(60, 40, 20, 0.1);
 }
-.segment:disabled {
+.segment[data-disabled] {
   color: var(--text-faint);
   text-decoration: line-through;
   cursor: default;
@@ -2259,14 +2276,13 @@ kbd {
   gap: 8px;
 }
 .popover {
-  z-index: 60;
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--bg);
   color: var(--text);
   box-shadow: var(--shadow-pop);
-  transform-origin: var(--radix-popover-content-transform-origin, top);
+  transform-origin: var(--transform-origin, top);
 }
 .clone-menu {
   display: flex;
@@ -5609,7 +5625,6 @@ a.item.import-row:hover {
   border-radius: var(--radius);
   background: var(--bg);
   box-shadow: 0 6px 20px rgb(0 0 0 / 0.12);
-  z-index: 50;
 }
 .reaction-picker button {
   width: 32px;
@@ -6238,10 +6253,12 @@ button.test-case-row:hover {
   .toast {
     transition: opacity 150ms ease;
   }
+  .select-menu[data-starting-style],
+  .dropdown[data-starting-style],
+  .popover[data-starting-style] {
+    transform: none;
+  }
   @starting-style {
-    .select-menu,
-    .dropdown,
-    .popover,
     .menu,
     .toast {
       transform: none;

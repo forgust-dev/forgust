@@ -1,27 +1,27 @@
-// Form controls on Radix primitives (keyboard, focus and ARIA handled there),
+// Form controls on Base UI primitives (keyboard, focus and ARIA handled there),
 // styled by `styles.css` (`.select`, `.switch`, `.segmented`, `.dropdown`).
-import type { CSSProperties, ReactNode } from "react";
-import { DropdownMenu, Popover as RPopover, Select as RSelect, Switch as RSwitch, ToggleGroup } from "radix-ui";
+import type { CSSProperties, ReactElement, ReactNode } from "react";
+import { Menu as BMenu } from "@base-ui/react/menu";
+import { Popover as BPopover } from "@base-ui/react/popover";
+import { Radio } from "@base-ui/react/radio";
+import { RadioGroup } from "@base-ui/react/radio-group";
+import { Select as BSelect } from "@base-ui/react/select";
+import { Switch as BSwitch } from "@base-ui/react/switch";
 import { Check, ChevronDown } from "lucide-react";
 
 export type Option = { value: string; label: ReactNode; hint?: ReactNode; disabled?: boolean; group?: string };
 
-// Radix reserves "" for "no value"; options may still use it.
-const EMPTY = "\u0000empty";
-const enc = (v: string) => (v === "" ? EMPTY : v);
-const dec = (v: string) => (v === EMPTY ? "" : v);
-
 function item(o: Option) {
   return (
-    <RSelect.Item key={o.value} value={enc(o.value)} className="select-item" disabled={o.disabled}>
-      <RSelect.ItemIndicator className="select-check">
+    <BSelect.Item key={o.value} value={o.value} className="select-item" disabled={o.disabled}>
+      <BSelect.ItemIndicator className="select-check">
         <Check size={14} />
-      </RSelect.ItemIndicator>
+      </BSelect.ItemIndicator>
       <span className="select-text">
-        <RSelect.ItemText>{o.label}</RSelect.ItemText>
+        <BSelect.ItemText>{o.label}</BSelect.ItemText>
         {o.hint && <span className="select-hint">{o.hint}</span>}
       </span>
-    </RSelect.Item>
+    </BSelect.Item>
   );
 }
 
@@ -57,33 +57,33 @@ export function Select({
   disabled?: boolean;
 }) {
   return (
-    <RSelect.Root value={enc(value)} onValueChange={(v) => onChange(dec(v))} disabled={disabled}>
-      <RSelect.Trigger className="select" aria-label={label} id={id} style={style}>
-        <span className="select-value">
-          <RSelect.Value placeholder={placeholder} />
-        </span>
-        <RSelect.Icon className="select-icon">
+    // `items` gives the box the chosen option's label; "" is a value like any other
+    <BSelect.Root value={value} onValueChange={(v) => onChange(v ?? "")} items={options.map((o) => ({ value: o.value, label: o.label }))} disabled={disabled}>
+      <BSelect.Trigger className="select" aria-label={label} id={id} style={style}>
+        <BSelect.Value className="select-value" placeholder={placeholder} />
+        <BSelect.Icon className="select-icon">
           <ChevronDown size={14} />
-        </RSelect.Icon>
-      </RSelect.Trigger>
-      <RSelect.Portal>
-        <RSelect.Content className="select-menu" position="popper" sideOffset={4} align="start">
-          <RSelect.Viewport>
+        </BSelect.Icon>
+      </BSelect.Trigger>
+      <BSelect.Portal>
+        {/* under the box, as a list (not over it, with the chosen option on the box) */}
+        <BSelect.Positioner className="positioner" side="bottom" align="start" sideOffset={4} alignItemWithTrigger={false}>
+          <BSelect.Popup className="select-menu">
             {groups(options).map(([group, opts], gi) =>
               group ? (
-                <RSelect.Group key={group}>
-                  {gi > 0 && <RSelect.Separator className="dropdown-sep" />}
-                  <RSelect.Label className="select-label">{group}</RSelect.Label>
+                <BSelect.Group key={group}>
+                  {gi > 0 && <BSelect.Separator className="dropdown-sep" />}
+                  <BSelect.GroupLabel className="select-label">{group}</BSelect.GroupLabel>
                   {opts.map(item)}
-                </RSelect.Group>
+                </BSelect.Group>
               ) : (
                 opts.map(item)
               ),
             )}
-          </RSelect.Viewport>
-        </RSelect.Content>
-      </RSelect.Portal>
-    </RSelect.Root>
+          </BSelect.Popup>
+        </BSelect.Positioner>
+      </BSelect.Portal>
+    </BSelect.Root>
   );
 }
 
@@ -91,60 +91,55 @@ export function Select({
 export function Switch({ checked, onChange, children, disabled }: { checked: boolean; onChange: (v: boolean) => void; children: ReactNode; disabled?: boolean }) {
   return (
     <label className="switch-row">
-      <RSwitch.Root className="switch" checked={checked} onCheckedChange={onChange} disabled={disabled}>
-        <RSwitch.Thumb className="switch-thumb" />
-      </RSwitch.Root>
+      <BSwitch.Root className="switch" checked={checked} onCheckedChange={(v) => onChange(v)} disabled={disabled}>
+        <BSwitch.Thumb className="switch-thumb" />
+      </BSwitch.Root>
       <span>{children}</span>
     </label>
   );
 }
 
-/** One choice among a few, shown side by side. */
+/** One choice among a few, shown side by side: radios (one is always chosen). */
 export function Segmented<T extends string>({ value, onChange, options, label }: { value: T; onChange: (v: T) => void; options: (Option & { value: T })[]; label: string }) {
   return (
-    <ToggleGroup.Root
-      type="single"
-      className="segmented"
-      aria-label={label}
-      value={value}
-      // a click on the chosen one would clear it: keep a value
-      onValueChange={(v) => v && onChange(v as T)}
-    >
+    <RadioGroup className="segmented" aria-label={label} value={value} onValueChange={(v) => onChange(v as T)}>
       {options.map((o) => (
-        <ToggleGroup.Item key={o.value} value={o.value} className="segment" disabled={o.disabled} title={typeof o.hint === "string" ? o.hint : undefined}>
+        <Radio.Root key={o.value} value={o.value} className="segment" disabled={o.disabled} title={typeof o.hint === "string" ? o.hint : undefined}>
           {o.label}
-        </ToggleGroup.Item>
+        </Radio.Root>
       ))}
-    </ToggleGroup.Root>
+    </RadioGroup>
   );
 }
 
 export type MenuItem = { label: ReactNode; icon?: ReactNode; onSelect: () => void; danger?: boolean; disabled?: boolean } | "separator";
 
-/** A dropdown menu opened by `trigger` (a button). */
-export function Menu({ trigger, items, align = "end" }: { trigger: ReactNode; items: MenuItem[]; align?: "start" | "end" }) {
+/** A dropdown menu opened by `trigger` (a button, or a component that passes its props and ref to one). */
+export function Menu({ trigger, items, align = "end" }: { trigger: ReactElement; items: MenuItem[]; align?: "start" | "end" }) {
   return (
-    <DropdownMenu.Root modal={false}>
-      <DropdownMenu.Trigger asChild>{trigger}</DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content className="dropdown" align={align} sideOffset={6}>
-          {items.map((it, i) =>
-            it === "separator" ? (
-              <DropdownMenu.Separator key={i} className="dropdown-sep" />
-            ) : (
-              <DropdownMenu.Item key={i} className={`dropdown-item ${it.danger ? "danger" : ""}`} onSelect={it.onSelect} disabled={it.disabled}>
-                {it.icon}
-                {it.label}
-              </DropdownMenu.Item>
-            ),
-          )}
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
+    <BMenu.Root modal={false}>
+      <BMenu.Trigger render={trigger} />
+      <BMenu.Portal>
+        <BMenu.Positioner className="positioner" align={align} sideOffset={6}>
+          <BMenu.Popup className="dropdown">
+            {items.map((it, i) =>
+              it === "separator" ? (
+                <BMenu.Separator key={i} className="dropdown-sep" />
+              ) : (
+                <BMenu.Item key={i} className={`dropdown-item ${it.danger ? "danger" : ""}`} onClick={() => it.onSelect()} disabled={it.disabled}>
+                  {it.icon}
+                  {it.label}
+                </BMenu.Item>
+              ),
+            )}
+          </BMenu.Popup>
+        </BMenu.Positioner>
+      </BMenu.Portal>
+    </BMenu.Root>
   );
 }
 
-/** A floating panel opened by `trigger` (a button). */
+/** A floating panel opened by `trigger` (a button, or a component that passes its props and ref to one). */
 export function Popover({
   trigger,
   children,
@@ -153,7 +148,7 @@ export function Popover({
   open,
   onOpenChange,
 }: {
-  trigger: ReactNode;
+  trigger: ReactElement;
   children: ReactNode;
   align?: "start" | "end";
   label?: string;
@@ -162,13 +157,15 @@ export function Popover({
   onOpenChange?: (open: boolean) => void;
 }) {
   return (
-    <RPopover.Root open={open} onOpenChange={onOpenChange}>
-      <RPopover.Trigger asChild>{trigger}</RPopover.Trigger>
-      <RPopover.Portal>
-        <RPopover.Content className="popover" align={align} sideOffset={6} aria-label={label}>
-          {children}
-        </RPopover.Content>
-      </RPopover.Portal>
-    </RPopover.Root>
+    <BPopover.Root open={open} onOpenChange={onOpenChange && ((o) => onOpenChange(o))}>
+      <BPopover.Trigger render={trigger} />
+      <BPopover.Portal>
+        <BPopover.Positioner className="positioner" align={align} sideOffset={6}>
+          <BPopover.Popup className="popover" aria-label={label}>
+            {children}
+          </BPopover.Popup>
+        </BPopover.Positioner>
+      </BPopover.Portal>
+    </BPopover.Root>
   );
 }
