@@ -41,6 +41,7 @@ const JobPage = lazy(() => import("./ci/Job").then((m) => ({ default: m.JobPage 
 const ArtifactBrowser = lazy(() => import("./ci/Artifacts").then((m) => ({ default: m.ArtifactBrowser })));
 const Schedules = lazy(() => import("./ci/Schedules").then((m) => ({ default: m.Schedules })));
 const Environments = lazy(() => import("./ci/Environments").then((m) => ({ default: m.Environments })));
+const EnvironmentPage = lazy(() => import("./ci/Environments").then((m) => ({ default: m.EnvironmentPage })));
 const ProjectSettings = lazy(() => import("./Settings").then((m) => ({ default: m.ProjectSettings })));
 const ProjectAuditLog = lazy(() => import("./Audit").then((m) => ({ default: m.ProjectAuditLog })));
 const SecurityPage = lazy(() => import("./Security").then((m) => ({ default: m.SecurityPage })));
@@ -91,6 +92,7 @@ function ProjectNav({ p, rest, gitRef }: { p: S["ProjectDetail"]; rest: string; 
   if (section === "commit" && more[0]) crumbs.push({ label: more[0].slice(0, 8) });
   if (section === "pipelines" && more[0]) crumbs.push({ label: more[0] === "new" ? "Run" : `#${more[0]}` });
   if (section === "jobs" && more[0]) crumbs.push({ label: `#${more[0]}` });
+  if (section === "environments" && /^\d+$/.test(more[0] ?? "")) crumbs.push({ label: "Environment" });
   if (section === "settings" && more.length === 1) {
     const page = settingsPage(more[0]);
     if (page) crumbs.push({ label: page.label });
@@ -182,7 +184,8 @@ export function ProjectPage({ id, fullPath, rest }: { id: number; fullPath: stri
                   {section === "jobs" && /^\d+$/.test(more[0] ?? "") && !more[1] && <JobPage key={more[0]} ctx={ctx} jobId={Number(more[0])} />}
                   {section === "jobs" && /^\d+$/.test(more[0] ?? "") && more[1] === "artifacts" && <ArtifactBrowser ctx={ctx} jobId={Number(more[0])} />}
                   {section === "pipeline_schedules" && (p.can_push ? <Schedules ctx={ctx} /> : <NotFound />)}
-                  {section === "environments" && <Environments ctx={ctx} stopped={more[0] === "stopped"} />}
+                  {section === "environments" && (more.length === 0 || more[0] === "stopped") && <Environments ctx={ctx} stopped={more[0] === "stopped"} />}
+                  {section === "environments" && /^\d+$/.test(more[0] ?? "") && <EnvironmentPage ctx={ctx} id={Number(more[0])} />}
                   {!knownSection(section) && <NotFound />}
                 </Suspense>
               )}

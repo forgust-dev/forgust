@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDownToLine, ChevronDown, ChevronRight, Download, FileText, Play, RotateCcw, Square, FolderOpen } from "lucide-react";
-import { api, bytes, timeAgo, type S } from "../../../api/client";
+import { api, bytes, timeAgo, timeUntil, type S } from "../../../api/client";
 import { Q } from "../../../components/ui";
 import { useProjectEvents } from "../../../shell/live";
 import { useAct } from "../../../shell/toast";
@@ -227,14 +227,6 @@ function JobList({ ctx, p, current }: { ctx: Ctx; p: S["PipelineDetail"]; curren
       })}
     </nav>
   );
-}
-
-/** "in 12 minutes", for a moment ahead. */
-function timeUntil(ts: string): string {
-  const s = Math.max(0, (Date.parse(ts) - Date.now()) / 1000);
-  if (s < 60) return "any moment now";
-  const [n, unit] = s >= 86400 ? [Math.round(s / 86400), "day"] : s >= 3600 ? [Math.round(s / 3600), "hour"] : [Math.round(s / 60), "minute"];
-  return `in ${n} ${unit}${n === 1 ? "" : "s"}`;
 }
 
 export function JobPage({ ctx, jobId }: { ctx: Ctx; jobId: number }) {

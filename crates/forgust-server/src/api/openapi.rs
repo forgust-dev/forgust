@@ -89,7 +89,7 @@ use super::{
         renovate::NewHostRule, forgust_db::renovate::HostRule, renovate::GroupRenovate, renovate::GroupRenovateStatus, renovate::AdminRenovate,
         renovate::AdminRenovateStatus,
         environments::EnvironmentDetail, environments::ProtectEnvironment, forgust_db::environments::Environment,
-        forgust_db::environments::EnvironmentSummary, forgust_db::environments::Deployment, forgust_db::environments::ProtectedEnvironment,
+        forgust_db::environments::EnvironmentSummary, environments::EnvironmentRow, forgust_db::environments::Deployment, forgust_db::environments::ProtectedEnvironment,
         ci::JobEnvironment, forgust_db::ci::PipelineLink, forgust_db::merge_trains::Car,
     )),
     tags((name = "auth"), (name = "user"), (name = "groups"), (name = "projects"), (name = "repository"), (name = "merge_requests"), (name = "issues"), (name = "releases"), (name = "imports"), (name = "registry"))

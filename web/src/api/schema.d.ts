@@ -3590,6 +3590,10 @@ export interface components {
             deployments: components["schemas"]["Deployment"][];
             protected: boolean;
         };
+        EnvironmentRow: components["schemas"]["EnvironmentSummary"] & {
+            /** @description Whether you may stop it (a protected one asks for more than push access). */
+            can_stop: boolean;
+        };
         EnvironmentSummary: components["schemas"]["Environment"] & {
             last_deployment?: components["schemas"]["Deployment"] | null;
         };
@@ -7439,7 +7443,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EnvironmentSummary"][];
+                    "application/json": components["schemas"]["EnvironmentRow"][];
                 };
             };
         };

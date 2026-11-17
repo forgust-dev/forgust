@@ -172,6 +172,19 @@ async fn protected_environments_and_resource_groups(pool: sqlx::PgPool) {
     let (p2, p3) = (pipeline(&fx, 2).await, pipeline(&fx, 3).await);
     assert_eq!(job_named(&p2, "deploy")["status"], "canceled");
     assert_eq!(job_named(&p3, "deploy")["status"], "pending", "the canceled job freed the resource group");
+
+    // production is up: a Developer may not stop it, and the list and its page say so
+    let deploy = request(&fx).await.expect("pipeline 3's deploy");
+    finish(&fx, &deploy, "success").await;
+    let mut dave = Client::new(&fx.srv.base);
+    dave.login("dave", &password("dave")).await;
+    let path = format!("/api/v1/projects/{}/environments", fx.project);
+    let envs = dave.ok_get(&path).await;
+    let eid = envs[0]["id"].as_i64().unwrap();
+    assert_eq!(envs[0]["can_stop"], false, "{envs}");
+    assert_eq!(dave.ok_get(&format!("{path}/{eid}")).await["can_stop"], false);
+    assert_eq!(dave.post(&format!("{path}/{eid}/stop"), json!({})).await.0, 403);
+    assert_eq!(fx.owner.ok_get(&path).await[0]["can_stop"], true);
 }
 
 async fn srv_member(fx: &Fx, user: &str, role: &str) {

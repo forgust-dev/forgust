@@ -1349,7 +1349,7 @@
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/EnvironmentSummary"
+                    "$ref": "#/components/schemas/EnvironmentRow"
                   }
                 }
               }
@@ -7730,6 +7730,25 @@
               },
               "protected": {
                 "type": "boolean"
+              }
+            }
+          }
+        ]
+      },
+      "EnvironmentRow": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/EnvironmentSummary"
+          },
+          {
+            "type": "object",
+            "required": [
+              "can_stop"
+            ],
+            "properties": {
+              "can_stop": {
+                "type": "boolean",
+                "description": "Whether you may stop it (a protected one asks for more than push access)."
               }
             }
           }

@@ -10,7 +10,7 @@ use utoipa::ToSchema;
 
 use super::project_for;
 use crate::auth::authz::ProjectAction;
-use crate::auth::{SignedIn, Viewer};
+use crate::auth::{Principal, SignedIn, Viewer};
 use crate::error::{ApiError, ApiResult};
 use crate::services;
 use crate::state::AppState;
@@ -21,13 +21,34 @@ pub struct ListQuery {
     state: Option<String>,
 }
 
-#[utoipa::path(get, path = "/api/v1/projects/{id}/environments", responses((status = 200, body = [EnvironmentSummary])), tag = "ci")]
+/// Who may stop which of a project's environments: push access and, for a
+/// protected one, the level its rule asks (stopping it is deploying to it).
+async fn stop_rule(state: &AppState, v: &Principal, p: &forgust_db::projects::Project) -> ApiResult<impl Fn(&str) -> bool + use<>> {
+    let push = crate::auth::authz::can_project(state, v, ProjectAction::Push, p).await?;
+    let rules = edb::protected(&state.db, p.id).await?;
+    let level = match v.user() {
+        _ if v.is_admin() => forgust_db::access::OWNER,
+        Some(u) => forgust_db::authz::project_level(&state.db, u.id, p.id).await?.unwrap_or(0),
+        None => 0,
+    };
+    Ok(move |name: &str| push && !rules.iter().any(|r| r.matches(name) && level < r.deploy_access_level))
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct EnvironmentRow {
+    #[serde(flatten)]
+    pub summary: EnvironmentSummary,
+    /// Whether you may stop it (a protected one asks for more than push access).
+    pub can_stop: bool,
+}
+
+#[utoipa::path(get, path = "/api/v1/projects/{id}/environments", responses((status = 200, body = [EnvironmentRow])), tag = "ci")]
 pub async fn list(
     State(state): State<AppState>,
     Viewer(v): Viewer,
     Path(id): Path<String>,
     Query(q): Query<ListQuery>,
-) -> ApiResult<Json<Vec<EnvironmentSummary>>> {
+) -> ApiResult<Json<Vec<EnvironmentRow>>> {
     let p = project_for(&state, &v, &id, ProjectAction::ReadCode).await?;
     let filter = match q.state.as_deref() {
         None | Some("available") => Some("available"),
@@ -36,7 +57,10 @@ pub async fn list(
         Some(_) => return Err(ApiError::bad("state is available, stopped or all")),
     };
     let mut conn = state.db.acquire().await?;
-    Ok(Json(edb::list(&mut conn, p.id, filter).await?))
+    let list = edb::list(&mut conn, p.id, filter).await?;
+    drop(conn);
+    let may_stop = stop_rule(&state, &v, &p).await?;
+    Ok(Json(list.into_iter().map(|summary| EnvironmentRow { can_stop: may_stop(&summary.environment.name), summary }).collect()))
 }
 
 #[derive(Serialize, ToSchema)]
@@ -58,7 +82,7 @@ pub async fn show(
     let e = edb::find(&state.db, p.id, env_id).await?.ok_or(ApiError::NotFound)?;
     let deployments = edb::deployments(&state.db, e.id, 100).await?;
     let protected = edb::protected(&state.db, p.id).await?.iter().any(|r| r.matches(&e.name));
-    let can_stop = crate::auth::authz::can_project(&state, &v, ProjectAction::Push, &p).await?;
+    let can_stop = stop_rule(&state, &v, &p).await?(&e.name);
     Ok(Json(EnvironmentDetail { environment: e, deployments, protected, can_stop }))
 }
 
@@ -70,14 +94,7 @@ pub async fn stop(
 ) -> ApiResult<Json<Environment>> {
     let p = project_for(&state, &principal, &id, ProjectAction::Push).await?;
     let e = edb::find(&state.db, p.id, env_id).await?.ok_or(ApiError::NotFound)?;
-    // stopping a protected environment is deploying to it
-    let rules = edb::protected(&state.db, p.id).await?;
-    let level = if principal.is_admin() {
-        forgust_db::access::OWNER
-    } else {
-        forgust_db::authz::project_level(&state.db, me.id, p.id).await?.unwrap_or(0)
-    };
-    if rules.iter().any(|r| r.matches(&e.name) && level < r.deploy_access_level) {
+    if !stop_rule(&state, &principal, &p).await?(&e.name) {
         return Err(ApiError::forbidden("this environment is protected: you may not stop it"));
     }
     crate::ci::environments::stop(&state, p.id, e.id, Some(me.id)).await?;

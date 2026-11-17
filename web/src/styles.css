@@ -3971,6 +3971,49 @@ a.status-badge:hover {
   font-weight: 600;
 }
 
+/* environments: the review apps' folders fold, their environments sit under them;
+   a deployment's ref, and the one live now */
+.list.rows > .list-group > .item {
+  gap: 12px;
+  padding: 11px 16px;
+}
+.env-folder {
+  width: 100%;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.list > .list-group > .env-folder:hover {
+  background: var(--bg-subtle);
+}
+.env-folder svg {
+  flex: none;
+}
+.list.rows > .list-group > .env-row.in-folder {
+  padding-left: 44px;
+}
+.deploy-ref {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+  font: 500 13px var(--mono);
+}
+.deploy-ref a {
+  color: inherit;
+}
+.deploy-ref a:hover {
+  color: var(--accent);
+}
+.list > .item.deploy-row.live {
+  background: color-mix(in srgb, var(--ok-soft) 55%, var(--bg));
+}
+
 /* a row that opens what it names on the page (a finding) */
 .decide-link {
   display: block;
