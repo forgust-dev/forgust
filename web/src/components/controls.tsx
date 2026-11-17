@@ -1,6 +1,7 @@
 // Form controls on Base UI primitives (keyboard, focus and ARIA handled there),
 // styled by `styles.css` (`.select`, `.switch`, `.segmented`, `.dropdown`).
-import { useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
+import type { CSSProperties, ReactElement, ReactNode } from "react";
+import { Combobox as BCombobox } from "@base-ui/react/combobox";
 import { Menu as BMenu } from "@base-ui/react/menu";
 import { Popover as BPopover } from "@base-ui/react/popover";
 import { Radio } from "@base-ui/react/radio";
@@ -89,7 +90,7 @@ export function Select({
 
 /**
  * A select box with a filter: for lists too long to scan. Typing narrows the
- * options, the arrows move, Enter takes the highlighted one.
+ * options, the arrows move, Enter takes the highlighted one (the first match).
  */
 export function Combobox({
   value,
@@ -104,79 +105,44 @@ export function Combobox({
   label: string;
   style?: CSSProperties;
 }) {
-  const [open, setOpen] = useState(false);
-  const [text, setText] = useState("");
-  const [active, setActive] = useState(0);
-  const term = text.trim().toLowerCase();
-  const shown = options.filter((o) => o.label.toLowerCase().includes(term));
-  const pick = (v: string) => {
-    onChange(v);
-    setOpen(false);
-  };
+  // the items are the options themselves: the box shows the chosen one's label,
+  // the filter matches labels; a value no option has shows as it is
+  const chosen = options.find((o) => o.value === value) ?? { value, label: value };
   return (
-    <Popover
-      open={open}
-      onOpenChange={(o) => {
-        setOpen(o);
-        setText("");
-        setActive(0);
-      }}
-      align="start"
-      label={label}
-      trigger={
-        <button type="button" className="select" role="combobox" aria-label={label} aria-expanded={open} style={style}>
-          <span className="select-value">{options.find((o) => o.value === value)?.label ?? value}</span>
-          <span className="select-icon">
-            <ChevronDown size={14} />
-          </span>
-        </button>
-      }
+    <BCombobox.Root
+      items={options}
+      value={chosen}
+      onValueChange={(o) => o && onChange(o.value)}
+      itemToStringLabel={(o) => o.label}
+      isItemEqualToValue={(a, b) => a.value === b.value}
+      // the first match is highlighted as you type: Enter takes it
+      autoHighlight
     >
-      <div className="combo">
-        <input
-          type="search"
-          autoFocus
-          value={text}
-          placeholder="Filter…"
-          aria-label={`Filter: ${label}`}
-          onChange={(e) => {
-            setText(e.target.value);
-            setActive(0);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-              e.preventDefault();
-              setActive((a) => Math.max(0, Math.min(shown.length - 1, a + (e.key === "ArrowDown" ? 1 : -1))));
-            } else if (e.key === "Enter" && shown[active]) {
-              e.preventDefault();
-              pick(shown[active].value);
-            }
-          }}
-        />
-        <div className="combo-list" role="listbox" aria-label={label}>
-          {shown.map((o, i) => (
-            <div
-              key={o.value}
-              role="option"
-              aria-selected={o.value === value}
-              data-highlighted={i === active ? "" : undefined}
-              ref={i === active ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
-              className="select-item"
-              onMouseMove={() => setActive(i)}
-              onClick={() => pick(o.value)}
-            >
-              {o.value === value && (
-                <span className="select-check">
-                  <Check size={14} />
-                </span>
+      <BCombobox.Trigger className="select" aria-label={label} style={style}>
+        <BCombobox.Value>{(o: { label: string } | null) => <span className="select-value">{o?.label}</span>}</BCombobox.Value>
+        <BCombobox.Icon className="select-icon">
+          <ChevronDown size={14} />
+        </BCombobox.Icon>
+      </BCombobox.Trigger>
+      <BCombobox.Portal>
+        <BCombobox.Positioner className="positioner" side="bottom" align="start" sideOffset={4}>
+          <BCombobox.Popup className="select-menu combo" aria-label={label}>
+            <BCombobox.Input type="search" placeholder="Filter…" aria-label={`Filter: ${label}`} />
+            <BCombobox.Empty className="combo-empty">Nothing matches</BCombobox.Empty>
+            <BCombobox.List className="combo-list">
+              {(o: { value: string; label: string }) => (
+                <BCombobox.Item key={o.value} value={o} className="select-item">
+                  <BCombobox.ItemIndicator className="select-check">
+                    <Check size={14} />
+                  </BCombobox.ItemIndicator>
+                  {o.label}
+                </BCombobox.Item>
               )}
-              {o.label}
-            </div>
-          ))}
-          {shown.length === 0 && <div className="combo-empty">Nothing matches</div>}
-        </div>
-      </div>
-    </Popover>
+            </BCombobox.List>
+          </BCombobox.Popup>
+        </BCombobox.Positioner>
+      </BCombobox.Portal>
+    </BCombobox.Root>
   );
 }
 

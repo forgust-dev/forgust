@@ -6319,7 +6319,7 @@ button.test-case-row:hover {
 }
 .code-hit {
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
 }
 .code-hit-head {
@@ -6357,23 +6357,25 @@ button.test-case-row:hover {
   min-width: 110px;
 }
 
-/* a select box with a filter (Combobox) */
-.popover:has(> .combo) {
-  padding: 6px;
-}
-.combo {
+/* a select box with a filter (Combobox): the filter stays, the list scrolls */
+.select-menu.combo {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  width: 220px;
-  max-width: 80vw;
+  gap: 4px;
+  width: max(220px, var(--anchor-width, 220px));
+  max-width: min(80vw, var(--available-width, 80vw));
+  overflow: hidden;
 }
 .combo input {
+  flex: none;
   height: 30px;
 }
 .combo-list {
-  max-height: 280px;
+  min-height: 0;
   overflow-y: auto;
+}
+.combo-list:empty {
+  display: none;
 }
 .combo-empty {
   padding: 6px 10px;

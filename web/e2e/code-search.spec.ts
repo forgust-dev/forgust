@@ -52,13 +52,13 @@ test("code is found from the repository page, the search page and the palette", 
     await page.getByRole("searchbox", { name: "File name" }).fill("");
     await expect(python).toBeVisible();
     // the language list has a filter: typing narrows it, Enter takes the first
-    await page.getByRole("combobox", { name: "Language" }).click();
-    await page.getByRole("searchbox", { name: "Filter: Language" }).fill("typ");
+    await page.getByRole("combobox", { name: "Language", exact: true }).click();
+    await page.getByRole("combobox", { name: "Filter: Language" }).fill("typ");
     await expect(page.getByRole("option")).toHaveText(["TypeScript"]);
-    await page.getByRole("searchbox", { name: "Filter: Language" }).fill("pyt");
+    await page.getByRole("combobox", { name: "Filter: Language" }).fill("pyt");
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/lang=python/);
-    await expect(page.getByRole("combobox", { name: "Language" })).toHaveText("Python");
+    await expect(page.getByRole("combobox", { name: "Language", exact: true })).toHaveText("Python");
     await expect(notes).toHaveCount(0);
     await expect(python).toBeVisible();
 
