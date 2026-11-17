@@ -302,7 +302,7 @@ function Breadcrumbs() {
   );
 }
 
-function ThemeButton() {
+export function ThemeButton() {
   const { theme, setTheme } = useTheme();
   // the icon a change brings turns in (styles.css); the one shown on load just shows
   const [changed, setChanged] = useState(false);
@@ -537,6 +537,9 @@ function NewMenu() {
 const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 
 /** The app frame: sidebar, slim top bar with breadcrumbs, and the page. */
+/** Pages a signed-out visitor reaches to get in: they replace the top bar with their own frame. */
+const AUTH_PATHS = ["/login", "/setup", "/forgot-password", "/reset-password", "/verify-email"];
+
 export function Shell({ children }: { children: ReactNode }) {
   const { user } = useSession();
   const [collapsed, setCollapsed] = usePref("sidebar.collapsed", false);
@@ -567,6 +570,15 @@ export function Shell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("keydown", key);
   }, [mobileOpen]);
 
+  // the sign-in pages are full screen: they bring their own frame (AuthLayout)
+  if (!user && AUTH_PATHS.includes(loc.pathname)) {
+    return (
+      <main className="main-solo">
+        <SiteBanner />
+        {children}
+      </main>
+    );
+  }
   if (!user) {
     return (
       <>

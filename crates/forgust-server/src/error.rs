@@ -13,6 +13,10 @@ pub enum ApiError {
     BadRequest(String),
     #[error("authentication required")]
     Unauthorized,
+    /// a sign-in's second step, after its challenge expired or was used up:
+    /// the password is asked again
+    #[error("this sign-in has expired: enter your password again")]
+    ChallengeExpired,
     #[error("{0}")]
     Forbidden(String),
     #[error("two-factor authentication is required by this organization")]
@@ -45,6 +49,7 @@ impl ApiError {
         match self {
             ApiError::BadRequest(_) => (StatusCode::BAD_REQUEST, "bad_request"),
             ApiError::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized"),
+            ApiError::ChallengeExpired => (StatusCode::UNAUTHORIZED, "challenge_expired"),
             ApiError::Forbidden(_) => (StatusCode::FORBIDDEN, "forbidden"),
             ApiError::TwoFactorRequired => (StatusCode::FORBIDDEN, "two_factor_required"),
             ApiError::NotFound => (StatusCode::NOT_FOUND, "not_found"),

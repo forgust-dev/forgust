@@ -3,7 +3,7 @@
 mod common;
 
 use common::*;
-use serde_json::json;
+use serde_json::{Value, json};
 
 /// The M1 exit criteria, end to end.
 #[sqlx::test(migrator = "forgust_db::MIGRATOR")]
@@ -569,8 +569,14 @@ async fn recovery_codes_stand_in_for_the_authenticator(pool: sqlx::PgPool) {
     let new = erin.ok_post("/api/v1/user/two_factor/recovery_codes", json!({ "password": password("erin") })).await;
     assert_eq!(new["recovery_codes"].as_array().unwrap().len(), 10);
     let ch = challenge(&srv, "erin").await;
-    assert_eq!(recover(&srv, &ch, &codes[3]).await.status(), 401);
+    let wrong = recover(&srv, &ch, &codes[3]).await;
+    assert_eq!(wrong.status(), 401);
+    assert_eq!(wrong.json::<Value>().await.unwrap()["error"], "unauthorized", "a wrong code: try another");
     assert_eq!(recover(&srv, &ch, new["recovery_codes"][0].as_str().unwrap()).await.status(), 200);
+    // the challenge is spent: the page sends them back to the password
+    let spent = recover(&srv, &ch, new["recovery_codes"][1].as_str().unwrap()).await;
+    assert_eq!(spent.status(), 401);
+    assert_eq!(spent.json::<Value>().await.unwrap()["error"], "challenge_expired");
 
     // an administrator's reset: no 2FA, no codes, every session ended
     let erin_id = erin.ok_get("/api/v1/user").await["id"].as_i64().unwrap();

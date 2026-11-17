@@ -288,7 +288,7 @@ test("forgot password, reset and email links", async ({ browser }) => {
   const page = await ctx.newPage();
   await page.goto("/login");
   await page.getByLabel("Username or email").fill("root");
-  await page.getByRole("link", { name: "Forgot your password?" }).click();
+  await page.getByRole("link", { name: "Forgot password?" }).click();
   // a server without email (email.smtp_url) promises no link: it says whom to ask
   const { email_enabled } = await (await page.request.get("/api/v1/setup")).json();
   if (email_enabled) {
