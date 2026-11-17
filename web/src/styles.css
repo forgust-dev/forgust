@@ -4014,6 +4014,32 @@ a.status-badge:hover {
   background: color-mix(in srgb, var(--ok-soft) 55%, var(--bg));
 }
 
+/* an empty page that leads somewhere (findings before any scan): what, how, the button */
+.no-scan {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 580px;
+  margin: 0 auto;
+}
+.no-scan h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 650;
+}
+.no-scan p {
+  margin: 0;
+}
+.no-scan .btn {
+  margin-top: 4px;
+}
+.no-scan p.small {
+  margin-top: 10px;
+  color: var(--text-faint);
+}
+
 /* a row that opens what it names on the page (a finding) */
 .decide-link {
   display: block;
