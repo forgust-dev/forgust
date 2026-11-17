@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT r.pipeline_id, p.status FROM ai_review_runs r JOIN ci_pipelines p ON p.id = r.pipeline_id\n          WHERE r.state = 'pending' AND p.status <> ALL($1) AND p.finished_at < now() - interval '5 minutes'",
+  "query": "SELECT r.pipeline_id, r.merge_request_id, p.status FROM ai_review_runs r JOIN ci_pipelines p ON p.id = r.pipeline_id\n          WHERE r.state = 'pending' AND p.status <> ALL($1) AND p.finished_at < now() - interval '5 minutes'",
   "describe": {
     "columns": [
       {
@@ -16,6 +16,17 @@
       },
       {
         "ordinal": 1,
+        "name": "merge_request_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ai_review_runs",
+            "name": "merge_request_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
         "name": "status",
         "type_info": "Text",
         "origin": {
@@ -33,8 +44,9 @@
     },
     "nullable": [
       false,
+      false,
       false
     ]
   },
-  "hash": "4aa3fc436616bd0e492b6aae96cce9185672cfb355fb6f787b3c50c16342e4ab"
+  "hash": "14ce5d03efd1cda512d0e9aa9777b0bf07b41f8b645d9711d874cea12d4497cf"
 }

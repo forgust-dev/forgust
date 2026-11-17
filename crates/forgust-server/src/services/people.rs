@@ -296,7 +296,7 @@ pub async fn request_changes(
     crate::auth::authz::writable(p)?;
     let user = principal.direct_user().ok_or(ApiError::Unauthorized)?.clone();
     // an AI review is advice: it never blocks merging
-    if user.user_type == "ai_review_bot" {
+    if user.user_type == super::ai_review::BOT_TYPE {
         return Err(ApiError::forbidden("the AI review bot cannot request changes"));
     }
     if project_role(state, principal, p).await?.level < REPORTER {

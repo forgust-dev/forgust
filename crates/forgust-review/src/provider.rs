@@ -3,6 +3,7 @@
 //! (Anthropic's Messages API...) is one more implementation, picked by
 //! `AI_REVIEW_PROVIDER`.
 
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use anyhow::{Context, bail};
@@ -19,6 +20,8 @@ pub struct OpenAiCompatible {
     base_url: String,
     model: String,
     api_key: Option<String>,
+    /// The endpoint refused JSON mode once: not asked for again.
+    no_json_mode: AtomicBool,
 }
 
 impl OpenAiCompatible {
@@ -34,6 +37,7 @@ impl OpenAiCompatible {
             base_url: base_url.trim_end_matches('/').to_string(),
             model: model.to_string(),
             api_key: api_key.filter(|k| !k.is_empty()),
+            no_json_mode: AtomicBool::new(false),
         })
     }
 
@@ -52,11 +56,15 @@ impl Provider for OpenAiCompatible {
         let mut body = json!({
             "model": self.model,
             "messages": [{ "role": "system", "content": system }, { "role": "user", "content": user }],
-            "response_format": { "type": "json_object" },
         });
+        let json_mode = !self.no_json_mode.load(Ordering::Relaxed);
+        if json_mode {
+            body["response_format"] = json!({ "type": "json_object" });
+        }
         let mut res = self.post(&body).await?;
-        // not every server knows JSON mode: ask again without it
-        if res.status() == reqwest::StatusCode::BAD_REQUEST || res.status() == reqwest::StatusCode::UNPROCESSABLE_ENTITY {
+        // not every server knows JSON mode: ask again without it, and from then on
+        if json_mode && (res.status() == reqwest::StatusCode::BAD_REQUEST || res.status() == reqwest::StatusCode::UNPROCESSABLE_ENTITY) {
+            self.no_json_mode.store(true, Ordering::Relaxed);
             body.as_object_mut().expect("object").remove("response_format");
             res = self.post(&body).await?;
         }
@@ -109,6 +117,9 @@ mod tests {
         let base = serve(app).await;
         let p = OpenAiCompatible::new(&base, "m", Some("k-1".into()), None, Duration::from_secs(5)).unwrap();
         assert_eq!(p.complete("s", "u").await.unwrap(), "{\"summary\":\"hi\"}");
+        // the next part asks without JSON mode straight away
+        assert_eq!(p.complete("s", "u").await.unwrap(), "{\"summary\":\"hi\"}");
+        assert!(p.no_json_mode.load(Ordering::Relaxed));
     }
 
     #[tokio::test]

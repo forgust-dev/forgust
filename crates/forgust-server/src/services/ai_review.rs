@@ -61,31 +61,36 @@ pub struct Overrides {
 }
 
 /// The settings in effect: the config file, then the administrator's changes.
+/// `api_key` is the config file's only: the one set in the admin area is
+/// decrypted where a job needs it ([`api_key`]).
 pub async fn config(state: &AppState) -> anyhow::Result<AiReviewConfig> {
-    config_with(state, true).await
-}
-
-/// The settings in effect without the key (not decrypted for what only
-/// shows them).
-pub async fn config_without_key(state: &AppState) -> anyhow::Result<AiReviewConfig> {
-    config_with(state, false).await
-}
-
-async fn config_with(state: &AppState, key_too: bool) -> anyhow::Result<AiReviewConfig> {
     let mut c = state.cfg.ai_review.clone();
-    let (raw, key) = forgust_db::ai_review::instance(&state.db).await?;
+    let (raw, _) = forgust_db::ai_review::instance(&state.db).await?;
     let o: Overrides = serde_json::from_value(raw).unwrap_or_default();
     macro_rules! over {
         ($($f:ident),*) => { $( if let Some(v) = o.$f { c.$f = v; } )* };
     }
     over!(enabled, provider, base_url, model, image, tags, max_concurrent, timeout_secs, max_comments, max_diff_bytes, ca_pem);
-    match key {
-        Some(sealed) if key_too => c.api_key = Some(state.secrets.decrypt_str(&sealed)?),
-        Some(_) => c.api_key = Some(String::new()),
-        None if !key_too => c.api_key = c.api_key.as_ref().map(|_| String::new()),
-        None => {}
-    }
     Ok(c)
+}
+
+/// The endpoint's key in effect: the admin area's, else the config file's.
+pub async fn api_key(state: &AppState) -> anyhow::Result<Option<String>> {
+    Ok(match forgust_db::ai_review::instance(&state.db).await?.1 {
+        Some(sealed) => Some(state.secrets.decrypt_str(&sealed)?),
+        None => state.cfg.ai_review.api_key.clone(),
+    }
+    .filter(|k| !k.is_empty()))
+}
+
+/// The user type of the projects' AI review bots.
+pub const BOT_TYPE: &str = "ai_review_bot";
+
+/// `user` when it is `project`'s own AI review bot and AI review is on there:
+/// who a review job runs as, and posts as.
+pub fn own_bot<'a>(user: Option<&'a User>, settings: Option<&forgust_db::ai_review::Settings>) -> Option<&'a User> {
+    let s = settings.filter(|s| s.enabled)?;
+    user.filter(|u| u.user_type == BOT_TYPE && s.bot_user_id == Some(u.id))
 }
 
 /// On, and set up enough to run.
@@ -111,7 +116,7 @@ async fn ensure_bot(state: &AppState, project: &Project, known: Option<i64>) -> 
     let kind = super::renovate::ProjectBot {
         username: bot_username(project.id),
         name: "AI review",
-        user_type: "ai_review_bot",
+        user_type: BOT_TYPE,
         level: forgust_db::access::REPORTER,
     };
     super::renovate::ensure_project_bot(state, project, &kind, known).await
@@ -184,16 +189,6 @@ pub async fn request(state: &AppState, principal: &Principal, project: &Project,
         return Err(ApiError::conflict("only an open merge request is reviewed"));
     }
     let latest = mrdb::latest_diff(&state.db, mr.id).await?.ok_or_else(|| ApiError::conflict("the merge request has no changes yet"))?;
-    // requests at once (two clicks, two merge requests): one review per
-    // merge request, and no more than max_concurrent on the instance
-    let mut lock = state.db.begin().await?;
-    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))").bind("ai-review-start").execute(&mut *lock).await?;
-    if forgust_db::ai_review::active(&state.db, Some(mr.id)).await? > 0 {
-        return Err(ApiError::conflict("a review of this merge request is already going"));
-    }
-    if forgust_db::ai_review::active(&state.db, None).await? >= cfg.max_concurrent as i64 {
-        return Err(ApiError::conflict("the instance is reviewing as many merge requests as it may: try again in a few minutes"));
-    }
     // asked again on a reviewed version (another model, another try): all of
     // it again; what was posted already is not posted twice
     let base = match forgust_db::ai_review::last_posted_head(&state.db, mr.id).await? {
@@ -210,6 +205,17 @@ pub async fn request(state: &AppState, principal: &Principal, project: &Project,
         _ => latest.base_sha.clone(),
     };
     let bot = ensure_bot(state, project, settings.bot_user_id).await?;
+    // requests at once (two clicks, two merge requests): one review per
+    // merge request, and no more than max_concurrent on the instance
+    let mut lock = state.db.begin().await?;
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))").bind("ai-review-start").execute(&mut *lock).await?;
+    let (this_mr, all) = forgust_db::ai_review::active_counts(&mut *lock, mr.id).await?;
+    if this_mr > 0 {
+        return Err(ApiError::conflict("a review of this merge request is already going"));
+    }
+    if all >= cfg.max_concurrent as i64 {
+        return Err(ApiError::conflict("the instance is reviewing as many merge requests as it may: try again in a few minutes"));
+    }
     let created = crate::ci::pipeline::create(
         state,
         crate::ci::pipeline::Trigger {
@@ -239,10 +245,15 @@ pub async fn request(state: &AppState, principal: &Principal, project: &Project,
 /// The job's variables, given when a runner takes it: where the model is,
 /// and its key (masked). Nothing from the project's, groups' or instance's
 /// CI variables, and no token of the forge.
-pub async fn job_variables(state: &AppState, mr: Option<&MergeRequest>) -> anyhow::Result<Vec<Var>> {
+pub async fn job_variables(state: &AppState, project: &Project, user: Option<&User>) -> anyhow::Result<Vec<Var>> {
+    let settings = forgust_db::ai_review::get(&state.db, project.id).await?;
+    anyhow::ensure!(
+        own_bot(user, settings.as_ref()).is_some(),
+        "an AI review job not run by the project's AI review bot, or AI review is off"
+    );
     let cfg = config(state).await?;
     anyhow::ensure!(usable(&cfg), "AI review is turned off on this instance");
-    let public = |k: &str, v: String| Var { key: k.into(), value: v, public: true, masked: false, file: false, raw: true };
+    let public = |k: &str, v: String| Var { raw: true, ..Var::public(k, v) };
     let mut v = vec![
         public("AI_REVIEW_PROVIDER", cfg.provider.as_str().into()),
         public("AI_REVIEW_BASE_URL", cfg.base_url.trim().into()),
@@ -250,14 +261,11 @@ pub async fn job_variables(state: &AppState, mr: Option<&MergeRequest>) -> anyho
         public("AI_REVIEW_MAX_COMMENTS", cfg.max_comments.to_string()),
         public("AI_REVIEW_MAX_DIFF_BYTES", cfg.max_diff_bytes.to_string()),
     ];
-    if let Some(m) = mr.filter(|m| !m.description.trim().is_empty()) {
-        v.push(public("CI_MERGE_REQUEST_DESCRIPTION", clip(&m.description, 8_000)));
-    }
-    if let Some(k) = cfg.api_key.filter(|k| !k.is_empty()) {
-        v.push(Var { key: "AI_REVIEW_API_KEY".into(), value: k, public: false, masked: true, file: false, raw: true });
+    if let Some(k) = api_key(state).await? {
+        v.push(Var { masked: true, raw: true, ..Var::secret("AI_REVIEW_API_KEY", k) });
     }
     if let Some(pem) = cfg.ca_pem.filter(|p| !p.trim().is_empty()) {
-        v.push(Var { key: "AI_REVIEW_CA_FILE".into(), value: pem, public: false, masked: false, file: true, raw: true });
+        v.push(Var { file: true, raw: true, ..Var::secret("AI_REVIEW_CA_FILE", pem) });
     }
     Ok(v)
 }
@@ -271,21 +279,28 @@ pub async fn sweep(state: &AppState) -> anyhow::Result<()> {
         tracing::warn!(pipeline = id, "AI review never finished; canceled (no runner with the configured tags?)");
         crate::ci::pipeline::cancel(state, id).await?;
     }
-    for (id, status) in forgust_db::ai_review::ended_pending(&state.db).await? {
+    for (id, mr_id, status) in forgust_db::ai_review::ended_pending(&state.db).await? {
         let why = format!("the review job ended ({status}) without a report");
-        if forgust_db::ai_review::finish(&state.db, id, None, "failed", Some(&why)).await? {
-            publish_for(state, id).await;
-        }
+        settle(state, id, mr_id, None, "failed", Some(&why)).await?;
     }
     Ok(())
 }
 
-async fn publish_for(state: &AppState, pipeline_id: i64) {
-    if let Ok(Some(run)) = forgust_db::ai_review::run(&state.db, pipeline_id).await
-        && let Ok(Some(mr)) = mrdb::find_by_id(&state.db, run.merge_request_id).await
-    {
+/// Record how a run ended ([`forgust_db::ai_review::finish`]), and tell the
+/// merge request's viewers when it did.
+async fn settle(
+    state: &AppState,
+    pipeline_id: i64,
+    mr_id: i64,
+    build: Option<i64>,
+    outcome: &str,
+    why: Option<&str>,
+) -> anyhow::Result<bool> {
+    let done = forgust_db::ai_review::finish(&state.db, pipeline_id, build, outcome, why).await?;
+    if done && let Some(mr) = mrdb::find_by_id(&state.db, mr_id).await? {
         state.events.publish(Event::MergeRequest { project_id: mr.project_id, iid: mr.iid });
     }
+    Ok(done)
 }
 
 /// Read a finished review job's report and post what holds up.
@@ -296,7 +311,7 @@ pub async fn ingest(state: &AppState, build_id: i64) -> anyhow::Result<()> {
         return Ok(());
     }
     let Some(run) = forgust_db::ai_review::run(&state.db, pl.id).await? else { return Ok(()) };
-    let fail = |why: String| fail_run(state, pl.id, b.id, why);
+    let fail = |why: String| async move { settle(state, pl.id, run.merge_request_id, Some(b.id), "failed", Some(&why)).await.map(|_| ()) };
     let Some(art) = forgust_db::ci::artifacts_of_build(&state.db, b.id).await?.into_iter().find(|a| a.file_type == REPORT) else {
         return fail("the review job uploaded no report".into()).await;
     };
@@ -315,33 +330,26 @@ pub async fn ingest(state: &AppState, build_id: i64) -> anyhow::Result<()> {
     }
     let Some(mr) = mrdb::find_by_id(&state.db, run.merge_request_id).await? else { return Ok(()) };
     let Some(project) = forgust_db::projects::find(&state.db, mr.project_id).await? else { return Ok(()) };
-    let latest = mrdb::latest_diff(&state.db, mr.id).await?;
-    let current = latest.as_ref().is_some_and(|d| d.head_sha == run.head_sha);
-    if mr.state != "opened" || !current || project.archived() {
-        if forgust_db::ai_review::finish(&state.db, pl.id, Some(b.id), "outdated", None).await? {
-            publish_for(state, pl.id).await;
-        }
+    let current = mrdb::latest_diff(&state.db, mr.id).await?.filter(|d| d.head_sha == run.head_sha);
+    let Some(latest) = current.filter(|_| mr.state == "opened" && !project.archived()) else {
+        settle(state, pl.id, mr.id, Some(b.id), "outdated", None).await?;
         return Ok(());
-    }
-    let latest = latest.expect("current");
-    let bot = match pl.user_id {
+    };
+    let user = match pl.user_id {
         Some(id) => forgust_db::users::find(&state.db, id).await?,
         None => None,
     };
     let settings = forgust_db::ai_review::get(&state.db, project.id).await?;
-    let Some(bot) = bot.filter(|u| u.user_type == "ai_review_bot" && settings.as_ref().and_then(|s| s.bot_user_id) == Some(u.id)) else {
-        return fail("the review did not run as the project's AI review bot".into()).await;
+    let Some(bot) = own_bot(user.as_ref(), settings.as_ref()) else {
+        return fail("AI review was turned off for this project, or the job did not run as its bot".into()).await;
     };
-    if !settings.is_some_and(|s| s.enabled) {
-        return fail("AI review was turned off for this project before the review was posted".into()).await;
-    }
     let cfg = config(state).await?;
     // claimed before posting: reading this report again posts nothing twice
     // (a retried job is another report: what it repeats is not posted again)
     if !forgust_db::ai_review::finish(&state.db, pl.id, Some(b.id), "posted", None).await? {
         return Ok(());
     }
-    match post(state, &project, &mr, &latest, &run, &rep, &bot, cfg.max_comments as usize).await {
+    match post(state, &project, &mr, &latest, &run, &rep, bot, cfg.max_comments as usize).await {
         Ok((posted, dropped)) => {
             forgust_db::ai_review::set_counts(&state.db, pl.id, posted as i32, dropped as i32).await?;
             state.events.publish(Event::MergeRequest { project_id: project.id, iid: mr.iid });
@@ -356,13 +364,6 @@ pub async fn ingest(state: &AppState, build_id: i64) -> anyhow::Result<()> {
     }
 }
 
-async fn fail_run(state: &AppState, pipeline_id: i64, build_id: i64, why: String) -> anyhow::Result<()> {
-    if forgust_db::ai_review::finish(&state.db, pipeline_id, Some(build_id), "failed", Some(&why)).await? {
-        publish_for(state, pipeline_id).await;
-    }
-    Ok(())
-}
-
 fn clip(s: &str, max: usize) -> String {
     if s.chars().count() <= max {
         return s.to_string();
@@ -372,7 +373,8 @@ fn clip(s: &str, max: usize) -> String {
     out
 }
 
-async fn commentable(state: &AppState, project_id: i64, latest: &MrDiff, paths: Vec<String>) -> anyhow::Result<Commentable> {
+/// The lines of `paths` (new paths) a comment may go on.
+async fn commentable(state: &AppState, project_id: i64, latest: &MrDiff, paths: &HashSet<&str>) -> anyhow::Result<Commentable> {
     let mut c = Commentable::default();
     if paths.is_empty() {
         return Ok(c);
@@ -381,7 +383,7 @@ async fn commentable(state: &AppState, project_id: i64, latest: &MrDiff, paths: 
     // of its paths
     let opts = DiffOptions { offset: 0, limit: 5_000, max_lines_per_file: 20_000, paths: None };
     let d = state.storage.diff(project_id, Some(&latest.base_sha), &latest.head_sha, opts).await?;
-    for f in d.files {
+    for f in d.files.into_iter().filter(|f| paths.contains(f.new_path.as_str())) {
         // the job names a file by its new path, renamed or not
         if f.old_path != f.new_path {
             c.old_path.insert(f.new_path.clone(), f.old_path.clone());
@@ -484,15 +486,8 @@ async fn post(
     bot: &User,
     max_comments: usize,
 ) -> anyhow::Result<(usize, usize)> {
-    let paths: Vec<String> = rep
-        .comments
-        .iter()
-        .map(|c| c.path.clone())
-        .filter(|p| forgust_storage::validate_path(p))
-        .collect::<HashSet<_>>()
-        .into_iter()
-        .collect();
-    let lines = commentable(state, project.id, latest, paths).await?;
+    let paths: HashSet<&str> = rep.comments.iter().map(|c| c.path.as_str()).collect();
+    let lines = commentable(state, project.id, latest, &paths).await?;
     let (new_lines, old_lines) = (&lines.new, &lines.old);
     // a removed line's number is of the old file: the review's base, which is
     // the merge request's only when the whole of it was reviewed
@@ -503,12 +498,12 @@ async fn post(
         .filter(|n| n.author_id == Some(bot.id))
         .filter_map(|n| Some(LineNote { path: n.new_path.clone()?, new_line: n.new_line, old_line: n.old_line, body: n.body.clone() }))
         .collect();
-    let mut posted = 0usize;
     let mut dropped = 0usize;
-    let mut suggestions = (0usize, 0usize); // (posted, left out)
+    let mut mismatched = 0usize; // suggestions left out
     let mut files: HashMap<String, Option<String>> = HashMap::new();
-    // each with the first line of its range (a suggestion on several lines)
-    let mut notes: Vec<(LineNote, Option<i32>)> = Vec::new();
+    // each with the first line of its range (a suggestion on several lines),
+    // and whether it carries a change to apply
+    let mut notes: Vec<(LineNote, Option<i32>, bool)> = Vec::new();
     for c in &rep.comments {
         // a suggestion block is the server's to write, from a checked suggestion
         let mut body = clip(strip_suggestion_blocks(&c.body).trim(), report::MAX_COMMENT_CHARS);
@@ -523,6 +518,7 @@ async fn post(
         }
         let mut new_line = c.new_line;
         let mut start = None;
+        let mut ready = false;
         if let (Some(s), Some(line)) = (&c.suggestion, c.new_line) {
             if !files.contains_key(&c.path) {
                 let text = match state.storage.blob(project.id, &latest.head_sha, &c.path, 4 << 20).await {
@@ -537,9 +533,9 @@ async fn post(
                     body = format!("{body}\n\n{block}");
                     new_line = Some(anchor);
                     start = (s.from_line < anchor).then_some(s.from_line as i32);
-                    suggestions.0 += 1;
+                    ready = true;
                 }
-                None => suggestions.1 += 1,
+                None => mismatched += 1,
             }
         }
         let note = LineNote {
@@ -548,10 +544,10 @@ async fn post(
             old_line: c.old_line.filter(|_| c.new_line.is_none()).map(|o| o as i32),
             body,
         };
-        if already.contains(&note) || notes.iter().any(|(n, _)| n == &note) {
+        if already.contains(&note) || notes.iter().any(|(n, ..)| n == &note) {
             continue;
         }
-        notes.push((note, start));
+        notes.push((note, start, ready));
     }
     let scope =
         if whole { "the changes".to_string() } else { format!("the changes since `{}`", &run.base_sha[..run.base_sha.len().min(8)]) };
@@ -570,7 +566,7 @@ async fn post(
         1 => "1 comment on the changed lines".to_string(),
         n => format!("{n} comments on the changed lines"),
     });
-    let ready = notes.iter().filter(|(n, _)| n.body.contains("\n```suggestion")).count();
+    let ready = notes.iter().filter(|(.., ready)| *ready).count();
     if !notes.is_empty() {
         summary.push_str(&match ready {
             0 => ".".to_string(),
@@ -581,8 +577,8 @@ async fn post(
     if dropped > 0 {
         summary.push_str(&format!(" {dropped} more were left out (not on a changed line, or past the limit)."));
     }
-    if suggestions.1 > 0 {
-        let n = suggestions.1;
+    if mismatched > 0 {
+        let n = mismatched;
         summary.push_str(&format!(
             " {n} suggested change{} did not match the code and {} left out (the comment{} posted as text).",
             if n == 1 { "" } else { "s" },
@@ -600,7 +596,7 @@ async fn post(
         }
     }
     add_bot_note(state, project, mr, bot, &summary, mrdb::Position::default()).await?;
-    for (LineNote { path, new_line, old_line, body }, start_new_line) in &notes {
+    for (LineNote { path, new_line, old_line, body }, start_new_line, _) in &notes {
         let pos = mrdb::Position {
             diff_id: Some(latest.id),
             base_sha: Some(&latest.base_sha),
@@ -614,9 +610,9 @@ async fn post(
             start_new_line: *start_new_line,
         };
         add_bot_note(state, project, mr, bot, body, pos).await?;
-        posted += 1;
     }
-    Ok((posted, dropped))
+    mrdb::touch(&state.db, mr.id).await?;
+    Ok((notes.len(), dropped))
 }
 
 /// A note of the bot: shown and sent to webhooks like any, but nobody is
@@ -630,16 +626,8 @@ async fn add_bot_note(
     pos: mrdb::Position<'_>,
 ) -> anyhow::Result<()> {
     let id = mrdb::add_note(&state.db, mr.id, Some(bot.id), None, body, false, pos).await?;
-    mrdb::touch(&state.db, mr.id).await?;
     if let Some(note) = mrdb::note(&state.db, mr.id, id).await? {
-        super::webhooks::emit(
-            state,
-            p,
-            "note",
-            json!({ "object_kind": "note", "project": super::mr::project_json(state, p), "merge_request": { "iid": mr.iid, "title": mr.title },
-                    "note": { "id": note.id, "body": note.body, "author": bot.username, "new_path": note.new_path, "new_line": note.new_line } }),
-        )
-        .await;
+        super::mr::note_webhook(state, p, mr, &note, &bot.username).await;
     }
     Ok(())
 }

@@ -21,12 +21,15 @@ fn git(dir: &Path) -> Command {
     c
 }
 
+/// A commit id, and nothing git would read as anything else.
+fn is_sha(rev: &str) -> bool {
+    !rev.is_empty() && rev.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
 /// `git diff base..head` in `dir`.
 pub fn git_diff(dir: &Path, base: &str, head: &str) -> anyhow::Result<String> {
-    for rev in [base, head] {
-        if rev.is_empty() || !rev.bytes().all(|b| b.is_ascii_hexdigit()) {
-            bail!("not a commit id: `{rev}`");
-        }
+    if let Some(rev) = [base, head].into_iter().find(|r| !is_sha(r)) {
+        bail!("not a commit id: `{rev}`");
     }
     let out = git(dir)
         .args(["diff", "--no-color", "--no-ext-diff", "-M", "--unified=3", "--src-prefix=a/", "--dst-prefix=b/"])
@@ -42,7 +45,7 @@ pub fn git_diff(dir: &Path, base: &str, head: &str) -> anyhow::Result<String> {
 /// A file at `rev`, when it exists (the project's review instructions).
 pub fn git_show(dir: &Path, rev: &str, path: &str, max: usize) -> Option<String> {
     // an empty rev would read the index: the merge request's own checkout
-    if rev.is_empty() || !rev.bytes().all(|b| b.is_ascii_hexdigit()) {
+    if !is_sha(rev) {
         return None;
     }
     let out = git(dir).arg("show").arg(format!("{rev}:{path}")).output().ok()?;

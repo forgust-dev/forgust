@@ -379,11 +379,7 @@ async fn job_payload(state: &AppState, runner: &Runner, build: &Build, token: &s
     }
     if pipeline.source == crate::services::ai_review::SOURCE {
         // only ever for the project's own AI review bot, with the feature on
-        let review = forgust_db::ai_review::get(db, project.id).await?.filter(|s| s.enabled);
-        user.as_ref()
-            .filter(|u| u.user_type == "ai_review_bot" && review.as_ref().and_then(|s| s.bot_user_id) == Some(u.id))
-            .ok_or_else(|| anyhow::anyhow!("an AI review job not run by the project's AI review bot, or AI review is off"))?;
-        predefined.extend(crate::services::ai_review::job_variables(state, mr.as_ref()).await?);
+        predefined.extend(crate::services::ai_review::job_variables(state, &project, user.as_ref()).await?);
     }
     // the job's environment
     let mut environment = None;
@@ -434,6 +430,15 @@ async fn job_payload(state: &AppState, runner: &Runner, build: &Build, token: &s
         settings_vars,
         pipeline_vars,
     );
+    // a job's `GIT_DEPTH` (0: all of the history) wins over the project's
+    // default, as on GitLab
+    let git_depth = vars
+        .iter()
+        .rev()
+        .find(|v| v.key == "GIT_DEPTH")
+        .and_then(|v| v.value.trim().parse::<i32>().ok())
+        .filter(|d| *d >= 0)
+        .unwrap_or(settings.default_git_depth);
     let cache_keys = payload::cache_keys(state, project.id, &pipeline.sha, &spec.job.cache).await;
     let body = payload::job_response(
         state,
@@ -445,8 +450,7 @@ async fn job_payload(state: &AppState, runner: &Runner, build: &Build, token: &s
             token,
             variables: vars,
             dependencies,
-            // a review's base may be any older commit of the merge request
-            git_depth: if pipeline.source == crate::services::ai_review::SOURCE { 0 } else { settings.default_git_depth },
+            git_depth,
             cache_keys,
         },
     )?;

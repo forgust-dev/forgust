@@ -64,6 +64,29 @@ fn review(job: &Value, comments: Value) -> Value {
     })
 }
 
+/// Forgust's own pipelines are listed twice (the server and the database):
+/// they say the same.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn the_system_pipelines_are_the_same_on_both_sides(pool: sqlx::PgPool) {
+    let sources = [
+        "push",
+        "web",
+        "api",
+        "schedule",
+        "merge_request_event",
+        "trigger",
+        "parent_pipeline",
+        "pipeline",
+        "renovate",
+        "security",
+        "ai_review",
+    ];
+    for s in sources {
+        let db: bool = sqlx::query_scalar("SELECT is_system_source($1)").bind(s).fetch_one(&pool).await.unwrap();
+        assert_eq!(db, forgust_server::ci::pipeline::is_system(s), "{s}");
+    }
+}
+
 #[sqlx::test(migrator = "forgust_db::MIGRATOR")]
 async fn ai_review_is_off_until_an_administrator_sets_an_endpoint(pool: sqlx::PgPool) {
     let srv = TestServer::start(pool).await;

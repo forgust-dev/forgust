@@ -14,6 +14,8 @@ use crate::config::AiProvider;
 use crate::error::{ApiError, ApiResult};
 use crate::services::ai_review as svc;
 use crate::state::AppState;
+use forgust_db::merge_requests::MergeRequest;
+use forgust_db::projects::Project;
 
 // ------------------------------------------------------------ project
 
@@ -33,7 +35,7 @@ pub struct AiReviewSettingsBody {
 }
 
 async fn settings_of(state: &AppState, project_id: i64) -> ApiResult<AiReviewSettings> {
-    let c = svc::config_without_key(state).await.map_err(ApiError::Internal)?;
+    let c = svc::config(state).await.map_err(ApiError::Internal)?;
     let enabled = forgust_db::ai_review::get(&state.db, project_id).await?.is_some_and(|s| s.enabled);
     Ok(AiReviewSettings { available: svc::usable(&c), enabled, endpoint: svc::endpoint_host(&c), model: c.model })
 }
@@ -92,13 +94,15 @@ pub struct AiReviewStatus {
     pub latest: Option<AiReviewRun>,
 }
 
-async fn status_of(state: &AppState, principal: &crate::auth::Principal, id: &str, iid: i64) -> ApiResult<AiReviewStatus> {
-    let p = project_for(state, principal, id, ProjectAction::ReadCode).await?;
-    let mr = forgust_db::merge_requests::find(&state.db, p.id, iid).await?.ok_or(ApiError::NotFound)?;
-    let c = svc::config_without_key(state).await.map_err(ApiError::Internal)?;
-    let on = svc::usable(&c) && forgust_db::ai_review::get(&state.db, p.id).await?.is_some_and(|s| s.enabled);
+async fn status_of(state: &AppState, principal: &crate::auth::Principal, p: &Project, mr: &MergeRequest) -> ApiResult<AiReviewStatus> {
+    // a project that never turned it on has no reviews: the usual answer, cheap
+    let Some(settings) = forgust_db::ai_review::get(&state.db, p.id).await? else {
+        return Ok(AiReviewStatus { available: false, can_request: false, endpoint: None, latest: None });
+    };
+    let c = svc::config(state).await.map_err(ApiError::Internal)?;
+    let on = svc::usable(&c) && settings.enabled;
     // where the code goes and why a review failed are for who can push
-    let pusher = can_project(state, principal, ProjectAction::Push, &p).await?;
+    let pusher = can_project(state, principal, ProjectAction::Push, p).await?;
     let can_request = on && mr.state == "opened" && !p.archived() && pusher;
     let latest = match forgust_db::ai_review::latest(&state.db, mr.id).await? {
         Some(r) => {
@@ -132,7 +136,9 @@ pub async fn mr_status(
     Viewer(v): Viewer,
     Path((id, iid)): Path<(String, i64)>,
 ) -> ApiResult<Json<AiReviewStatus>> {
-    Ok(Json(status_of(&state, &v, &id, iid).await?))
+    let p = project_for(&state, &v, &id, ProjectAction::ReadCode).await?;
+    let mr = forgust_db::merge_requests::find(&state.db, p.id, iid).await?.ok_or(ApiError::NotFound)?;
+    Ok(Json(status_of(&state, &v, &p, &mr).await?))
 }
 
 /// Ask for an AI review of the merge request's latest version (who can push).
@@ -145,7 +151,7 @@ pub async fn mr_request(
     let p = project_for(&state, &principal, &id, ProjectAction::ReadCode).await?;
     let mr = forgust_db::merge_requests::find(&state.db, p.id, iid).await?.ok_or(ApiError::NotFound)?;
     svc::request(&state, &principal, &p, &mr).await?;
-    Ok(Json(status_of(&state, &principal, &id, iid).await?))
+    Ok(Json(status_of(&state, &principal, &p, &mr).await?))
 }
 
 // ------------------------------------------------------------ admin
@@ -197,11 +203,11 @@ async fn admin_status(state: &AppState) -> ApiResult<AdminAiReviewStatus> {
             max_comments: c.max_comments,
             max_diff_bytes: c.max_diff_bytes,
             ca_pem: c.ca_pem,
-            api_key_set: c.api_key.is_some_and(|k| !k.is_empty()),
+            api_key_set: forgust_db::ai_review::instance(&state.db).await?.1.is_some() || c.api_key.is_some_and(|k| !k.is_empty()),
             api_key: None,
         },
         enabled_projects: forgust_db::ai_review::enabled_count(&state.db).await?,
-        active_runs: forgust_db::ai_review::active(&state.db, None).await?,
+        active_runs: forgust_db::ai_review::active(&state.db).await?,
     })
 }
 

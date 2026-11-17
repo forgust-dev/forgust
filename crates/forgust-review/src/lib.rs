@@ -89,11 +89,13 @@ async fn review_into(job: &Job, provider: &dyn Provider, report: &mut Report) ->
             if !shown || c.body.trim().is_empty() || (c.line.is_none() && c.old_line.is_none()) {
                 continue;
             }
-            // the server checks it against the file; here only its shape
-            let suggestion = c
-                .suggestion()
-                .filter(|s| c.line.is_some() && s.from_line >= 1 && s.from_line <= s.to_line)
-                .map(|s| report::Suggestion { from_line: s.from_line, to_line: s.to_line, original: s.original, code: s.code });
+            // on new lines only; the server checks the rest against the file
+            let suggestion = c.suggestion().filter(|_| c.line.is_some()).map(|s| report::Suggestion {
+                from_line: s.from_line,
+                to_line: s.to_line,
+                original: s.original,
+                code: s.code,
+            });
             report.comments.push(Comment {
                 path: c.path,
                 new_line: c.line,

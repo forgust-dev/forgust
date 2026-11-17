@@ -2,12 +2,11 @@
 //! settings, and one row per review run.
 
 use chrono::{DateTime, Utc};
-use serde::Serialize;
 use sqlx::PgExecutor;
 
 use crate::Result;
 
-#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone)]
 pub struct Settings {
     pub project_id: i64,
     pub enabled: bool,
@@ -71,7 +70,7 @@ pub async fn set_instance(e: impl PgExecutor<'_>, overrides: &serde_json::Value,
 
 // ------------------------------------------------------------ runs
 
-#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone)]
 pub struct Run {
     pub pipeline_id: i64,
     pub merge_request_id: i64,
@@ -193,16 +192,27 @@ pub async fn set_counts(e: impl PgExecutor<'_>, pipeline_id: i64, posted: i32, d
     Ok(())
 }
 
-/// Review pipelines not finished yet: of one merge request, or of the instance.
-pub async fn active(e: impl PgExecutor<'_>, merge_request_id: Option<i64>) -> Result<i64> {
+/// Review pipelines not finished yet on the instance.
+pub async fn active(e: impl PgExecutor<'_>) -> Result<i64> {
     sqlx::query_scalar!(
-        r#"SELECT count(*) AS "n!" FROM ci_pipelines
-            WHERE source = 'ai_review' AND ($1::bigint IS NULL OR merge_request_id = $1) AND status = ANY($2)"#,
-        merge_request_id,
+        r#"SELECT count(*) AS "n!" FROM ci_pipelines WHERE source = 'ai_review' AND status = ANY($1)"#,
         crate::ci::ACTIVE as &[&str]
     )
     .fetch_one(e)
     .await
+}
+
+/// Review pipelines not finished yet: (of this merge request, of the instance).
+pub async fn active_counts(e: impl PgExecutor<'_>, merge_request_id: i64) -> Result<(i64, i64)> {
+    let r = sqlx::query!(
+        r#"SELECT count(*) FILTER (WHERE merge_request_id = $1) AS "mr!", count(*) AS "all!" FROM ci_pipelines
+            WHERE source = 'ai_review' AND status = ANY($2)"#,
+        merge_request_id,
+        crate::ci::ACTIVE as &[&str]
+    )
+    .fetch_one(e)
+    .await?;
+    Ok((r.mr, r.all))
 }
 
 /// A project's review pipelines not finished yet.
@@ -229,16 +239,17 @@ pub async fn stale(e: impl PgExecutor<'_>, secs: f64) -> Result<Vec<i64>> {
 }
 
 /// Pending runs whose pipeline ended without a report being read (canceled,
-/// failed before uploading): what to mark failed.
-pub async fn ended_pending(e: impl PgExecutor<'_>) -> Result<Vec<(i64, String)>> {
+/// failed before uploading): what to mark failed, as (pipeline, merge
+/// request, pipeline status).
+pub async fn ended_pending(e: impl PgExecutor<'_>) -> Result<Vec<(i64, i64, String)>> {
     Ok(sqlx::query!(
-        "SELECT r.pipeline_id, p.status FROM ai_review_runs r JOIN ci_pipelines p ON p.id = r.pipeline_id
+        "SELECT r.pipeline_id, r.merge_request_id, p.status FROM ai_review_runs r JOIN ci_pipelines p ON p.id = r.pipeline_id
           WHERE r.state = 'pending' AND p.status <> ALL($1) AND p.finished_at < now() - interval '5 minutes'",
         crate::ci::ACTIVE as &[&str]
     )
     .fetch_all(e)
     .await?
     .into_iter()
-    .map(|r| (r.pipeline_id, r.status))
+    .map(|r| (r.pipeline_id, r.merge_request_id, r.status))
     .collect())
 }
