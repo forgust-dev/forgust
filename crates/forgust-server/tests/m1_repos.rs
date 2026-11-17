@@ -622,13 +622,6 @@ async fn enable_totp(c: &Client, username: &str) -> Vec<String> {
     on["recovery_codes"].as_array().unwrap().iter().map(|c| c.as_str().unwrap().to_string()).collect()
 }
 
-/// The password step of a sign-in: its second-factor challenge.
-async fn challenge(srv: &TestServer, username: &str) -> String {
-    let v = Client::new(&srv.base).login(username, &password(username)).await;
-    assert_eq!(v["two_factor_required"], true);
-    v["challenge"].as_str().unwrap().to_string()
-}
-
 async fn recover(srv: &TestServer, challenge: &str, code: &str) -> reqwest::Response {
     reqwest::Client::new()
         .post(format!("{}/api/v1/auth/login/recovery", srv.base))

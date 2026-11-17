@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, username, email, name, user_type, is_admin, is_external, state, namespace_id, totp_enabled, created_at,\n                  email_verified_at, unconfirmed_email, avatar_at\n         FROM users WHERE lower(username) = lower($1) OR lower(email) = lower($1)\n         ORDER BY (lower(username) = lower($1)) DESC LIMIT 1",
+  "query": "SELECT id, username, email, name, user_type, is_admin, is_external, state, namespace_id, totp_enabled, security_keys_enabled, created_at,\n                  email_verified_at, unconfirmed_email, avatar_at\n         FROM users WHERE lower(username) = lower($1)",
   "describe": {
     "columns": [
       {
@@ -115,6 +115,17 @@
       },
       {
         "ordinal": 10,
+        "name": "security_keys_enabled",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "security_keys_enabled"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
         "name": "created_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -125,7 +136,7 @@
         }
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "email_verified_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -136,7 +147,7 @@
         }
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "unconfirmed_email",
         "type_info": "Text",
         "origin": {
@@ -147,7 +158,7 @@
         }
       },
       {
-        "ordinal": 13,
+        "ordinal": 14,
         "name": "avatar_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -175,10 +186,11 @@
       true,
       false,
       false,
+      false,
       true,
       true,
       true
     ]
   },
-  "hash": "645809491caf9f9e34022b53b006bb65bf49fd758b22408449ec129d2f02bb78"
+  "hash": "f2cc68cd6c19e86b024e05614f4370abe7f6928bc43284cdea665555209c728d"
 }

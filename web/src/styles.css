@@ -6446,3 +6446,15 @@ button.test-case-row:hover {
   border-radius: 6px;
   user-select: all;
 }
+
+/* security keys and passkeys: actions wrap below the name on narrow screens */
+.list > .item.wrap {
+  flex-wrap: wrap;
+}
+.list > .item.wrap > .grow {
+  min-width: 12rem;
+}
+.list > .item.wrap input[type="password"] {
+  width: 12rem;
+  max-width: 100%;
+}

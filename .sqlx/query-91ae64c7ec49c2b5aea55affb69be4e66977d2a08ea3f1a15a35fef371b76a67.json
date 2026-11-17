@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM recovery_codes WHERE user_id = $1\n            AND NOT EXISTS (SELECT 1 FROM users WHERE id = $1 AND two_factor_enabled)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "91ae64c7ec49c2b5aea55affb69be4e66977d2a08ea3f1a15a35fef371b76a67"
+}

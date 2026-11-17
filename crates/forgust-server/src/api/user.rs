@@ -10,11 +10,12 @@ use utoipa::ToSchema;
 
 use super::Paging;
 use super::dto::{NewToken, ProjectDto, UserDto};
-use crate::auth::{SignedIn, session};
+use crate::auth::{SignedIn, session, webauthn};
 use crate::crypto;
 use crate::error::{ApiError, ApiResult};
 use crate::services::{self, paths, users};
 use crate::state::AppState;
+use forgust_db::webauthn::CredentialKind;
 
 /// Account-security changes (email, password, 2FA, new tokens, SSH keys) need a browser
 /// session of a human user: a leaked token must not be able to persist access
@@ -396,6 +397,7 @@ pub struct TotpCode {
 pub struct TotpEnabled {
     pub user: UserDto,
     /// Shown this once: each stands in for the authenticator at sign-in, once.
+    /// Empty when the account already had codes (from its security keys).
     pub recovery_codes: Vec<String>,
 }
 
@@ -414,7 +416,7 @@ pub async fn totp_enable(
     }
     let sealed = forgust_db::users::totp_secret(&mut *tx, u.id).await?.ok_or_else(|| ApiError::bad("run setup first"))?;
     forgust_db::users::set_totp(&mut *tx, u.id, Some(&sealed), true).await?;
-    let recovery_codes = session::reset_recovery_codes(&mut tx, u.id).await?;
+    let recovery_codes = session::first_recovery_codes(&mut tx, u.id).await?;
     tx.commit().await?;
     services::audit(&state, &p, "two_factor_enabled", Some(("user", u.id)), json!({}), None).await;
     let u = forgust_db::users::find(&state.db, u.id).await?.ok_or(ApiError::NotFound)?;
@@ -435,7 +437,7 @@ pub async fn totp_disable(
     require_interactive(&u, &p)?;
     reauth(&state, &jar, u.id, &req.password).await?;
     let mut tx = state.db.begin().await?;
-    forgust_db::users::disable_two_factor(&mut tx, u.id).await?;
+    forgust_db::users::disable_totp(&mut tx, u.id).await?;
     tx.commit().await?;
     services::audit(&state, &p, "two_factor_disabled", Some(("user", u.id)), json!({}), None).await;
     let u = forgust_db::users::find(&state.db, u.id).await?.ok_or(ApiError::NotFound)?;
@@ -468,7 +470,7 @@ pub async fn recovery_codes_reset(
 ) -> ApiResult<Json<NewRecoveryCodes>> {
     require_interactive(&u, &p)?;
     reauth(&state, &jar, u.id, &req.password).await?;
-    if !u.totp_enabled {
+    if !u.two_factor() {
         return Err(ApiError::conflict("turn on two-factor authentication first"));
     }
     let mut tx = state.db.begin().await?;
@@ -476,6 +478,242 @@ pub async fn recovery_codes_reset(
     tx.commit().await?;
     services::audit(&state, &p, "recovery_codes_reset", Some(("user", u.id)), json!({}), None).await;
     Ok(Json(NewRecoveryCodes { recovery_codes }))
+}
+
+// ------------------------------------------------------------------ security keys and passkeys
+
+/// More would only be a list nobody reviews.
+const MAX_WEBAUTHN: usize = 20;
+
+#[derive(Serialize, ToSchema)]
+pub struct WebauthnCredentials {
+    /// Security keys and passkeys work on this instance (served over https).
+    pub available: bool,
+    pub credentials: Vec<forgust_db::webauthn::CredentialInfo>,
+}
+
+pub async fn webauthn_list(State(state): State<AppState>, SignedIn(u, _): SignedIn) -> ApiResult<Json<WebauthnCredentials>> {
+    Ok(Json(WebauthnCredentials { available: state.webauthn.is_some(), credentials: forgust_db::webauthn::list(&state.db, u.id).await? }))
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct WebauthnRegisterStart {
+    /// A second factor, or a sign-in of its own.
+    pub kind: CredentialKind,
+    /// The account's password: a borrowed session must not be able to add its
+    /// own way in.
+    #[serde(default)]
+    pub password: String,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct WebauthnRegistration {
+    /// Send back with the new credential.
+    pub ceremony: String,
+    /// Options for `navigator.credentials.create` (WebAuthn).
+    #[schema(value_type = Object)]
+    pub options: Value,
+}
+
+/// The browser session making this request (its id).
+async fn current_session(state: &AppState, jar: &axum_extra::extract::CookieJar) -> ApiResult<i64> {
+    let token = crate::auth::session_cookie(&state.cfg, jar).map(crypto::token_hash).unwrap_or_default();
+    forgust_db::sessions::id_by_token(&state.db, &token).await?.ok_or(ApiError::Unauthorized)
+}
+
+/// Start adding a security key or a passkey. The authenticator is asked not to
+/// make a second credential for the account; a passkey must be one it can
+/// offer with no username (discoverable) and that verifies its user.
+pub async fn webauthn_register_start(
+    State(state): State<AppState>,
+    SignedIn(u, p): SignedIn,
+    jar: axum_extra::extract::CookieJar,
+    Json(req): Json<WebauthnRegisterStart>,
+) -> ApiResult<Json<WebauthnRegistration>> {
+    require_interactive(&u, &p)?;
+    require_confirmed(&state, &u)?;
+    let rp = webauthn::of(&state)?;
+    reauth(&state, &jar, u.id, &req.password).await?;
+    let exclude = forgust_db::webauthn::credential_ids(&state.db, u.id).await?;
+    if exclude.len() >= MAX_WEBAUTHN {
+        return Err(ApiError::conflict(format!("an account has at most {MAX_WEBAUTHN} security keys and passkeys")));
+    }
+    let session_id = current_session(&state, &jar).await?;
+    let handle = forgust_db::webauthn::handle(&state.db, u.id, uuid::Uuid::new_v4()).await?;
+    let display = if u.name.is_empty() { &u.username } else { &u.name };
+    let (options, pending) = match req.kind {
+        CredentialKind::Passkey => {
+            let (mut options, reg) =
+                rp.start_passkey_registration(handle, &u.username, display, Some(exclude)).map_err(webauthn::internal)?;
+            webauthn::require_resident_key(&mut options);
+            (webauthn::to_json(&options)?, webauthn::to_json(&reg)?)
+        }
+        CredentialKind::SecurityKey => {
+            let (mut options, reg) =
+                rp.start_securitykey_registration(handle, &u.username, display, Some(exclude), None, None).map_err(webauthn::internal)?;
+            webauthn::without_cred_protect(&mut options);
+            (webauthn::to_json(&options)?, webauthn::to_json(&reg)?)
+        }
+    };
+    let ceremony = crypto::random_urlsafe(32);
+    forgust_db::webauthn::save_ceremony(
+        &state.db,
+        &crypto::token_hash(&ceremony),
+        req.kind.registration(),
+        Some(u.id),
+        Some(session_id),
+        &pending,
+        Utc::now() + chrono::Duration::minutes(5),
+    )
+    .await?;
+    Ok(Json(WebauthnRegistration { ceremony, options }))
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct WebauthnRegisterFinish {
+    pub ceremony: String,
+    /// How the owner tells it apart ("YubiKey 5C", "Phone").
+    pub name: String,
+    /// What `navigator.credentials.create` returned (`PublicKeyCredential`, as JSON).
+    #[schema(value_type = Object)]
+    pub credential: webauthn_rs::prelude::RegisterPublicKeyCredential,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct WebauthnRegistered {
+    pub credential: forgust_db::webauthn::CredentialInfo,
+    pub user: UserDto,
+    /// The account's first second factor: its recovery codes, shown this once
+    /// (empty otherwise).
+    pub recovery_codes: Vec<String>,
+}
+
+fn credential_name(name: &str) -> ApiResult<String> {
+    let name = name.trim();
+    paths::validate_name(name)?;
+    if name.chars().count() > 64 {
+        return Err(ApiError::bad("give it a name of at most 64 characters"));
+    }
+    Ok(name.to_string())
+}
+
+/// Finish adding a security key or a passkey, from the session that started it.
+pub async fn webauthn_register_finish(
+    State(state): State<AppState>,
+    SignedIn(u, p): SignedIn,
+    jar: axum_extra::extract::CookieJar,
+    Json(req): Json<WebauthnRegisterFinish>,
+) -> ApiResult<Json<WebauthnRegistered>> {
+    require_interactive(&u, &p)?;
+    require_confirmed(&state, &u)?;
+    let name = credential_name(&req.name)?;
+    let rp = webauthn::of(&state)?;
+    let session_id = current_session(&state, &jar).await?;
+    let expired = || ApiError::bad("this registration expired: start again");
+    let c = forgust_db::webauthn::take_ceremony(&state.db, &crypto::token_hash(&req.ceremony))
+        .await?
+        .filter(|c| c.user_id == Some(u.id) && c.session_id == Some(session_id))
+        .ok_or_else(expired)?;
+    let kind = CredentialKind::of_registration(&c.kind).ok_or_else(expired)?;
+    let refused = |e: webauthn_rs::prelude::WebauthnError| {
+        use webauthn_rs::prelude::WebauthnError as E;
+        // webauthn-rs 0.6.2 reports a credential of the exclude list (one this
+        // account has already) as CredentialAlteredAlgFromRequest
+        if matches!(e, E::CredentialAlteredAlgFromRequest | E::CredentialExcludedFromRequest | E::CredentialAlreadyExists) {
+            return ApiError::conflict("this authenticator is already registered");
+        }
+        tracing::info!(user = u.id, error = %e, "a WebAuthn registration was refused");
+        ApiError::bad("the authenticator's answer was not accepted: try again")
+    };
+    let (credential_id, credential) = match kind {
+        CredentialKind::Passkey => {
+            // the browser says the authenticator could not keep it: it would never
+            // be offered at sign-in (an unsigned hint, only to spare the user)
+            if req.credential.extensions.cred_props.as_ref().and_then(|c| c.rk) == Some(false) {
+                return Err(ApiError::bad("this authenticator cannot keep a passkey: add it as a security key instead"));
+            }
+            let key = rp.finish_passkey_registration(&req.credential, &webauthn::from_json(c.state)?).map_err(refused)?;
+            (key.cred_id().to_vec(), webauthn::to_json(&key)?)
+        }
+        CredentialKind::SecurityKey => {
+            let key = rp.finish_securitykey_registration(&req.credential, &webauthn::from_json(c.state)?).map_err(refused)?;
+            (key.cred_id().to_vec(), webauthn::to_json(&key)?)
+        }
+    };
+    let mut tx = state.db.begin().await?;
+    let credential = forgust_db::webauthn::insert(&mut tx, u.id, kind, &credential_id, &credential, &name, &rp.id).await.map_err(|e| {
+        if forgust_db::is_unique_violation(&e) { ApiError::conflict("this authenticator is already registered") } else { e.into() }
+    })?;
+    let recovery_codes = if kind == CredentialKind::SecurityKey { session::first_recovery_codes(&mut tx, u.id).await? } else { Vec::new() };
+    let after = forgust_db::users::find(&mut *tx, u.id).await?.ok_or(ApiError::NotFound)?;
+    tx.commit().await?;
+    services::audit(
+        &state,
+        &p,
+        "webauthn_registered",
+        Some(("user", u.id)),
+        json!({ "kind": kind, "name": name, "credential": credential.id }),
+        None,
+    )
+    .await;
+    webauthn_notice(&state, &u, kind, "added", &name).await;
+    Ok(Json(WebauthnRegistered { credential, user: UserDto::from(&after, true), recovery_codes }))
+}
+
+/// The account's inbox hears of every change to its ways in.
+async fn webauthn_notice(state: &AppState, u: &forgust_db::users::User, kind: CredentialKind, done: &str, name: &str) {
+    let label = kind.label();
+    services::notify::send_to(
+        state,
+        &u.email,
+        &format!("A {label} was {done}"),
+        &format!(
+            "Hello {},\n\nThe {label} “{name}” was {done} on your Forgust account.\n\nIf it was not you, change your password now and check Profile > Security.\n",
+            u.username
+        ),
+    )
+    .await;
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct WebauthnRename {
+    pub name: String,
+}
+
+pub async fn webauthn_rename(
+    State(state): State<AppState>,
+    SignedIn(u, p): SignedIn,
+    Path(id): Path<i64>,
+    Json(req): Json<WebauthnRename>,
+) -> ApiResult<Json<Value>> {
+    require_interactive(&u, &p)?;
+    let name = credential_name(&req.name)?;
+    if !forgust_db::webauthn::rename(&state.db, u.id, id, &name).await? {
+        return Err(ApiError::NotFound);
+    }
+    services::audit(&state, &p, "webauthn_renamed", Some(("user", u.id)), json!({ "credential": id, "name": name }), None).await;
+    Ok(Json(json!({ "ok": true })))
+}
+
+/// Remove a security key or a passkey (the password again). With the last
+/// second factor go the recovery codes.
+pub async fn webauthn_remove(
+    State(state): State<AppState>,
+    SignedIn(u, p): SignedIn,
+    jar: axum_extra::extract::CookieJar,
+    Path(id): Path<i64>,
+    Json(req): Json<ConfirmPassword>,
+) -> ApiResult<Json<UserDto>> {
+    require_interactive(&u, &p)?;
+    reauth(&state, &jar, u.id, &req.password).await?;
+    let mut tx = state.db.begin().await?;
+    let (kind, name) = forgust_db::webauthn::delete(&mut tx, u.id, id).await?.ok_or(ApiError::NotFound)?;
+    let after = forgust_db::users::find(&mut *tx, u.id).await?.ok_or(ApiError::NotFound)?;
+    tx.commit().await?;
+    services::audit(&state, &p, "webauthn_removed", Some(("user", u.id)), json!({ "kind": kind, "name": name, "credential": id }), None)
+        .await;
+    webauthn_notice(&state, &u, kind, "removed", &name).await;
+    Ok(Json(UserDto::from(&after, true)))
 }
 
 // ------------------------------------------------------------------ lists

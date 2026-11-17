@@ -719,8 +719,9 @@ pub async fn delete_user(
     Ok(Json(json!({ "deleted": u.username, "projects_deleted": projects.len() })))
 }
 
-/// Turn two-factor authentication off (a lost authenticator), recovery codes
-/// included, and end their sessions; they sign in and set it up again.
+/// Turn two-factor authentication off (a lost authenticator or security key):
+/// the app, the recovery codes, security keys and passkeys go, and their
+/// sessions end. They sign in with their password and set it up again.
 pub async fn reset_two_factor(
     State(state): State<AppState>,
     Admin(me, p): Admin,
@@ -728,7 +729,8 @@ pub async fn reset_two_factor(
 ) -> ApiResult<Json<serde_json::Value>> {
     let u = person(&state, id).await?;
     let mut tx = state.db.begin().await?;
-    forgust_db::users::disable_two_factor(&mut tx, u.id).await?;
+    // security keys and passkeys too: whatever was lost may be among them
+    forgust_db::users::clear_second_factors(&mut tx, u.id).await?;
     // whoever holds a session of theirs (the lost device) is signed out too
     if u.id != me.id {
         forgust_db::sessions::delete_for_user(&mut *tx, u.id).await?;

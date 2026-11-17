@@ -97,6 +97,11 @@ volumes: { forgust-data: {}, db-data: {} }
   (`docker compose logs forgust | grep setup`).
 - **Configuration:** every key in [`forgust.example.toml`](forgust.example.toml) can
   be set as `FORGUST_<SECTION>__<KEY>`; OIDC providers go in `[oidc.<name>]`.
+- **Security keys and passkeys** are bound to the host of `server.external_url`, which
+  must be served over https (or be `localhost`); they are off otherwise. On a move to
+  another host they stop working: people sign in with their password and a recovery
+  code (or an administrator resets their two-factor authentication), then add them
+  again. See [SECURITY.md](SECURITY.md#signing-in).
 - **Backups:** `forgust backup --output DIR` and `forgust restore --input DIR` cover
   the database and the repositories. Also keep `/var/lib/forgust/secret.key`, the
   SSH host key next to it, and the S3 bucket if you use one.
@@ -136,8 +141,8 @@ volumes: { forgust-data: {}, db-data: {} }
 ### 🔐 Security
 - Built-in scanners (code, secrets, dependencies, containers, infrastructure as code)
   with a Security tab, merge request checks and alerts
-- OIDC sign-in, two-factor authentication with recovery codes, personal, project and
-  deploy tokens
+- OIDC sign-in, passkeys, two-factor authentication (an authenticator app or security
+  keys, with recovery codes), personal, project and deploy tokens
 - Strict CSP, an image proxy for Markdown images, rate limits
 
 ### 🛠️ Administration
@@ -173,8 +178,7 @@ against 300 ms).
 
 Forgust is young (0.1) and built for private teams first. Not there yet: forks and
 merge requests from forks, wikis, snippets, package registries, push and pull
-mirroring, issue boards, confidential issues, system hooks, and WebAuthn, SAML or
-LDAP sign-in. Code search covers each project's default branch, not other branches
+mirroring, issue boards, confidential issues, system hooks, and SAML or LDAP sign-in. Code search covers each project's default branch, not other branches
 or tags.
 
 ## Tech Stack

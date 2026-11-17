@@ -3,6 +3,8 @@
 
 [server]
 listen = "0.0.0.0:8080"
+# what browsers type; its host is the relying party for security keys and passkeys
+# (over https, or on localhost: off otherwise; changing the host invalidates them)
 external_url = "http://localhost:8080"
 ssh_listen = "0.0.0.0:2222"
 ssh_external = "localhost:2222"

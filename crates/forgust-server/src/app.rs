@@ -96,6 +96,13 @@ pub async fn build_state(
     let images = cfg.security.image_proxy.then(|| crate::render::ImageProxy::new(secrets.clone(), &cfg.server.external_url));
     let oidc = OidcClients::new(cfg.oidc.clone())?;
     let storage = storage_for(&cfg);
+    let webauthn = match crate::auth::webauthn::build(&cfg) {
+        Ok(w) => Some(Arc::new(w)),
+        Err(why) => {
+            tracing::warn!("security keys and passkeys are off: {why}");
+            None
+        }
+    };
     let code_index =
         if cfg.code_search.enabled { Some(Arc::new(crate::code_search::CodeIndex::open(&cfg.code_index_dir())?)) } else { None };
     let mailer: Arc<dyn crate::services::notify::Mailer> = if !cfg.email.enabled() {
@@ -120,6 +127,7 @@ pub async fn build_state(
         code_index,
         images,
         oidc,
+        webauthn,
         mailer,
         setup_token: Mutex::new(None),
         login_limiter: RateLimiter::new(10, Duration::from_secs(60)),

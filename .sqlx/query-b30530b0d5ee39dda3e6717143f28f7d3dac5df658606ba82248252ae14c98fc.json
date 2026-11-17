@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, username, email, name, user_type, is_admin, is_external, state, namespace_id, totp_enabled, created_at,\n                  email_verified_at, unconfirmed_email, avatar_at\n         FROM users\n         WHERE ($1 = '' OR username ILIKE '%' || $1 || '%' OR name ILIKE '%' || $1 || '%' OR ($5 AND email ILIKE '%' || $1 || '%'))\n           AND ($2 OR user_type = 'human')\n         ORDER BY username LIMIT $3 OFFSET $4",
+  "query": "SELECT id, username, email, name, user_type, is_admin, is_external, state, namespace_id, totp_enabled, security_keys_enabled, created_at,\n                  email_verified_at, unconfirmed_email, avatar_at\n         FROM users WHERE lower(username) = lower($1) OR lower(email) = lower($1)\n         ORDER BY (lower(username) = lower($1)) DESC LIMIT 1",
   "describe": {
     "columns": [
       {
@@ -115,6 +115,17 @@
       },
       {
         "ordinal": 10,
+        "name": "security_keys_enabled",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "security_keys_enabled"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
         "name": "created_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -125,7 +136,7 @@
         }
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "email_verified_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -136,7 +147,7 @@
         }
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "unconfirmed_email",
         "type_info": "Text",
         "origin": {
@@ -147,7 +158,7 @@
         }
       },
       {
-        "ordinal": 13,
+        "ordinal": 14,
         "name": "avatar_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -160,11 +171,7 @@
     ],
     "parameters": {
       "Left": [
-        "Text",
-        "Bool",
-        "Int8",
-        "Int8",
-        "Bool"
+        "Text"
       ]
     },
     "nullable": [
@@ -179,10 +186,11 @@
       true,
       false,
       false,
+      false,
       true,
       true,
       true
     ]
   },
-  "hash": "aca3fed76c4b229de119f73c18861f55de1c8a9470653c0f3bc5f88355c680e1"
+  "hash": "b30530b0d5ee39dda3e6717143f28f7d3dac5df658606ba82248252ae14c98fc"
 }

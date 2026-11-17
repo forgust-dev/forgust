@@ -1,4 +1,5 @@
 import { createHmac } from "node:crypto";
+import type { Browser, Page } from "@playwright/test";
 import { apiCall, expect, test } from "./fixtures";
 
 /** The current TOTP code for a base32 secret (RFC 6238: SHA-1, 30 s, 6 digits). */
@@ -26,17 +27,18 @@ test("two-factor: recovery codes are shown once and sign in once", async ({ page
     await me.goto("/login");
     await me.getByLabel("Username or email").fill(username);
     await me.getByLabel("Password").fill(pw);
-    await me.getByRole("button", { name: "Sign in" }).click();
+    await me.getByRole("button", { name: "Sign in", exact: true }).click();
   };
   try {
     await signIn();
     await expect.poll(() => me.evaluate(() => location.pathname)).not.toBe("/login");
     await me.goto("/profile/security");
     await me.getByRole("button", { name: "Set up 2FA" }).click();
-    const secret = (await me.locator("code").first().textContent())!.trim();
-    await me.getByLabel("Code").fill(totp(secret));
-    await me.getByLabel("Confirm with your password").fill(pw);
-    await me.getByRole("button", { name: "Enable" }).click();
+    const app = me.locator(".card", { hasText: "Authenticator app" });
+    const secret = (await app.locator("code").first().textContent())!.trim();
+    await app.getByLabel("Code").fill(totp(secret));
+    await app.getByLabel("Confirm with your password").fill(pw);
+    await app.getByRole("button", { name: "Enable" }).click();
 
     // the codes, this once
     await expect(me.getByText("Save your recovery codes")).toBeVisible();
@@ -67,5 +69,104 @@ test("two-factor: recovery codes are shown once and sign in once", async ({ page
   } finally {
     await ctx.close();
     await admin("delete", `/admin/users/${u.id}`);
+  }
+});
+
+/** A signed-in browser of a new account, and how to remove the account after. */
+async function newAccount(page: Page, browser: Browser, prefix: string) {
+  const admin = await apiCall(page);
+  const username = `${prefix}${Date.now()}`;
+  const pw = "a-long-test-password";
+  const u = await admin("post", "/admin/users", { username, email: `${username}@example.com`, password: pw });
+  const ctx = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+  const me = await ctx.newPage();
+  const signIn = async () => {
+    await me.goto("/login");
+    await me.getByLabel("Username or email").fill(username);
+    await me.getByLabel("Password").fill(pw);
+    await me.getByRole("button", { name: "Sign in", exact: true }).click();
+  };
+  const done = async () => {
+    await ctx.close();
+    await admin("delete", `/admin/users/${u.id}`);
+  };
+  return { me, ctx, username, pw, signIn, done };
+}
+
+/** Chromium's virtual authenticator (WebAuthn over CDP), in this page. */
+async function virtualAuthenticator(me: Page, passkey: boolean) {
+  const cdp = await me.context().newCDPSession(me);
+  await cdp.send("WebAuthn.enable");
+  const { authenticatorId } = await cdp.send("WebAuthn.addVirtualAuthenticator", {
+    options: { protocol: "ctap2", transport: passkey ? "internal" : "usb", hasResidentKey: passkey, hasUserVerification: true, isUserVerified: true, automaticPresenceSimulation: true },
+  });
+  return { cdp, authenticatorId };
+}
+
+const webauthnAvailable = async (page: Page) => (await (await page.request.get("/api/v1/setup")).json()).webauthn as boolean;
+
+test("security key: a second factor after the password", async ({ page, browser }) => {
+  test.skip(!(await webauthnAvailable(page)), "WebAuthn needs the server at https or localhost");
+  const { me, pw, signIn, done } = await newAccount(page, browser, "key");
+  try {
+    await virtualAuthenticator(me, false);
+    await signIn();
+    await expect.poll(() => me.evaluate(() => location.pathname)).not.toBe("/login");
+    await me.goto("/profile/security");
+    const keys = me.locator(".card", { hasText: "Security keys" });
+    await keys.getByLabel("Name").fill("Virtual key");
+    await keys.getByLabel("Confirm with your password").fill(pw);
+    await keys.getByRole("button", { name: "Add a security key" }).click();
+    await expect(keys.getByText("Security key added.")).toBeVisible();
+    await expect(keys.getByText("Virtual key")).toBeVisible();
+    // the first second factor: recovery codes, this once
+    await expect(me.getByText("Save your recovery codes")).toBeVisible();
+    await me.getByRole("button", { name: "I saved them" }).click();
+    await expect(me.getByRole("heading", { name: /^Two-factor authentication/ })).toContainText("enabled");
+
+    // the password, then the key
+    await me.context().clearCookies();
+    await signIn();
+    await me.getByRole("button", { name: "Use your security key" }).click();
+    await expect.poll(() => me.evaluate(() => location.pathname)).not.toBe("/login");
+
+    // removed (the password again): two-factor is off
+    await me.goto("/profile/security");
+    await keys.getByRole("button", { name: "Remove…" }).click();
+    await keys.getByLabel("Your password", { exact: true }).fill(pw);
+    await keys.getByRole("button", { name: "Remove", exact: true }).click();
+    await expect(keys.getByText("Virtual key removed.")).toBeVisible();
+    await expect(me.getByRole("heading", { name: /^Two-factor authentication/ })).toContainText("off");
+  } finally {
+    await done();
+  }
+});
+
+test("passkey: sign in without a password", async ({ page, browser }) => {
+  test.skip(!(await webauthnAvailable(page)), "WebAuthn needs the server at https or localhost");
+  const { me, username, pw, signIn, done } = await newAccount(page, browser, "pk");
+  try {
+    await virtualAuthenticator(me, true);
+    await signIn();
+    await expect.poll(() => me.evaluate(() => location.pathname)).not.toBe("/login");
+    await me.goto("/profile/security");
+    const passkeys = me.locator(".card", { hasText: "Your passkeys" });
+    await passkeys.getByLabel("Name").fill("This laptop");
+    await passkeys.getByLabel("Confirm with your password").fill(pw);
+    await passkeys.getByRole("button", { name: "Add a passkey" }).click();
+    await expect(passkeys.getByText("Passkey added.")).toBeVisible();
+    await expect(passkeys.getByText("never used")).toBeVisible();
+
+    // signed out: no username, no password
+    await me.context().clearCookies();
+    await me.goto("/login");
+    await me.getByRole("button", { name: "Sign in with a passkey" }).click();
+    await expect.poll(() => me.evaluate(() => location.pathname)).not.toBe("/login");
+    const who = await (await me.request.get("/api/v1/user")).json();
+    expect(who.username).toBe(username);
+    await me.goto("/profile/security");
+    await expect(passkeys.getByText(/last used/)).toBeVisible();
+  } finally {
+    await done();
   }
 });

@@ -1,10 +1,43 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, username, email, name, user_type, is_admin, is_external, state, namespace_id, totp_enabled, created_at,\n                  email_verified_at, unconfirmed_email, avatar_at\n         FROM users WHERE id = $1",
+  "query": "SELECT t.id AS tid, t.project_id, t.user_id, u.id, u.username, u.email, u.name, u.user_type, u.is_admin, u.is_external, u.state,\n                  u.namespace_id, u.totp_enabled, u.security_keys_enabled, u.created_at, u.email_verified_at, u.unconfirmed_email, u.avatar_at\n             FROM ci_job_tokens t JOIN users u ON u.id = t.user_id\n            WHERE t.token_hash = $1 AND t.expires_at > now()",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
+        "name": "tid",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_job_tokens",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "project_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_job_tokens",
+            "name": "project_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_job_tokens",
+            "name": "user_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
         "name": "id",
         "type_info": "Int8",
         "origin": {
@@ -15,7 +48,7 @@
         }
       },
       {
-        "ordinal": 1,
+        "ordinal": 4,
         "name": "username",
         "type_info": "Text",
         "origin": {
@@ -26,7 +59,7 @@
         }
       },
       {
-        "ordinal": 2,
+        "ordinal": 5,
         "name": "email",
         "type_info": "Text",
         "origin": {
@@ -37,7 +70,7 @@
         }
       },
       {
-        "ordinal": 3,
+        "ordinal": 6,
         "name": "name",
         "type_info": "Text",
         "origin": {
@@ -48,7 +81,7 @@
         }
       },
       {
-        "ordinal": 4,
+        "ordinal": 7,
         "name": "user_type",
         "type_info": "Text",
         "origin": {
@@ -59,7 +92,7 @@
         }
       },
       {
-        "ordinal": 5,
+        "ordinal": 8,
         "name": "is_admin",
         "type_info": "Bool",
         "origin": {
@@ -70,7 +103,7 @@
         }
       },
       {
-        "ordinal": 6,
+        "ordinal": 9,
         "name": "is_external",
         "type_info": "Bool",
         "origin": {
@@ -81,7 +114,7 @@
         }
       },
       {
-        "ordinal": 7,
+        "ordinal": 10,
         "name": "state",
         "type_info": "Text",
         "origin": {
@@ -92,7 +125,7 @@
         }
       },
       {
-        "ordinal": 8,
+        "ordinal": 11,
         "name": "namespace_id",
         "type_info": "Int8",
         "origin": {
@@ -103,7 +136,7 @@
         }
       },
       {
-        "ordinal": 9,
+        "ordinal": 12,
         "name": "totp_enabled",
         "type_info": "Bool",
         "origin": {
@@ -114,7 +147,18 @@
         }
       },
       {
-        "ordinal": 10,
+        "ordinal": 13,
+        "name": "security_keys_enabled",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "security_keys_enabled"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
         "name": "created_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -125,7 +169,7 @@
         }
       },
       {
-        "ordinal": 11,
+        "ordinal": 15,
         "name": "email_verified_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -136,7 +180,7 @@
         }
       },
       {
-        "ordinal": 12,
+        "ordinal": 16,
         "name": "unconfirmed_email",
         "type_info": "Text",
         "origin": {
@@ -147,7 +191,7 @@
         }
       },
       {
-        "ordinal": 13,
+        "ordinal": 17,
         "name": "avatar_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -160,7 +204,7 @@
     ],
     "parameters": {
       "Left": [
-        "Int8"
+        "Bytea"
       ]
     },
     "nullable": [
@@ -172,7 +216,11 @@
       false,
       false,
       false,
+      false,
+      false,
+      false,
       true,
+      false,
       false,
       false,
       true,
@@ -180,5 +228,5 @@
       true
     ]
   },
-  "hash": "f3af112ce4d323c4daf0c236b5ecc8de060b4c1204d916e5e37336aaf31f094a"
+  "hash": "7cf172cc32d0b4c1e3d6b842ad566a5953803a7bf59198c68e3bcec641fb15be"
 }

@@ -297,6 +297,36 @@
         }
       }
     },
+    "/api/v1/auth/login/second_factor": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "What can finish a sign-in whose password (or provider) was accepted.",
+        "operationId": "second_factors",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PendingLogin"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecondFactors"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/login/totp": {
       "post": {
         "tags": [
@@ -319,6 +349,116 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login/webauthn": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "The second step with a security key, on what `/auth/login/webauthn/start` asked it to sign.",
+        "operationId": "login_webauthn",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebauthnLogin"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login/webauthn/start": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Ask the account's security keys to sign for a pending sign-in (asking\nagain replaces the question); the answer goes to `/auth/login/webauthn`.",
+        "operationId": "security_key_start",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PendingLogin"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebauthnChallenge"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/passkey/finish": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Sign in with a passkey. It verified its user (PIN, biometrics): no password\nand no second factor are asked. Every refusal looks the same.",
+        "operationId": "passkey_finish",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeyFinish"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/passkey/start": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Start a sign-in with a passkey: no username, the authenticator offers the\npasskeys it holds for this site.",
+        "operationId": "passkey_start",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyStart"
                 }
               }
             }
@@ -6929,6 +7069,47 @@
           }
         }
       },
+      "CredentialInfo": {
+        "type": "object",
+        "description": "A credential as its owner sees it (no key material).",
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/CredentialKind"
+          },
+          "last_used_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "CredentialKind": {
+        "type": "string",
+        "description": "What a credential is for: a second factor after the password, or a\nsign-in of its own.",
+        "enum": [
+          "security_key",
+          "passkey"
+        ]
+      },
       "Day": {
         "type": "object",
         "required": [
@@ -11348,6 +11529,39 @@
           }
         }
       },
+      "PasskeyFinish": {
+        "type": "object",
+        "required": [
+          "ceremony",
+          "credential"
+        ],
+        "properties": {
+          "ceremony": {
+            "type": "string"
+          },
+          "credential": {
+            "type": "object",
+            "description": "What `navigator.credentials.get` returned (`PublicKeyCredential`, as JSON)."
+          }
+        }
+      },
+      "PasskeyStart": {
+        "type": "object",
+        "required": [
+          "ceremony",
+          "options"
+        ],
+        "properties": {
+          "ceremony": {
+            "type": "string",
+            "description": "Send back with the answer."
+          },
+          "options": {
+            "type": "object",
+            "description": "Options for `navigator.credentials.get` (WebAuthn)."
+          }
+        }
+      },
       "PathCommit": {
         "type": "object",
         "required": [
@@ -11366,6 +11580,17 @@
             ]
           },
           "path": {
+            "type": "string"
+          }
+        }
+      },
+      "PendingLogin": {
+        "type": "object",
+        "required": [
+          "challenge"
+        ],
+        "properties": {
+          "challenge": {
             "type": "string"
           }
         }
@@ -13632,6 +13857,29 @@
           }
         }
       },
+      "SecondFactors": {
+        "type": "object",
+        "description": "The second factors a pending sign-in can be finished with.",
+        "required": [
+          "totp",
+          "security_key",
+          "recovery_code"
+        ],
+        "properties": {
+          "recovery_code": {
+            "type": "boolean",
+            "description": "A recovery code (some are left)."
+          },
+          "security_key": {
+            "type": "boolean",
+            "description": "A security key: `/auth/login/webauthn/start`, then `/auth/login/webauthn`."
+          },
+          "totp": {
+            "type": "boolean",
+            "description": "A code from the authenticator app."
+          }
+        }
+      },
       "SectionReport": {
         "type": "object",
         "required": [
@@ -13902,7 +14150,8 @@
         "type": "object",
         "required": [
           "needs_setup",
-          "email_enabled"
+          "email_enabled",
+          "webauthn"
         ],
         "properties": {
           "email_enabled": {
@@ -13911,6 +14160,10 @@
           },
           "needs_setup": {
             "type": "boolean"
+          },
+          "webauthn": {
+            "type": "boolean",
+            "description": "Security keys and passkeys work here (served over https): the sign-in\npage offers passkeys."
           }
         }
       },
@@ -14778,7 +15031,7 @@
             "items": {
               "type": "string"
             },
-            "description": "Shown this once: each stands in for the authenticator at sign-in, once."
+            "description": "Shown this once: each stands in for the authenticator at sign-in, once.\nEmpty when the account already had codes (from its security keys)."
           },
           "user": {
             "$ref": "#/components/schemas/UserDto"
@@ -15375,6 +15628,13 @@
             ],
             "description": "`active` or `blocked`; only to the user themselves and to admins."
           },
+          "totp_enabled": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Of the second factors, an authenticator app (the others: security keys)."
+          },
           "two_factor_enabled": {
             "type": [
               "boolean",
@@ -15532,6 +15792,141 @@
           "scope": {
             "type": "string",
             "description": "`project` or `namespace`"
+          }
+        }
+      },
+      "WebauthnChallenge": {
+        "type": "object",
+        "required": [
+          "options"
+        ],
+        "properties": {
+          "options": {
+            "type": "object",
+            "description": "Options for `navigator.credentials.get` (WebAuthn)."
+          }
+        }
+      },
+      "WebauthnCredentials": {
+        "type": "object",
+        "required": [
+          "available",
+          "credentials"
+        ],
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "description": "Security keys and passkeys work on this instance (served over https)."
+          },
+          "credentials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CredentialInfo"
+            }
+          }
+        }
+      },
+      "WebauthnLogin": {
+        "type": "object",
+        "required": [
+          "challenge",
+          "credential"
+        ],
+        "properties": {
+          "challenge": {
+            "type": "string"
+          },
+          "credential": {
+            "type": "object",
+            "description": "What `navigator.credentials.get` returned (`PublicKeyCredential`, as JSON)."
+          }
+        }
+      },
+      "WebauthnRegisterFinish": {
+        "type": "object",
+        "required": [
+          "ceremony",
+          "name",
+          "credential"
+        ],
+        "properties": {
+          "ceremony": {
+            "type": "string"
+          },
+          "credential": {
+            "type": "object",
+            "description": "What `navigator.credentials.create` returned (`PublicKeyCredential`, as JSON)."
+          },
+          "name": {
+            "type": "string",
+            "description": "How the owner tells it apart (\"YubiKey 5C\", \"Phone\")."
+          }
+        }
+      },
+      "WebauthnRegisterStart": {
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/CredentialKind",
+            "description": "A second factor, or a sign-in of its own."
+          },
+          "password": {
+            "type": "string",
+            "description": "The account's password: a borrowed session must not be able to add its\nown way in."
+          }
+        }
+      },
+      "WebauthnRegistered": {
+        "type": "object",
+        "required": [
+          "credential",
+          "user",
+          "recovery_codes"
+        ],
+        "properties": {
+          "credential": {
+            "$ref": "#/components/schemas/CredentialInfo"
+          },
+          "recovery_codes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The account's first second factor: its recovery codes, shown this once\n(empty otherwise)."
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserDto"
+          }
+        }
+      },
+      "WebauthnRegistration": {
+        "type": "object",
+        "required": [
+          "ceremony",
+          "options"
+        ],
+        "properties": {
+          "ceremony": {
+            "type": "string",
+            "description": "Send back with the new credential."
+          },
+          "options": {
+            "type": "object",
+            "description": "Options for `navigator.credentials.create` (WebAuthn)."
+          }
+        }
+      },
+      "WebauthnRename": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
           }
         }
       },

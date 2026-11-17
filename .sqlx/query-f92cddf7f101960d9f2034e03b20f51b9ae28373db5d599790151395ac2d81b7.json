@@ -1,15 +1,15 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT t.id AS tid, t.user_id, t.name AS token_name, t.scopes, t.expires_at, t.revoked, t.last_used_at, t.created_at AS token_created_at,\n                  t.mcp_used_at, u.id, u.username, u.email, u.name, u.user_type, u.is_admin, u.is_external, u.state, u.namespace_id,\n                  u.totp_enabled, u.created_at, u.email_verified_at, u.unconfirmed_email, u.avatar_at\n             FROM personal_access_tokens t JOIN users u ON u.id = t.user_id\n            WHERE t.token_hash = $1 AND NOT t.revoked AND (t.expires_at IS NULL OR t.expires_at > now())",
+  "query": "SELECT s.id AS sid, s.user_id, s.csrf_token, s.expires_at, s.last_seen_at, s.impersonator_id,\n                  u.id, u.username, u.email, u.name, u.user_type, u.is_admin, u.is_external, u.state, u.namespace_id, u.totp_enabled, u.security_keys_enabled,\n                  u.created_at, u.email_verified_at, u.unconfirmed_email, u.avatar_at\n             FROM sessions s JOIN users u ON u.id = s.user_id\n            WHERE s.token_hash = $1 AND s.expires_at > now()",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "tid",
+        "name": "sid",
         "type_info": "Int8",
         "origin": {
           "Table": {
-            "table": "personal_access_tokens",
+            "table": "sessions",
             "name": "id"
           }
         }
@@ -20,90 +20,57 @@
         "type_info": "Int8",
         "origin": {
           "Table": {
-            "table": "personal_access_tokens",
+            "table": "sessions",
             "name": "user_id"
           }
         }
       },
       {
         "ordinal": 2,
-        "name": "token_name",
+        "name": "csrf_token",
         "type_info": "Text",
         "origin": {
           "Table": {
-            "table": "personal_access_tokens",
-            "name": "name"
+            "table": "sessions",
+            "name": "csrf_token"
           }
         }
       },
       {
         "ordinal": 3,
-        "name": "scopes",
-        "type_info": "TextArray",
-        "origin": {
-          "Table": {
-            "table": "personal_access_tokens",
-            "name": "scopes"
-          }
-        }
-      },
-      {
-        "ordinal": 4,
         "name": "expires_at",
         "type_info": "Timestamptz",
         "origin": {
           "Table": {
-            "table": "personal_access_tokens",
+            "table": "sessions",
             "name": "expires_at"
           }
         }
       },
       {
-        "ordinal": 5,
-        "name": "revoked",
-        "type_info": "Bool",
+        "ordinal": 4,
+        "name": "last_seen_at",
+        "type_info": "Timestamptz",
         "origin": {
           "Table": {
-            "table": "personal_access_tokens",
-            "name": "revoked"
+            "table": "sessions",
+            "name": "last_seen_at"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "impersonator_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "sessions",
+            "name": "impersonator_id"
           }
         }
       },
       {
         "ordinal": 6,
-        "name": "last_used_at",
-        "type_info": "Timestamptz",
-        "origin": {
-          "Table": {
-            "table": "personal_access_tokens",
-            "name": "last_used_at"
-          }
-        }
-      },
-      {
-        "ordinal": 7,
-        "name": "token_created_at",
-        "type_info": "Timestamptz",
-        "origin": {
-          "Table": {
-            "table": "personal_access_tokens",
-            "name": "created_at"
-          }
-        }
-      },
-      {
-        "ordinal": 8,
-        "name": "mcp_used_at",
-        "type_info": "Timestamptz",
-        "origin": {
-          "Table": {
-            "table": "personal_access_tokens",
-            "name": "mcp_used_at"
-          }
-        }
-      },
-      {
-        "ordinal": 9,
         "name": "id",
         "type_info": "Int8",
         "origin": {
@@ -114,7 +81,7 @@
         }
       },
       {
-        "ordinal": 10,
+        "ordinal": 7,
         "name": "username",
         "type_info": "Text",
         "origin": {
@@ -125,7 +92,7 @@
         }
       },
       {
-        "ordinal": 11,
+        "ordinal": 8,
         "name": "email",
         "type_info": "Text",
         "origin": {
@@ -136,7 +103,7 @@
         }
       },
       {
-        "ordinal": 12,
+        "ordinal": 9,
         "name": "name",
         "type_info": "Text",
         "origin": {
@@ -147,7 +114,7 @@
         }
       },
       {
-        "ordinal": 13,
+        "ordinal": 10,
         "name": "user_type",
         "type_info": "Text",
         "origin": {
@@ -158,7 +125,7 @@
         }
       },
       {
-        "ordinal": 14,
+        "ordinal": 11,
         "name": "is_admin",
         "type_info": "Bool",
         "origin": {
@@ -169,7 +136,7 @@
         }
       },
       {
-        "ordinal": 15,
+        "ordinal": 12,
         "name": "is_external",
         "type_info": "Bool",
         "origin": {
@@ -180,7 +147,7 @@
         }
       },
       {
-        "ordinal": 16,
+        "ordinal": 13,
         "name": "state",
         "type_info": "Text",
         "origin": {
@@ -191,7 +158,7 @@
         }
       },
       {
-        "ordinal": 17,
+        "ordinal": 14,
         "name": "namespace_id",
         "type_info": "Int8",
         "origin": {
@@ -202,7 +169,7 @@
         }
       },
       {
-        "ordinal": 18,
+        "ordinal": 15,
         "name": "totp_enabled",
         "type_info": "Bool",
         "origin": {
@@ -213,7 +180,18 @@
         }
       },
       {
-        "ordinal": 19,
+        "ordinal": 16,
+        "name": "security_keys_enabled",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "security_keys_enabled"
+          }
+        }
+      },
+      {
+        "ordinal": 17,
         "name": "created_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -224,7 +202,7 @@
         }
       },
       {
-        "ordinal": 20,
+        "ordinal": 18,
         "name": "email_verified_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -235,7 +213,7 @@
         }
       },
       {
-        "ordinal": 21,
+        "ordinal": 19,
         "name": "unconfirmed_email",
         "type_info": "Text",
         "origin": {
@@ -246,7 +224,7 @@
         }
       },
       {
-        "ordinal": 22,
+        "ordinal": 20,
         "name": "avatar_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -267,9 +245,6 @@
       false,
       false,
       false,
-      true,
-      false,
-      true,
       false,
       true,
       false,
@@ -281,6 +256,7 @@
       false,
       false,
       true,
+      false,
       false,
       false,
       true,
@@ -288,5 +264,5 @@
       true
     ]
   },
-  "hash": "05ea771fa5de9fc6d28b39ad4d0e82fe766d4ce5296d1e65b7d93f5bed3d2f23"
+  "hash": "f92cddf7f101960d9f2034e03b20f51b9ae28373db5d599790151395ac2d81b7"
 }

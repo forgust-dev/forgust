@@ -66,6 +66,7 @@ pub async fn delete_expired(pool: &sqlx::PgPool) -> Result<u64> {
     let mut n = sqlx::query!("DELETE FROM sessions WHERE expires_at < now()").execute(pool).await?.rows_affected();
     n += sqlx::query!("DELETE FROM login_challenges WHERE expires_at < now()").execute(pool).await?.rows_affected();
     n += sqlx::query!("DELETE FROM oidc_states WHERE expires_at < now()").execute(pool).await?.rows_affected();
+    n += sqlx::query!("DELETE FROM webauthn_ceremonies WHERE expires_at < now()").execute(pool).await?.rows_affected();
     n += sqlx::query!("DELETE FROM lfs_ssh_tokens WHERE expires_at < now()").execute(pool).await?.rows_affected();
     Ok(n)
 }
@@ -94,14 +95,35 @@ pub async fn create_challenge(
 /// Take a pending second-factor challenge for checking, locked until `c`'s
 /// transaction ends: two answers sent at once are checked one after the other,
 /// and the second finds the challenge gone once the first succeeded.
-pub async fn lock_challenge(c: &mut sqlx::PgConnection, token_hash: &[u8]) -> Result<Option<(i64, Option<serde_json::Value>)>> {
-    let r = sqlx::query!(
-        "SELECT user_id, provider_sync FROM login_challenges WHERE token_hash = $1 AND expires_at > now() FOR UPDATE",
+pub async fn lock_challenge(c: &mut sqlx::PgConnection, token_hash: &[u8]) -> Result<Option<Challenge>> {
+    sqlx::query_as!(
+        Challenge,
+        "SELECT user_id, provider_sync, webauthn_state FROM login_challenges WHERE token_hash = $1 AND expires_at > now() FOR UPDATE",
         token_hash
     )
     .fetch_optional(&mut *c)
-    .await?;
-    Ok(r.map(|r| (r.user_id, r.provider_sync)))
+    .await
+}
+
+/// A sign-in waiting for its second factor.
+pub struct Challenge {
+    pub user_id: i64,
+    /// What its provider sign-in said about the account, to apply once complete.
+    pub provider_sync: Option<serde_json::Value>,
+    /// What a security key was asked to sign for it, if one was.
+    pub webauthn_state: Option<serde_json::Value>,
+}
+
+/// Whose pending sign-in this is (without taking it).
+pub async fn challenge_user(e: impl PgExecutor<'_>, token_hash: &[u8]) -> Result<Option<i64>> {
+    sqlx::query_scalar!("SELECT user_id FROM login_challenges WHERE token_hash = $1 AND expires_at > now()", token_hash)
+        .fetch_optional(e)
+        .await
+}
+
+/// The session behind a cookie's token (its id), if live.
+pub async fn id_by_token(e: impl PgExecutor<'_>, token_hash: &[u8]) -> Result<Option<i64>> {
+    sqlx::query_scalar!("SELECT id FROM sessions WHERE token_hash = $1 AND expires_at > now()", token_hash).fetch_optional(e).await
 }
 
 pub async fn delete_challenge(e: impl PgExecutor<'_>, token_hash: &[u8]) -> Result<()> {
@@ -164,7 +186,7 @@ pub async fn signed_in_from(e: impl PgExecutor<'_>, user_id: i64, ip: &str) -> R
 pub async fn find_with_user(e: impl PgExecutor<'_>, token_hash: &[u8]) -> Result<Option<(SessionRow, crate::users::User)>> {
     let r = sqlx::query!(
         r#"SELECT s.id AS sid, s.user_id, s.csrf_token, s.expires_at, s.last_seen_at, s.impersonator_id,
-                  u.id, u.username, u.email, u.name, u.user_type, u.is_admin, u.is_external, u.state, u.namespace_id, u.totp_enabled,
+                  u.id, u.username, u.email, u.name, u.user_type, u.is_admin, u.is_external, u.state, u.namespace_id, u.totp_enabled, u.security_keys_enabled,
                   u.created_at, u.email_verified_at, u.unconfirmed_email, u.avatar_at
              FROM sessions s JOIN users u ON u.id = s.user_id
             WHERE s.token_hash = $1 AND s.expires_at > now()"#,
@@ -193,6 +215,7 @@ pub async fn find_with_user(e: impl PgExecutor<'_>, token_hash: &[u8]) -> Result
                 state: r.state,
                 namespace_id: r.namespace_id,
                 totp_enabled: r.totp_enabled,
+                security_keys_enabled: r.security_keys_enabled,
                 created_at: r.created_at,
                 email_verified_at: r.email_verified_at,
                 unconfirmed_email: r.unconfirmed_email,

@@ -418,6 +418,8 @@ async fn impersonation(pool: sqlx::PgPool) {
         (format!("/api/v1/projects/{project}/deploy_tokens"), json!({ "name": "d", "scopes": ["read_repository"] })),
         (format!("/api/v1/projects/{project}/access_tokens"), json!({ "name": "b", "access_level": "developer", "scopes": ["api"] })),
         (format!("/api/v1/projects/{project}/runners"), json!({ "description": "r" })),
+        ("/api/v1/user/webauthn/register/start".to_string(), json!({ "kind": "passkey", "password": "" })),
+        ("/api/v1/user/webauthn/1/remove".to_string(), json!({ "password": "" })),
     ] {
         let (st, b) = as_dave.post(&path, body).await;
         assert_eq!(st, 403, "POST {path} while impersonating: {b}");

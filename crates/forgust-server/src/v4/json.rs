@@ -38,7 +38,7 @@ pub fn me(cfg: &Config, u: &User) -> Value {
     o.insert("public_email".into(), json!(""));
     o.insert("is_admin".into(), json!(u.is_admin));
     o.insert("created_at".into(), json!(ts(&u.created_at)));
-    o.insert("two_factor_enabled".into(), json!(u.totp_enabled));
+    o.insert("two_factor_enabled".into(), json!(u.two_factor()));
     o.insert("external".into(), json!(u.is_external));
     v
 }

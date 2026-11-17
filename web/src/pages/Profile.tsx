@@ -8,6 +8,7 @@ import { ScopePicker, useCrudList } from "../components/Tokens";
 import { ResendLink } from "../components/ResendLink";
 import { AvatarUpload } from "../components/AvatarUpload";
 import { NotificationDefaults } from "../components/Notifications";
+import { cancelled, createCredential, webauthnSupported } from "../api/webauthn";
 
 export function Profile() {
   return (
@@ -386,8 +387,13 @@ function Security() {
   const [disablePw, setDisablePw] = useState("");
   // just made: shown this once
   const [codes, setCodes] = useState<string[] | null>(null);
-  const refresh = async () => setSession(await api.get<S["SessionInfo"]>("/session"));
+  const [codesPw, setCodesPw] = useState("");
   const queryClient = useQueryClient();
+  // the account changed: its session (2FA state) and its count of codes left
+  const refresh = async () => {
+    setSession(await api.get<S["SessionInfo"]>("/session"));
+    await queryClient.invalidateQueries({ queryKey: ["recovery_codes"] });
+  };
   const { run, msg, error } = useFormRun();
   return (
     <div className="settings-page">
@@ -413,77 +419,243 @@ function Security() {
           </div>
         </form>
       </Section>
-      <Section title={<>Two-factor authentication {user?.two_factor_enabled ? <Badge tone="ok">enabled</Badge> : <Badge>off</Badge>}</>} description="A code from an authenticator app, asked for after your password.">
-        {codes && <NewRecoveryCodes codes={codes} onDone={() => setCodes(null)} />}
-        {user?.two_factor_enabled ? (
-          <form
-            className="stack"
-            onSubmit={run(async () => {
-              await api.post("/user/two_factor/disable", { password: disablePw });
-              await refresh();
-            }, "Two-factor authentication disabled.")}
-          >
-            <Field label="Confirm with your password">
-              <input type="password" value={disablePw} onChange={(e) => setDisablePw(e.target.value)} />
-            </Field>
-            <div className="row">
-              <button
-                type="button"
-                className="btn"
-                onClick={run(async () => {
-                  const r = await api.post<S["NewRecoveryCodes"]>("/user/two_factor/recovery_codes", { password: disablePw });
-                  setCodes(r.recovery_codes);
+      <Section
+        title={<>Two-factor authentication {user?.two_factor_enabled ? <Badge tone="ok">enabled</Badge> : <Badge>off</Badge>}</>}
+        description="Asked for after your password: a code from an authenticator app, or a security key. Some organizations require it."
+      >
+        <div className="stack">
+          {codes && <NewRecoveryCodes codes={codes} onDone={() => setCodes(null)} />}
+          <Card title={<>Authenticator app {user?.totp_enabled && <Badge tone="ok">on</Badge>}</>}>
+            {user?.totp_enabled ? (
+              <form
+                className="stack"
+                onSubmit={run(async () => {
+                  await api.post("/user/two_factor/disable", { password: disablePw });
                   setDisablePw("");
+                  await refresh();
+                }, "Authenticator app turned off.")}
+              >
+                <Field label="Confirm with your password">
+                  <input type="password" autoComplete="current-password" value={disablePw} onChange={(e) => setDisablePw(e.target.value)} />
+                </Field>
+                <div>
+                  <button className="btn danger">Turn off the app</button>
+                </div>
+              </form>
+            ) : setup ? (
+              <form
+                className="stack"
+                onSubmit={run(async () => {
+                  const r = await api.post<S["TotpEnabled"]>("/user/two_factor/enable", { code, password: disablePw });
+                  if (r.recovery_codes.length) setCodes(r.recovery_codes);
+                  setSetup(null);
+                  setDisablePw("");
+                  await refresh();
+                }, "Two-factor authentication enabled.")}
+              >
+                <p style={{ margin: 0 }}>Add this key to your authenticator app, then enter the 6-digit code it shows.</p>
+                <code style={{ wordBreak: "break-all" }}>{setup.secret}</code>
+                <a href={setup.otpauth_url} className="small">
+                  Open in authenticator app
+                </a>
+                <Field label="Code">
+                  <input inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} />
+                </Field>
+                <Field label="Confirm with your password" hint="Accounts without a password (single sign-on): leave empty within 10 minutes of signing in">
+                  <input type="password" autoComplete="current-password" value={disablePw} onChange={(e) => setDisablePw(e.target.value)} />
+                </Field>
+                <div>
+                  <button className="btn primary">Enable</button>
+                </div>
+              </form>
+            ) : (
+              <div className="stack">
+                <p className="muted" style={{ margin: 0 }}>
+                  A time-based code from an app on your phone.
+                </p>
+                <div>
+                  <button className="btn primary" onClick={run(async () => setSetup(await api.post<S["TotpSetup"]>("/user/two_factor/setup")), "")}>
+                    Set up 2FA
+                  </button>
+                </div>
+              </div>
+            )}
+          </Card>
+          <WebauthnCard kind="security_key" onCodes={setCodes} onChange={refresh} />
+          {user?.two_factor_enabled && (
+            <Card title="Recovery codes">
+              <form
+                className="stack"
+                onSubmit={run(async () => {
+                  const r = await api.post<S["NewRecoveryCodes"]>("/user/two_factor/recovery_codes", { password: codesPw });
+                  setCodes(r.recovery_codes);
+                  setCodesPw("");
                   await queryClient.invalidateQueries({ queryKey: ["recovery_codes"] });
                 }, "")}
               >
-                New recovery codes
-              </button>
-              <button className="btn danger">Disable 2FA</button>
-            </div>
-            <RecoveryCodesLeft />
-          </form>
-        ) : setup ? (
-          <form
-            className="stack"
-            onSubmit={run(async () => {
-              const r = await api.post<S["TotpEnabled"]>("/user/two_factor/enable", { code, password: disablePw });
-              setCodes(r.recovery_codes);
-              await queryClient.invalidateQueries({ queryKey: ["recovery_codes"] });
-              setSetup(null);
-              setDisablePw("");
-              await refresh();
-            }, "Two-factor authentication enabled.")}
-          >
-            <p style={{ margin: 0 }}>Add this key to your authenticator app, then enter the 6-digit code it shows.</p>
-            <code style={{ wordBreak: "break-all" }}>{setup.secret}</code>
-            <a href={setup.otpauth_url} className="small">
-              Open in authenticator app
-            </a>
-            <Field label="Code">
-              <input inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} />
-            </Field>
-            <Field label="Confirm with your password" hint="Accounts without a password (single sign-on): leave empty within 10 minutes of signing in">
-              <input type="password" autoComplete="current-password" value={disablePw} onChange={(e) => setDisablePw(e.target.value)} />
-            </Field>
-            <div>
-              <button className="btn primary">Enable</button>
-            </div>
-          </form>
-        ) : (
-          <div className="stack">
-            <p className="muted" style={{ margin: 0 }}>
-              Protect your account with a time-based code. Some organizations require it.
-            </p>
-            <div>
-              <button className="btn primary" onClick={run(async () => setSetup(await api.post<S["TotpSetup"]>("/user/two_factor/setup")), "")}>
-                Set up 2FA
-              </button>
-            </div>
-          </div>
-        )}
+                <RecoveryCodesLeft />
+                <Field label="Confirm with your password">
+                  <input type="password" autoComplete="current-password" value={codesPw} onChange={(e) => setCodesPw(e.target.value)} />
+                </Field>
+                <div>
+                  <button className="btn">New recovery codes</button>
+                </div>
+              </form>
+            </Card>
+          )}
+        </div>
+      </Section>
+      <Section title="Passkeys" description="Sign in with your fingerprint, face or device PIN instead of your password. A passkey stays on your device or in your password manager.">
+        <WebauthnCard kind="passkey" onCodes={setCodes} onChange={refresh} />
       </Section>
       <SignInProviders />
+    </div>
+  );
+}
+
+type CredentialKind = S["CredentialKind"];
+
+/** What each kind is called, and how it is explained. */
+const KINDS: Record<CredentialKind, { label: string; title: string; empty: string; hint: string }> = {
+  security_key: {
+    label: "security key",
+    title: "Security keys",
+    empty: "No security keys yet. Add one: you touch it after your password.",
+    hint: "To tell your keys apart: “YubiKey 5C”",
+  },
+  passkey: { label: "passkey", title: "Your passkeys", empty: "No passkeys yet.", hint: "Where it is kept: “Phone”, “Laptop”" },
+};
+
+/** Security keys or passkeys: the list (rename, remove) and adding one. */
+function WebauthnCard({ kind, onCodes, onChange }: { kind: CredentialKind; onCodes: (c: string[]) => void; onChange: () => Promise<void> }) {
+  const list = useQuery({ queryKey: ["webauthn"], queryFn: () => api.get<S["WebauthnCredentials"]>("/user/webauthn") });
+  const [name, setName] = useState("");
+  const [pw, setPw] = useState("");
+  const { run, msg, error } = useFormRun(() => list.refetch());
+  const copy = KINDS[kind];
+  const add = run(async () => {
+    const start = await api.post<S["WebauthnRegistration"]>("/user/webauthn/register/start", { kind, password: pw });
+    let credential;
+    try {
+      credential = await createCredential(start.options);
+    } catch (e) {
+      throw cancelled(e) ? new Error(`Nothing was added: the ${copy.label} was not confirmed.`) : e;
+    }
+    const r = await api.post<S["WebauthnRegistered"]>("/user/webauthn/register/finish", { ceremony: start.ceremony, name, credential });
+    if (r.recovery_codes.length) onCodes(r.recovery_codes);
+    setName("");
+    setPw("");
+    await onChange();
+  }, `${copy.label[0].toUpperCase()}${copy.label.slice(1)} added.`);
+  return (
+    <Q q={list}>
+      {(data) => {
+        if (!data.available || !webauthnSupported()) {
+          return (
+            <Card title={copy.title}>
+              <p className="muted" style={{ margin: 0 }}>
+                {!data.available ? "Security keys and passkeys need Forgust served over https; ask your administrator." : "This browser cannot use security keys or passkeys."}
+              </p>
+            </Card>
+          );
+        }
+        const items = data.credentials.filter((c) => c.kind === kind);
+        return (
+          <Card title={<>{copy.title} {items.length > 0 && <Badge tone="ok">{items.length}</Badge>}</>}>
+            <div className="stack">
+              <ErrorBox error={error} />
+              {msg && <div className="alert ok">{msg}</div>}
+              {items.length === 0 ? (
+                <p className="muted" style={{ margin: 0 }}>
+                  {copy.empty}
+                </p>
+              ) : (
+                <div className="list">
+                  {items.map((c) => (
+                    <CredentialRow key={c.id} credential={c} run={run} onChange={onChange} />
+                  ))}
+                </div>
+              )}
+              <form className="stack" onSubmit={add}>
+                <div className="grid2">
+                  <Field label="Name" hint={copy.hint}>
+                    <input value={name} maxLength={64} onChange={(e) => setName(e.target.value)} />
+                  </Field>
+                  <Field label="Confirm with your password">
+                    <input type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} />
+                  </Field>
+                </div>
+                <div>
+                  <button className="btn primary" disabled={!name.trim()}>
+                    Add a {copy.label}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </Card>
+        );
+      }}
+    </Q>
+  );
+}
+
+/** One security key or passkey: rename it, or remove it (the password again). */
+function CredentialRow({
+  credential: c,
+  run,
+  onChange,
+}: {
+  credential: S["CredentialInfo"];
+  run: ReturnType<typeof useFormRun>["run"];
+  onChange: () => Promise<void>;
+}) {
+  // renaming (the new name) or removing (the password), or neither
+  const [edit, setEdit] = useState<{ mode: "rename" | "remove"; value: string } | null>(null);
+  const value = edit?.value ?? "";
+  const set = (v: string) => edit && setEdit({ ...edit, value: v });
+  return (
+    <div className="item wrap">
+      <div className="grow">
+        {edit?.mode === "rename" ? <input aria-label="New name" autoFocus value={value} onChange={(e) => set(e.target.value)} /> : <strong>{c.name}</strong>}
+        <div className="small muted">
+          added {timeAgo(c.created_at)} · {c.last_used_at ? `last used ${timeAgo(c.last_used_at)}` : "never used"}
+        </div>
+      </div>
+      {edit === null ? (
+        <>
+          <button className="btn small" onClick={() => setEdit({ mode: "rename", value: c.name })}>
+            Rename
+          </button>
+          <button className="btn small danger" onClick={() => setEdit({ mode: "remove", value: "" })}>
+            Remove…
+          </button>
+        </>
+      ) : (
+        <>
+          {edit.mode === "remove" && (
+            <input type="password" aria-label="Your password" placeholder="Your password" autoComplete="current-password" value={value} onChange={(e) => set(e.target.value)} />
+          )}
+          <button
+            className={`btn small ${edit.mode === "remove" ? "danger" : "primary"}`}
+            onClick={run(
+              async () => {
+                if (edit.mode === "rename") await api.put(`/user/webauthn/${c.id}`, { name: value });
+                else {
+                  await api.post(`/user/webauthn/${c.id}/remove`, { password: value });
+                  await onChange();
+                }
+                setEdit(null);
+              },
+              edit.mode === "rename" ? "Renamed." : `${c.name} removed.`,
+            )}
+          >
+            {edit.mode === "rename" ? "Save" : "Remove"}
+          </button>
+          <button className="btn small" onClick={() => setEdit(null)}>
+            Cancel
+          </button>
+        </>
+      )}
     </div>
   );
 }
