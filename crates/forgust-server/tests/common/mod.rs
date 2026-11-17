@@ -337,3 +337,10 @@ pub fn totp_code_at(secret: &str, ahead: u64) -> String {
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
     totp_rs::Builder::new().with_secret(secret).build().unwrap().generate(now + ahead).to_string()
 }
+
+/// The password step of a sign-in with two-factor authentication: its challenge.
+pub async fn challenge(srv: &TestServer, username: &str) -> String {
+    let v = Client::new(&srv.base).login(username, &password(username)).await;
+    assert_eq!(v["two_factor_required"], true, "{v}");
+    v["challenge"].as_str().unwrap().to_string()
+}

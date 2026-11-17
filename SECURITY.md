@@ -37,6 +37,37 @@ The image is scanned for known vulnerabilities at each release, and `latest` eve
 week. Releases up to 0.1.0 were published before signing and have no attestation
 to verify.
 
+## Signing in
+
+- **Passwords** are hashed with Argon2. Sign-in attempts are limited per client, per
+  login and per account; past the account's limit, only addresses it signed in from
+  before may keep trying.
+- **Two-factor authentication** is an authenticator app (TOTP) or security keys
+  (WebAuthn), asked for after the password or the identity provider. Ten single-use
+  recovery codes come with the first second factor; using one emails the account.
+  Wrong answers, whatever the factor, share one limit of 5 per account per 10 minutes.
+  With two-factor authentication on, git over HTTP and the registry take tokens, not
+  the password.
+- **Passkeys** sign in without a username or password. They must verify their user
+  (PIN or biometrics), so a passkey sign-in skips the second step. They are not a
+  second factor: an account with only a passkey still signs in with its password
+  alone, and does not meet an organization's two-factor requirement.
+- **WebAuthn** uses the host of `server.external_url` as its relying party id and
+  accepts that URL's origin only (no subdomains, no other port), over https or on
+  `localhost`. Ceremony state stays in the database and is used once. Attestation is
+  not asked for. A counter that goes back is refused and audited
+  (`webauthn_clone_suspected`).
+- **Changing the domain** (the host of `server.external_url`) makes every security key
+  and passkey stop working: they belong to the old host. Before moving, make sure
+  people with security keys have recovery codes or an authenticator app; after it,
+  they add their keys again (an administrator can reset two-factor authentication
+  for anyone locked out).
+- **Changes to the ways in** (password, email, two-factor, keys, tokens) need a
+  browser session of the account itself, never an impersonation or a token. Changing
+  the email address or the second factors, and adding or removing a security key or
+  passkey, ask for the password again. They are audited; a new or removed security key
+  or passkey is emailed to the account.
+
 ## Scope
 
 Anything in this repository: the server and its APIs (`/api/v1`, `/api/v4`, the

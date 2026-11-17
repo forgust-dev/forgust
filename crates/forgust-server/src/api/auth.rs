@@ -4,12 +4,16 @@ use axum::http::HeaderMap;
 use axum::response::{IntoResponse, Redirect, Response};
 use axum_extra::extract::CookieJar;
 use chrono::{Duration, Utc};
+use forgust_db::webauthn::CredentialKind;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use utoipa::ToSchema;
+use webauthn_rs::prelude::{
+    DiscoverableAuthentication, Passkey, PublicKeyCredential, SecurityKey, SecurityKeyAuthentication, WebauthnError,
+};
 
 use super::dto::UserDto;
-use crate::auth::{ClientIp, Principal, Viewer, account_open, login_allowed, login_checked, session, session_cookie};
+use crate::auth::{ClientIp, Principal, Viewer, account_open, login_allowed, login_checked, session, session_cookie, webauthn};
 use crate::crypto;
 use crate::error::{ApiError, ApiResult};
 use crate::services::{self, users};
@@ -53,6 +57,7 @@ async fn start_session(
     headers: &HeaderMap,
     ip: ClientIp,
     user: &forgust_db::users::User,
+    method: &str,
 ) -> ApiResult<(CookieJar, Json<LoginResponse>)> {
     let ip = ip.text();
     let s = session::create(state, user.id, ip.as_deref(), user_agent(headers).as_deref()).await?;
@@ -61,7 +66,7 @@ async fn start_session(
         &Principal::User { user: user.clone(), scopes: None },
         "login",
         Some(("user", user.id)),
-        json!({}),
+        json!({ "method": method }),
         ip.as_deref(),
     )
     .await;
@@ -110,7 +115,7 @@ pub async fn login(
     if !user.is_active() {
         return Err(ApiError::forbidden("this account is blocked"));
     }
-    if user.totp_enabled {
+    if user.two_factor() {
         let challenge = crypto::random_urlsafe(32);
         forgust_db::sessions::create_challenge(
             &state.db,
@@ -122,7 +127,7 @@ pub async fn login(
         .await?;
         return Ok((jar, Json(LoginResponse { session: None, two_factor_required: true, challenge: Some(challenge) })));
     }
-    start_session(&state, jar, &headers, ip, &user).await
+    start_session(&state, jar, &headers, ip, &user, "password").await
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -166,6 +171,17 @@ pub async fn login_recovery(
 enum Factor<'a> {
     Totp(&'a str),
     Recovery(&'a str),
+    SecurityKey(&'a PublicKeyCredential),
+}
+
+impl Factor<'_> {
+    fn method(&self) -> &'static str {
+        match self {
+            Factor::Totp(_) => "totp",
+            Factor::Recovery(_) => "recovery_code",
+            Factor::SecurityKey(_) => "security_key",
+        }
+    }
 }
 
 /// Finish a sign-in whose password (or provider) is accepted. The challenge
@@ -181,10 +197,9 @@ async fn second_factor(
 ) -> ApiResult<(CookieJar, Json<LoginResponse>)> {
     let hash = crypto::token_hash(challenge);
     let mut tx = state.db.begin().await?;
-    let (user_id, provider_sync) = forgust_db::sessions::lock_challenge(&mut tx, &hash).await?.ok_or(ApiError::Unauthorized)?;
-    if !state.login_limiter.allow(&format!("totp|{user_id}")) {
-        return Err(ApiError::forbidden("too many attempts, try again in a minute"));
-    }
+    let forgust_db::sessions::Challenge { user_id, provider_sync, webauthn_state } =
+        forgust_db::sessions::lock_challenge(&mut tx, &hash).await?.ok_or(ApiError::Unauthorized)?;
+    second_step_allowed(&state, user_id)?;
     let user = forgust_db::users::find(&mut *tx, user_id).await?.ok_or(ApiError::Unauthorized)?;
     // wrong codes: 5 per 10 minutes per account; then the challenge is gone
     // and the password is asked again
@@ -197,8 +212,9 @@ async fn second_factor(
     let ok = match factor {
         Factor::Totp(code) => session::verify_totp(&state, &mut tx, &user, code).await?,
         Factor::Recovery(code) => {
-            user.totp_enabled && forgust_db::recovery_codes::consume(&mut *tx, user.id, &session::recovery_code_hash(code)).await?
+            user.two_factor() && forgust_db::recovery_codes::consume(&mut *tx, user.id, &session::recovery_code_hash(code)).await?
         }
+        Factor::SecurityKey(answer) => security_key_signed(&state, &mut tx, &user, webauthn_state, answer).await?,
     };
     if !ok {
         state.totp_failures.allow(&acct);
@@ -222,7 +238,7 @@ async fn second_factor(
         }
         None => user,
     };
-    start_session(&state, jar, &headers, ip, &user).await
+    start_session(&state, jar, &headers, ip, &user, factor.method()).await
 }
 
 /// A recovery code stood in for the authenticator: audited, and the account's
@@ -240,6 +256,222 @@ async fn recovery_code_used(state: &AppState, user: &forgust_db::users::User, le
         ),
     )
     .await;
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct PendingLogin {
+    pub challenge: String,
+}
+
+/// The second factors a pending sign-in can be finished with.
+#[derive(Serialize, ToSchema)]
+pub struct SecondFactors {
+    /// A code from the authenticator app.
+    pub totp: bool,
+    /// A security key: `/auth/login/webauthn/start`, then `/auth/login/webauthn`.
+    pub security_key: bool,
+    /// A recovery code (some are left).
+    pub recovery_code: bool,
+}
+
+/// One more try at a pending sign-in's second step: 10 a minute per account.
+fn second_step_allowed(state: &AppState, user_id: i64) -> ApiResult<()> {
+    if state.login_limiter.allow(&format!("totp|{user_id}")) {
+        Ok(())
+    } else {
+        Err(ApiError::forbidden("too many attempts, try again in a minute"))
+    }
+}
+
+/// What can finish a sign-in whose password (or provider) was accepted.
+#[utoipa::path(post, path = "/api/v1/auth/login/second_factor", request_body = PendingLogin, responses((status = 200, body = SecondFactors)), tag = "auth")]
+pub async fn second_factors(State(state): State<AppState>, Json(req): Json<PendingLogin>) -> ApiResult<Json<SecondFactors>> {
+    let user_id =
+        forgust_db::sessions::challenge_user(&state.db, &crypto::token_hash(&req.challenge)).await?.ok_or(ApiError::Unauthorized)?;
+    let user = forgust_db::users::find(&state.db, user_id).await?.ok_or(ApiError::Unauthorized)?;
+    Ok(Json(SecondFactors {
+        totp: user.totp_enabled,
+        security_key: user.security_keys_enabled && state.webauthn.is_some(),
+        recovery_code: forgust_db::recovery_codes::remaining(&state.db, user.id).await? > 0,
+    }))
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct WebauthnChallenge {
+    /// Options for `navigator.credentials.get` (WebAuthn).
+    #[schema(value_type = Object)]
+    pub options: serde_json::Value,
+}
+
+/// Ask the account's security keys to sign for a pending sign-in (asking
+/// again replaces the question); the answer goes to `/auth/login/webauthn`.
+#[utoipa::path(post, path = "/api/v1/auth/login/webauthn/start", request_body = PendingLogin, responses((status = 200, body = WebauthnChallenge)), tag = "auth")]
+pub async fn security_key_start(State(state): State<AppState>, Json(req): Json<PendingLogin>) -> ApiResult<Json<WebauthnChallenge>> {
+    let rp = webauthn::of(&state)?;
+    let hash = crypto::token_hash(&req.challenge);
+    let user_id = forgust_db::sessions::challenge_user(&state.db, &hash).await?.ok_or(ApiError::Unauthorized)?;
+    second_step_allowed(&state, user_id)?;
+    let keys = forgust_db::webauthn::credentials(&state.db, user_id, CredentialKind::SecurityKey).await?;
+    let keys: Vec<SecurityKey> = keys.into_iter().map(|k| webauthn::from_json(k.credential)).collect::<ApiResult<_>>()?;
+    if keys.is_empty() {
+        return Err(ApiError::conflict("this account has no security key"));
+    }
+    let (options, asked) = rp.start_securitykey_authentication(&keys).map_err(webauthn::internal)?;
+    if !forgust_db::webauthn::set_challenge_state(&state.db, &hash, &webauthn::to_json(&asked)?).await? {
+        return Err(ApiError::Unauthorized);
+    }
+    Ok(Json(WebauthnChallenge { options: webauthn::to_json(&options)? }))
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct WebauthnLogin {
+    pub challenge: String,
+    /// What `navigator.credentials.get` returned (`PublicKeyCredential`, as JSON).
+    #[schema(value_type = Object)]
+    pub credential: PublicKeyCredential,
+}
+
+/// The second step with a security key, on what `/auth/login/webauthn/start` asked it to sign.
+#[utoipa::path(post, path = "/api/v1/auth/login/webauthn", request_body = WebauthnLogin, responses((status = 200, body = LoginResponse)), tag = "auth")]
+pub async fn login_webauthn(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    headers: HeaderMap,
+    ip: ClientIp,
+    Json(req): Json<WebauthnLogin>,
+) -> ApiResult<(CookieJar, Json<LoginResponse>)> {
+    second_factor(state, jar, headers, ip, &req.challenge, Factor::SecurityKey(&req.credential)).await
+}
+
+/// Check a security key's answer for a pending sign-in: it signed what it was
+/// asked to, and it is one of this account's security keys. Its counter moves on.
+async fn security_key_signed(
+    state: &AppState,
+    tx: &mut sqlx::PgConnection,
+    user: &forgust_db::users::User,
+    asked: Option<serde_json::Value>,
+    answer: &PublicKeyCredential,
+) -> ApiResult<bool> {
+    let rp = webauthn::of(state)?;
+    let Some(asked) = asked.and_then(|a| webauthn::from_json::<SecurityKeyAuthentication>(a).ok()) else { return Ok(false) };
+    let Some(stored) = forgust_db::webauthn::find_by_credential_id(&mut *tx, answer.get_credential_id()).await? else { return Ok(false) };
+    if stored.user_id != user.id || stored.kind != CredentialKind::SecurityKey {
+        return Ok(false);
+    }
+    let result = match rp.finish_securitykey_authentication(answer, &asked) {
+        Ok(r) => r,
+        Err(e) => {
+            credential_refused(state, user, stored.id, &e).await;
+            return Ok(false);
+        }
+    };
+    let mut key: SecurityKey = webauthn::from_json(stored.credential)?;
+    let moved = key.update_credential(&result);
+    webauthn::record_use(tx, stored.id, &key, moved).await?;
+    Ok(true)
+}
+
+/// A credential's answer was refused. A counter that went back means a copy
+/// of the key may exist: audited, for the administrators to see.
+async fn credential_refused(state: &AppState, user: &forgust_db::users::User, credential: i64, e: &WebauthnError) {
+    tracing::info!(user = user.id, credential, error = %e, "a WebAuthn answer was refused");
+    if matches!(e, WebauthnError::CredentialPossibleCompromise) {
+        let p = Principal::User { user: user.clone(), scopes: None };
+        services::audit(state, &p, "webauthn_clone_suspected", Some(("user", user.id)), json!({ "credential": credential }), None).await;
+    }
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct PasskeyStart {
+    /// Send back with the answer.
+    pub ceremony: String,
+    /// Options for `navigator.credentials.get` (WebAuthn).
+    #[schema(value_type = Object)]
+    pub options: serde_json::Value,
+}
+
+/// Start a sign-in with a passkey: no username, the authenticator offers the
+/// passkeys it holds for this site.
+#[utoipa::path(post, path = "/api/v1/auth/passkey/start", responses((status = 200, body = PasskeyStart)), tag = "auth")]
+pub async fn passkey_start(State(state): State<AppState>, ip: ClientIp) -> ApiResult<Json<PasskeyStart>> {
+    let rp = webauthn::of(&state)?;
+    // the client's budget, under a login no account can have
+    if !login_allowed(&state, ip, " passkey") {
+        return Err(ApiError::forbidden("too many attempts, try again later"));
+    }
+    let (mut options, asked) = rp.start_discoverable_authentication().map_err(webauthn::internal)?;
+    // asked for with a button, not offered in the username field's autofill
+    options.mediation = None;
+    let ceremony = crypto::random_urlsafe(32);
+    forgust_db::webauthn::save_ceremony(
+        &state.db,
+        &crypto::token_hash(&ceremony),
+        forgust_db::webauthn::PASSKEY_LOGIN,
+        None,
+        None,
+        &webauthn::to_json(&asked)?,
+        Utc::now() + Duration::minutes(5),
+    )
+    .await?;
+    Ok(Json(PasskeyStart { ceremony, options: webauthn::to_json(&options)? }))
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct PasskeyFinish {
+    pub ceremony: String,
+    /// What `navigator.credentials.get` returned (`PublicKeyCredential`, as JSON).
+    #[schema(value_type = Object)]
+    pub credential: PublicKeyCredential,
+}
+
+/// Sign in with a passkey. It verified its user (PIN, biometrics): no password
+/// and no second factor are asked. Every refusal looks the same.
+#[utoipa::path(post, path = "/api/v1/auth/passkey/finish", request_body = PasskeyFinish, responses((status = 200, body = LoginResponse)), tag = "auth")]
+pub async fn passkey_finish(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    headers: HeaderMap,
+    ip: ClientIp,
+    Json(req): Json<PasskeyFinish>,
+) -> ApiResult<(CookieJar, Json<LoginResponse>)> {
+    let rp = webauthn::of(&state)?;
+    if ip.text().is_some_and(|c| state.login_ip_failures.exceeded(&c)) {
+        return Err(ApiError::forbidden("too many attempts, try again later"));
+    }
+    let refused = |user_id: Option<i64>| {
+        login_checked(&state, ip, "", user_id, false);
+        ApiError::Unauthorized
+    };
+    // used up whatever comes next: an answer is checked once
+    let ceremony = forgust_db::webauthn::take_ceremony(&state.db, &crypto::token_hash(&req.ceremony)).await?;
+    let Some(c) = ceremony.filter(|c| c.kind == forgust_db::webauthn::PASSKEY_LOGIN) else { return Err(refused(None)) };
+    let Ok(asked) = webauthn::from_json::<DiscoverableAuthentication>(c.state) else { return Err(refused(None)) };
+    let Ok((handle, credential_id)) = rp.identify_discoverable_authentication(&req.credential) else { return Err(refused(None)) };
+    let stored = forgust_db::webauthn::find_by_credential_id(&state.db, credential_id).await?;
+    let Some(stored) = stored.filter(|s| s.kind == CredentialKind::Passkey) else { return Err(refused(None)) };
+    // the authenticator's idea of whose passkey it is must be the account's
+    if stored.user_handle != Some(handle) {
+        return Err(refused(Some(stored.user_id)));
+    }
+    if !account_open(&state, ip, stored.user_id).await? {
+        return Err(ApiError::forbidden("too many attempts, try again later"));
+    }
+    let user = forgust_db::users::find(&state.db, stored.user_id).await?.ok_or(ApiError::Unauthorized)?;
+    let mut passkey: Passkey = webauthn::from_json(stored.credential)?;
+    let result = match rp.finish_discoverable_authentication_v2(&req.credential, asked, &passkey) {
+        Ok(r) if r.user_verified() => r,
+        Ok(_) => return Err(refused(Some(user.id))),
+        Err(e) => {
+            credential_refused(&state, &user, stored.id, &e).await;
+            return Err(refused(Some(user.id)));
+        }
+    };
+    if !user.is_active() || user.is_bot() {
+        return Err(ApiError::forbidden("this account is blocked"));
+    }
+    let moved = passkey.update_credential(&result);
+    webauthn::record_use(&mut *state.db.acquire().await?, stored.id, &passkey, moved).await?;
+    start_session(&state, jar, &headers, ip, &user, "passkey").await
 }
 
 /// A provider sign-in waiting for its second factor (`login_challenges.provider_sync`).
@@ -352,7 +584,7 @@ pub async fn register(
     .await?;
     tx.commit().await?;
     services::accounts::send_confirmation(&state, &user, &user.email).await?;
-    start_session(&state, jar, &headers, ip, &user).await
+    start_session(&state, jar, &headers, ip, &user, "registration").await
 }
 
 /// Current session (for the web app on load).
@@ -630,7 +862,7 @@ async fn finish_sign_in(
     // the account's second factor still applies: the provider's sign-in
     // stands in for the password only. The challenge travels in the fragment
     // (never sent to a server, never in a Referer).
-    if user.totp_enabled {
+    if user.two_factor() {
         let challenge = crypto::random_urlsafe(32);
         // what the provider says about the account waits for the code too
         let sync = serde_json::to_value(PendingSync { provider: name, identity }).map_err(|e| ApiError::Internal(e.into()))?;
@@ -645,7 +877,7 @@ async fn finish_sign_in(
         return Ok((jar, Redirect::to(&format!("/login#totp={challenge}"))).into_response());
     }
     let user = sync_from_provider(&state, &name, &identity, user, ip.text().as_deref()).await?;
-    let (jar, _) = start_session(&state, jar, &headers, ip, &user).await?;
+    let (jar, _) = start_session(&state, jar, &headers, ip, &user, "oidc").await?;
     Ok((jar, Redirect::to("/")).into_response())
 }
 
@@ -655,10 +887,17 @@ pub struct SetupStatus {
     /// Whether the instance sends email (confirmation and reset links,
     /// notifications). Without it, nothing should promise or wait for one.
     pub email_enabled: bool,
+    /// Security keys and passkeys work here (served over https): the sign-in
+    /// page offers passkeys.
+    pub webauthn: bool,
 }
 
 pub async fn setup_status(State(state): State<AppState>) -> ApiResult<Json<SetupStatus>> {
-    Ok(Json(SetupStatus { needs_setup: forgust_db::users::count_humans(&state.db).await? == 0, email_enabled: state.cfg.email.enabled() }))
+    Ok(Json(SetupStatus {
+        needs_setup: forgust_db::users::count_humans(&state.db).await? == 0,
+        email_enabled: state.cfg.email.enabled(),
+        webauthn: state.webauthn.is_some(),
+    }))
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -710,7 +949,7 @@ pub async fn setup(
         None,
     )
     .await;
-    start_session(&state, jar, &headers, ip, &user).await
+    start_session(&state, jar, &headers, ip, &user, "setup").await
 }
 
 #[derive(Deserialize, ToSchema)]

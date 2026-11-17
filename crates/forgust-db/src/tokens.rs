@@ -46,7 +46,7 @@ pub async fn find_pat_with_user(e: impl PgExecutor<'_>, hash: &[u8]) -> Result<O
     let r = sqlx::query!(
         r#"SELECT t.id AS tid, t.user_id, t.name AS token_name, t.scopes, t.expires_at, t.revoked, t.last_used_at, t.created_at AS token_created_at,
                   t.mcp_used_at, u.id, u.username, u.email, u.name, u.user_type, u.is_admin, u.is_external, u.state, u.namespace_id,
-                  u.totp_enabled, u.created_at, u.email_verified_at, u.unconfirmed_email, u.avatar_at
+                  u.totp_enabled, u.security_keys_enabled, u.created_at, u.email_verified_at, u.unconfirmed_email, u.avatar_at
              FROM personal_access_tokens t JOIN users u ON u.id = t.user_id
             WHERE t.token_hash = $1 AND NOT t.revoked AND (t.expires_at IS NULL OR t.expires_at > now())"#,
         hash
@@ -77,6 +77,7 @@ pub async fn find_pat_with_user(e: impl PgExecutor<'_>, hash: &[u8]) -> Result<O
                 state: r.state,
                 namespace_id: r.namespace_id,
                 totp_enabled: r.totp_enabled,
+                security_keys_enabled: r.security_keys_enabled,
                 created_at: r.created_at,
                 email_verified_at: r.email_verified_at,
                 unconfirmed_email: r.unconfirmed_email,
@@ -248,7 +249,7 @@ pub async fn create_job_token(
 pub async fn find_job_token(e: impl PgExecutor<'_>, hash: &[u8]) -> Result<Option<(JobToken, crate::users::User)>> {
     let r = sqlx::query!(
         r#"SELECT t.id AS tid, t.project_id, t.user_id, u.id, u.username, u.email, u.name, u.user_type, u.is_admin, u.is_external, u.state,
-                  u.namespace_id, u.totp_enabled, u.created_at, u.email_verified_at, u.unconfirmed_email, u.avatar_at
+                  u.namespace_id, u.totp_enabled, u.security_keys_enabled, u.created_at, u.email_verified_at, u.unconfirmed_email, u.avatar_at
              FROM ci_job_tokens t JOIN users u ON u.id = t.user_id
             WHERE t.token_hash = $1 AND t.expires_at > now()"#,
         hash
@@ -269,6 +270,7 @@ pub async fn find_job_token(e: impl PgExecutor<'_>, hash: &[u8]) -> Result<Optio
                 state: r.state,
                 namespace_id: r.namespace_id,
                 totp_enabled: r.totp_enabled,
+                security_keys_enabled: r.security_keys_enabled,
                 created_at: r.created_at,
                 email_verified_at: r.email_verified_at,
                 unconfirmed_email: r.unconfirmed_email,

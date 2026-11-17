@@ -16,6 +16,8 @@ pub struct User {
     pub state: String,
     pub namespace_id: Option<i64>,
     pub totp_enabled: bool,
+    /// The account has security keys (WebAuthn, as its second factor).
+    pub security_keys_enabled: bool,
     pub created_at: DateTime<Utc>,
     /// When the current email was confirmed (None: not yet).
     pub email_verified_at: Option<DateTime<Utc>>,
@@ -40,6 +42,12 @@ impl User {
     pub fn email_verified(&self) -> bool {
         self.email_verified_at.is_some()
     }
+    /// A password alone does not sign in: an authenticator app or a security
+    /// key is asked for too. (Passkeys are a sign-in of their own: an account
+    /// with one still signs in with just its password.)
+    pub fn two_factor(&self) -> bool {
+        self.totp_enabled || self.security_keys_enabled
+    }
 }
 
 pub struct NewUser<'a> {
@@ -63,7 +71,7 @@ pub async fn insert(conn: &mut PgConnection, u: NewUser<'_>) -> Result<User> {
         User,
         r#"INSERT INTO users (username, email, name, password_hash, user_type, bot_source_type, bot_source_id, is_admin, email_verified_at)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CASE WHEN $9 THEN now() END)
-           RETURNING id, username, email, name, user_type, is_admin, is_external, state, namespace_id, totp_enabled, created_at,
+           RETURNING id, username, email, name, user_type, is_admin, is_external, state, namespace_id, totp_enabled, security_keys_enabled, created_at,
                   email_verified_at, unconfirmed_email, avatar_at"#,
         u.username,
         u.email,
@@ -87,7 +95,7 @@ pub async fn set_namespace(e: impl PgExecutor<'_>, user_id: i64, namespace_id: i
 pub async fn find(e: impl PgExecutor<'_>, id: i64) -> Result<Option<User>> {
     sqlx::query_as!(
         User,
-        "SELECT id, username, email, name, user_type, is_admin, is_external, state, namespace_id, totp_enabled, created_at,
+        "SELECT id, username, email, name, user_type, is_admin, is_external, state, namespace_id, totp_enabled, security_keys_enabled, created_at,
                   email_verified_at, unconfirmed_email, avatar_at
          FROM users WHERE id = $1",
         id
@@ -100,7 +108,7 @@ pub async fn find(e: impl PgExecutor<'_>, id: i64) -> Result<Option<User>> {
 pub async fn find_many(e: impl PgExecutor<'_>, ids: &[i64]) -> Result<Vec<User>> {
     sqlx::query_as!(
         User,
-        "SELECT id, username, email, name, user_type, is_admin, is_external, state, namespace_id, totp_enabled, created_at,
+        "SELECT id, username, email, name, user_type, is_admin, is_external, state, namespace_id, totp_enabled, security_keys_enabled, created_at,
                   email_verified_at, unconfirmed_email, avatar_at
          FROM users WHERE id = ANY($1)",
         ids
@@ -112,7 +120,7 @@ pub async fn find_many(e: impl PgExecutor<'_>, ids: &[i64]) -> Result<Vec<User>>
 pub async fn find_by_username(e: impl PgExecutor<'_>, username: &str) -> Result<Option<User>> {
     sqlx::query_as!(
         User,
-        "SELECT id, username, email, name, user_type, is_admin, is_external, state, namespace_id, totp_enabled, created_at,
+        "SELECT id, username, email, name, user_type, is_admin, is_external, state, namespace_id, totp_enabled, security_keys_enabled, created_at,
                   email_verified_at, unconfirmed_email, avatar_at
          FROM users WHERE lower(username) = lower($1)",
         username
@@ -124,7 +132,7 @@ pub async fn find_by_username(e: impl PgExecutor<'_>, username: &str) -> Result<
 pub async fn find_by_email(e: impl PgExecutor<'_>, email: &str) -> Result<Option<User>> {
     sqlx::query_as!(
         User,
-        "SELECT id, username, email, name, user_type, is_admin, is_external, state, namespace_id, totp_enabled, created_at,
+        "SELECT id, username, email, name, user_type, is_admin, is_external, state, namespace_id, totp_enabled, security_keys_enabled, created_at,
                   email_verified_at, unconfirmed_email, avatar_at
          FROM users WHERE lower(email) = lower($1)",
         email
@@ -175,11 +183,18 @@ pub async fn set_totp(e: impl PgExecutor<'_>, id: i64, secret_enc: Option<&str>,
     Ok(())
 }
 
-/// Turn the second factor off: the authenticator app and the recovery codes
-/// that stand in for it go together.
-pub async fn disable_two_factor(c: &mut PgConnection, id: i64) -> Result<()> {
+/// Turn the authenticator app off. The recovery codes go with the last second
+/// factor (security keys may remain).
+pub async fn disable_totp(c: &mut PgConnection, id: i64) -> Result<()> {
     set_totp(&mut *c, id, None, false).await?;
-    crate::recovery_codes::delete_for_user(&mut *c, id).await
+    crate::recovery_codes::delete_unless_needed(c, id).await
+}
+
+/// Every second factor and every passkey, with the recovery codes (an
+/// administrator's reset, an address that turned out to be someone else's).
+pub async fn clear_second_factors(c: &mut PgConnection, id: i64) -> Result<()> {
+    disable_totp(c, id).await?;
+    crate::webauthn::delete_for_user(c, id).await
 }
 
 pub async fn set_admin(e: impl PgExecutor<'_>, id: i64, admin: bool) -> Result<()> {
@@ -209,7 +224,7 @@ pub async fn list(
 ) -> Result<Vec<User>> {
     sqlx::query_as!(
         User,
-        "SELECT id, username, email, name, user_type, is_admin, is_external, state, namespace_id, totp_enabled, created_at,
+        "SELECT id, username, email, name, user_type, is_admin, is_external, state, namespace_id, totp_enabled, security_keys_enabled, created_at,
                   email_verified_at, unconfirmed_email, avatar_at
          FROM users
          WHERE ($1 = '' OR username ILIKE '%' || $1 || '%' OR name ILIKE '%' || $1 || '%' OR ($5 AND email ILIKE '%' || $1 || '%'))
@@ -235,11 +250,11 @@ pub async fn delete(e: impl PgExecutor<'_>, id: i64) -> Result<()> {
 }
 
 /// Every way into the account but its password: access tokens, SSH keys,
-/// provider identities and the second factor with its recovery codes (for an
+/// provider identities, passkeys and the second factor with its recovery codes (for an
 /// address that turns out to be someone else's: what they find must not be
 /// what whoever registered it set up).
 pub async fn forget_credentials(c: &mut PgConnection, user_id: i64) -> Result<()> {
-    disable_two_factor(&mut *c, user_id).await?;
+    clear_second_factors(c, user_id).await?;
     sqlx::query!("UPDATE personal_access_tokens SET revoked = true WHERE user_id = $1", user_id).execute(&mut *c).await?;
     sqlx::query!("DELETE FROM ssh_keys WHERE user_id = $1", user_id).execute(&mut *c).await?;
     sqlx::query!("DELETE FROM identities WHERE user_id = $1", user_id).execute(&mut *c).await?;
@@ -312,7 +327,7 @@ pub async fn remove_identities(e: impl PgExecutor<'_>, user_id: i64, provider: &
 pub async fn bots_for(e: impl PgExecutor<'_>, source_type: &str, source_id: i64) -> Result<Vec<User>> {
     sqlx::query_as!(
         User,
-        "SELECT id, username, email, name, user_type, is_admin, is_external, state, namespace_id, totp_enabled, created_at,
+        "SELECT id, username, email, name, user_type, is_admin, is_external, state, namespace_id, totp_enabled, security_keys_enabled, created_at,
                   email_verified_at, unconfirmed_email, avatar_at
          FROM users WHERE bot_source_type = $1 AND bot_source_id = $2 ORDER BY id",
         source_type,
@@ -361,7 +376,7 @@ pub async fn set_unproven_email(e: impl PgExecutor<'_>, id: i64, email: &str) ->
 pub async fn find_by_login(e: impl PgExecutor<'_>, login: &str) -> Result<Option<User>> {
     sqlx::query_as!(
         User,
-        "SELECT id, username, email, name, user_type, is_admin, is_external, state, namespace_id, totp_enabled, created_at,
+        "SELECT id, username, email, name, user_type, is_admin, is_external, state, namespace_id, totp_enabled, security_keys_enabled, created_at,
                   email_verified_at, unconfirmed_email, avatar_at
          FROM users WHERE lower(username) = lower($1) OR lower(email) = lower($1)
          ORDER BY (lower(username) = lower($1)) DESC LIMIT 1",

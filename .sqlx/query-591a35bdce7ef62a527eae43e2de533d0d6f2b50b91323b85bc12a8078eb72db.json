@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET security_keys_enabled = EXISTS (SELECT 1 FROM webauthn_credentials WHERE user_id = $1 AND kind = 'security_key'),\n                          updated_at = now()\n          WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "591a35bdce7ef62a527eae43e2de533d0d6f2b50b91323b85bc12a8078eb72db"
+}

@@ -43,6 +43,7 @@ pub mod ssh_keys;
 pub mod todos;
 pub mod tokens;
 pub mod users;
+pub mod webauthn;
 pub mod webhooks;
 
 pub use sqlx::{PgConnection, PgPool, Postgres, Transaction};

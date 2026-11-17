@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE users SET webauthn_handle = COALESCE(webauthn_handle, $2) WHERE id = $1 RETURNING webauthn_handle",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "webauthn_handle",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "webauthn_handle"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "29c0067d3cc36babf2e6b164b47fc72e7ee50546bd9d43029665b80a9669feca"
+}

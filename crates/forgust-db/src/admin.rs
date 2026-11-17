@@ -537,7 +537,7 @@ pub async fn users(e: impl PgExecutor<'_>, search: &str, filter: &str, limit: i6
     sqlx::query_as!(
         AdminUser,
         r#"SELECT u.id, u.username, u.name, u.email, u.user_type, u.is_admin, u.is_external, u.state,
-                  u.totp_enabled AS two_factor_enabled, (u.email_verified_at IS NOT NULL) AS "email_verified!",
+                  u.two_factor_enabled AS "two_factor_enabled!", (u.email_verified_at IS NOT NULL) AS "email_verified!",
                   u.created_at, u.last_sign_in_at,
                   (SELECT count(*) FROM sessions s WHERE s.user_id = u.id AND s.expires_at > now()) AS "sessions!",
                   (SELECT count(*) FROM personal_access_tokens t WHERE t.user_id = u.id AND NOT t.revoked
@@ -551,7 +551,7 @@ pub async fn users(e: impl PgExecutor<'_>, search: &str, filter: &str, limit: i6
                     WHEN 'blocked' THEN u.user_type = 'human' AND u.state = 'blocked'
                     WHEN 'external' THEN u.user_type = 'human' AND u.is_external
                     WHEN 'unconfirmed' THEN u.user_type = 'human' AND u.email_verified_at IS NULL
-                    WHEN 'two_factor_off' THEN u.user_type = 'human' AND NOT u.totp_enabled
+                    WHEN 'two_factor_off' THEN u.user_type = 'human' AND NOT u.two_factor_enabled
                     ELSE u.user_type = 'human' END
             ORDER BY u.username LIMIT $3 OFFSET $4"#,
         search,

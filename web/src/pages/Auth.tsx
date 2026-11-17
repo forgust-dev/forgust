@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api, type S } from "../api/client";
+import { cancelled, getCredential, webauthnSupported } from "../api/webauthn";
 import { useProviders, useSetup } from "../prefetch";
 import { useSession } from "../session";
 import { ErrorBox, Field } from "../components/ui";
@@ -25,6 +26,8 @@ export function Login() {
     if (m) history.replaceState(null, "", window.location.pathname + window.location.search);
     return m ? m[1] : null;
   });
+  // what can finish it: the app, a security key, a recovery code
+  const [factors, setFactors] = useState<S["SecondFactors"] | null>(null);
   const [code, setCode] = useState("");
   // a lost authenticator: one of the recovery codes instead
   const [recovery, setRecovery] = useState(false);
@@ -32,6 +35,12 @@ export function Login() {
   const [busy, setBusy] = useState(false);
   const providers = useProviders();
   const setup = useSetup();
+  const passkeys = !!setup.data?.webauthn && webauthnSupported();
+
+  useEffect(() => {
+    if (!challenge) return;
+    api.post<S["SecondFactors"]>("/auth/login/second_factor", { challenge }).then(setFactors, setError);
+  }, [challenge]);
 
   const finish = (r: S["LoginResponse"]) => {
     if (r.two_factor_required) {
@@ -44,19 +53,41 @@ export function Login() {
     }
   };
 
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
+  const attempt = async (f: () => Promise<S["LoginResponse"]>) => {
     setBusy(true);
     setError(null);
     try {
-      if (challenge) finish(await api.post<S["LoginResponse"]>(recovery ? "/auth/login/recovery" : "/auth/login/totp", { challenge, code }));
-      else finish(await api.post<S["LoginResponse"]>("/auth/login", { login, password }));
+      finish(await f());
     } catch (err) {
-      setError(err);
+      if (!cancelled(err)) setError(err);
     } finally {
       setBusy(false);
     }
   };
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    attempt(() =>
+      challenge
+        ? api.post<S["LoginResponse"]>(recovery ? "/auth/login/recovery" : "/auth/login/totp", { challenge, code })
+        : api.post<S["LoginResponse"]>("/auth/login", { login, password }),
+    );
+  };
+
+  const securityKey = () =>
+    attempt(async () => {
+      // each try asks a fresh question (it replaces the last one)
+      const { options } = await api.post<S["WebauthnChallenge"]>("/auth/login/webauthn/start", { challenge });
+      const credential = await getCredential(options);
+      return api.post<S["LoginResponse"]>("/auth/login/webauthn", { challenge, credential });
+    });
+
+  const passkey = () =>
+    attempt(async () => {
+      const start = await api.post<S["PasskeyStart"]>("/auth/passkey/start");
+      const credential = await getCredential(start.options);
+      return api.post<S["LoginResponse"]>("/auth/passkey/finish", { ceremony: start.ceremony, credential });
+    });
 
   if (setup.data?.needs_setup) {
     return (
@@ -70,6 +101,10 @@ export function Login() {
     );
   }
 
+  const withKey = !!factors?.security_key && webauthnSupported();
+  // the code field: the app's, or a recovery code; not when a key is all there is
+  const codeField = recovery || !factors || factors.totp;
+
   return (
     <div className="page narrow auth-page">
       <Logo size={36} className="auth-logo" />
@@ -78,31 +113,40 @@ export function Login() {
         <ErrorBox error={error} />
         {challenge ? (
           <>
-            <Field
-              label={recovery ? "Recovery code" : "Authentication code"}
-              hint={recovery ? "One of the codes you saved when you set up two-factor authentication; it works once" : "From your authenticator app"}
-            >
-              <input
-                key={String(recovery)}
-                autoFocus
-                inputMode={recovery ? undefined : "numeric"}
-                autoComplete={recovery ? "off" : "one-time-code"}
-                spellCheck={false}
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-              />
-            </Field>
-            <button
-              type="button"
-              className="link-btn small"
-              onClick={() => {
-                setRecovery(!recovery);
-                setCode("");
-                setError(null);
-              }}
-            >
-              {recovery ? "Use your authenticator app" : "Lost your authenticator? Use a recovery code"}
-            </button>
+            {withKey && !recovery && (
+              <button type="button" className={`btn${factors?.totp ? "" : " primary"}`} disabled={busy} onClick={securityKey}>
+                Use your security key
+              </button>
+            )}
+            {codeField && (
+              <Field
+                label={recovery ? "Recovery code" : "Authentication code"}
+                hint={recovery ? "One of the codes you saved when you set up two-factor authentication; it works once" : "From your authenticator app"}
+              >
+                <input
+                  key={String(recovery)}
+                  autoFocus
+                  inputMode={recovery ? undefined : "numeric"}
+                  autoComplete={recovery ? "off" : "one-time-code"}
+                  spellCheck={false}
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                />
+              </Field>
+            )}
+            {(recovery || factors?.recovery_code) && (
+              <button
+                type="button"
+                className="link-btn small"
+                onClick={() => {
+                  setRecovery(!recovery);
+                  setCode("");
+                  setError(null);
+                }}
+              >
+                {recovery ? "Back" : `Lost your ${withKey && !factors?.totp ? "security key" : "authenticator"}? Use a recovery code`}
+              </button>
+            )}
           </>
         ) : (
           <>
@@ -117,9 +161,16 @@ export function Login() {
             </Link>
           </>
         )}
-        <button className="btn primary" disabled={busy}>
-          {challenge ? "Verify" : "Sign in"}
-        </button>
+        {(!challenge || codeField) && (
+          <button className="btn primary" disabled={busy}>
+            {challenge ? "Verify" : "Sign in"}
+          </button>
+        )}
+        {!challenge && passkeys && (
+          <button type="button" className="btn" disabled={busy} onClick={passkey}>
+            Sign in with a passkey
+          </button>
+        )}
         {!challenge &&
           providers.data?.map((p) => (
             <a key={p.name} className="btn" href={`/api/v1/auth/oidc/${p.name}/start`}>

@@ -145,6 +145,15 @@ pub async fn reset_recovery_codes(c: &mut sqlx::PgConnection, user_id: i64) -> A
     Ok(codes)
 }
 
+/// Recovery codes for an account getting its first second factor: new ones
+/// when it has none left, nothing (empty) when it keeps the ones it has.
+pub async fn first_recovery_codes(c: &mut sqlx::PgConnection, user_id: i64) -> ApiResult<Vec<String>> {
+    if forgust_db::recovery_codes::remaining(&mut *c, user_id).await? > 0 {
+        return Ok(Vec::new());
+    }
+    reset_recovery_codes(c, user_id).await
+}
+
 #[cfg(test)]
 mod recovery_tests {
     use super::*;

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, username, email, name, user_type, is_admin, is_external, state, namespace_id, totp_enabled, created_at,\n                  email_verified_at, unconfirmed_email, avatar_at\n         FROM users WHERE id = ANY($1)",
+  "query": "INSERT INTO users (username, email, name, password_hash, user_type, bot_source_type, bot_source_id, is_admin, email_verified_at)\n           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CASE WHEN $9 THEN now() END)\n           RETURNING id, username, email, name, user_type, is_admin, is_external, state, namespace_id, totp_enabled, security_keys_enabled, created_at,\n                  email_verified_at, unconfirmed_email, avatar_at",
   "describe": {
     "columns": [
       {
@@ -115,6 +115,17 @@
       },
       {
         "ordinal": 10,
+        "name": "security_keys_enabled",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "security_keys_enabled"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
         "name": "created_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -125,7 +136,7 @@
         }
       },
       {
-        "ordinal": 11,
+        "ordinal": 12,
         "name": "email_verified_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -136,7 +147,7 @@
         }
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "unconfirmed_email",
         "type_info": "Text",
         "origin": {
@@ -147,7 +158,7 @@
         }
       },
       {
-        "ordinal": 13,
+        "ordinal": 14,
         "name": "avatar_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -160,7 +171,15 @@
     ],
     "parameters": {
       "Left": [
-        "Int8Array"
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Int8",
+        "Bool",
+        "Bool"
       ]
     },
     "nullable": [
@@ -175,10 +194,11 @@
       true,
       false,
       false,
+      false,
       true,
       true,
       true
     ]
   },
-  "hash": "687d88162be586955a2dab9a041ecdc786480f8c26837944d53259a6cfae0347"
+  "hash": "ded41b236b27717f7c0826b8710def057c3e2088923817b439a33191d8aa28d8"
 }

@@ -27,3 +27,15 @@ pub async fn delete_for_user(e: impl PgExecutor<'_>, user_id: i64) -> Result<()>
     sqlx::query!("DELETE FROM recovery_codes WHERE user_id = $1", user_id).execute(e).await?;
     Ok(())
 }
+
+/// Drop the account's codes once it has no second factor left for them to stand in for.
+pub async fn delete_unless_needed(c: &mut PgConnection, user_id: i64) -> Result<()> {
+    sqlx::query!(
+        "DELETE FROM recovery_codes WHERE user_id = $1
+            AND NOT EXISTS (SELECT 1 FROM users WHERE id = $1 AND two_factor_enabled)",
+        user_id
+    )
+    .execute(&mut *c)
+    .await?;
+    Ok(())
+}

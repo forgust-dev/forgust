@@ -32,6 +32,8 @@ pub struct UserDto {
     pub state: Option<String>,
     /// Only to the user themselves and to admins (it tells who is easiest to attack).
     pub two_factor_enabled: Option<bool>,
+    /// Of the second factors, an authenticator app (the others: security keys).
+    pub totp_enabled: Option<bool>,
     pub namespace_id: Option<i64>,
     pub created_at: DateTime<Utc>,
     /// Shown with the email: whether it is confirmed, and a new address
@@ -53,7 +55,8 @@ impl UserDto {
             user_type: u.user_type.clone(),
             is_admin: show_email.then_some(u.is_admin),
             state: show_email.then(|| u.state.clone()),
-            two_factor_enabled: show_email.then_some(u.totp_enabled),
+            two_factor_enabled: show_email.then_some(u.two_factor()),
+            totp_enabled: show_email.then_some(u.totp_enabled),
             namespace_id: u.namespace_id,
             created_at: u.created_at,
             email_verified: show_email.then(|| u.email_verified()),

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, username, email, name, user_type, is_admin, is_external, state, namespace_id, totp_enabled, created_at,\n                  email_verified_at, unconfirmed_email, avatar_at\n         FROM users WHERE lower(email) = lower($1)",
+  "query": "SELECT u.id, u.username, u.name, u.email, u.user_type, u.is_admin, u.is_external, u.state,\n                  u.two_factor_enabled AS \"two_factor_enabled!\", (u.email_verified_at IS NOT NULL) AS \"email_verified!\",\n                  u.created_at, u.last_sign_in_at,\n                  (SELECT count(*) FROM sessions s WHERE s.user_id = u.id AND s.expires_at > now()) AS \"sessions!\",\n                  (SELECT count(*) FROM personal_access_tokens t WHERE t.user_id = u.id AND NOT t.revoked\n                     AND (t.expires_at IS NULL OR t.expires_at > now())) AS \"tokens!\",\n                  COALESCE((SELECT array_agg(DISTINCT i.provider) FROM identities i WHERE i.user_id = u.id), '{}') AS \"providers!\"\n             FROM users u\n            WHERE ($1 = '' OR u.username ILIKE '%' || $1 || '%' OR u.name ILIKE '%' || $1 || '%' OR u.email ILIKE '%' || $1 || '%')\n              AND CASE $2\n                    WHEN 'bots' THEN u.user_type <> 'human'\n                    WHEN 'admins' THEN u.user_type = 'human' AND u.is_admin\n                    WHEN 'blocked' THEN u.user_type = 'human' AND u.state = 'blocked'\n                    WHEN 'external' THEN u.user_type = 'human' AND u.is_external\n                    WHEN 'unconfirmed' THEN u.user_type = 'human' AND u.email_verified_at IS NULL\n                    WHEN 'two_factor_off' THEN u.user_type = 'human' AND NOT u.two_factor_enabled\n                    ELSE u.user_type = 'human' END\n            ORDER BY u.username LIMIT $3 OFFSET $4",
   "describe": {
     "columns": [
       {
@@ -27,23 +27,23 @@
       },
       {
         "ordinal": 2,
-        "name": "email",
-        "type_info": "Text",
-        "origin": {
-          "Table": {
-            "table": "users",
-            "name": "email"
-          }
-        }
-      },
-      {
-        "ordinal": 3,
         "name": "name",
         "type_info": "Text",
         "origin": {
           "Table": {
             "table": "users",
             "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "email",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "email"
           }
         }
       },
@@ -93,25 +93,20 @@
       },
       {
         "ordinal": 8,
-        "name": "namespace_id",
-        "type_info": "Int8",
+        "name": "two_factor_enabled!",
+        "type_info": "Bool",
         "origin": {
           "Table": {
             "table": "users",
-            "name": "namespace_id"
+            "name": "two_factor_enabled"
           }
         }
       },
       {
         "ordinal": 9,
-        "name": "totp_enabled",
+        "name": "email_verified!",
         "type_info": "Bool",
-        "origin": {
-          "Table": {
-            "table": "users",
-            "name": "totp_enabled"
-          }
-        }
+        "origin": "Expression"
       },
       {
         "ordinal": 10,
@@ -126,41 +121,40 @@
       },
       {
         "ordinal": 11,
-        "name": "email_verified_at",
+        "name": "last_sign_in_at",
         "type_info": "Timestamptz",
         "origin": {
           "Table": {
             "table": "users",
-            "name": "email_verified_at"
+            "name": "last_sign_in_at"
           }
         }
       },
       {
         "ordinal": 12,
-        "name": "unconfirmed_email",
-        "type_info": "Text",
-        "origin": {
-          "Table": {
-            "table": "users",
-            "name": "unconfirmed_email"
-          }
-        }
+        "name": "sessions!",
+        "type_info": "Int8",
+        "origin": "Expression"
       },
       {
         "ordinal": 13,
-        "name": "avatar_at",
-        "type_info": "Timestamptz",
-        "origin": {
-          "Table": {
-            "table": "users",
-            "name": "avatar_at"
-          }
-        }
+        "name": "tokens!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 14,
+        "name": "providers!",
+        "type_info": "TextArray",
+        "origin": "Expression"
       }
     ],
     "parameters": {
       "Left": [
-        "Text"
+        "Text",
+        "Text",
+        "Int8",
+        "Int8"
       ]
     },
     "nullable": [
@@ -173,12 +167,13 @@
       false,
       false,
       true,
-      false,
+      null,
       false,
       true,
-      true,
-      true
+      null,
+      null,
+      null
     ]
   },
-  "hash": "d0fe779e2782c4ba4f7e567a3772ef74c4293648ab3d539f08953edffa51ddc0"
+  "hash": "671794e8f8c012beb4c6ed7730d51de863d355e66bc568ca820a5ec70b7ca039"
 }

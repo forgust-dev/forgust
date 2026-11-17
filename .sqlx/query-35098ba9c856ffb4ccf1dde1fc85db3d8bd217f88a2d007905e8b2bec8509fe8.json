@@ -1,76 +1,10 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT s.id AS sid, s.user_id, s.csrf_token, s.expires_at, s.last_seen_at, s.impersonator_id,\n                  u.id, u.username, u.email, u.name, u.user_type, u.is_admin, u.is_external, u.state, u.namespace_id, u.totp_enabled,\n                  u.created_at, u.email_verified_at, u.unconfirmed_email, u.avatar_at\n             FROM sessions s JOIN users u ON u.id = s.user_id\n            WHERE s.token_hash = $1 AND s.expires_at > now()",
+  "query": "SELECT id, username, email, name, user_type, is_admin, is_external, state, namespace_id, totp_enabled, security_keys_enabled, created_at,\n                  email_verified_at, unconfirmed_email, avatar_at\n         FROM users WHERE lower(email) = lower($1)",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "sid",
-        "type_info": "Int8",
-        "origin": {
-          "Table": {
-            "table": "sessions",
-            "name": "id"
-          }
-        }
-      },
-      {
-        "ordinal": 1,
-        "name": "user_id",
-        "type_info": "Int8",
-        "origin": {
-          "Table": {
-            "table": "sessions",
-            "name": "user_id"
-          }
-        }
-      },
-      {
-        "ordinal": 2,
-        "name": "csrf_token",
-        "type_info": "Text",
-        "origin": {
-          "Table": {
-            "table": "sessions",
-            "name": "csrf_token"
-          }
-        }
-      },
-      {
-        "ordinal": 3,
-        "name": "expires_at",
-        "type_info": "Timestamptz",
-        "origin": {
-          "Table": {
-            "table": "sessions",
-            "name": "expires_at"
-          }
-        }
-      },
-      {
-        "ordinal": 4,
-        "name": "last_seen_at",
-        "type_info": "Timestamptz",
-        "origin": {
-          "Table": {
-            "table": "sessions",
-            "name": "last_seen_at"
-          }
-        }
-      },
-      {
-        "ordinal": 5,
-        "name": "impersonator_id",
-        "type_info": "Int8",
-        "origin": {
-          "Table": {
-            "table": "sessions",
-            "name": "impersonator_id"
-          }
-        }
-      },
-      {
-        "ordinal": 6,
         "name": "id",
         "type_info": "Int8",
         "origin": {
@@ -81,7 +15,7 @@
         }
       },
       {
-        "ordinal": 7,
+        "ordinal": 1,
         "name": "username",
         "type_info": "Text",
         "origin": {
@@ -92,7 +26,7 @@
         }
       },
       {
-        "ordinal": 8,
+        "ordinal": 2,
         "name": "email",
         "type_info": "Text",
         "origin": {
@@ -103,7 +37,7 @@
         }
       },
       {
-        "ordinal": 9,
+        "ordinal": 3,
         "name": "name",
         "type_info": "Text",
         "origin": {
@@ -114,7 +48,7 @@
         }
       },
       {
-        "ordinal": 10,
+        "ordinal": 4,
         "name": "user_type",
         "type_info": "Text",
         "origin": {
@@ -125,7 +59,7 @@
         }
       },
       {
-        "ordinal": 11,
+        "ordinal": 5,
         "name": "is_admin",
         "type_info": "Bool",
         "origin": {
@@ -136,7 +70,7 @@
         }
       },
       {
-        "ordinal": 12,
+        "ordinal": 6,
         "name": "is_external",
         "type_info": "Bool",
         "origin": {
@@ -147,7 +81,7 @@
         }
       },
       {
-        "ordinal": 13,
+        "ordinal": 7,
         "name": "state",
         "type_info": "Text",
         "origin": {
@@ -158,7 +92,7 @@
         }
       },
       {
-        "ordinal": 14,
+        "ordinal": 8,
         "name": "namespace_id",
         "type_info": "Int8",
         "origin": {
@@ -169,7 +103,7 @@
         }
       },
       {
-        "ordinal": 15,
+        "ordinal": 9,
         "name": "totp_enabled",
         "type_info": "Bool",
         "origin": {
@@ -180,7 +114,18 @@
         }
       },
       {
-        "ordinal": 16,
+        "ordinal": 10,
+        "name": "security_keys_enabled",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "security_keys_enabled"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
         "name": "created_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -191,7 +136,7 @@
         }
       },
       {
-        "ordinal": 17,
+        "ordinal": 12,
         "name": "email_verified_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -202,7 +147,7 @@
         }
       },
       {
-        "ordinal": 18,
+        "ordinal": 13,
         "name": "unconfirmed_email",
         "type_info": "Text",
         "origin": {
@@ -213,7 +158,7 @@
         }
       },
       {
-        "ordinal": 19,
+        "ordinal": 14,
         "name": "avatar_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -226,7 +171,7 @@
     ],
     "parameters": {
       "Left": [
-        "Bytea"
+        "Text"
       ]
     },
     "nullable": [
@@ -235,16 +180,11 @@
       false,
       false,
       false,
-      true,
-      false,
-      false,
-      false,
-      false,
-      false,
       false,
       false,
       false,
       true,
+      false,
       false,
       false,
       true,
@@ -252,5 +192,5 @@
       true
     ]
   },
-  "hash": "8e237ab5879b22ccde05f36db78f035649fec75980ce22cc3fd543829ff0581e"
+  "hash": "35098ba9c856ffb4ccf1dde1fc85db3d8bd217f88a2d007905e8b2bec8509fe8"
 }

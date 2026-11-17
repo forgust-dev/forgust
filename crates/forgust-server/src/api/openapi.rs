@@ -12,7 +12,7 @@ use super::{
 #[openapi(
     info(title = "Forgust API", description = "Forgust REST API (v1)"),
     paths(
-        auth::login, auth::login_totp, auth::login_recovery, auth::session, auth::forgot_password, auth::reset_password, auth::confirm_email,
+        auth::login, auth::login_totp, auth::login_recovery, auth::second_factors, auth::security_key_start, auth::login_webauthn, auth::passkey_start, auth::passkey_finish, auth::session, auth::forgot_password, auth::reset_password, auth::confirm_email,
         user::me, user::list_identities, user::list_keys, user::list_tokens, crate::oauth::authorize_info, crate::oauth::authorize, user::my_projects, user::work, user::todos, user::contributions, user::profile,
         groups::list_top, groups::create, groups::show, groups::subgroups, groups::projects, groups::members, groups::storage,
         projects::explore, projects::protected_tags, projects::storage, projects::pages, projects::protect_tag, projects::unprotect_tag, projects::create, projects::show, projects::members, projects::users, projects::protected_branches,
@@ -48,10 +48,10 @@ use super::{
         forgust_db::ci::Runner, forgust_db::ci::RunnerManager, forgust_db::ci::Pipeline, forgust_db::ci::Artifact,
         forgust_db::ci::ProjectCiSettings, forgust_db::ci::AllowedProject, ci::AllowProject,
         forgust_db::ci::Schedule, ci::ScheduleDto, ci::ScheduleBody, ci::KeyValueOut,
-        auth::LoginRequest, auth::LoginResponse, auth::SessionInfo, auth::TotpLogin, auth::RecoveryLogin, auth::RegisterRequest, auth::Provider,
+        auth::LoginRequest, auth::LoginResponse, auth::SessionInfo, auth::TotpLogin, auth::RecoveryLogin, auth::PendingLogin, auth::SecondFactors, auth::WebauthnChallenge, auth::WebauthnLogin, auth::PasskeyStart, auth::PasskeyFinish, auth::RegisterRequest, auth::Provider,
         auth::SetupRequest, auth::SetupStatus, auth::ForgotPassword, auth::ResetPassword, auth::ConfirmEmail,
         user::Work, user::Profile, user::Contributions, forgust_db::contributions::Day, forgust_db::contributions::Activity, forgust_db::people::WorkMr, forgust_db::people::WorkIssue, forgust_db::todos::Todo,
-        crate::oauth::AuthorizeInfo, crate::oauth::AuthorizeDecision, crate::oauth::AuthorizeRedirect, crate::oauth::AuthorizeRequest, user::UpdateMe, user::ChangePassword, user::AddKey, user::CreateToken, user::TotpSetup, user::TotpCode, user::TotpEnabled, user::TotpDisable, user::RecoveryCodesLeft, user::NewRecoveryCodes, user::LinkedProvider, user::ConfirmPassword, user::LinkStart, user::MyProject,
+        crate::oauth::AuthorizeInfo, crate::oauth::AuthorizeDecision, crate::oauth::AuthorizeRedirect, crate::oauth::AuthorizeRequest, user::UpdateMe, user::ChangePassword, user::AddKey, user::CreateToken, user::TotpSetup, user::TotpCode, user::TotpEnabled, user::TotpDisable, user::RecoveryCodesLeft, user::NewRecoveryCodes, user::WebauthnCredentials, user::WebauthnRegisterStart, user::WebauthnRegistration, user::WebauthnRegisterFinish, user::WebauthnRegistered, user::WebauthnRename, forgust_db::webauthn::CredentialInfo, forgust_db::webauthn::CredentialKind, user::LinkedProvider, user::ConfirmPassword, user::LinkStart, user::MyProject,
         groups::CreateGroup, groups::UpdateGroup, groups::PolicyRequest, groups::NewPath, groups::TransferGroup, groups::AddMember,
         groups::ShareRequest, groups::CreateAccessToken, groups::CreateDeployToken,
         projects::CreateProject, projects::UpdateProject, projects::NewPath, projects::TransferProject, projects::ProtectBranch, projects::AddDeployKey,

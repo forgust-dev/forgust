@@ -3,6 +3,7 @@
 pub mod authz;
 pub mod oidc;
 pub mod session;
+pub mod webauthn;
 
 use axum::extract::FromRequestParts;
 use axum::http::Method;

@@ -61,6 +61,12 @@ graphile_worker = "0.14"
 object_store = { version = "0.14", features = ["aws"] }
 argon2 = "0.6"
 totp-rs = { version = "6", features = ["otpauth", "gen_secret"] }
+# security keys and passkeys. conditional-ui: usernameless sign-in;
+# danger-allow-state-serialisation: ceremony state kept in Postgres (it never
+# goes to the browser). Brings in OpenSSL, through webauthn-rs-core.
+webauthn-rs = { version = "0.6.2", features = ["conditional-ui", "danger-allow-state-serialisation"] }
+# its option types, to adjust what the browser is asked for (same version)
+webauthn-rs-proto = "=0.6.2"
 openidconnect = { version = "4", default-features = false, features = ["reqwest", "rustls-tls"] }
 aes-gcm = "0.11"
 russh = "0.65"
@@ -93,4 +99,6 @@ regex-syntax = "0.8.11"
 
 [dev-dependencies]
 tempfile = "3"
+# a software authenticator for the WebAuthn tests (already in the tree)
+p256 = { version = "0.13", features = ["ecdsa"] }
 reqwest = { version = "0.13", default-features = false, features = ["rustls", "json", "stream", "multipart", "query", "form"] }

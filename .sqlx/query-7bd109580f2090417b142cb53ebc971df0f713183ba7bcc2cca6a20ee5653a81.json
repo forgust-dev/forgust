@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM webauthn_credentials WHERE id = $2 AND user_id = $1 RETURNING kind AS \"kind: CredentialKind\", name",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "kind: CredentialKind",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "webauthn_credentials",
+            "name": "kind"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "webauthn_credentials",
+            "name": "name"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "7bd109580f2090417b142cb53ebc971df0f713183ba7bcc2cca6a20ee5653a81"
+}

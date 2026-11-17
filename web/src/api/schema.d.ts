@@ -139,6 +139,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/login/second_factor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** What can finish a sign-in whose password (or provider) was accepted. */
+        post: operations["second_factors"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login/totp": {
         parameters: {
             query?: never;
@@ -149,6 +166,83 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["login_totp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/login/webauthn": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The second step with a security key, on what `/auth/login/webauthn/start` asked it to sign. */
+        post: operations["login_webauthn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/login/webauthn/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask the account's security keys to sign for a pending sign-in (asking
+         *     again replaces the question); the answer goes to `/auth/login/webauthn`.
+         */
+        post: operations["security_key_start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/passkey/finish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign in with a passkey. It verified its user (PIN, biometrics): no password
+         *     and no second factor are asked. Every refusal looks the same.
+         */
+        post: operations["passkey_finish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/passkey/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a sign-in with a passkey: no username, the authenticator offers the
+         *     passkeys it holds for this site.
+         */
+        post: operations["passkey_start"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3289,6 +3383,23 @@ export interface components {
             /** @description The tag object (annotated) or the commit (lightweight). */
             target: string;
         };
+        /** @description A credential as its owner sees it (no key material). */
+        CredentialInfo: {
+            /** Format: date-time */
+            created_at: string;
+            /** Format: int64 */
+            id: number;
+            kind: components["schemas"]["CredentialKind"];
+            /** Format: date-time */
+            last_used_at?: string | null;
+            name: string;
+        };
+        /**
+         * @description What a credential is for: a second factor after the password, or a
+         *     sign-in of its own.
+         * @enum {string}
+         */
+        CredentialKind: "security_key" | "passkey";
         Day: {
             /** Format: int64 */
             count: number;
@@ -4622,9 +4733,23 @@ export interface components {
             /** @description Where the site is (or would be). */
             url?: string | null;
         };
+        PasskeyFinish: {
+            ceremony: string;
+            /** @description What `navigator.credentials.get` returned (`PublicKeyCredential`, as JSON). */
+            credential: Record<string, never>;
+        };
+        PasskeyStart: {
+            /** @description Send back with the answer. */
+            ceremony: string;
+            /** @description Options for `navigator.credentials.get` (WebAuthn). */
+            options: Record<string, never>;
+        };
         PathCommit: {
             commit?: components["schemas"]["CommitInfo"] | null;
             path: string;
+        };
+        PendingLogin: {
+            challenge: string;
         };
         Person: {
             email: string;
@@ -5332,6 +5457,15 @@ export interface components {
             merge_requests: components["schemas"]["ItemHit"][];
             projects: components["schemas"]["ProjectHit"][];
         };
+        /** @description The second factors a pending sign-in can be finished with. */
+        SecondFactors: {
+            /** @description A recovery code (some are left). */
+            recovery_code: boolean;
+            /** @description A security key: `/auth/login/webauthn/start`, then `/auth/login/webauthn`. */
+            security_key: boolean;
+            /** @description A code from the authenticator app. */
+            totp: boolean;
+        };
         SectionReport: {
             /** Format: int32 */
             approvals_required: number;
@@ -5457,6 +5591,11 @@ export interface components {
              */
             email_enabled: boolean;
             needs_setup: boolean;
+            /**
+             * @description Security keys and passkeys work here (served over https): the sign-in
+             *     page offers passkeys.
+             */
+            webauthn: boolean;
         };
         ShareDto: {
             /** Format: date-time */
@@ -5770,7 +5909,10 @@ export interface components {
             password: string;
         };
         TotpEnabled: {
-            /** @description Shown this once: each stands in for the authenticator at sign-in, once. */
+            /**
+             * @description Shown this once: each stands in for the authenticator at sign-in, once.
+             *     Empty when the account already had codes (from its security keys).
+             */
             recovery_codes: string[];
             user: components["schemas"]["UserDto"];
         };
@@ -5963,6 +6105,8 @@ export interface components {
             namespace_id?: number | null;
             /** @description `active` or `blocked`; only to the user themselves and to admins. */
             state?: string | null;
+            /** @description Of the second factors, an authenticator app (the others: security keys). */
+            totp_enabled?: boolean | null;
             /** @description Only to the user themselves and to admins (it tells who is easiest to attack). */
             two_factor_enabled?: boolean | null;
             unconfirmed_email?: string | null;
@@ -6016,6 +6160,54 @@ export interface components {
             namespace?: string | null;
             /** @description `project` or `namespace` */
             scope: string;
+        };
+        WebauthnChallenge: {
+            /** @description Options for `navigator.credentials.get` (WebAuthn). */
+            options: Record<string, never>;
+        };
+        WebauthnCredentials: {
+            /** @description Security keys and passkeys work on this instance (served over https). */
+            available: boolean;
+            credentials: components["schemas"]["CredentialInfo"][];
+        };
+        WebauthnLogin: {
+            challenge: string;
+            /** @description What `navigator.credentials.get` returned (`PublicKeyCredential`, as JSON). */
+            credential: Record<string, never>;
+        };
+        WebauthnRegisterFinish: {
+            ceremony: string;
+            /** @description What `navigator.credentials.create` returned (`PublicKeyCredential`, as JSON). */
+            credential: Record<string, never>;
+            /** @description How the owner tells it apart ("YubiKey 5C", "Phone"). */
+            name: string;
+        };
+        WebauthnRegisterStart: {
+            /** @description A second factor, or a sign-in of its own. */
+            kind: components["schemas"]["CredentialKind"];
+            /**
+             * @description The account's password: a borrowed session must not be able to add its
+             *     own way in.
+             */
+            password?: string;
+        };
+        WebauthnRegistered: {
+            credential: components["schemas"]["CredentialInfo"];
+            /**
+             * @description The account's first second factor: its recovery codes, shown this once
+             *     (empty otherwise).
+             */
+            recovery_codes: string[];
+            user: components["schemas"]["UserDto"];
+        };
+        WebauthnRegistration: {
+            /** @description Send back with the new credential. */
+            ceremony: string;
+            /** @description Options for `navigator.credentials.create` (WebAuthn). */
+            options: Record<string, never>;
+        };
+        WebauthnRename: {
+            name: string;
         };
         Webhook: {
             /** Format: date-time */
@@ -6338,6 +6530,29 @@ export interface operations {
             };
         };
     };
+    second_factors: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PendingLogin"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecondFactors"];
+                };
+            };
+        };
+    };
     login_totp: {
         parameters: {
             query?: never;
@@ -6357,6 +6572,94 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LoginResponse"];
+                };
+            };
+        };
+    };
+    login_webauthn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebauthnLogin"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResponse"];
+                };
+            };
+        };
+    };
+    security_key_start: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PendingLogin"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebauthnChallenge"];
+                };
+            };
+        };
+    };
+    passkey_finish: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasskeyFinish"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResponse"];
+                };
+            };
+        };
+    };
+    passkey_start: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasskeyStart"];
                 };
             };
         };

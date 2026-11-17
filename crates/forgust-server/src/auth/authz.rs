@@ -63,7 +63,7 @@ pub async fn project_role(state: &AppState, principal: &Principal, project: &Pro
             let root = project.traversal_ids.first().copied().unwrap_or(project.namespace_id);
             let (level, require_2fa) = forgust_db::authz::project_level_and_2fa(&state.db, user.id, project.id, root).await?;
             let level = level.unwrap_or(0);
-            if level > 0 && require_2fa && !user.is_bot() && !user.totp_enabled && !user.is_admin {
+            if level > 0 && require_2fa && !user.is_bot() && !user.two_factor() && !user.is_admin {
                 return Err(ApiError::TwoFactorRequired);
             }
             role.level = level;
@@ -177,7 +177,7 @@ pub async fn group_level(state: &AppState, principal: &Principal, ns: &Namespace
     let Some(user) = principal.direct_user() else { return Ok((0, false)) };
     let (level, require_2fa) = forgust_db::authz::namespace_level_and_2fa(&state.db, user.id, ns.id, ns.root_id()).await?;
     let level = level.unwrap_or(0);
-    if level > 0 && require_2fa && !user.is_bot() && !user.totp_enabled && !user.is_admin {
+    if level > 0 && require_2fa && !user.is_bot() && !user.two_factor() && !user.is_admin {
         return Err(ApiError::TwoFactorRequired);
     }
     if principal.is_admin() && level < OWNER {

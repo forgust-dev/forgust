@@ -107,7 +107,7 @@ pub async fn basic_principal(state: &AppState, headers: &HeaderMap, ip: ClientIp
         return Err(ApiError::Unauthorized);
     }
     let user = forgust_db::users::find(&state.db, id).await?.ok_or(ApiError::Unauthorized)?;
-    if !user.is_active() || user.totp_enabled {
+    if !user.is_active() || user.two_factor() {
         return Err(ApiError::Unauthorized);
     }
     Ok(Principal::User { user, scopes: None })

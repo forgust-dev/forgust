@@ -38,6 +38,9 @@ pub struct Inner {
     /// Proxy for Markdown images from other sites (None: `security.image_proxy` off).
     pub images: Option<crate::render::ImageProxy>,
     pub oidc: crate::auth::oidc::OidcClients,
+    /// Security keys and passkeys (None: `server.external_url` is not a domain
+    /// over https, or localhost).
+    pub webauthn: Option<Arc<crate::auth::webauthn::RelyingParty>>,
     pub mailer: Arc<dyn crate::services::notify::Mailer>,
     /// One-time token for creating the first admin (None once set up).
     pub setup_token: Mutex<Option<String>>,
