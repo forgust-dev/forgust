@@ -4,7 +4,7 @@ use axum::Json;
 use utoipa::OpenApi;
 
 use super::{
-    auth, awards, ci, dto, environments, groups, imports, issues, milestones, mr, notifications, projects, registry, releases, renovate,
+    ai_review, auth, awards, ci, dto, environments, groups, imports, issues, milestones, mr, notifications, projects, registry, releases, renovate,
     repo, review, search, security, tests, user,
 };
 
@@ -39,6 +39,7 @@ use super::{
         registry::info, registry::tags, registry::cleanup_policy, registry::set_cleanup_policy,
         renovate::get, renovate::set, renovate::run_now, renovate::host_rules, renovate::add_host_rule, renovate::delete_host_rule, renovate::admin_host_rules, renovate::admin_add_host_rule, renovate::admin_delete_host_rule,
         renovate::group_get, renovate::group_set, renovate::admin_get, renovate::admin_set,
+        ai_review::get, ai_review::set, ai_review::mr_status, ai_review::mr_request, ai_review::admin_get, ai_review::admin_set,
         environments::list, environments::show, environments::protected, environments::protect,
         mr::add_to_train, mr::merge_trains,
     ),
@@ -88,6 +89,8 @@ use super::{
         renovate::RenovateStatus, renovate::RenovateRun, renovate::RenovateSettingsBody, renovate::RenovateRunStarted,
         renovate::NewHostRule, forgust_db::renovate::HostRule, renovate::GroupRenovate, renovate::GroupRenovateStatus, renovate::AdminRenovate,
         renovate::AdminRenovateStatus,
+        ai_review::AiReviewSettings, ai_review::AiReviewSettingsBody, ai_review::AiReviewRun, ai_review::AiReviewStatus,
+        ai_review::AdminAiReview, ai_review::AdminAiReviewStatus, crate::config::AiProvider,
         environments::EnvironmentDetail, environments::ProtectEnvironment, forgust_db::environments::Environment,
         forgust_db::environments::EnvironmentSummary, environments::EnvironmentRow, forgust_db::environments::Deployment, forgust_db::environments::ProtectedEnvironment,
         ci::JobEnvironment, forgust_db::ci::PipelineLink, forgust_db::merge_trains::Car,

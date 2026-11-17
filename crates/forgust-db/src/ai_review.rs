@@ -16,13 +16,9 @@ pub struct Settings {
 }
 
 pub async fn get(e: impl PgExecutor<'_>, project_id: i64) -> Result<Option<Settings>> {
-    sqlx::query_as!(
-        Settings,
-        "SELECT project_id, enabled, bot_user_id, user_id FROM ai_review_settings WHERE project_id = $1",
-        project_id
-    )
-    .fetch_optional(e)
-    .await
+    sqlx::query_as!(Settings, "SELECT project_id, enabled, bot_user_id, user_id FROM ai_review_settings WHERE project_id = $1", project_id)
+        .fetch_optional(e)
+        .await
 }
 
 /// Turn it on or off; `bot_user_id` and `user_id` are kept when None.
