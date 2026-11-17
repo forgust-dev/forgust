@@ -4,8 +4,8 @@ use axum::Json;
 use utoipa::OpenApi;
 
 use super::{
-    ai_review, auth, awards, ci, dto, environments, groups, imports, issues, milestones, mr, notifications, projects, registry, releases, renovate,
-    repo, review, search, security, tests, user,
+    ai_review, auth, awards, ci, dto, environments, groups, imports, issues, milestones, mr, notifications, projects, registry, releases,
+    renovate, repo, review, search, security, tests, user,
 };
 
 #[derive(OpenApi)]

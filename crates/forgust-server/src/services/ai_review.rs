@@ -362,6 +362,15 @@ async fn commentable(
     Ok((new, old))
 }
 
+/// A comment on a line, as posted (what a review posting it again would repeat).
+#[derive(PartialEq, Eq, Hash)]
+struct LineNote {
+    path: String,
+    new_line: Option<i32>,
+    old_line: Option<i32>,
+    body: String,
+}
+
 /// Post the summary and the comments that hold up: (posted, dropped).
 #[allow(clippy::too_many_arguments)]
 async fn post(
@@ -387,14 +396,14 @@ async fn post(
     // the merge request's only when the whole of it was reviewed
     let whole = run.base_sha == latest.base_sha;
     let existing = mrdb::notes(&state.db, mr.id).await?;
-    let already: HashSet<(Option<String>, Option<i32>, Option<i32>, String)> = existing
+    let already: HashSet<LineNote> = existing
         .iter()
         .filter(|n| n.author_id == Some(bot.id))
-        .map(|n| (n.new_path.clone(), n.new_line, n.old_line, n.body.clone()))
+        .filter_map(|n| Some(LineNote { path: n.new_path.clone()?, new_line: n.new_line, old_line: n.old_line, body: n.body.clone() }))
         .collect();
     let mut posted = 0usize;
     let mut dropped = 0usize;
-    let mut notes: Vec<(String, Option<i32>, Option<i32>, String)> = Vec::new();
+    let mut notes: Vec<LineNote> = Vec::new();
     for c in &rep.comments {
         let body = clip(c.body.trim(), report::MAX_COMMENT_CHARS);
         let on_line = match (c.new_line, c.old_line) {
@@ -406,11 +415,16 @@ async fn post(
             dropped += 1;
             continue;
         }
-        let key = (Some(c.path.clone()), c.new_line.map(|n| n as i32), c.old_line.filter(|_| c.new_line.is_none()).map(|o| o as i32), body);
-        if already.contains(&key) || notes.contains(&(c.path.clone(), key.1, key.2, key.3.clone())) {
+        let note = LineNote {
+            path: c.path.clone(),
+            new_line: c.new_line.map(|n| n as i32),
+            old_line: c.old_line.filter(|_| c.new_line.is_none()).map(|o| o as i32),
+            body,
+        };
+        if already.contains(&note) || notes.contains(&note) {
             continue;
         }
-        notes.push((c.path.clone(), key.1, key.2, key.3));
+        notes.push(note);
     }
     let scope =
         if whole { "the changes".to_string() } else { format!("the changes since `{}`", &run.base_sha[..run.base_sha.len().min(8)]) };
@@ -442,7 +456,7 @@ async fn post(
         }
     }
     add_bot_note(state, project, mr, bot, &summary, mrdb::Position::default()).await?;
-    for (path, new_line, old_line, body) in &notes {
+    for LineNote { path, new_line, old_line, body } in &notes {
         let pos = mrdb::Position {
             diff_id: Some(latest.id),
             base_sha: Some(&latest.base_sha),

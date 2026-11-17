@@ -1,0 +1,148 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT pipeline_id, merge_request_id, base_sha, head_sha, requested_by, state, comments_posted, comments_dropped,\n                error, created_at, finished_at\n           FROM ai_review_runs WHERE merge_request_id = $1 ORDER BY created_at DESC, pipeline_id DESC LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pipeline_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ai_review_runs",
+            "name": "pipeline_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "merge_request_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ai_review_runs",
+            "name": "merge_request_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "base_sha",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ai_review_runs",
+            "name": "base_sha"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "head_sha",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ai_review_runs",
+            "name": "head_sha"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "requested_by",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ai_review_runs",
+            "name": "requested_by"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "state",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ai_review_runs",
+            "name": "state"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "comments_posted",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "ai_review_runs",
+            "name": "comments_posted"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "comments_dropped",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "ai_review_runs",
+            "name": "comments_dropped"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "error",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ai_review_runs",
+            "name": "error"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "ai_review_runs",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "finished_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "ai_review_runs",
+            "name": "finished_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "645a04e57cdb3c42a9d66212f91bda909f5baa8082b9c2930817dd20a3a138e6"
+}

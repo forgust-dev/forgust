@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT r.pipeline_id, p.status FROM ai_review_runs r JOIN ci_pipelines p ON p.id = r.pipeline_id\n          WHERE r.state = 'pending' AND p.status <> ALL($1) AND p.finished_at < now() - interval '5 minutes'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pipeline_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ai_review_runs",
+            "name": "pipeline_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "status",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "status"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "4aa3fc436616bd0e492b6aae96cce9185672cfb355fb6f787b3c50c16342e4ab"
+}

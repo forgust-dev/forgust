@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO ai_review_runs (pipeline_id, merge_request_id, base_sha, head_sha, requested_by) VALUES ($1, $2, $3, $4, $5)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "edcabaa5786818c42d81a86f9d4ef8f34ea82d179cbde776f4025ecd91c0daca"
+}

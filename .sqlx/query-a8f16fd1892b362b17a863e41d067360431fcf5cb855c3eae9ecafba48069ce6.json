@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO ai_review_instance (id, overrides, api_key_enc) VALUES (true, $1, $3)\n         ON CONFLICT (id) DO UPDATE SET overrides = $1,\n             api_key_enc = CASE WHEN $2 THEN $3 ELSE ai_review_instance.api_key_enc END, updated_at = now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a8f16fd1892b362b17a863e41d067360431fcf5cb855c3eae9ecafba48069ce6"
+}

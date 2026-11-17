@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT head_sha FROM ai_review_runs WHERE merge_request_id = $1 AND state = 'posted'\n          ORDER BY created_at DESC, pipeline_id DESC LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "head_sha",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ai_review_runs",
+            "name": "head_sha"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "cdceb3f1c0dec3bca309e882c50a25aba0e5c5d3cd0c63958877ced303eaf0cd"
+}

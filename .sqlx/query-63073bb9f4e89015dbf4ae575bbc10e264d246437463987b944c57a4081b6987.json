@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT overrides, api_key_enc FROM ai_review_instance WHERE id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "overrides",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "ai_review_instance",
+            "name": "overrides"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "api_key_enc",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ai_review_instance",
+            "name": "api_key_enc"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "63073bb9f4e89015dbf4ae575bbc10e264d246437463987b944c57a4081b6987"
+}

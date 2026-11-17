@@ -40,7 +40,11 @@ async fn settings_of(state: &AppState, project_id: i64) -> ApiResult<AiReviewSet
 
 /// AI review of the project's merge requests (Maintainers).
 #[utoipa::path(get, path = "/api/v1/projects/{id}/ai_review", responses((status = 200, body = AiReviewSettings)), tag = "ai_review")]
-pub async fn get(State(state): State<AppState>, SignedIn(_, principal): SignedIn, Path(id): Path<String>) -> ApiResult<Json<AiReviewSettings>> {
+pub async fn get(
+    State(state): State<AppState>,
+    SignedIn(_, principal): SignedIn,
+    Path(id): Path<String>,
+) -> ApiResult<Json<AiReviewSettings>> {
     let p = project_for(&state, &principal, &id, ProjectAction::Admin).await?;
     Ok(Json(settings_of(&state, p.id).await?))
 }
@@ -118,7 +122,11 @@ async fn status_of(state: &AppState, principal: &crate::auth::Principal, id: &st
 
 /// The merge request's latest AI review.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/merge_requests/{iid}/ai_review", responses((status = 200, body = AiReviewStatus)), tag = "ai_review")]
-pub async fn mr_status(State(state): State<AppState>, Viewer(v): Viewer, Path((id, iid)): Path<(String, i64)>) -> ApiResult<Json<AiReviewStatus>> {
+pub async fn mr_status(
+    State(state): State<AppState>,
+    Viewer(v): Viewer,
+    Path((id, iid)): Path<(String, i64)>,
+) -> ApiResult<Json<AiReviewStatus>> {
     Ok(Json(status_of(&state, &v, &id, iid).await?))
 }
 
