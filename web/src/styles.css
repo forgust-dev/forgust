@@ -3578,6 +3578,18 @@ a.status-badge:hover {
   font-weight: 700;
   letter-spacing: -0.03em;
 }
+/* on a phone the title takes its own line, under the status and the actions
+   (beside them, it was squeezed into a narrow column) */
+@media (max-width: 600px) {
+  .pipeline-head .pipeline-title {
+    order: 1;
+    flex-basis: 100%;
+    font-size: 25px;
+  }
+  .pipeline-head > .btn:first-of-type {
+    margin-left: auto;
+  }
+}
 .facts-bar {
   display: flex;
   flex-wrap: wrap;

@@ -252,7 +252,7 @@ export function PipelineHeader({ ctx, p, tab }: { ctx: Ctx; p: S["PipelineDetail
   const first = pickJob(p.jobs);
   return (
     <div className="stack" style={{ gap: 14 }}>
-      <div className="row wrap" style={{ gap: 12 }}>
+      <div className="row wrap pipeline-head" style={{ gap: 12 }}>
         <StatusBadge status={p.status} />
         <h1 className="pipeline-title grow">
           {p.commit_title || `Pipeline #${p.iid}`} <span className="faint mono">#{p.iid}</span>
