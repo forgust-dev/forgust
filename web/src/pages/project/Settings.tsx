@@ -137,46 +137,59 @@ function GeneralSettings({ ctx }: { ctx: Ctx }) {
     if (Object.hasOwn(MOVED, hash)) nav(`${ctx.web}/-/settings/${MOVED[hash]}${hash}`, { replace: true });
   }, [hash]);
 
+  // archived, the settings are read-only: its Owner (the only one who sees this
+  // page then) can still rename, move, delete or unarchive it
+  const archived = p.archived;
   return (
     <div className="stack settings-page">
-      <ListHead title="General settings" sub="Name, picture and storage of this project." />
+      <ListHead
+        title="General settings"
+        sub={archived ? "This project is archived: unarchive it to change its settings or see its storage. It can still be renamed, moved or deleted." : "Name, picture and storage of this project."}
+      />
       <ErrorBox error={error} />
       {msg && <div className="alert ok">{msg}</div>}
-      <Section title="Picture" description="The project's picture in lists, its page and the sidebar.">
-        <AvatarUpload
-          preview={<Tile name={p.name} src={p.avatar_url} big />}
-          path={`/projects/${p.id}/avatar`}
-          hasOne={!!p.avatar_url}
-          onChanged={() => qc.invalidateQueries({ queryKey: ["project", p.id] })}
-          what="in lists and on the project's page"
-        />
-      </Section>
-      <Section title="General" description="Name, description, who can see the project, and the branch it opens on.">
-        <form className="stack" onSubmit={run(() => api.put(`/projects/${p.id}`, { name, description, visibility, default_branch: defaultBranch || null }), "Saved.")}>
-          <Field label="Name">
-            <input value={name} onChange={(e) => setName(e.target.value)} />
-          </Field>
-          <Field label="Description">
-            <input value={description} onChange={(e) => setDescription(e.target.value)} />
-          </Field>
-          <Field label="Visibility">
-            <VisibilitySelect value={visibility} onChange={setVisibility} />
-          </Field>
-          <Field label="Default branch">
-            <Select
-              value={defaultBranch}
-              onChange={setDefaultBranch}
-              options={(branches.data ?? [{ name: defaultBranch } as S["BranchDto"]]).map((b) => ({ value: b.name, label: b.name }))}
+      {!archived && (
+        <>
+          <Section title="Picture" description="The project's picture in lists, its page and the sidebar.">
+            <AvatarUpload
+              preview={<Tile name={p.name} src={p.avatar_url} big />}
+              path={`/projects/${p.id}/avatar`}
+              hasOne={!!p.avatar_url}
+              onChanged={() => qc.invalidateQueries({ queryKey: ["project", p.id] })}
+              what="in lists and on the project's page"
             />
-          </Field>
-          <div>
-            <button className="btn primary">Save</button>
-          </div>
-        </form>
-      </Section>
-      <Section id="storage" title="Storage" description="What this project keeps: its repository, uploaded files, CI artifacts and logs, Git LFS objects and container images; and its storage quotas, if any.">
-        <StorageUse ctx={ctx} />
-      </Section>
+          </Section>
+          <Section title="General" description="Name, description, who can see the project, and the branch it opens on.">
+            <form className="stack" onSubmit={run(() => api.put(`/projects/${p.id}`, { name, description, visibility, default_branch: defaultBranch || null }), "Saved.")}>
+              <Field label="Name">
+                <input value={name} onChange={(e) => setName(e.target.value)} />
+              </Field>
+              <Field label="Description">
+                <input value={description} onChange={(e) => setDescription(e.target.value)} />
+              </Field>
+              <Field label="Visibility">
+                <VisibilitySelect value={visibility} onChange={setVisibility} />
+              </Field>
+              <Field label="Default branch">
+                <Select
+                  value={defaultBranch}
+                  onChange={setDefaultBranch}
+                  options={(branches.data ?? [{ name: defaultBranch } as S["BranchDto"]]).map((b) => ({ value: b.name, label: b.name }))}
+                />
+              </Field>
+              <div>
+                <button className="btn primary">Save</button>
+              </div>
+            </form>
+          </Section>
+        </>
+      )}
+      {/* its figures are for Maintainers, and an archived project has none */}
+      {!archived && (
+        <Section id="storage" title="Storage" description="What this project keeps: its repository, uploaded files, CI artifacts and logs, Git LFS objects and container images; and its storage quotas, if any.">
+          <StorageUse ctx={ctx} />
+        </Section>
+      )}
       {p.can_own && (
         <Section title="Advanced" description="Change the path, move the project to another group, or delete it." danger>
           <div className="stack">
@@ -214,22 +227,38 @@ function GeneralSettings({ ctx }: { ctx: Ctx }) {
                 Move
               </button>
             </form>
-            <div className="row wrap" style={{ gap: 8, alignItems: "center" }}>
-              <button
-                className="btn"
-                onClick={run(
-                  async () => {
-                    await api.post(`/projects/${p.id}/archive`);
-                    nav(`/${p.full_path}`);
-                  },
-                  "Archived: the project is read-only.",
-                  `Archive ${p.full_path}? It becomes read-only for everyone (code, issues, merge requests, CI, settings) until you unarchive it.`,
-                )}
-              >
-                Archive project
-              </button>
-              <span className="small muted">Read-only, kept and readable; unarchive it from its page.</span>
-            </div>
+            {archived ? (
+              <div className="row wrap" style={{ gap: 8, alignItems: "center" }}>
+                <button
+                  className="btn"
+                  onClick={run(async () => {
+                    await api.post(`/projects/${p.id}/unarchive`);
+                    // every page's permissions change with it (settings, pushing, the banner)
+                    await qc.invalidateQueries();
+                  }, "Unarchived: the project can change again.")}
+                >
+                  Unarchive project
+                </button>
+                <span className="small muted">Writable again for its members, as before it was archived.</span>
+              </div>
+            ) : (
+              <div className="row wrap" style={{ gap: 8, alignItems: "center" }}>
+                <button
+                  className="btn"
+                  onClick={run(
+                    async () => {
+                      await api.post(`/projects/${p.id}/archive`);
+                      nav(`/${p.full_path}`);
+                    },
+                    "Archived: the project is read-only.",
+                    `Archive ${p.full_path}? It becomes read-only for everyone (code, issues, merge requests, CI, settings) until you unarchive it.`,
+                  )}
+                >
+                  Archive project
+                </button>
+                <span className="small muted">Read-only, kept and readable; unarchive it from its page or here.</span>
+              </div>
+            )}
             <div>
               <button
                 className="btn danger"

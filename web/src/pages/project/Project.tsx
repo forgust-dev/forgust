@@ -175,7 +175,7 @@ export function ProjectPage({ id, fullPath, rest }: { id: number; fullPath: stri
                   {section === "merge_requests" && /^\d+$/.test(more[0] ?? "") && (
                     <MergeRequestPage key={more[0]} ctx={ctx} iid={Number(more[0])} tab={more[1] === "commits" ? "commits" : more[1] === "diffs" ? "diffs" : "overview"} />
                   )}
-                  {section === "settings" && (p.can_admin && more.length <= 1 ? <ProjectSettings ctx={ctx} page={more[0] ?? ""} /> : <NotFound />)}
+                  {section === "settings" && (canOpenSettings(p, more) ? <ProjectSettings ctx={ctx} page={more[0] ?? ""} /> : <NotFound />)}
                   {section === "pipelines" && more.length === 0 && <PipelineList ctx={ctx} />}
                   {section === "pipelines" && more[0] === "new" && <RunPipeline ctx={ctx} />}
                   {section === "pipelines" && /^\d+$/.test(more[0] ?? "") && <PipelinePage ctx={ctx} iid={Number(more[0])} />}
@@ -195,6 +195,15 @@ export function ProjectPage({ id, fullPath, rest }: { id: number; fullPath: stri
 }
 
 const VISIBILITY_ICON: Record<string, ReactNode> = { private: <Lock size={12} />, internal: <Building2 size={12} />, public: <Globe size={12} /> };
+
+/**
+ * Settings are for Maintainers; an archived project's are read-only, but its Owner
+ * keeps the general page: to rename, move, delete or unarchive it.
+ */
+function canOpenSettings(p: S["ProjectDetail"], more: string[]) {
+  if (p.can_admin) return more.length <= 1;
+  return p.archived && p.can_own && more.length === 0;
+}
 
 /** On every page of an archived project: it is read-only; its Owner unarchives it here. */
 function ArchivedBanner({ p }: { p: S["ProjectDetail"] }) {

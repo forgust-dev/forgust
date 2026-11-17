@@ -170,7 +170,10 @@ function projectItems(p: S["ProjectDetail"], ref: string, mrCount?: number, issu
             }),
           },
         ]
-      : []),
+      : // archived, its Owner keeps the general page (rename, move, delete, unarchive)
+        p.archived && p.can_own
+        ? [{ to: `${web}/-/settings`, label: "Settings", icon: <Settings size={16} />, match: sec("settings") }]
+        : []),
   ];
 }
 
