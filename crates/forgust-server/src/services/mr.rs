@@ -899,6 +899,10 @@ pub async fn may_edit(state: &AppState, principal: &Principal, p: &Project, mr: 
 pub async fn approve(state: &AppState, principal: &Principal, p: &Project, mr: &MergeRequest, approve: bool) -> ApiResult<()> {
     crate::auth::authz::writable(p)?;
     let user = principal.direct_user().ok_or(ApiError::Unauthorized)?;
+    // an AI review is advice, never an approval
+    if user.user_type == "ai_review_bot" {
+        return Err(ApiError::forbidden("the AI review bot cannot approve"));
+    }
     let role = project_role(state, principal, p).await?;
     if role.level < forgust_db::access::REPORTER {
         return Err(ApiError::forbidden("approving needs at least the Reporter role"));

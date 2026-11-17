@@ -377,6 +377,14 @@ async fn job_payload(state: &AppState, runner: &Runner, build: &Build, token: &s
             .ok_or_else(|| anyhow::anyhow!("a Renovate job not run by the project's Renovate bot"))?;
         predefined.extend(crate::services::renovate::job_variables(state, &project, settings, bot, build.timeout_secs as i64).await?);
     }
+    if pipeline.source == crate::services::ai_review::SOURCE {
+        // only ever for the project's own AI review bot, with the feature on
+        let review = forgust_db::ai_review::get(db, project.id).await?.filter(|s| s.enabled);
+        user.as_ref()
+            .filter(|u| u.user_type == "ai_review_bot" && review.as_ref().and_then(|s| s.bot_user_id) == Some(u.id))
+            .ok_or_else(|| anyhow::anyhow!("an AI review job not run by the project's AI review bot, or AI review is off"))?;
+        predefined.extend(crate::services::ai_review::job_variables(state).await?);
+    }
     // the job's environment
     let mut environment = None;
     if let Some(env) = &spec.job.environment {
@@ -750,6 +758,7 @@ const ARTIFACT_TYPES: &[&str] = &[
     "annotations",
     "repository_xray",
     "cyclonedx",
+    crate::services::ai_review::REPORT,
 ];
 
 async fn upload_artifacts(

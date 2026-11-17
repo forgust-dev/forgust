@@ -2,6 +2,7 @@
 //! per-domain query modules in `forgust-db`.
 
 pub mod accounts;
+pub mod ai_review;
 pub mod auto_merge;
 pub mod avatars;
 pub mod awards;

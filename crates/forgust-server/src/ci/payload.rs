@@ -122,7 +122,8 @@ fn report_format(kind: &str) -> &'static str {
         | "load_performance"
         | "annotations"
         | "cyclonedx"
-        | "coverage_report" => "gzip",
+        | "coverage_report"
+        | crate::services::ai_review::REPORT => "gzip",
         _ => "zip",
     }
 }

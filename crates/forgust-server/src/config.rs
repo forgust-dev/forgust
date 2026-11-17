@@ -28,6 +28,7 @@ pub struct Config {
     pub renovate: RenovateConfig,
     pub pages: PagesConfig,
     pub security_scanning: SecurityScanningConfig,
+    pub ai_review: AiReviewConfig,
     pub oidc: BTreeMap<String, OidcProvider>,
 }
 
@@ -140,6 +141,78 @@ impl Default for RenovateConfig {
             onboarding_config: None,
             extra_env: BTreeMap::new(),
             github_com_token: None,
+        }
+    }
+}
+
+/// The model API an AI review talks to. Only OpenAI-compatible endpoints
+/// (`/chat/completions`: OpenAI, Ollama, vLLM, llama.cpp, LiteLLM...) for now;
+/// others become variants here, and the job reads which one from
+/// `AI_REVIEW_PROVIDER`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AiProvider {
+    #[default]
+    #[serde(rename = "openai")]
+    OpenAi,
+}
+
+impl AiProvider {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AiProvider::OpenAi => "openai",
+        }
+    }
+}
+
+/// AI review of merge requests: on request, Forgust runs a job of its own on
+/// the instance's runners that sends a merge request's changes to `base_url`
+/// and posts what the model says as notes of a bot of the project. Off until
+/// an administrator turns it on: the code leaves for wherever `base_url` is.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AiReviewConfig {
+    pub enabled: bool,
+    pub provider: AiProvider,
+    /// The API's base, e.g. `https://api.openai.com/v1` or
+    /// `http://ollama:11434/v1`; reached from the runners, not the server.
+    pub base_url: String,
+    pub model: String,
+    /// Sent as `Authorization: Bearer` (masked in the job); none for a local
+    /// model.
+    pub api_key: Option<String>,
+    /// The image the job runs: Forgust's own (`forgust ai-review`).
+    pub image: String,
+    /// Runner tags the job asks for. Only instance runners take review jobs.
+    pub tags: Vec<String>,
+    /// Reviews at once on the instance; more are refused until one ends.
+    pub max_concurrent: u32,
+    pub timeout_secs: u64,
+    /// Line comments one review may post.
+    pub max_comments: u32,
+    /// Changes sent to the model per review; files past it are listed as not
+    /// reviewed, never cut.
+    pub max_diff_bytes: u64,
+    /// PEM of the authorities the endpoint's certificate is signed by, when
+    /// it is an in-house CA (`security.ca_file` does not reach jobs).
+    pub ca_pem: Option<String>,
+}
+
+impl Default for AiReviewConfig {
+    fn default() -> Self {
+        AiReviewConfig {
+            enabled: false,
+            provider: AiProvider::OpenAi,
+            base_url: String::new(),
+            model: String::new(),
+            api_key: None,
+            image: format!("ghcr.io/forgust-dev/forgust:{}", env!("CARGO_PKG_VERSION")),
+            tags: Vec::new(),
+            max_concurrent: 2,
+            timeout_secs: 900,
+            max_comments: 10,
+            max_diff_bytes: 200_000,
+            ca_pem: None,
         }
     }
 }
