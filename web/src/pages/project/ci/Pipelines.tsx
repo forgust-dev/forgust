@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useLayoutEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, Clock3, CornerDownRight, GitBranch, Play, RotateCcw, Server, ServerOff, Square, Tag, Timer, Plus, X } from "lucide-react";
@@ -313,6 +313,74 @@ function upstreamOf(j: S["JobDto"], jobs: S["JobDto"][]): Set<string> {
   return new Set(before.filter((o) => o.stage_idx === last).map((o) => o.name));
 }
 
+/** The room between two stages, where the lines turn (styles.css: .stage-link). */
+const STAGE_GAP = 48;
+
+type Edge = { from: string; to: string; d: string };
+
+/** The lines from each job to the jobs that wait for it, drawn behind the cards:
+ *  quiet, until a hovered job lights its own and dims the rest. */
+function GraphEdges({ graph, jobs, focus }: { graph: HTMLDivElement | null; jobs: S["JobDto"][]; focus?: string }) {
+  const [geo, setGeo] = useState<{ w: number; h: number; edges: Edge[] }>();
+  // the lines move only when the jobs or what they wait for do, not with a status
+  const shape = jobs.map((j) => `${j.name}:${j.stage_idx}:${j.needs?.join(",") ?? "-"}`).join("|");
+  // the graph comes as state, not a ref: a child's effects run before its parent's ref is set
+  useLayoutEffect(() => {
+    const el = graph;
+    if (!el) return;
+    const measure = () => {
+      // stacked on a phone: the cards follow each other, a line would only cross them
+      if (getComputedStyle(el).flexDirection === "column") return setGeo(undefined);
+      const box = el.getBoundingClientRect();
+      const ox = el.scrollLeft - box.left - el.clientLeft;
+      const oy = el.scrollTop - box.top - el.clientTop;
+      const at = new Map<string, DOMRect>();
+      el.querySelectorAll<HTMLElement>("[data-job]").forEach((c) => at.set(c.dataset.job!, c.getBoundingClientRect()));
+      const edges: Edge[] = [];
+      for (const j of jobs) {
+        const b = at.get(j.name);
+        if (!b) continue;
+        for (const u of upstreamOf(j, jobs)) {
+          const a = at.get(u);
+          if (!a) continue;
+          const y1 = a.top + a.height / 2 + oy;
+          const y2 = b.top + b.height / 2 + oy;
+          let d: string;
+          if (b.left > a.right) {
+            // out of the earlier card, turn in the gap after its stage, then straight on
+            const x1 = a.right + ox;
+            const x2 = b.left + ox;
+            const g = Math.min(STAGE_GAP, x2 - x1);
+            d = `M${x1} ${y1}C${x1 + g * 0.6} ${y1} ${x1 + g * 0.4} ${y2} ${x1 + g} ${y2}H${x2}`;
+          } else {
+            // a need inside one stage: a loop along the column's left side
+            const x = Math.min(a.left, b.left) + ox;
+            d = `M${a.left + ox} ${y1}C${x - 18} ${y1} ${x - 18} ${y2} ${b.left + ox} ${y2}`;
+          }
+          edges.push({ from: u, to: j.name, d });
+        }
+      }
+      setGeo({ w: el.scrollWidth, h: el.scrollHeight, edges });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    el.querySelectorAll(".stage-col").forEach((c) => ro.observe(c));
+    return () => ro.disconnect();
+  }, [graph, shape]);
+  if (!geo) return null;
+  const rel = (e: Edge) => (!focus ? "" : e.to === focus ? "up" : e.from === focus ? "down" : "dim");
+  // the lit lines last, over the others
+  const edges = focus ? [...geo.edges].sort((a, b) => Number(rel(a) !== "dim") - Number(rel(b) !== "dim")) : geo.edges;
+  return (
+    <svg className="graph-edges" width={geo.w} height={geo.h} aria-hidden="true">
+      {edges.map((e) => (
+        <path key={`${e.from}>${e.to}`} d={e.d} className={rel(e)} />
+      ))}
+    </svg>
+  );
+}
+
 const pipelineKey = (pid: number, iid: number) => ["pipeline", pid, iid];
 
 export function usePipeline(ctx: Ctx, iid: number | undefined) {
@@ -513,6 +581,7 @@ export function JobCard({ ctx, j, canRun, rel, onHover }: { ctx: Ctx; j: S["JobD
   return (
     <div
       className={`job-card ${j.retried ? "retried" : ""} ${j.status === "manual" ? "manual" : ""} ${rel ?? ""}`}
+      data-job={j.retried ? undefined : j.name}
       onMouseEnter={() => onHover?.(j.name)}
       onMouseLeave={() => onHover?.(null)}
       onFocus={() => onHover?.(j.name)}
@@ -567,6 +636,7 @@ function stageSummary(jobs: S["JobDto"][]) {
 export function PipelinePage({ ctx, iid }: { ctx: Ctx; iid: number }) {
   const [showRetried, setShowRetried] = useState(false);
   const [hover, setHover] = useState<string | null>(null);
+  const [graph, setGraph] = useState<HTMLDivElement | null>(null);
   const q = usePipeline(ctx, iid);
   return (
     <Q q={q}>
@@ -588,7 +658,8 @@ export function PipelinePage({ ctx, iid }: { ctx: Ctx; iid: number }) {
             <PipelineHeader ctx={ctx} p={p} tab="graph" />
             <PipelineTests ctx={ctx} iid={iid} />
             {live.length > 0 && (
-              <div className="pipeline-graph" role="list" aria-label="Stages">
+              <div className="pipeline-graph" role="list" aria-label="Stages" ref={setGraph}>
+                <GraphEdges graph={graph} jobs={live} focus={focus?.name} />
                 {p.stages.map((stage, i) => {
                   const jobs = live.filter((j) => j.stage === stage);
                   return (

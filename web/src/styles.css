@@ -4226,6 +4226,7 @@ a.status-badge:hover {
 /* ---- pipeline graph */
 
 .pipeline-graph {
+  position: relative;
   display: flex;
   overflow-x: auto;
   padding: 20px;
@@ -4234,15 +4235,45 @@ a.status-badge:hover {
   border: 1px solid var(--border);
 }
 .stage-wrap {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: flex-start;
   flex: none;
 }
+/* the room between stages, where the lines turn (Pipelines.tsx: STAGE_GAP) */
 .stage-link {
-  width: 32px;
-  height: 2px;
-  margin-top: 46px;
-  background: var(--border-strong);
+  width: 48px;
+  flex: none;
+}
+/* lines from each job to the jobs that wait for it, behind the cards */
+.graph-edges {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+.graph-edges path {
+  fill: none;
+  stroke: var(--text-faint);
+  stroke-width: 1.5;
+  opacity: 0.45;
+  transition: stroke 0.1s, opacity 0.1s;
+}
+.graph-edges path.up {
+  stroke: var(--accent);
+  stroke-width: 2;
+  opacity: 1;
+}
+.graph-edges path.down {
+  stroke: var(--warn);
+  stroke-width: 2;
+  opacity: 1;
+}
+.graph-edges path.dim {
+  opacity: 0.15;
 }
 .stage-col {
   display: flex;
@@ -4473,7 +4504,8 @@ a.status-badge:hover {
   .stage-wrap {
     flex-direction: column;
   }
-  .stage-link {
+  .stage-link,
+  .graph-edges {
     display: none;
   }
   .stage-col {
