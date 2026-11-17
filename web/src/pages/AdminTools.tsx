@@ -173,14 +173,14 @@ export function AdminStorage() {
             {KINDS.map((k) => (
               <Stat key={k.key} label={k.label} value={bytes(s.kinds[k.key])} hint={k.store === "disk" ? "on this server's disk" : k.store === "blobs" ? `in ${s.blob_backend === "s3" ? "S3" : "the blob store"}` : undefined} />
             ))}
+            {s.code_index && (
+              <Stat
+                label="Code search index"
+                value={bytes(s.code_index.bytes)}
+                hint={`on this server's disk · ${s.code_index.files} files · ${s.code_index.projects} of ${s.code_index.projects_total} projects indexed`}
+              />
+            )}
           </div>
-          <p className="small muted" style={{ margin: 0 }}>
-            Git repositories are always on this server's disk (<span className="mono">{s.repositories_location}</span>), never in the blob store; LFS objects, CI artifacts, archived job logs, image
-            layers and uploads are in <span className="mono">{s.blob_location}</span>. Repositories are measured after each push and once a day
-            {s.repositories_unmeasured > 0 && <> ({s.repositories_unmeasured} not measured in the last day: measuring them now)</>}. LFS objects and image layers count once here, and for each project that
-            uses them below.
-          </p>
-
           <Card
             title="Blob store contents"
             actions={

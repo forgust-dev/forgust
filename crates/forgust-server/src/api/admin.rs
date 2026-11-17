@@ -60,6 +60,9 @@ pub struct StorageOverview {
     pub repositories_location: String,
     pub kinds: forgust_db::admin::StorageKinds,
     pub total: i64,
+    /// The code search index on this server's disk (None: code search is off).
+    /// Counted in `total`.
+    pub code_index: Option<CodeIndexStorage>,
     /// Largest first: what each keeps, LFS objects and image layers counted for every project using them.
     pub projects: Vec<forgust_db::admin::ProjectStorage>,
     /// Top-level groups and personal namespaces, largest first.
@@ -71,6 +74,31 @@ pub struct StorageOverview {
     /// The storage quota of every top-level group and personal namespace
     /// without its own.
     pub default_quota: Option<i64>,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct CodeIndexStorage {
+    pub location: String,
+    pub bytes: i64,
+    pub files: i64,
+    /// Projects in the index, of `projects_total`: the rest is waiting.
+    pub projects: i64,
+    pub projects_total: i64,
+}
+
+async fn code_index_storage(state: &AppState) -> ApiResult<Option<CodeIndexStorage>> {
+    let Some(index) = state.code_index.clone() else { return Ok(None) };
+    let projects = forgust_db::code_search::indexed_projects(&state.db, index.generation()).await?;
+    let projects_total = forgust_db::admin::project_count(&state.db).await?;
+    let (bytes, files) =
+        tokio::task::spawn_blocking(move || (index.disk_bytes(), index.files().unwrap_or(0))).await.map_err(anyhow::Error::from)?;
+    Ok(Some(CodeIndexStorage {
+        location: state.cfg.code_index_dir().display().to_string(),
+        bytes: bytes as i64,
+        files: files as i64,
+        projects,
+        projects_total,
+    }))
 }
 
 /// What the instance keeps, by kind and by project.
@@ -87,6 +115,7 @@ pub async fn storage(State(state): State<AppState>, Admin(..): Admin) -> ApiResu
         let mut conn = state.db.acquire().await?;
         state.jobs.enqueue(&mut conn, crate::jobs::MeasureRepositories.request()).await.map_err(ApiError::Internal)?;
     }
+    let code_index = code_index_storage(&state).await?;
     let k = &kinds;
     let total = k.repositories + k.lfs + k.artifacts + k.job_logs_archived + k.job_logs_live + k.registry + k.uploads;
     let b = &state.cfg.blobs;
@@ -97,7 +126,8 @@ pub async fn storage(State(state): State<AppState>, Admin(..): Admin) -> ApiResu
         blob_location,
         repositories_location: state.cfg.repos_dir().display().to_string(),
         kinds,
-        total,
+        total: total + code_index.as_ref().map_or(0, |c| c.bytes),
+        code_index,
         projects,
         namespaces,
         repositories_unmeasured: unmeasured,
@@ -343,6 +373,7 @@ const RUNNABLE: &[(&str, &str)] = &[
     ("maintenance_sweep", "Repository maintenance (full repack of repositories pushed to) and repository sizes"),
     ("cleanup", "Expired sessions and tokens, idle git processes"),
     ("measure_repositories", "Repository sizes for Storage"),
+    ("reindex_code", "Code search: index every project again from its repository"),
     ("update_check", "Ask GitHub for the latest Forgust release (unless turned off in Settings)"),
 ];
 

@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO code_index_state (project_id, generation, indexed_commit, default_branch, indexed_at)\n         VALUES ($1, $2, $3, $4, $5)\n         ON CONFLICT (project_id) DO UPDATE SET generation = $2, indexed_commit = $3, default_branch = $4, indexed_at = $5",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cf546ac5cec84207f4b71fadd2f4f07b4ba27fdb79cc1b16699504c2e9ab5f32"
+}

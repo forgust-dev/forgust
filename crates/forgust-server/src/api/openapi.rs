@@ -20,7 +20,7 @@ use super::{
         mr::list, mr::count, mr::create, mr::show, mr::stack_on, mr::auto_merge, mr::merge_status, mr::merge, mr::diff, mr::notes, mr::set_labels,
         awards::mr_reactions, awards::mr_react, awards::issue_reactions, awards::issue_react,
         notifications::mine, notifications::channels, notifications::set_channel, notifications::inbox, notifications::unsubscribe_info, notifications::unsubscribe, notifications::set_mine, notifications::project, notifications::set_project,
-        search::search, security::findings, security::finding, security::dismiss, security::reopen, security::merge_request, security::scanning, security::set_scanning, security::run_scan,
+        search::search, search::code, search::code_languages, security::findings, security::finding, security::dismiss, security::reopen, security::merge_request, security::scanning, security::set_scanning, security::run_scan,
         security::group_scanning, security::set_group_scanning, security::admin_scanning, security::set_admin_scanning, tests::pipeline_tests, tests::pipeline_test_cases, tests::mr_tests,
         milestones::list, milestones::show, milestones::create, milestones::update, milestones::delete,
         releases::list, releases::show, releases::create, releases::update, releases::delete, releases::add_link, releases::delete_link, releases::upload,

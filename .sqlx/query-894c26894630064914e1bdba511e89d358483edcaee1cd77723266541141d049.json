@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) AS \"n!\"\n             FROM projects p JOIN routes r ON r.source_type = 'project' AND r.source_id = p.id\n            WHERE NOT EXISTS (SELECT 1 FROM code_index_state s WHERE s.project_id = p.id AND s.generation = $4)\n              AND ($5::bigint IS NULL OR p.id = $5)\n              AND ($6::text IS NULL OR lower(r.path) LIKE lower($6) || '/%' ESCAPE '\\')\n              AND ($2 OR p.visibility = 20 OR (p.visibility = 10 AND $3)\n                   OR EXISTS (SELECT 1 FROM listed_project_authorizations a WHERE a.project_id = p.id AND a.user_id = $1 AND a.access_level >= 20))",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "n!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Bool",
+        "Bool",
+        "Text",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "894c26894630064914e1bdba511e89d358483edcaee1cd77723266541141d049"
+}

@@ -209,6 +209,26 @@ pub struct FileChange {
     pub content: Option<Vec<u8>>,
 }
 
+/// A file of a commit's tree, with what is needed to read it without its path.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TreeBlob {
+    pub path: String,
+    /// Git file mode: `0o100644`, `0o100755`, or `0o120000` for a symlink.
+    pub mode: u32,
+    pub oid: String,
+    pub size: u64,
+}
+
+/// A path that differs between two commits (renames are a delete and an add).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlobChange {
+    pub path: String,
+    /// Mode in the new commit; 0 when the path is gone.
+    pub mode: u32,
+    /// Object in the new commit; `None` when the path is gone.
+    pub oid: Option<String>,
+}
+
 pub fn is_valid_oid(s: &str) -> bool {
     s.len() == 40 && s.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
 }

@@ -96,6 +96,8 @@ pub async fn build_state(
     let images = cfg.security.image_proxy.then(|| crate::render::ImageProxy::new(secrets.clone(), &cfg.server.external_url));
     let oidc = OidcClients::new(cfg.oidc.clone())?;
     let storage = storage_for(&cfg);
+    let code_index =
+        if cfg.code_search.enabled { Some(Arc::new(crate::code_search::CodeIndex::open(&cfg.code_index_dir())?)) } else { None };
     let mailer: Arc<dyn crate::services::notify::Mailer> = if !cfg.email.enabled() {
         Arc::new(crate::services::notify::NoMailer)
     } else if cfg.email.smtp_url == "memory:" {
@@ -115,6 +117,7 @@ pub async fn build_state(
         hooks: HookConfig { hooks_dir, socket: socket_path(&run_dir), secret: crate::crypto::random_urlsafe(32) },
         metrics,
         highlighter: crate::render::Highlighter::new(),
+        code_index,
         images,
         oidc,
         mailer,

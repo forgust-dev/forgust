@@ -81,6 +81,11 @@ impl Principal {
         self.direct_user().is_some_and(|u| !u.is_bot() && !u.is_external)
     }
 
+    /// Who is searching, for the rules `forgust_db::search` applies in SQL.
+    pub fn search_viewer(&self) -> forgust_db::search::Viewer {
+        forgust_db::search::Viewer { user_id: self.direct_user().map(|u| u.id), admin: self.is_admin(), internal: self.sees_internal() }
+    }
+
     /// An administrator's powers over every project, group and user: from a
     /// browser session, or a token made for it (`admin_mode`), as for the admin
     /// API. A token with another scope (an `api` PAT, an MCP client) and a CI

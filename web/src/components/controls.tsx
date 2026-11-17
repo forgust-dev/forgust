@@ -1,6 +1,7 @@
 // Form controls on Base UI primitives (keyboard, focus and ARIA handled there),
 // styled by `styles.css` (`.select`, `.switch`, `.segmented`, `.dropdown`).
 import type { CSSProperties, ReactElement, ReactNode } from "react";
+import { Combobox as BCombobox } from "@base-ui/react/combobox";
 import { Menu as BMenu } from "@base-ui/react/menu";
 import { Popover as BPopover } from "@base-ui/react/popover";
 import { Radio } from "@base-ui/react/radio";
@@ -84,6 +85,64 @@ export function Select({
         </BSelect.Positioner>
       </BSelect.Portal>
     </BSelect.Root>
+  );
+}
+
+/**
+ * A select box with a filter: for lists too long to scan. Typing narrows the
+ * options, the arrows move, Enter takes the highlighted one (the first match).
+ */
+export function Combobox({
+  value,
+  onChange,
+  options,
+  label,
+  style,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+  label: string;
+  style?: CSSProperties;
+}) {
+  // the items are the options themselves: the box shows the chosen one's label,
+  // the filter matches labels; a value no option has shows as it is
+  const chosen = options.find((o) => o.value === value) ?? { value, label: value };
+  return (
+    <BCombobox.Root
+      items={options}
+      value={chosen}
+      onValueChange={(o) => o && onChange(o.value)}
+      itemToStringLabel={(o) => o.label}
+      isItemEqualToValue={(a, b) => a.value === b.value}
+      // the first match is highlighted as you type: Enter takes it
+      autoHighlight
+    >
+      <BCombobox.Trigger className="select" aria-label={label} style={style}>
+        <BCombobox.Value>{(o: { label: string } | null) => <span className="select-value">{o?.label}</span>}</BCombobox.Value>
+        <BCombobox.Icon className="select-icon">
+          <ChevronDown size={14} />
+        </BCombobox.Icon>
+      </BCombobox.Trigger>
+      <BCombobox.Portal>
+        <BCombobox.Positioner className="positioner" side="bottom" align="start" sideOffset={4}>
+          <BCombobox.Popup className="select-menu combo" aria-label={label}>
+            <BCombobox.Input type="search" placeholder="Filter…" aria-label={`Filter: ${label}`} />
+            <BCombobox.Empty className="combo-empty">Nothing matches</BCombobox.Empty>
+            <BCombobox.List className="combo-list">
+              {(o: { value: string; label: string }) => (
+                <BCombobox.Item key={o.value} value={o} className="select-item">
+                  <BCombobox.ItemIndicator className="select-check">
+                    <Check size={14} />
+                  </BCombobox.ItemIndicator>
+                  {o.label}
+                </BCombobox.Item>
+              )}
+            </BCombobox.List>
+          </BCombobox.Popup>
+        </BCombobox.Positioner>
+      </BCombobox.Portal>
+    </BCombobox.Root>
   );
 }
 

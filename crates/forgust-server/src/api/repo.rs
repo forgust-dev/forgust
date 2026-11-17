@@ -19,6 +19,7 @@ use super::project_for;
 use crate::auth::Viewer;
 use crate::auth::authz::ProjectAction;
 use crate::error::{ApiError, ApiResult};
+use crate::languages::is_binary;
 use crate::render;
 use crate::state::{AppState, ResponseCache};
 
@@ -308,10 +309,6 @@ pub struct BlobResponse {
     /// Rendered Markdown, for `.md` files.
     pub markdown_html: Option<String>,
     pub lfs: Option<LfsInfo>,
-}
-
-fn is_binary(data: &[u8]) -> bool {
-    data.iter().take(8000).any(|&b| b == 0)
 }
 
 async fn render_blob(state: &AppState, p: &Project, git_ref: &str, commit: &str, path: &str) -> ApiResult<BlobResponse> {

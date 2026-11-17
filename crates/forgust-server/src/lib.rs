@@ -9,6 +9,7 @@ pub mod auth;
 pub mod backup;
 pub mod blob;
 pub mod ci;
+pub mod code_search;
 pub mod config;
 pub mod crypto;
 pub mod error;

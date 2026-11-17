@@ -204,6 +204,13 @@ impl PostReceive {
                 });
                 crate::services::webhooks::emit(state, &p, "push", payload).await;
             }
+            // code search follows the default branch (on a first push it was
+            // just set, in `after_push`)
+            if let Some(default) = &p.default_branch
+                && self.updates.iter().any(|u| u.name.strip_prefix("refs/heads/") == Some(default.as_str()))
+            {
+                crate::code_search::indexer::queue(state, self.project_id).await;
+            }
         }
         refresh_repository_size(state, self.project_id).await;
         let pushes = forgust_db::maintenance::record_push(&state.db, self.project_id).await?;
@@ -286,6 +293,56 @@ impl TaskHandler for Maintenance {
     }
 }
 
+/// Bring the code search index up to date for one project (or remove a
+/// deleted project from it). All of them share one queue: the index has a
+/// single writer.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct IndexCode {
+    pub project_id: i64,
+}
+
+impl IndexCode {
+    pub fn request(self) -> JobRequest {
+        JobRequest {
+            task: Self::IDENTIFIER,
+            // pushes while one waits collapse into it: it reads the head when it runs
+            job_key: Some(format!("code-index:{}", self.project_id)),
+            queue: Some("code-index".into()),
+            payload: serde_json::to_value(&self).unwrap_or_default(),
+            max_attempts: Some(5),
+        }
+    }
+}
+
+impl TaskHandler for IndexCode {
+    const IDENTIFIER: &'static str = "index_code";
+
+    async fn run(self, ctx: WorkerContext) -> impl IntoTaskHandlerResult {
+        let state = ctx.get_ext::<AppState>().ok_or("no app state")?;
+        let started = std::time::Instant::now();
+        crate::code_search::indexer::index_project(state, self.project_id).await.map_err(|e| e.to_string())?;
+        metrics::histogram!("forgust_code_index_seconds").record(started.elapsed().as_secs_f64());
+        Ok::<(), String>(())
+    }
+}
+
+/// Throw away what the code search index knows and index every project again
+/// (Admin > Background jobs).
+#[derive(Debug, Serialize, Default)]
+pub struct ReindexCode;
+payload_free!(ReindexCode);
+
+impl TaskHandler for ReindexCode {
+    const IDENTIFIER: &'static str = "reindex_code";
+
+    async fn run(self, ctx: WorkerContext) -> impl IntoTaskHandlerResult {
+        let state = ctx.get_ext::<AppState>().ok_or("no app state")?;
+        let queued = crate::code_search::indexer::reindex_all(state).await.map_err(|e| e.to_string())?;
+        tracing::info!(projects = queued, "code search: reindexing");
+        Ok::<(), String>(())
+    }
+}
+
 /// Hourly: full maintenance for repos pushed to since their last run.
 #[derive(Debug, Serialize, Default)]
 pub struct MaintenanceSweep;
@@ -307,6 +364,11 @@ impl TaskHandler for MaintenanceSweep {
         // LFS objects no project uses any more go a day after they were last used
         if let Err(e) = crate::lfs::sweep_unused(state, crate::lfs::UNUSED_KEPT).await {
             tracing::warn!(error = %e, "unused LFS objects not swept");
+        }
+        // code search: projects the index is behind on (imports, restores, a
+        // rebuilt index, deleted projects)
+        if let Err(e) = crate::code_search::indexer::queue_due(state).await {
+            tracing::warn!(error = %e, "code index jobs not queued");
         }
         Ok::<(), String>(())
     }
@@ -689,6 +751,8 @@ pub async fn start_worker(state: AppState, concurrency: usize) -> anyhow::Result
         .define_job::<PostReceive>()
         .define_job::<Maintenance>()
         .define_job::<MaintenanceSweep>()
+        .define_job::<IndexCode>()
+        .define_job::<ReindexCode>()
         .define_job::<Cleanup>()
         .define_job::<ScanBlobs>()
         .define_job::<MeasureRepositories>()
@@ -713,6 +777,17 @@ pub async fn start_worker(state: AppState, concurrency: usize) -> anyhow::Result
         .add_extension(state)
         .init()
         .await?;
+    // code search: projects not indexed yet (an upgrade, a new or restored
+    // index) start now rather than at the next hourly sweep
+    // (not awaited: the listeners do not wait for it)
+    let sweep_state = check_state.clone();
+    tokio::spawn(async move {
+        match crate::code_search::indexer::queue_due(&sweep_state).await {
+            Ok(0) => {}
+            Ok(n) => tracing::info!(projects = n, "code search: indexing"),
+            Err(e) => tracing::warn!(error = %e, "code index jobs not queued"),
+        }
+    });
     // a fresh install, or one that was down, hears of a release now rather than in up to 6 hours
     if let Err(e) = crate::services::updates::queue_check(&check_state).await {
         tracing::warn!(error = %e, "could not queue the release check");

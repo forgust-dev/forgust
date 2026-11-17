@@ -80,6 +80,15 @@ enabled = true
 max_blob_bytes = 10737418240   # largest image layer
 token_ttl_secs = 900
 
+[code_search]
+# search inside files: an index of each project's default branch on this server's
+# disk, updated after pushes. It can be deleted at any time: it is rebuilt in the
+# background (also: Admin > Background jobs > "reindex_code"). Not part of backups.
+enabled = true
+# index_dir = "/var/lib/forgust/code-index"   # default: <data_dir>/code-index; every process of the instance must see it
+max_file_bytes = 1048576       # larger files are not indexed (binary files and LFS pointers never are)
+query_timeout_ms = 2000        # a search answers with what it found after this long, and says there is more
+
 [renovate]
 # built-in Renovate (ADR-0023): projects turn on "Dependency updates" and Forgust
 # runs Renovate as a CI job on these runners, with a bot of the project

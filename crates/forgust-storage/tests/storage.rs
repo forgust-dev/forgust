@@ -94,6 +94,31 @@ async fn exercise(format: RefFormat) {
     assert_eq!(blame[0].commit.subject, "first");
     assert_eq!(blame[1].commit.id, second);
 
+    let (blobs, cut) = storage.tree_blobs(repo, &second, 100).await.unwrap();
+    assert!(!cut);
+    let listed: Vec<_> = blobs.iter().map(|b| (b.path.as_str(), b.mode, b.size)).collect();
+    assert_eq!(listed, vec![("README", 0o100644, 8), ("src/lib.rs", 0o100644, 30)]);
+    assert_eq!(storage.tree_blobs(repo, &second, 1).await.unwrap(), (blobs[..1].to_vec(), true));
+
+    let changes = storage.changed_blobs(repo, &first, &second).await.unwrap();
+    assert_eq!(
+        changes,
+        vec![
+            BlobChange { path: "README".into(), mode: 0o100644, oid: Some(blobs[0].oid.clone()) },
+            BlobChange { path: "README.md".into(), mode: 0, oid: None },
+            BlobChange { path: "src/lib.rs".into(), mode: 0o100644, oid: Some(blobs[1].oid.clone()) },
+        ]
+    );
+    assert!(storage.changed_blobs(repo, &second, &second).await.unwrap().is_empty());
+
+    let asked = vec![blobs[1].oid.clone(), "0".repeat(40), second.clone(), blobs[0].oid.clone()];
+    let read = storage.blobs_by_id(repo, &asked, 12).await.unwrap();
+    assert_eq!(read[0], Some((30, b"fn a() {}\nfn".to_vec())));
+    // missing, then a commit: neither is a blob
+    assert_eq!((&read[1], &read[2]), (&None, &None));
+    assert_eq!(read[3], Some((8, b"# Hello\n".to_vec())));
+    assert!(matches!(storage.blobs_by_id(repo, &["main".to_string()], 12).await, Err(StorageError::Invalid(_))));
+
     let refs = storage.refs(repo, "refs/heads/").await.unwrap();
     assert_eq!(refs.len(), 2);
     let tags = storage.refs(repo, "refs/tags/").await.unwrap();

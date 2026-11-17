@@ -67,5 +67,6 @@ fi
 
 ARGS=(--url "http://127.0.0.1:$PORT" --token "$TOKEN" --project bench/fixture --file src/file_00000.rs --refs-project bench/refs1m --mr 'bench/fixture!1'
   --out "bench/results/$(date -u +%Y%m%dT%H%M%SZ).json" --baseline "$BASELINE" --host "$(uname -n), see bench/HOST.md")
+[[ -n "${LINUX_BUNDLE:-}" ]] && ARGS+=(--large-project bench/linux)
 [[ "${UPDATE_BASELINE:-0}" == 1 ]] && ARGS+=(--update-baseline)
 $BIN/forgust-bench run "${ARGS[@]}"

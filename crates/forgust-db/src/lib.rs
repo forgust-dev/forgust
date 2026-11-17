@@ -7,6 +7,7 @@ pub mod authz;
 pub mod awards;
 pub mod ci;
 pub mod ci_variables;
+pub mod code_search;
 pub mod contributions;
 pub mod environments;
 pub mod gpg_keys;

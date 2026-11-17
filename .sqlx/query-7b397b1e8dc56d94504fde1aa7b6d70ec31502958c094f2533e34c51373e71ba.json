@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT generation, indexed_commit FROM code_index_state WHERE project_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "generation",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "code_index_state",
+            "name": "generation"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "indexed_commit",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "code_index_state",
+            "name": "indexed_commit"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "7b397b1e8dc56d94504fde1aa7b6d70ec31502958c094f2533e34c51373e71ba"
+}
