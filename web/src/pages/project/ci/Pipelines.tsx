@@ -353,19 +353,27 @@ function ManualCard({ ctx, p }: { ctx: Ctx; p: S["PipelineDetail"] }) {
     if (!confirmRun(j)) return;
     await run(() => api.post(`/projects/${ctx.p.id}/jobs/${j.id}/play`), `Started ${j.name}`);
   };
+  // as tall as the facts beside it: what waits and its button on one line, the why in its tip
   return (
     <section className="manual-card" aria-label="Waiting for you">
-      <span className="eyebrow">
-        <Clock3 size={14} aria-hidden /> Waiting for you
-      </span>
-      <h2>{env ? `Deploy to ${env}` : `Run ${j.name}`}</h2>
-      <p>
-        {waiting.length === 1
-          ? `${j.name} is a manual job: it runs when someone starts it.`
-          : `${j.name} and ${waiting.length - 1} more manual job${waiting.length === 2 ? "" : "s"} run when someone starts them.`}
-      </p>
-      <button className="btn run" onClick={play}>
-        <Play size={14} /> Run {j.name}
+      <div className="manual-text">
+        <span className="eyebrow">
+          <Clock3 size={14} aria-hidden /> Waiting for you
+          {waiting.length > 1 && ` · ${waiting.length} manual jobs`}
+        </span>
+        <h2>{env ? `Deploy to ${env}` : `Run ${j.name}`}</h2>
+      </div>
+      <button
+        className="btn run"
+        onClick={play}
+        aria-label={`Start ${j.name}`}
+        title={
+          waiting.length === 1
+            ? `${j.name} is a manual job: it runs when someone starts it.`
+            : `${j.name} and ${waiting.length - 1} more manual job${waiting.length === 2 ? "" : "s"} run when someone starts them.`
+        }
+      >
+        <Play size={14} /> Start
       </button>
     </section>
   );

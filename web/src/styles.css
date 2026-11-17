@@ -3531,11 +3531,12 @@ a.status-badge:hover {
 .facts-bar dd.mono {
   font-size: 12.5px;
 }
-/* the facts, and beside them the manual job waiting for someone */
+/* the facts, and beside them the manual job waiting for someone: one height for
+   both (the card is a line: what waits, then its button) */
 .pipe-summary {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 14px;
 }
 .pipe-summary > .facts-bar {
@@ -3543,16 +3544,25 @@ a.status-badge:hover {
   min-width: 0;
 }
 .manual-card {
-  flex: 1 1 300px;
+  /* room for "Deploy to production" and its button on one line */
+  flex: 1 1 340px;
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
   min-width: 0;
-  padding: 16px 18px;
+  padding: 12px 14px 12px 18px;
   border: 1px solid var(--emph-border);
   border-radius: var(--radius-lg);
   background: var(--emph-bg);
   color: var(--emph-text);
+}
+.manual-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 .manual-card .eyebrow {
   display: inline-flex;
@@ -3564,18 +3574,13 @@ a.status-badge:hover {
 }
 .manual-card h2 {
   margin: 0;
-  font-size: 19px;
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.02em;
-}
-.manual-card p {
-  margin: 0;
-  color: var(--emph-muted);
-  font-size: 13.5px;
+  overflow-wrap: anywhere;
 }
 .manual-card .btn.run {
-  align-self: flex-start;
-  margin-top: 8px;
+  flex: none;
   border-color: var(--emph-btn-bg);
   background: var(--emph-btn-bg);
   color: var(--emph-btn-text);
