@@ -146,7 +146,7 @@ impl Default for RenovateConfig {
 }
 
 /// AI review of merge requests: on request, Forgust runs a job of its own on
-/// the instance's runners, with the reviewer image (forgust-dev/forgust-reviewer),
+/// the instance's runners, with the reviewer image (`crates/forgust-reviewer`),
 /// that sends a merge request's changes to `base_url`, and posts what the
 /// model says as notes of a bot of the project. Off until an administrator
 /// turns it on: the code leaves for wherever `base_url` is.
@@ -192,7 +192,8 @@ impl Default for AiReviewConfig {
             base_url: String::new(),
             model: String::new(),
             api_key: None,
-            image: "ghcr.io/forgust-dev/forgust-reviewer:0.1.0".into(),
+            // released with the server, under the same version
+            image: format!("ghcr.io/forgust-dev/forgust-reviewer:{}", env!("CARGO_PKG_VERSION")),
             tags: Vec::new(),
             max_concurrent: 2,
             timeout_secs: 900,

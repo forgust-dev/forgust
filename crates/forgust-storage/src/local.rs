@@ -12,9 +12,9 @@ use lru::LruCache;
 use sha2::{Digest, Sha256};
 
 use crate::catfile::{CatFilePool, parse_raw_tree};
-use crate::diff::{Diff, DiffOptions, parse_numstat_z, parse_unified_diff};
 use crate::types::*;
 use crate::{Result, Storage, StorageError, cli};
+use forgust_diff::{Diff, DiffOptions, parse_numstat_z, parse_unified_diff};
 
 const SHORT: Duration = Duration::from_secs(30);
 const LONG: Duration = Duration::from_secs(600);

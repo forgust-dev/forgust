@@ -618,7 +618,7 @@ function AiReviewForm({ initial }: { initial: S["AdminAiReviewStatus"] }) {
         <Field label="Timeout (minutes)">
           <input type="number" min={1} max={120} value={Math.round(s.timeout_secs / 60)} onChange={(e) => setS({ ...s, timeout_secs: Number(e.target.value) * 60 })} />
         </Field>
-        <Field label="Reviewer image" hint="Runs forgust-review: ghcr.io/forgust-dev/forgust-reviewer, or an image of your own with the same contract">
+        <Field label="Reviewer image" hint="Runs forgust-review: ghcr.io/forgust-dev/forgust-reviewer at this server's version, or an image of your own with the same contract">
           <input className="mono" value={s.image} onChange={(e) => setS({ ...s, image: e.target.value })} />
         </Field>
         <Field label="Runner tags" hint="Comma-separated; instance runners only">
@@ -631,7 +631,7 @@ function AiReviewForm({ initial }: { initial: S["AdminAiReviewStatus"] }) {
           <>
             One NAME=value per line, given to the job as AI_REVIEW_NAME and shown in its variables: no secrets. For example MAX_DIFF_BYTES (changes per model
             request: fit the model&apos;s context) or TEMPERATURE; the{" "}
-            <a href="https://github.com/forgust-dev/forgust-reviewer#variables" target="_blank" rel="noreferrer">
+            <a href="https://github.com/forgust-dev/forgust/tree/main/crates/forgust-reviewer#variables" target="_blank" rel="noreferrer">
               reviewer&apos;s README
             </a>{" "}
             lists them.

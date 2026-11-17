@@ -1,9 +1,6 @@
-//! What a review job leaves behind (`artifacts:reports:ai_review`): the
-//! report of the contract with the reviewer image (forgust-dev/forgust-reviewer,
-//! its README), kept here as the server reads it. The job is not trusted: the
-//! server checks every comment against the merge request before posting it.
-//! A field the image adds later is ignored; `version` changes only when the
-//! report does in a way this server cannot read.
+//! What a review job leaves behind (`artifacts:reports:ai_review`), and the
+//! server reads. The job is not trusted: the server checks every comment
+//! against the merge request before posting it.
 
 use serde::{Deserialize, Serialize};
 

@@ -106,7 +106,7 @@ timeout_secs = 3600
 
 [ai_review]
 # AI review of merge requests: a "Request AI review" button runs a job on these
-# runners, with the reviewer image (github.com/forgust-dev/forgust-reviewer), that
+# runners, with the reviewer image (crates/forgust-reviewer, released with Forgust), that
 # sends the merge request's changes to base_url, and posts what the model says as
 # comments of a bot of the project. Off by default: THE CODE OF REVIEWED MERGE
 # REQUESTS IS SENT TO base_url. Also in Admin > AI review.
@@ -119,7 +119,7 @@ tags = []                 # runner tags for the job (instance runners only)
 max_concurrent = 2        # reviews at once on the instance
 timeout_secs = 900
 max_comments = 10         # line comments one review may post
-# image = "ghcr.io/forgust-dev/forgust-reviewer:0.1.0"   # runs `forgust-review`
+# image = "ghcr.io/forgust-dev/forgust-reviewer:<version>"   # the server's version; runs `forgust-review`
 # ca_pem = "-----BEGIN CERTIFICATE-----..."              # when the endpoint uses an in-house CA
 # The reviewer's own options, given to the job as AI_REVIEW_<NAME> (see its README):
 # [ai_review.options]      # shown in the job's variables: no secrets

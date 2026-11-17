@@ -258,7 +258,7 @@ pub async fn admin_set(
         return Err(ApiError::bad("the model is a name like gpt-4.1 or qwen2.5-coder:32b"));
     }
     if s.image.trim().is_empty() || s.image.chars().any(char::is_whitespace) {
-        return Err(ApiError::bad("the image is a name like ghcr.io/forgust-dev/forgust-reviewer:0.1.0"));
+        return Err(ApiError::bad("the image is a name like ghcr.io/forgust-dev/forgust-reviewer:0.3.0"));
     }
     if !(1..=50).contains(&s.max_concurrent) {
         return Err(ApiError::bad("1 to 50 reviews at once"));

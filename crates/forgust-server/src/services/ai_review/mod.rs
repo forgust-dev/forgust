@@ -2,8 +2,9 @@
 //! runs a pipeline of its own (source `ai_review`) on the instance's runners,
 //! as a bot that is a Reporter of the project, whose job sends the changes to
 //! the model endpoint the administrator set. The job runs the reviewer image
-//! (forgust-dev/forgust-reviewer); the variables it gets and the report it
-//! leaves ([`report`]) are the contract between the two.
+//! (`crates/forgust-reviewer`, released with the server under the same
+//! version); the variables it gets and the report it leaves ([`report`]) are
+//! the contract between the two.
 //!
 //! The job holds no credential of the forge beyond its job token (clone
 //! only): it uploads a report, and the server checks every comment in it (the
@@ -11,7 +12,7 @@
 //! `max_comments`, not posted already) before posting it as the bot. A
 //! review is advice: the bot cannot approve or request changes.
 
-pub mod report;
+pub use forgust_reviewer::report;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 

@@ -7,6 +7,7 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+forgust-diff = { workspace = true, features = ["schema"] }
 anyhow.workspace = true
 thiserror.workspace = true
 async-trait.workspace = true

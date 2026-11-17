@@ -1,0 +1,16 @@
+[package]
+name = "forgust-diff"
+description = "Diffs parsed into files, hunks and numbered lines (shared by the server and the AI reviewer)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[features]
+# serializable, with OpenAPI schemas: what the server's API returns
+schema = ["dep:serde", "dep:utoipa"]
+
+[dependencies]
+serde = { workspace = true, optional = true }
+utoipa = { version = "6", features = ["chrono"], optional = true }

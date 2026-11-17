@@ -13,6 +13,8 @@ publish = false
 [workspace.dependencies]
 forgust-db = { path = "crates/forgust-db" }
 forgust-storage = { path = "crates/forgust-storage" }
+forgust-diff = { path = "crates/forgust-diff" }
+forgust-reviewer = { path = "crates/forgust-reviewer", default-features = false }
 forgust-ci-config = { path = "crates/forgust-ci-config" }
 
 anyhow = "1"

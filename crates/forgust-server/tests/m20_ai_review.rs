@@ -234,7 +234,7 @@ async fn a_review_runs_as_a_reporter_bot_and_only_what_holds_up_is_posted(pool: 
     assert_eq!(var(&job, "AI_REVIEW_MAX_DIFF_BYTES").as_deref(), Some("50000"), "the reviewer's options, passed on");
     assert_eq!(var(&job, "AI_REVIEW_AWS_SECRET").as_deref(), Some("s3cr3t-value-42"));
     assert!(masked(&job, "AI_REVIEW_AWS_SECRET"));
-    assert_eq!(job["image"]["name"], "ghcr.io/forgust-dev/forgust-reviewer:0.1.0");
+    assert_eq!(job["image"]["name"], format!("ghcr.io/forgust-dev/forgust-reviewer:{}", env!("CARGO_PKG_VERSION")), "the server's version");
     assert_eq!(var(&job, "FORGUST_REVIEW_HEAD_SHA"), Some(head.clone()));
     assert_eq!(var(&job, "FORGUST_REVIEW_BASE_SHA"), Some(main_head.clone()));
     assert_eq!(var(&job, "FORGUST_REVIEW_TARGET_SHA"), Some(main_head.clone()));
@@ -368,7 +368,7 @@ async fn a_review_runs_as_a_reporter_bot_and_only_what_holds_up_is_posted(pool: 
 /// that image's user, against a model the test plays: the report it uploads
 /// is read and posted. Opt in with `FORGUST_TEST_RUNNER=gitlab/gitlab-runner:<version>`
 /// and `FORGUST_TEST_AI_REVIEW_IMAGE=<a forgust-reviewer image>` (built from
-/// forgust-dev/forgust-reviewer: `docker build -t forgust-reviewer:local .`).
+/// the repository's root: `docker build -f crates/forgust-reviewer/Dockerfile -t forgust-reviewer:local .`).
 #[sqlx::test(migrator = "forgust_db::MIGRATOR")]
 async fn a_stock_runner_runs_a_review(pool: sqlx::PgPool) {
     let (Ok(runner_image), Ok(review_image)) = (std::env::var("FORGUST_TEST_RUNNER"), std::env::var("FORGUST_TEST_AI_REVIEW_IMAGE")) else {
