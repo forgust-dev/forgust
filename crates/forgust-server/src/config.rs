@@ -190,7 +190,9 @@ pub struct AiReviewConfig {
     pub timeout_secs: u64,
     /// Line comments one review may post.
     pub max_comments: u32,
-    /// Changes sent to the model per review; files past it are listed as not
+    /// Changes sent to the model per request (fit it to the model's context);
+    /// a larger merge request takes several requests, up to 8 (so up to 8
+    /// times this per review), and files past them are listed as not
     /// reviewed, never cut.
     pub max_diff_bytes: u64,
     /// PEM of the authorities the endpoint's certificate is signed by, when

@@ -33,7 +33,7 @@ pub struct AiReviewSettingsBody {
 }
 
 async fn settings_of(state: &AppState, project_id: i64) -> ApiResult<AiReviewSettings> {
-    let c = svc::config(state).await.map_err(ApiError::Internal)?;
+    let c = svc::config_without_key(state).await.map_err(ApiError::Internal)?;
     let enabled = forgust_db::ai_review::get(&state.db, project_id).await?.is_some_and(|s| s.enabled);
     Ok(AiReviewSettings { available: svc::usable(&c), enabled, endpoint: svc::endpoint_host(&c), model: c.model })
 }
@@ -95,7 +95,7 @@ pub struct AiReviewStatus {
 async fn status_of(state: &AppState, principal: &crate::auth::Principal, id: &str, iid: i64) -> ApiResult<AiReviewStatus> {
     let p = project_for(state, principal, id, ProjectAction::ReadCode).await?;
     let mr = forgust_db::merge_requests::find(&state.db, p.id, iid).await?.ok_or(ApiError::NotFound)?;
-    let c = svc::config(state).await.map_err(ApiError::Internal)?;
+    let c = svc::config_without_key(state).await.map_err(ApiError::Internal)?;
     let on = svc::usable(&c) && forgust_db::ai_review::get(&state.db, p.id).await?.is_some_and(|s| s.enabled);
     // where the code goes and why a review failed are for who can push
     let pusher = can_project(state, principal, ProjectAction::Push, &p).await?;
@@ -162,6 +162,7 @@ pub struct AdminAiReview {
     pub max_concurrent: u32,
     pub timeout_secs: u64,
     pub max_comments: u32,
+    /// Changes per model request (a review makes up to 8).
     pub max_diff_bytes: u64,
     /// PEM of an in-house CA the endpoint's certificate is signed by.
     pub ca_pem: Option<String>,
@@ -242,7 +243,7 @@ pub async fn admin_set(
         return Err(ApiError::bad("1 to 50 comments per review"));
     }
     if !(10_000..=5_000_000).contains(&s.max_diff_bytes) {
-        return Err(ApiError::bad("10 kB to 5 MB of changes per review"));
+        return Err(ApiError::bad("10 kB to 5 MB of changes per model request"));
     }
     let ca_pem = s.ca_pem.as_deref().map(str::trim).filter(|p| !p.is_empty());
     if ca_pem.is_some_and(|p| !p.contains("-----BEGIN CERTIFICATE-----") || p.len() > 100_000) {

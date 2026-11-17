@@ -5006,6 +5006,7 @@
           "max_diff_bytes": {
             "type": "integer",
             "format": "int64",
+            "description": "Changes per model request (a review makes up to 8).",
             "minimum": 0
           },
           "model": {

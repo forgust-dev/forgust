@@ -23,8 +23,9 @@ use anyhow::{Context, bail};
 use crate::provider::Provider;
 use crate::report::{Comment, Report, Skipped};
 
-/// Requests to the model per review, at most.
-const MAX_REQUESTS: usize = 8;
+/// Requests to the model per review, at most (each of at most
+/// `AI_REVIEW_MAX_DIFF_BYTES` of changes).
+pub const MAX_REQUESTS: usize = 8;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(600);
 
 /// One review to make.
@@ -105,7 +106,9 @@ async fn review_into(job: &Job, provider: &dyn Provider, report: &mut Report) ->
     if !chunks.is_empty() && failures == chunks.len() {
         bail!("the model failed on every part of the changes");
     }
-    report.comments.truncate(job.max_comments);
+    // the server keeps the first max_comments that hold up: a part's comments
+    // that do not are no reason to lose another part's
+    report.comments.truncate(job.max_comments * MAX_REQUESTS);
     report.summary = summaries.join("\n\n");
     report.skipped = skipped;
     Ok(())
@@ -243,7 +246,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_review_keeps_comments_on_shown_files_up_to_the_cap() {
+    async fn a_review_keeps_comments_on_shown_files_and_leaves_the_cap_to_the_server() {
         let (d, base, head) = repo();
         let answer = r#"{"summary": "Adds b.", "comments": [
             {"path": "src/lib.rs", "line": 2, "body": "b panics", "suggestion":
@@ -256,18 +259,21 @@ mod tests {
         assert_eq!(r.summary, "Adds b.");
         assert_eq!(
             r.comments,
-            vec![Comment {
-                path: "src/lib.rs".into(),
-                new_line: Some(2),
-                old_line: None,
-                body: "b panics".into(),
-                suggestion: Some(report::Suggestion {
-                    from_line: 2,
-                    to_line: 2,
-                    original: "fn b() { panic!() }".into(),
-                    code: "fn b() -> Option<()> { None }".into()
-                }),
-            }]
+            vec![
+                Comment {
+                    path: "src/lib.rs".into(),
+                    new_line: Some(2),
+                    old_line: None,
+                    body: "b panics".into(),
+                    suggestion: Some(report::Suggestion {
+                        from_line: 2,
+                        to_line: 2,
+                        original: "fn b() { panic!() }".into(),
+                        code: "fn b() -> Option<()> { None }".into()
+                    }),
+                },
+                Comment { path: "src/lib.rs".into(), new_line: Some(1), old_line: None, body: "over the cap".into(), suggestion: None }
+            ]
         );
     }
 
@@ -285,5 +291,6 @@ mod tests {
         let (d, base, _) = repo();
         assert_eq!(diff::git_show(d.path(), &base, prompt::INSTRUCTIONS_FILE, 100).as_deref(), Some("Check error handling.\n"));
         assert_eq!(diff::git_show(d.path(), &base, "missing.md", 100), None);
+        assert_eq!(diff::git_show(d.path(), "", prompt::INSTRUCTIONS_FILE, 100), None, "never the checkout's");
     }
 }

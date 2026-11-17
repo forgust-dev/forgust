@@ -118,7 +118,7 @@ tags = []                 # runner tags for the job (instance runners only)
 max_concurrent = 2        # reviews at once on the instance
 timeout_secs = 900
 max_comments = 10         # line comments one review may post
-max_diff_bytes = 200000   # changes sent per review; files past it are listed as not reviewed
+max_diff_bytes = 200000   # changes per model request (fit the context); up to 8 requests a review
 # image = "ghcr.io/forgust-dev/forgust:<version>"   # runs `forgust ai-review`
 # ca_pem = "-----BEGIN CERTIFICATE-----..."         # when the endpoint uses an in-house CA
 

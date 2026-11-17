@@ -167,6 +167,19 @@ pub async fn finish(e: impl PgExecutor<'_>, pipeline_id: i64, build_id: Option<i
         > 0)
 }
 
+/// Give back a run's claim by `build_id` (its posting failed): the next read
+/// of that job's report claims it again.
+pub async fn unclaim(e: impl PgExecutor<'_>, pipeline_id: i64, build_id: i64) -> Result<()> {
+    sqlx::query!(
+        "UPDATE ai_review_runs SET state = 'pending', build_id = NULL, finished_at = NULL WHERE pipeline_id = $1 AND build_id = $2",
+        pipeline_id,
+        build_id
+    )
+    .execute(e)
+    .await?;
+    Ok(())
+}
+
 /// What a posted run posted.
 pub async fn set_counts(e: impl PgExecutor<'_>, pipeline_id: i64, posted: i32, dropped: i32) -> Result<()> {
     sqlx::query!(

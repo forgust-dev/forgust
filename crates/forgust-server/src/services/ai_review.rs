@@ -62,6 +62,16 @@ pub struct Overrides {
 
 /// The settings in effect: the config file, then the administrator's changes.
 pub async fn config(state: &AppState) -> anyhow::Result<AiReviewConfig> {
+    config_with(state, true).await
+}
+
+/// The settings in effect without the key (not decrypted for what only
+/// shows them).
+pub async fn config_without_key(state: &AppState) -> anyhow::Result<AiReviewConfig> {
+    config_with(state, false).await
+}
+
+async fn config_with(state: &AppState, key_too: bool) -> anyhow::Result<AiReviewConfig> {
     let mut c = state.cfg.ai_review.clone();
     let (raw, key) = forgust_db::ai_review::instance(&state.db).await?;
     let o: Overrides = serde_json::from_value(raw).unwrap_or_default();
@@ -69,8 +79,11 @@ pub async fn config(state: &AppState) -> anyhow::Result<AiReviewConfig> {
         ($($f:ident),*) => { $( if let Some(v) = o.$f { c.$f = v; } )* };
     }
     over!(enabled, provider, base_url, model, image, tags, max_concurrent, timeout_secs, max_comments, max_diff_bytes, ca_pem);
-    if let Some(sealed) = key {
-        c.api_key = Some(state.secrets.decrypt_str(&sealed)?);
+    match key {
+        Some(sealed) if key_too => c.api_key = Some(state.secrets.decrypt_str(&sealed)?),
+        Some(_) => c.api_key = Some(String::new()),
+        None if !key_too => c.api_key = c.api_key.as_ref().map(|_| String::new()),
+        None => {}
     }
     Ok(c)
 }
@@ -171,9 +184,10 @@ pub async fn request(state: &AppState, principal: &Principal, project: &Project,
         return Err(ApiError::conflict("only an open merge request is reviewed"));
     }
     let latest = mrdb::latest_diff(&state.db, mr.id).await?.ok_or_else(|| ApiError::conflict("the merge request has no changes yet"))?;
-    // two clicks at once start one review
+    // requests at once (two clicks, two merge requests): one review per
+    // merge request, and no more than max_concurrent on the instance
     let mut lock = state.db.begin().await?;
-    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))").bind(format!("ai-review:{}", mr.id)).execute(&mut *lock).await?;
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))").bind("ai-review-start").execute(&mut *lock).await?;
     if forgust_db::ai_review::active(&state.db, Some(mr.id)).await? > 0 {
         return Err(ApiError::conflict("a review of this merge request is already going"));
     }
@@ -186,7 +200,10 @@ pub async fn request(state: &AppState, principal: &Principal, project: &Project,
         Some(prev)
             if prev != latest.head_sha
                 && prev != latest.base_sha
-                && state.storage.is_ancestor(project.id, &prev, &latest.head_sha).await.unwrap_or(false) =>
+                && state.storage.is_ancestor(project.id, &prev, &latest.head_sha).await.unwrap_or(false)
+                // a merge (of the target branch, typically) brings in changes
+                // that are not the merge request's: review all of it then
+                && state.storage.rev_list(project.id, &prev, &latest.head_sha, true).await.is_ok_and(|m| m.is_empty()) =>
         {
             prev
         }
@@ -249,7 +266,8 @@ pub async fn job_variables(state: &AppState, mr: Option<&MergeRequest>) -> anyho
 /// pipeline ended without a report read.
 pub async fn sweep(state: &AppState) -> anyhow::Result<()> {
     let cfg = config(state).await?;
-    for id in forgust_db::ai_review::stale(&state.db, cfg.timeout_secs as f64 + 86_400.0).await? {
+    // asked for by someone waiting, and holding a slot: an hour to be taken
+    for id in forgust_db::ai_review::stale(&state.db, cfg.timeout_secs as f64 + 3_600.0).await? {
         tracing::warn!(pipeline = id, "AI review never finished; canceled (no runner with the configured tags?)");
         crate::ci::pipeline::cancel(state, id).await?;
     }
@@ -310,23 +328,32 @@ pub async fn ingest(state: &AppState, build_id: i64) -> anyhow::Result<()> {
         Some(id) => forgust_db::users::find(&state.db, id).await?,
         None => None,
     };
-    let Some(bot) = bot.filter(|u| u.user_type == "ai_review_bot") else {
+    let settings = forgust_db::ai_review::get(&state.db, project.id).await?;
+    let Some(bot) = bot.filter(|u| u.user_type == "ai_review_bot" && settings.as_ref().and_then(|s| s.bot_user_id) == Some(u.id)) else {
         return fail("the review did not run as the project's AI review bot".into()).await;
     };
+    if !settings.is_some_and(|s| s.enabled) {
+        return fail("AI review was turned off for this project before the review was posted".into()).await;
+    }
     let cfg = config(state).await?;
     // claimed before posting: reading this report again posts nothing twice
     // (a retried job is another report: what it repeats is not posted again)
     if !forgust_db::ai_review::finish(&state.db, pl.id, Some(b.id), "posted", None).await? {
         return Ok(());
     }
-    let r = post(state, &project, &mr, &latest, &run, &rep, &bot, cfg.max_comments as usize).await;
-    let (posted, dropped) = match &r {
-        Ok(counts) => *counts,
-        Err(_) => (0, 0),
-    };
-    forgust_db::ai_review::set_counts(&state.db, pl.id, posted as i32, dropped as i32).await?;
-    state.events.publish(Event::MergeRequest { project_id: project.id, iid: mr.iid });
-    r.map(|_| ())
+    match post(state, &project, &mr, &latest, &run, &rep, &bot, cfg.max_comments as usize).await {
+        Ok((posted, dropped)) => {
+            forgust_db::ai_review::set_counts(&state.db, pl.id, posted as i32, dropped as i32).await?;
+            state.events.publish(Event::MergeRequest { project_id: project.id, iid: mr.iid });
+            Ok(())
+        }
+        Err(e) => {
+            // the task is tried again: let it claim the run again (what was
+            // posted already is not posted twice)
+            forgust_db::ai_review::unclaim(&state.db, pl.id, b.id).await?;
+            Err(e)
+        }
+    }
 }
 
 async fn fail_run(state: &AppState, pipeline_id: i64, build_id: i64, why: String) -> anyhow::Result<()> {
@@ -345,37 +372,45 @@ fn clip(s: &str, max: usize) -> String {
     out
 }
 
-/// The lines of `latest`'s diff a comment may go on: (path, new line) for
-/// added and kept lines, (path, old line) for removed ones.
-async fn commentable(
-    state: &AppState,
-    project_id: i64,
-    latest: &MrDiff,
-    paths: Vec<String>,
-) -> anyhow::Result<(HashSet<(String, u32)>, HashSet<(String, u32)>)> {
-    let mut new = HashSet::new();
-    let mut old = HashSet::new();
+async fn commentable(state: &AppState, project_id: i64, latest: &MrDiff, paths: Vec<String>) -> anyhow::Result<Commentable> {
+    let mut c = Commentable::default();
     if paths.is_empty() {
-        return Ok((new, old));
+        return Ok(c);
     }
-    let opts = DiffOptions { offset: 0, limit: paths.len().max(1), max_lines_per_file: 20_000, paths: Some(paths) };
+    // the whole diff, not only these paths: git sees a rename only with both
+    // of its paths
+    let opts = DiffOptions { offset: 0, limit: 5_000, max_lines_per_file: 20_000, paths: None };
     let d = state.storage.diff(project_id, Some(&latest.base_sha), &latest.head_sha, opts).await?;
     for f in d.files {
+        // the job names a file by its new path, renamed or not
+        if f.old_path != f.new_path {
+            c.old_path.insert(f.new_path.clone(), f.old_path.clone());
+        }
         for h in &f.hunks {
             for l in &h.lines {
                 match (l.kind, l.new, l.old) {
                     (DiffLineKind::Add | DiffLineKind::Context, Some(n), _) => {
-                        new.insert((f.new_path.clone(), n));
+                        c.new.insert((f.new_path.clone(), n));
                     }
                     (DiffLineKind::Del, _, Some(o)) => {
-                        old.insert((f.old_path.clone(), o));
+                        c.old.insert((f.new_path.clone(), o));
                     }
                     _ => {}
                 }
             }
         }
     }
-    Ok((new, old))
+    Ok(c)
+}
+
+/// The lines of a diff a comment may go on, by the file's new path: added
+/// and kept lines by their new number, removed ones by their old number.
+#[derive(Default)]
+struct Commentable {
+    new: HashSet<(String, u32)>,
+    old: HashSet<(String, u32)>,
+    /// Renamed files: new path → old path.
+    old_path: HashMap<String, String>,
 }
 
 /// The model's text without the suggestion blocks it wrote anyway.
@@ -457,7 +492,8 @@ async fn post(
         .collect::<HashSet<_>>()
         .into_iter()
         .collect();
-    let (new_lines, old_lines) = commentable(state, project.id, latest, paths).await?;
+    let lines = commentable(state, project.id, latest, paths).await?;
+    let (new_lines, old_lines) = (&lines.new, &lines.old);
     // a removed line's number is of the old file: the review's base, which is
     // the merge request's only when the whole of it was reviewed
     let whole = run.base_sha == latest.base_sha;
@@ -570,7 +606,7 @@ async fn post(
             base_sha: Some(&latest.base_sha),
             start_sha: Some(&latest.start_sha),
             head_sha: Some(&latest.head_sha),
-            old_path: Some(path),
+            old_path: Some(lines.old_path.get(path).unwrap_or(path)),
             new_path: Some(path),
             old_line: *old_line,
             new_line: *new_line,

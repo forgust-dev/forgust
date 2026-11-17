@@ -587,7 +587,7 @@ function AiReviewForm({ initial }: { initial: S["AdminAiReviewStatus"] }) {
         <Field label="Comments per review">
           <input type="number" min={1} max={50} value={s.max_comments} onChange={(e) => setS({ ...s, max_comments: Number(e.target.value) })} />
         </Field>
-        <Field label="Changes per review (kB)" hint="Files past it are listed as not reviewed">
+        <Field label="Changes per model request (kB)" hint="Fit it to the model's context; a review makes up to 8 requests, then lists the files left out">
           <input
             type="number"
             min={10}

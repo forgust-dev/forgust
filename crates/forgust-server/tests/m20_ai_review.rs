@@ -515,3 +515,65 @@ async fn suggested_changes_are_checked_then_applied_by_a_person(pool: sqlx::PgPo
     let commit = srv.state.storage.commit(project, &head).await.unwrap().unwrap();
     assert_eq!(commit.author.email, email, "committed as who applied it, not the bot: {commit:?}");
 }
+
+/// A renamed file: the job names it by its new path, removed lines too. A
+/// merge of the target branch into the merge request: the next review is of
+/// all of it again, never of what the merge brought in.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn renamed_files_and_merges_of_the_target_branch(pool: sqlx::PgPool) {
+    let srv = TestServer::start_with(pool, |c| {
+        c.ci.long_poll_secs = 1;
+        c.ai_review.enabled = true;
+        c.ai_review.base_url = "http://models.internal/v1".into();
+        c.ai_review.model = "m".into();
+    })
+    .await;
+    let owner = srv.user("olivia", false).await;
+    let (_, _, project) = org_project(&owner).await;
+    let work = srv.work_dir("ai-rename");
+    seed_repo(&work).await;
+    let lines: Vec<String> = (1..=10).map(|i| format!("pub const N{i}: u32 = {i};")).collect();
+    commit_file(&work, "src/consts.rs", &(lines.join("\n") + "\n"), "consts").await;
+    let remote = srv.http_url("olivia", "acme/platform/api");
+    must(git(&work, &["push", "-q", &remote, "main"]).await);
+    must(git(&work, &["checkout", "-q", "-b", "topic"]).await);
+    must(git(&work, &["mv", "src/consts.rs", "src/app.rs"]).await);
+    let kept: Vec<&String> = lines.iter().filter(|l| !l.contains("N2:")).collect();
+    std::fs::write(work.join("src/app.rs"), kept.iter().map(|l| format!("{l}\n")).collect::<String>()).unwrap();
+    must(git(&work, &["commit", "-q", "-am", "rename, drop N2"]).await);
+    must(git(&work, &["push", "-q", &remote, "topic"]).await);
+    wait_jobs(&srv.state).await;
+    let iid = owner
+        .ok_post(&format!("/api/v1/projects/{project}/merge_requests"), json!({ "source_branch": "topic", "title": "Rename" }))
+        .await["iid"]
+        .as_i64()
+        .unwrap();
+    owner.ok_put(&format!("/api/v1/projects/{project}/ai_review"), json!({ "enabled": true })).await;
+    let admin = srv.user("root", true).await;
+    let runner = admin.ok_post("/api/v1/admin/runners", json!({ "description": "shared" })).await["token"].as_str().unwrap().to_string();
+    let path = format!("/api/v1/projects/{project}/merge_requests/{iid}/ai_review");
+    owner.ok_post(&path, json!({})).await;
+    let job = request(&srv, &runner).await.expect("the review job");
+    let comments = json!([{ "path": "src/app.rs", "old_line": 2, "body": "N2 is still used." }]);
+    report_and_finish(&srv, &job, Some(review(&job, comments)), "success").await;
+    let st = owner.ok_get(&path).await;
+    assert_eq!(st["latest"]["comments_posted"], 1, "{st}");
+    let notes = owner.ok_get(&format!("/api/v1/projects/{project}/merge_requests/{iid}/notes")).await;
+    let n = notes.as_array().unwrap().iter().find(|n| n["old_line"] == 2).unwrap_or_else(|| panic!("{notes}"));
+    assert_eq!((n["old_path"].as_str(), n["new_path"].as_str()), (Some("src/consts.rs"), Some("src/app.rs")));
+
+    // main moves on and is merged into the branch: a review of all of it again
+    must(git(&work, &["checkout", "-q", "main"]).await);
+    commit_file(&work, "README.md", "# Demo\n\nMore.\n", "readme").await;
+    must(git(&work, &["push", "-q", &remote, "main"]).await);
+    must(git(&work, &["checkout", "-q", "topic"]).await);
+    must(git(&work, &["merge", "-q", "--no-edit", "main"]).await);
+    must(git(&work, &["push", "-q", &remote, "topic"]).await);
+    wait_jobs(&srv.state).await;
+    let first_head = var(&job, "FORGUST_REVIEW_HEAD_SHA").unwrap();
+    owner.ok_post(&path, json!({})).await;
+    let job = request(&srv, &runner).await.expect("the second review");
+    let base = var(&job, "FORGUST_REVIEW_BASE_SHA").unwrap();
+    assert_ne!(base, first_head, "not since the last review: the merge would bring main's changes in");
+    assert_eq!(Some(base), var(&job, "FORGUST_REVIEW_TARGET_SHA"), "the merge request's own base");
+}

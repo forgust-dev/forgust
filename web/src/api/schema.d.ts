@@ -2739,7 +2739,10 @@ export interface components {
             max_comments: number;
             /** Format: int32 */
             max_concurrent: number;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Changes per model request (a review makes up to 8).
+             */
             max_diff_bytes: number;
             model: string;
             provider: components["schemas"]["AiProvider"];

@@ -41,7 +41,8 @@ pub fn git_diff(dir: &Path, base: &str, head: &str) -> anyhow::Result<String> {
 
 /// A file at `rev`, when it exists (the project's review instructions).
 pub fn git_show(dir: &Path, rev: &str, path: &str, max: usize) -> Option<String> {
-    if !rev.bytes().all(|b| b.is_ascii_hexdigit()) {
+    // an empty rev would read the index: the merge request's own checkout
+    if rev.is_empty() || !rev.bytes().all(|b| b.is_ascii_hexdigit()) {
         return None;
     }
     let out = git(dir).arg("show").arg(format!("{rev}:{path}")).output().ok()?;
