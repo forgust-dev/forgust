@@ -75,8 +75,8 @@ test("the stack map shows both layers and what merges next", async ({ page }) =>
 test("your work lists your merge requests; projects moved to their own page", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Your work" })).toBeVisible();
-  await page.getByRole("navigation", { name: "Your work" }).getByRole("button", { name: /Merge requests/ }).click();
-  const yours = page.locator("section", { has: page.getByRole("heading", { name: "Opened by you" }) });
+  const yours = page.locator("section", { has: page.getByRole("heading", { name: "Your merge requests" }) });
+  await expect(yours.locator(".item", { hasText: "Checkout with discounts" })).toContainText("opened by you");
   await expect(yours.getByRole("link", { name: "Checkout with discounts" })).toBeVisible();
   await yours.getByRole("link", { name: "Checkout with discounts" }).click();
   await expect(page.getByRole("heading", { name: "Checkout with discounts" })).toBeVisible();
@@ -90,10 +90,7 @@ test("your work keeps review requests you already reviewed apart from those wait
   const me = await call("get", `/users/${ADMIN}`);
   const mr2 = `/projects/${project.id}/merge_requests/2`;
   const section = (name: string) => page.locator("section", { has: page.getByRole("heading", { name }) });
-  const reviewRequests = async () => {
-    await page.goto("/");
-    await page.getByRole("navigation", { name: "Your work" }).getByRole("button", { name: /Review requests/ }).click();
-  };
+  const reviewRequests = () => page.goto("/");
   // !2 is shared: whatever happens, leave no reviewer and no open thread behind
   let note: { id: number } | null = null;
   try {

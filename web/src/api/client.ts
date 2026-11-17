@@ -71,6 +71,9 @@ export function qs(params: Record<string, string | number | boolean | undefined 
   return s ? `?${s}` : "";
 }
 
+/** "1 issue", "3 issues", "1,204 commits": a count and its noun. */
+export const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
+
 export const LEVELS = ["guest", "reporter", "developer", "maintainer", "owner"] as const;
 
 export function timeAgo(ts: number | string): string {

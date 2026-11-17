@@ -3584,6 +3584,281 @@ a.status-badge:hover {
 .manual-card .btn.run:hover {
   filter: brightness(0.94);
 }
+
+/* ---- the page's emphasized card, wide (components/decide.tsx): what there is to
+   decide or act on, on your work, milestones, releases, findings and the admin
+   overview. The readiness card's look: what and why on the left with the one
+   action, the items on the right; one column when narrow */
+.decide-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px 32px;
+  padding: 18px 20px;
+  border: 1px solid var(--emph-border);
+  border-radius: var(--radius-lg);
+  background: var(--emph-bg);
+  color: var(--emph-text);
+  box-shadow: 0 1px 2px rgba(28, 25, 21, 0.15);
+}
+.decide-main {
+  flex: 1 1 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.decide-side {
+  flex: 1.4 1 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.decide-card .eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--emph-link);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.decide-card .eyebrow.bad {
+  color: var(--emph-bad);
+}
+.decide-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.decide-title {
+  flex: 1;
+  min-width: 0;
+}
+.decide-card h2 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+.decide-title p {
+  margin: 2px 0 0;
+  color: var(--emph-muted);
+  font-size: 13.5px;
+}
+.decide-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-top: 10px;
+}
+.decide-card a,
+.decide-card .link-btn {
+  color: var(--emph-link);
+}
+.decide-card .btn.run {
+  border-color: var(--emph-btn-bg);
+  background: var(--emph-btn-bg);
+  color: var(--emph-btn-text);
+  font-weight: 700;
+}
+.decide-card .btn.run:hover {
+  filter: brightness(0.94);
+}
+.decide-card .checks {
+  gap: 4px;
+}
+.decide-card .checks li {
+  min-height: 32px;
+  padding: 4px 10px;
+  border-radius: var(--radius);
+  color: var(--emph-muted);
+  font-size: 13px;
+}
+/* what to look at or what blocks stands out; what passes steps back */
+.decide-card .checks li.item,
+.decide-card .checks li.bad,
+.decide-card .checks li.warn {
+  min-height: 36px;
+  background: var(--emph-row);
+  color: var(--emph-text);
+  font-size: 13.5px;
+}
+.decide-card .checks li a {
+  color: inherit;
+}
+.decide-card .checks li a:hover {
+  color: var(--emph-link);
+}
+.decide-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.decide-aside {
+  flex: none;
+  color: var(--emph-muted);
+  font: 12px var(--mono);
+}
+.decide-card .check-icon,
+.decide-card .row-ic {
+  flex: none;
+  color: var(--emph-muted);
+}
+.decide-card .check-icon.ok {
+  color: var(--emph-ok);
+}
+.decide-card .check-icon.bad {
+  color: var(--emph-bad);
+}
+.decide-card .check-icon.warn {
+  color: var(--emph-warn);
+}
+.decide-foot {
+  margin: 0;
+  padding: 0 10px;
+  color: var(--emph-muted);
+  font-size: 12.5px;
+}
+.decide-card code {
+  background: var(--emph-row);
+  color: var(--emph-text);
+}
+
+/* the small ring of a list row (your work): on a light surface, no count inside */
+.ready-ring.mini .track {
+  stroke: var(--border);
+}
+.mr-ready {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.mr-ready.ok {
+  color: var(--ok);
+  font-weight: 600;
+}
+.decide-label {
+  margin: 0;
+  padding: 0 10px;
+  color: var(--emph-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* a page in sections (your work): each title with its count and what to do with it */
+.section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  min-height: 30px;
+}
+.section-count {
+  margin-left: 3px;
+  color: var(--text-faint);
+  font: 500 12px var(--mono);
+}
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+.work-page .work-section {
+  margin-top: 10px;
+}
+
+/* the admin overview: CI in the middle, the instance's numbers beside it, as the
+   project page's right column */
+.admin-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 20px 28px;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .admin-overview {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* facts in a right-column card, one a line: the label, the value on the right */
+.side-facts {
+  display: flex;
+  flex-direction: column;
+  margin: 8px 0 0;
+}
+.side-facts > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.side-facts > div:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+.side-facts dt {
+  color: var(--text-muted);
+  font-size: 13.5px;
+}
+.side-facts dd {
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.side-facts dd a {
+  color: inherit;
+}
+.side-facts dd a:hover {
+  color: var(--accent);
+}
+.side-fact-hint {
+  flex-basis: 100%;
+  margin: 1px 0 0;
+  color: var(--text-faint);
+  font-size: 12.5px;
+}
+.decide-card .checks .decide-aside a {
+  color: var(--emph-link);
+  font-family: var(--sans);
+}
+/* a row that opens what it names on the page (a finding) */
+.decide-link {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.decide-link:hover {
+  color: var(--emph-link);
+}
+.decide-link:focus-visible {
+  outline: 2px solid var(--emph-link);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
 .stage-dots {
   display: inline-flex;
   flex-wrap: wrap;
@@ -6201,11 +6476,9 @@ button.test-case-row:hover {
   padding: 1px 7px;
   border: 1px solid color-mix(in srgb, currentColor 28%, transparent);
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
   text-align: center;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
   color: var(--text-muted);
   background: var(--bg-hover);
 }

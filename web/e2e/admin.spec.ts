@@ -11,7 +11,7 @@ async function adminNav(page: Page, name: string) {
 
 test("admin: overview, storage, jobs and health", async ({ page }) => {
   await page.goto("/admin");
-  await expect(page.locator(".stat-label", { hasText: /^Projects$/ })).toBeVisible();
+  await expect(page.locator(".side-facts dt", { hasText: /^Projects$/ })).toBeVisible();
   await expect(page.getByLabel(/Pipelines per day/)).toBeVisible();
 
   await adminNav(page, "Storage");

@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, ShieldAlert, ShieldCheck } from "lucide-react";
 import { api, qs, refLink, timeAgo, type S } from "../../api/client";
 import { Empty, FilterTabs, ListHead, Q, SearchField, useDebounced } from "../../components/ui";
+import { DecideCard } from "../../components/decide";
 import { Select } from "../../components/controls";
 import { useAct } from "../../shell/toast";
 import type { Ctx } from "./Project";
@@ -27,15 +28,74 @@ const REASONS = [
 ];
 
 export function SeverityBadge({ severity }: { severity: string }) {
-  return <span className={`sev sev-${severity}`}>{severity}</span>;
+  return <span className={`sev sev-${severity}`}>{severity[0].toUpperCase() + severity.slice(1)}</span>;
 }
 
 type Finding = S["Finding"];
 
+/** Where a finding is, in a few words: a file and line, a package, or an image. */
+function whereText(f: Finding) {
+  if (f.report_type === "dependency_scanning" && f.package_name) return `${f.package_name}@${f.package_version ?? "?"}`;
+  if (f.report_type === "container_scanning") return f.image ?? f.package_name ?? "";
+  return f.file ? `${f.file}${f.start_line ? `:${f.start_line}` : ""}` : "";
+}
+
+/**
+ * The page's emphasized card: the critical and high findings still open on the
+ * default branch, to fix or to dismiss. None when there are none.
+ */
+function Triage({ ctx, counts, open, onOpen }: { ctx: Ctx; counts: S["SecurityCounts"]; open?: Finding[]; onOpen: (f: Finding) => void }) {
+  const urgent = counts.critical + counts.high;
+  // the open findings: those the list shows when it is not filtered, else their own request
+  const q = useQuery({
+    queryKey: ["security", ctx.p.id, "detected", "triage"],
+    queryFn: () => api.get<S["SecurityOverview"]>(`/projects/${ctx.p.id}/security/findings${qs({ state: "detected", per_page: 100 })}`),
+    enabled: urgent > 0 && !open,
+  });
+  if (urgent === 0) return null;
+  const rank = (f: Finding) => (f.severity === "critical" ? 0 : 1);
+  const top = (open ?? q.data?.findings ?? [])
+    .filter((f) => f.severity === "critical" || f.severity === "high")
+    .sort((a, b) => rank(a) - rank(b))
+    .slice(0, 4);
+  const parts = [counts.critical > 0 && `${counts.critical} critical`, counts.high > 0 && `${counts.high} high`].filter(Boolean).join(" and ");
+  return (
+    <DecideCard
+      label="To triage"
+      late={counts.critical > 0}
+      eyebrow={
+        <>
+          <ShieldAlert size={14} aria-hidden /> To triage
+        </>
+      }
+      title={`${parts} finding${urgent === 1 ? "" : "s"}`}
+      sub="Open on the default branch: fix them, or dismiss them with a reason."
+      actions={
+        top[0] && (
+          <button type="button" className="btn run" onClick={() => onOpen(top[0])}>
+            Look at the first
+          </button>
+        )
+      }
+      rows={top.map((f) => ({
+        key: String(f.id),
+        tone: f.severity === "critical" ? "bad" : "warn",
+        text: (
+          <button type="button" className="decide-link" onClick={() => onOpen(f)} title={`${f.severity}: ${f.title}`}>
+            {f.title}
+          </button>
+        ),
+        aside: whereText(f),
+      }))}
+      foot={top.length > 0 && urgent > top.length ? `And ${urgent - top.length} more below.` : undefined}
+    />
+  );
+}
+
 /** A finding in a list: a toggle (severity, title) and what it is about. */
 function FindingRow({ ctx, f, open, onToggle, struck }: { ctx: Ctx; f: Finding; open: boolean; onToggle: () => void; struck?: boolean }) {
   return (
-    <div className="list-group">
+    <div className="list-group" id={`finding-${f.id}`}>
       <div className="item finding-row">
         <button type="button" className="finding-toggle" aria-expanded={open} onClick={onToggle}>
           {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -94,11 +154,28 @@ export function SecurityPage({ ctx }: { ctx: Ctx }) {
   const [kind, setKind] = useState("");
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState<number | null>(null);
+  // a finding picked in the card: shown open in the list, once it is there
+  const [focus, setFocus] = useState<number | null>(null);
   const term = useDebounced(search, 250);
   const q = useQuery({
     queryKey: ["security", ctx.p.id, state, severity, kind, term],
     queryFn: () => api.get<S["SecurityOverview"]>(`/projects/${ctx.p.id}/security/findings${qs({ state, severity, report_type: kind, search: term, per_page: 100 })}`),
   });
+  useEffect(() => {
+    if (focus == null) return;
+    const el = document.getElementById(`finding-${focus}`);
+    if (!el) return;
+    el.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    setFocus(null);
+  }, [focus, q.data]);
+  const openFinding = (f: Finding) => {
+    setState("detected");
+    setSeverity("");
+    setKind("");
+    setSearch("");
+    setOpen(f.id);
+    setFocus(f.id);
+  };
   return (
     <div className="stack">
       <ListHead
@@ -116,6 +193,7 @@ export function SecurityPage({ ctx }: { ctx: Ctx }) {
       <Q q={q}>
         {(s) => (
           <>
+            <Triage ctx={ctx} counts={s.counts} open={state === "detected" && !severity && !kind && !term ? s.findings : undefined} onOpen={openFinding} />
             <div className="sev-summary" role="group" aria-label="By severity">
               {SEVERITIES.filter((sv) => sv !== "unknown" || s.counts.unknown > 0).map((sv) => (
                 <button

@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, RefreshCw, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowUpCircle, CheckCircle2, RefreshCw, ShieldAlert, XCircle } from "lucide-react";
 import { api, bytes, qs, timeAgo, type S } from "../api/client";
 import { Card, ErrorBox, Field, Q, SearchField, useDebounced } from "../components/ui";
+import { DecideCard, type DecideRow } from "../components/decide";
 import { Segmented } from "../components/controls";
 import { useAct, useToast } from "../shell/toast";
 
@@ -23,60 +24,169 @@ function Stat({ label, value, hint, to }: { label: string; value: React.ReactNod
   );
 }
 
+/** Where an administrator acts on a health check that is not ok. */
+const HEALTH_LINK: Record<string, { to: string; label: string }> = {
+  Runners: { to: "/admin/runners", label: "Runners" },
+  "Background jobs": { to: "/admin/jobs", label: "Jobs" },
+  "Blob store": { to: "/admin/storage", label: "Storage" },
+};
+
+/**
+ * The overview's emphasized card: what needs an administrator now (health checks
+ * that warn or fail, a newer release). None when everything is fine.
+ */
+function NeedsAdmin({ checks, update }: { checks: S["HealthCheck"][]; update?: S["UpdateStatus"] }) {
+  const rows: DecideRow[] = checks
+    .filter((c) => c.status !== "ok")
+    .map((c) => {
+      const link = HEALTH_LINK[c.name];
+      return {
+        key: c.name,
+        tone: c.status === "warn" ? "warn" : "bad",
+        text: (
+          <>
+            <strong>{c.name}</strong> · {c.detail}
+          </>
+        ),
+        aside: link && <Link to={link.to}>{link.label}</Link>,
+      };
+    });
+  if (update?.available) {
+    rows.unshift({
+      key: "update",
+      tone: "warn",
+      icon: <ArrowUpCircle size={16} className="check-icon warn" aria-hidden />,
+      text: (
+        <>
+          <strong>Forgust {update.available}</strong> is out · this server runs {update.current}
+        </>
+      ),
+      aside: update.url && (
+        <a href={update.url} target="_blank" rel="noreferrer">
+          Release notes
+        </a>
+      ),
+    });
+  }
+  if (rows.length === 0) return null;
+  const failing = rows.some((r) => r.tone === "bad");
+  return (
+    <DecideCard
+      label="Needs an administrator"
+      late={failing}
+      eyebrow={
+        <>
+          <ShieldAlert size={14} aria-hidden /> Needs an administrator
+        </>
+      }
+      title={`${rows.length} thing${rows.length === 1 ? " needs" : "s need"} you`}
+      sub={failing ? "Something is failing: see the health checks." : "From the health checks and the release check."}
+      actions={
+        <Link className="btn run" to="/admin/health">
+          Open Health
+        </Link>
+      }
+      rows={rows}
+    />
+  );
+}
+
+/** A fact of a right-column card: a label, its value, and what the value is made of. */
+function Fact({ label, value, hint, to }: { label: string; value: React.ReactNode; hint?: React.ReactNode; to?: string }) {
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd>{to ? <Link to={to}>{value}</Link> : value}</dd>
+      {hint && <p className="side-fact-hint">{hint}</p>}
+    </div>
+  );
+}
+
 export function AdminOverview() {
   const q = useQuery({ queryKey: ["admin-overview"], queryFn: () => api.get<S["Overview"]>("/admin/overview"), refetchInterval: 30_000 });
+  // the Health page's checks and the sidebar's release check: the same requests. Not
+  // polled, and kept a while: a check writes and deletes an object in the blob store
+  // (the Health page itself checks afresh)
+  const health = useQuery({ queryKey: ["admin-health"], queryFn: () => api.get<S["Health"]>("/admin/health"), staleTime: 300_000 });
+  const update = useQuery({ queryKey: ["admin-update"], queryFn: () => api.get<S["UpdateStatus"]>("/admin/update"), staleTime: 3_600_000 });
+  // the counts do not wait for the checks (the slowest of them): their card comes when they do
+  const all = {
+    isLoading: q.isLoading,
+    error: q.error,
+    data: q.data ? { o: q.data, checks: health.data?.checks ?? [] } : undefined,
+  };
   return (
-    <Q q={q}>
-      {(o) => {
+    <Q q={all}>
+      {({ o, checks }) => {
         const c = o.counts;
         const ci = o.ci;
         return (
           <div className="stack" style={{ gap: 20 }}>
-            <div className="stat-grid">
-              <Stat label="Users" value={c.users_active} hint={`${c.users_admins} admin${c.users_admins === 1 ? "" : "s"} · ${c.users_blocked} blocked · ${c.users_unconfirmed} unconfirmed`} to="/admin/users" />
-              <Stat label="Bots" value={c.bots} hint="project, group and Renovate bots" />
-              <Stat label="Groups" value={c.groups} />
-              <Stat label="Projects" value={c.projects} to="/admin/storage" />
-              <Stat label="Merge requests" value={c.merge_requests_open} hint={`open · ${c.merge_requests_merged} merged`} />
-              <Stat label="Issues" value={c.issues_open} hint={`open · ${c.issues_closed} closed`} />
-              <Stat label="Dependency updates" value={o.renovate_projects} hint={`projects · ${o.renovate_runs} run${o.renovate_runs === 1 ? "" : "s"} going on`} to="/admin/dependency-updates" />
-            </div>
-
-            <Card title="CI, last 30 days">
-              <div className="stack">
-                <div className="stat-grid">
-                  <Stat label="Jobs" value={ci.jobs_last_30_days} hint="last 30 days" />
-                  <Stat label="Waiting for a runner" value={ci.jobs_queued} hint={`${ci.jobs_running} running now`} />
-                  <Stat label="Runners online" value={`${ci.runners_online} / ${ci.runners}`} hint={`${ci.runners_paused} paused · seen in the last hour`} to="/admin/runners" />
-                </div>
-                <PipelinesChart days={ci.pipelines_per_day} />
-                {ci.busiest_projects.length > 0 && (
-                  <div>
-                    <h3 className="small">Most pipelines</h3>
-                    <div className="list">
-                      {ci.busiest_projects.map((b) => (
-                        <div className="item small" key={b.project_id}>
-                          <Link className="grow" to={`/${b.full_path}/-/pipelines`}>
-                            {b.full_path}
-                          </Link>
-                          <span className="mono">{b.pipelines}</span>
-                        </div>
-                      ))}
-                    </div>
+            <NeedsAdmin checks={checks} update={update.data} />
+            <div className="admin-overview">
+              <Card title="CI, last 30 days">
+                <div className="stack">
+                  <div className="stat-grid">
+                    <Stat label="Jobs" value={ci.jobs_last_30_days} hint="last 30 days" />
+                    <Stat label="Waiting for a runner" value={ci.jobs_queued} hint={`${ci.jobs_running} running now`} />
+                    <Stat label="Runners online" value={`${ci.runners_online} / ${ci.runners}`} hint={`${ci.runners_paused} paused · seen in the last hour`} to="/admin/runners" />
                   </div>
-                )}
-              </div>
-            </Card>
+                  <PipelinesChart days={ci.pipelines_per_day} />
+                  {ci.busiest_projects.length > 0 && (
+                    <div>
+                      <h3 className="small">Most pipelines</h3>
+                      <div className="list">
+                        {ci.busiest_projects.map((b) => (
+                          <div className="item small" key={b.project_id}>
+                            <Link className="grow" to={`/${b.full_path}/-/pipelines`}>
+                              {b.full_path}
+                            </Link>
+                            <span className="mono">{b.pipelines}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </Card>
 
-            <div className="stat-grid">
-              <Stat label="Version" value={<span className="mono">{o.version}</span>} />
-              <Stat label="Blob store" value={<span className="mono">{o.blob_backend}</span>} to="/admin/storage" />
-              <Stat label="Cached responses" value={o.cache_entries} />
-              <Stat label="Live git cat-file processes" value={o.git_processes} />
+              <aside className="repo-about" aria-label="This instance">
+                <section className="side-card">
+                  <h2>Instance</h2>
+                  <dl className="side-facts">
+                    <Fact
+                      label="Users"
+                      value={c.users_active}
+                      hint={`${c.users_admins} admin${c.users_admins === 1 ? "" : "s"} · ${c.users_blocked} blocked · ${c.users_unconfirmed} unconfirmed`}
+                      to="/admin/users"
+                    />
+                    <Fact label="Bots" value={c.bots} hint="Project, group and Renovate bots" />
+                    <Fact label="Groups" value={c.groups} />
+                    <Fact label="Projects" value={c.projects} to="/admin/projects" />
+                    <Fact label="Open merge requests" value={c.merge_requests_open} hint={`${c.merge_requests_merged} merged`} />
+                    <Fact label="Open issues" value={c.issues_open} hint={`${c.issues_closed} closed`} />
+                    <Fact
+                      label="Dependency updates"
+                      value={`${o.renovate_projects} project${o.renovate_projects === 1 ? "" : "s"}`}
+                      hint={`${o.renovate_runs} run${o.renovate_runs === 1 ? "" : "s"} going on`}
+                      to="/admin/dependency-updates"
+                    />
+                  </dl>
+                </section>
+                <section className="side-card">
+                  <h2>Server</h2>
+                  <dl className="side-facts">
+                    <Fact label="Version" value={<span className="mono">{o.version}</span>} />
+                    <Fact label="Blob store" value={<span className="mono">{o.blob_backend}</span>} to="/admin/storage" />
+                    <Fact label="Cached responses" value={o.cache_entries} />
+                    <Fact label="Live git cat-file processes" value={o.git_processes} />
+                  </dl>
+                  <p className="side-fact-hint" style={{ marginTop: 10 }}>
+                    More in the <a href="/metrics">Prometheus metrics</a> and <Link to="/admin/health">Health</Link>.
+                  </p>
+                </section>
+              </aside>
             </div>
-            <p className="small muted" style={{ margin: 0 }}>
-              More in the <a href="/metrics">Prometheus metrics</a> and <Link to="/admin/health">Health</Link>.
-            </p>
           </div>
         );
       }}
