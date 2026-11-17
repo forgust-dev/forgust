@@ -47,8 +47,10 @@ pub async fn set_project_level(e: impl PgExecutor<'_>, user_id: i64, project_id:
 
 /// Effective level of each of these people for the project.
 pub async fn levels(e: impl PgExecutor<'_>, project_id: i64, user_ids: &[i64]) -> Result<Vec<(i64, String)>> {
+    // `id!`: sqlx, checking against Postgres 17, takes the key of the left side of
+    // this join for nullable
     Ok(sqlx::query!(
-        r#"SELECT u.id, coalesce(ns.level, u.notification_level) AS "level!"
+        r#"SELECT u.id AS "id!", coalesce(ns.level, u.notification_level) AS "level!"
              FROM users u LEFT JOIN notification_settings ns ON ns.user_id = u.id AND ns.project_id = $1
             WHERE u.id = ANY($2)"#,
         project_id,
