@@ -12,6 +12,9 @@ pub const MAX_BYTES: usize = 1 << 20;
 /// Longest summary and comment the server posts (longer ones are cut, marked).
 pub const MAX_SUMMARY_CHARS: usize = 4000;
 pub const MAX_COMMENT_CHARS: usize = 4000;
+/// A suggested change replaces at most this many lines, with at most this much code.
+pub const MAX_SUGGESTION_LINES: u32 = 20;
+pub const MAX_SUGGESTION_CHARS: usize = 4000;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Report {
@@ -42,6 +45,20 @@ pub struct Comment {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub old_line: Option<u32>,
     pub body: String,
+    /// A change ready to apply, on lines of the new file (`new_line` comments only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub suggestion: Option<Suggestion>,
+}
+
+/// Replace lines `from_line..=to_line` of the new file, which read `original`
+/// (checked by the server against the file), with `code`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Suggestion {
+    pub from_line: u32,
+    pub to_line: u32,
+    pub original: String,
+    /// The replacement; empty deletes the lines.
+    pub code: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

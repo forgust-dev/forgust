@@ -88,11 +88,17 @@ async fn review_into(job: &Job, provider: &dyn Provider, report: &mut Report) ->
             if !shown || c.body.trim().is_empty() || (c.line.is_none() && c.old_line.is_none()) {
                 continue;
             }
+            // the server checks it against the file; here only its shape
+            let suggestion = c
+                .suggestion()
+                .filter(|s| c.line.is_some() && s.from_line >= 1 && s.from_line <= s.to_line)
+                .map(|s| report::Suggestion { from_line: s.from_line, to_line: s.to_line, original: s.original, code: s.code });
             report.comments.push(Comment {
                 path: c.path,
                 new_line: c.line,
                 old_line: if c.line.is_some() { None } else { c.old_line },
                 body: c.body.trim().to_string(),
+                suggestion,
             });
         }
     }
@@ -240,14 +246,29 @@ mod tests {
     async fn a_review_keeps_comments_on_shown_files_up_to_the_cap() {
         let (d, base, head) = repo();
         let answer = r#"{"summary": "Adds b.", "comments": [
-            {"path": "src/lib.rs", "line": 2, "body": "b panics"},
+            {"path": "src/lib.rs", "line": 2, "body": "b panics", "suggestion":
+                {"from_line": 2, "to_line": 2, "original": "fn b() { panic!() }", "code": "fn b() -> Option<()> { None }"}},
             {"path": "src/other.rs", "line": 1, "body": "not shown"},
             {"path": "src/lib.rs", "line": 1, "body": "over the cap"}]}"#;
         let p = Canned(Mutex::new(vec![Ok(answer.into())]));
         let r = review(&job(d.path(), &base, &head), &p).await;
         assert_eq!(r.error, None);
         assert_eq!(r.summary, "Adds b.");
-        assert_eq!(r.comments, vec![Comment { path: "src/lib.rs".into(), new_line: Some(2), old_line: None, body: "b panics".into() }]);
+        assert_eq!(
+            r.comments,
+            vec![Comment {
+                path: "src/lib.rs".into(),
+                new_line: Some(2),
+                old_line: None,
+                body: "b panics".into(),
+                suggestion: Some(report::Suggestion {
+                    from_line: 2,
+                    to_line: 2,
+                    original: "fn b() { panic!() }".into(),
+                    code: "fn b() -> Option<()> { None }".into()
+                }),
+            }]
+        );
     }
 
     #[tokio::test]

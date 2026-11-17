@@ -29,7 +29,15 @@ Answer with one JSON object and nothing else:
 {{\"summary\": \"2-5 sentences: what the change does and the main risks, in Markdown\",
  \"comments\": [{{\"path\": \"src/a.rs\", \"line\": 12, \"body\": \"what is wrong and how to fix it, in Markdown\"}}]}}
 `line` is a number after `L`; for a removed line use `\"old_line\"` (the number after `O`) instead. At most \
-{max_comments} comments; an empty list is a fine answer. Never mention people with @.",
+{max_comments} comments; an empty list is a fine answer. Never mention people with @.
+
+When the fix is small, certain and fits in one block of consecutive `L` lines (at most 20), add a change \
+people can apply in one click to that comment:
+\"suggestion\": {{\"from_line\": 12, \"to_line\": 13, \"original\": \"the current text of lines 12-13, exactly\", \
+\"code\": \"what replaces them, with the file's indentation\"}}
+`original` and `code` are the bare lines (no `L12 +` prefix, no Markdown fence). Leave the suggestion out when \
+the fix needs changes in more than one place, or you are not sure: applying half a fix breaks the code. Never \
+write a ```suggestion block in `body`.",
     )
 }
 
@@ -77,6 +85,28 @@ pub struct AnswerComment {
     pub old_line: Option<u32>,
     #[serde(default)]
     pub body: String,
+    /// Read with [`AnswerComment::suggestion`]: one the model got wrong is
+    /// left out, not the comment (or the whole answer).
+    #[serde(default, rename = "suggestion")]
+    pub raw_suggestion: Option<serde_json::Value>,
+}
+
+impl AnswerComment {
+    pub fn suggestion(&self) -> Option<AnswerSuggestion> {
+        serde_json::from_value(self.raw_suggestion.clone()?).ok()
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AnswerSuggestion {
+    #[serde(alias = "start_line")]
+    pub from_line: u32,
+    #[serde(alias = "end_line")]
+    pub to_line: u32,
+    #[serde(default)]
+    pub original: String,
+    #[serde(default, alias = "replacement")]
+    pub code: String,
 }
 
 /// The JSON object in a model's answer: alone, in a code fence, or after some
@@ -107,6 +137,17 @@ mod tests {
         assert_eq!(a.comments[0].line, Some(3));
         let b = parse("{\"summary\": \"s\", \"comments\": [{\"path\": \"a.rs\", \"old_line\": 2, \"body\": \"y\"}]}").unwrap();
         assert_eq!(b.comments[0].old_line, Some(2));
+        let c = parse(
+            r#"{"comments": [{"path": "a.rs", "line": 4, "body": "z",
+            "suggestion": {"start_line": 4, "end_line": 5, "original": "a\nb", "replacement": "c"}}]}"#,
+        )
+        .unwrap();
+        let s = c.comments[0].suggestion().unwrap();
+        assert_eq!((s.from_line, s.to_line, s.original.as_str(), s.code.as_str()), (4, 5, "a\nb", "c"));
+        // a suggestion that is not one is no reason to lose the comment
+        let d = parse(r#"{"comments": [{"path": "a.rs", "line": 4, "body": "z", "suggestion": "use x"}]}"#).unwrap();
+        assert_eq!(d.comments[0].body, "z");
+        assert!(d.comments[0].suggestion().is_none());
         assert!(parse("no idea").is_err());
     }
 

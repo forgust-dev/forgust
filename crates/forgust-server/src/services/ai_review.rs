@@ -10,7 +10,7 @@
 //! `max_comments`, not posted already) before posting it as the bot. A
 //! review is advice: the bot cannot approve or request changes.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use forgust_db::merge_requests::{self as mrdb, MergeRequest, MrDiff};
 use forgust_db::projects::Project;
@@ -378,6 +378,56 @@ async fn commentable(
     Ok((new, old))
 }
 
+/// The model's text without the suggestion blocks it wrote anyway.
+fn strip_suggestion_blocks(body: &str) -> String {
+    let mut out = Vec::new();
+    let mut inside = false;
+    for l in body.lines() {
+        let t = l.trim_start();
+        if inside {
+            inside = !t.starts_with("```");
+        } else if t.starts_with("```suggestion") {
+            inside = true;
+        } else {
+            out.push(l);
+        }
+    }
+    out.join("\n")
+}
+
+/// A suggestion that holds up, as (the line its comment goes on, the block):
+/// every line it replaces is a line of the diff, they read what the model
+/// says they read (it often gets numbers or indentation wrong), and the code
+/// is small, changes something and cannot end the block early.
+fn checked_suggestion(file: Option<&str>, in_diff: impl Fn(u32) -> bool, line: u32, s: &report::Suggestion) -> Option<(u32, String)> {
+    let (from, to) = (s.from_line, s.to_line);
+    if from == 0 || to < from || to - from >= report::MAX_SUGGESTION_LINES || s.code.chars().count() > report::MAX_SUGGESTION_CHARS {
+        return None;
+    }
+    if !(from..=to).all(&in_diff) {
+        return None;
+    }
+    let current = super::suggestions::lines_of(file?, from as usize, to as usize)?;
+    let same = |a: &[&str], b: &[String]| a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.trim_end() == y.trim_end());
+    let original: Vec<&str> = s.original.lines().collect();
+    if !same(&original, &current) {
+        return None;
+    }
+    let code: Vec<String> = s.code.lines().map(str::to_string).collect();
+    if code.iter().any(|l| l.trim_start().starts_with("```")) || same(&code.iter().map(String::as_str).collect::<Vec<_>>(), &current) {
+        return None;
+    }
+    // on the commented line when it is in the range, else on the last one
+    let anchor = if (from..=to).contains(&line) { line } else { to };
+    let mut block = format!("```suggestion:-{}+{}\n", anchor - from, to - anchor);
+    for l in &code {
+        block.push_str(l);
+        block.push('\n');
+    }
+    block.push_str("```");
+    Some((anchor, block))
+}
+
 /// A comment on a line, as posted (what a review posting it again would repeat).
 #[derive(PartialEq, Eq, Hash)]
 struct LineNote {
@@ -419,9 +469,13 @@ async fn post(
         .collect();
     let mut posted = 0usize;
     let mut dropped = 0usize;
-    let mut notes: Vec<LineNote> = Vec::new();
+    let mut suggestions = (0usize, 0usize); // (posted, left out)
+    let mut files: HashMap<String, Option<String>> = HashMap::new();
+    // each with the first line of its range (a suggestion on several lines)
+    let mut notes: Vec<(LineNote, Option<i32>)> = Vec::new();
     for c in &rep.comments {
-        let body = clip(c.body.trim(), report::MAX_COMMENT_CHARS);
+        // a suggestion block is the server's to write, from a checked suggestion
+        let mut body = clip(strip_suggestion_blocks(&c.body).trim(), report::MAX_COMMENT_CHARS);
         let on_line = match (c.new_line, c.old_line) {
             (Some(n), _) => new_lines.contains(&(c.path.clone(), n)),
             (None, Some(o)) => whole && old_lines.contains(&(c.path.clone(), o)),
@@ -431,16 +485,37 @@ async fn post(
             dropped += 1;
             continue;
         }
+        let mut new_line = c.new_line;
+        let mut start = None;
+        if let (Some(s), Some(line)) = (&c.suggestion, c.new_line) {
+            if !files.contains_key(&c.path) {
+                let text = match state.storage.blob(project.id, &latest.head_sha, &c.path, 4 << 20).await {
+                    Ok(b) if !b.truncated => String::from_utf8(b.data).ok(),
+                    _ => None,
+                };
+                files.insert(c.path.clone(), text);
+            }
+            let file = files.get(&c.path).and_then(Option::as_deref);
+            match checked_suggestion(file, |n| new_lines.contains(&(c.path.clone(), n)), line, s) {
+                Some((anchor, block)) => {
+                    body = format!("{body}\n\n{block}");
+                    new_line = Some(anchor);
+                    start = (s.from_line < anchor).then_some(s.from_line as i32);
+                    suggestions.0 += 1;
+                }
+                None => suggestions.1 += 1,
+            }
+        }
         let note = LineNote {
             path: c.path.clone(),
-            new_line: c.new_line.map(|n| n as i32),
+            new_line: new_line.map(|n| n as i32),
             old_line: c.old_line.filter(|_| c.new_line.is_none()).map(|o| o as i32),
             body,
         };
-        if already.contains(&note) || notes.contains(&note) {
+        if already.contains(&note) || notes.iter().any(|(n, _)| n == &note) {
             continue;
         }
-        notes.push(note);
+        notes.push((note, start));
     }
     let scope =
         if whole { "the changes".to_string() } else { format!("the changes since `{}`", &run.base_sha[..run.base_sha.len().min(8)]) };
@@ -456,11 +531,28 @@ async fn post(
     }
     summary.push_str(&match notes.len() {
         0 => "No comment on the changed lines.".to_string(),
-        1 => "1 comment on the changed lines.".to_string(),
-        n => format!("{n} comments on the changed lines."),
+        1 => "1 comment on the changed lines".to_string(),
+        n => format!("{n} comments on the changed lines"),
     });
+    let ready = notes.iter().filter(|(n, _)| n.body.contains("\n```suggestion")).count();
+    if !notes.is_empty() {
+        summary.push_str(&match ready {
+            0 => ".".to_string(),
+            1 => ", 1 with a change to apply.".to_string(),
+            n => format!(", {n} with a change to apply."),
+        });
+    }
     if dropped > 0 {
         summary.push_str(&format!(" {dropped} more were left out (not on a changed line, or past the limit)."));
+    }
+    if suggestions.1 > 0 {
+        let n = suggestions.1;
+        summary.push_str(&format!(
+            " {n} suggested change{} did not match the code and {} left out (the comment{} posted as text).",
+            if n == 1 { "" } else { "s" },
+            if n == 1 { "was" } else { "were" },
+            if n == 1 { " is" } else { "s are" }
+        ));
     }
     if !rep.skipped.is_empty() {
         summary.push_str("\n\nNot reviewed:\n");
@@ -472,7 +564,7 @@ async fn post(
         }
     }
     add_bot_note(state, project, mr, bot, &summary, mrdb::Position::default()).await?;
-    for LineNote { path, new_line, old_line, body } in &notes {
+    for (LineNote { path, new_line, old_line, body }, start_new_line) in &notes {
         let pos = mrdb::Position {
             diff_id: Some(latest.id),
             base_sha: Some(&latest.base_sha),
@@ -483,7 +575,7 @@ async fn post(
             old_line: *old_line,
             new_line: *new_line,
             start_old_line: None,
-            start_new_line: None,
+            start_new_line: *start_new_line,
         };
         add_bot_note(state, project, mr, bot, body, pos).await?;
         posted += 1;
@@ -528,6 +620,36 @@ mod tests {
         let j = &p.jobs["ai_review"];
         assert_eq!(j.script, vec!["forgust ai-review"]);
         assert_eq!(j.artifacts.as_ref().unwrap().reports[REPORT], vec![report::FILE]);
+    }
+
+    #[test]
+    fn suggestions_hold_up_or_are_left_out() {
+        let file = "a\n    let x = 1 / 0;\n    y\nz\n";
+        let s = |from, to, original: &str, code: &str| report::Suggestion {
+            from_line: from,
+            to_line: to,
+            original: original.into(),
+            code: code.into(),
+        };
+        let all = |_: u32| true;
+        // on the commented line, the model's trailing spaces forgiven
+        let (at, block) = checked_suggestion(Some(file), all, 2, &s(2, 2, "    let x = 1 / 0;  ", "    let x = 1;")).unwrap();
+        assert_eq!((at, block.as_str()), (2, "```suggestion:-0+0\n    let x = 1;\n```"));
+        // a range: the comment moves into it
+        let (at, block) = checked_suggestion(Some(file), all, 4, &s(2, 3, "    let x = 1 / 0;\n    y", "")).unwrap();
+        assert_eq!((at, block.as_str()), (3, "```suggestion:-1+0\n```"));
+        let r = crate::services::suggestions::parse(&format!("text\n\n{block}")).unwrap();
+        assert_eq!((r.above, r.below, r.lines.len()), (1, 0, 0), "what Apply reads");
+        // the lines do not read that (wrong number, wrong indentation)
+        assert!(checked_suggestion(Some(file), all, 2, &s(3, 3, "    let x = 1 / 0;", "x")).is_none());
+        assert!(checked_suggestion(Some(file), all, 2, &s(2, 2, "let x = 1 / 0;", "x")).is_none());
+        // not in the diff, no change, a fence, too long, no file
+        assert!(checked_suggestion(Some(file), |n| n != 2, 2, &s(2, 2, "    let x = 1 / 0;", "x")).is_none());
+        assert!(checked_suggestion(Some(file), all, 2, &s(2, 2, "    let x = 1 / 0;", "    let x = 1 / 0;")).is_none());
+        assert!(checked_suggestion(Some(file), all, 2, &s(2, 2, "    let x = 1 / 0;", "```\nx")).is_none());
+        assert!(checked_suggestion(Some(file), all, 2, &s(1, 30, "a", "x")).is_none());
+        assert!(checked_suggestion(None, all, 2, &s(2, 2, "    let x = 1 / 0;", "x")).is_none());
+        assert_eq!(strip_suggestion_blocks("Fix:\n```suggestion\nbad\n```\nThanks"), "Fix:\nThanks");
     }
 
     #[test]

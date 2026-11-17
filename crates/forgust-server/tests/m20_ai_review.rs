@@ -449,3 +449,69 @@ async fn a_stock_runner_runs_a_review(pool: sqlx::PgPool) {
         "{notes}"
     );
 }
+
+/// A review's changes ready to apply: one that holds up gets a suggestion
+/// block people apply in one click; one whose lines do not read what the
+/// model said, or a block the model wrote itself, is posted as text only.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn suggested_changes_are_checked_then_applied_by_a_person(pool: sqlx::PgPool) {
+    let srv = TestServer::start_with(pool, |c| {
+        c.ci.long_poll_secs = 1;
+        c.ai_review.enabled = true;
+        c.ai_review.base_url = "http://models.internal/v1".into();
+        c.ai_review.model = "m".into();
+    })
+    .await;
+    let owner = srv.user("olivia", false).await;
+    let (_, _, project) = org_project(&owner).await;
+    let work = srv.work_dir("ai-sugg");
+    seed_repo(&work).await;
+    let remote = srv.http_url("olivia", "acme/platform/api");
+    must(git(&work, &["push", "-q", &remote, "main"]).await);
+    must(git(&work, &["checkout", "-q", "-b", "topic"]).await);
+    commit_file(&work, "src/main.rs", "fn main() {\n    println!(\"hello, world\");\n    let x = 1 / 0;\n}\n", "divide").await;
+    must(git(&work, &["push", "-q", &remote, "topic"]).await);
+    wait_jobs(&srv.state).await;
+    let iid = owner
+        .ok_post(&format!("/api/v1/projects/{project}/merge_requests"), json!({ "source_branch": "topic", "title": "Divide" }))
+        .await["iid"]
+        .as_i64()
+        .unwrap();
+    owner.ok_put(&format!("/api/v1/projects/{project}/ai_review"), json!({ "enabled": true })).await;
+    let admin = srv.user("root", true).await;
+    let runner = admin.ok_post("/api/v1/admin/runners", json!({ "description": "shared" })).await["token"].as_str().unwrap().to_string();
+    let path = format!("/api/v1/projects/{project}/merge_requests/{iid}/ai_review");
+    owner.ok_post(&path, json!({})).await;
+    let job = request(&srv, &runner).await.expect("the review job");
+    let comments = json!([
+        { "path": "src/main.rs", "new_line": 3, "body": "Division by zero.",
+          "suggestion": { "from_line": 3, "to_line": 3, "original": "    let x = 1 / 0;", "code": "    let x = 1;" } },
+        { "path": "src/main.rs", "new_line": 2, "body": "Greet by name.",
+          "suggestion": { "from_line": 2, "to_line": 2, "original": "println!(\"hello\");", "code": "    println!(\"hello, {name}\");" } },
+        { "path": "src/main.rs", "new_line": 1, "body": "Main:\n```suggestion\nfn main() -> Result<(), ()> {\n```\nmaybe." },
+    ]);
+    report_and_finish(&srv, &job, Some(review(&job, comments)), "success").await;
+    let st = owner.ok_get(&path).await;
+    assert_eq!((st["latest"]["state"].as_str(), st["latest"]["comments_posted"].as_i64()), (Some("posted"), Some(3)), "{st}");
+
+    let notes = owner.ok_get(&format!("/api/v1/projects/{project}/merge_requests/{iid}/notes")).await;
+    let on = |line: i64| notes.as_array().unwrap().iter().find(|n| n["new_line"] == line).unwrap_or_else(|| panic!("{notes}")).clone();
+    let fix = on(3);
+    assert_eq!(fix["body"], "Division by zero.\n\n```suggestion:-0+0\n    let x = 1;\n```", "the server writes the block");
+    assert!(!on(2)["body"].as_str().unwrap().contains("```suggestion"), "the lines do not read that: text only");
+    assert_eq!(on(1)["body"], "Main:\nmaybe.", "a block the model wrote is not posted");
+    let summary = notes.as_array().unwrap().iter().find(|n| n["new_path"].is_null() && n["author_bot"] == true).unwrap();
+    let text = summary["body"].as_str().unwrap();
+    assert!(text.contains("3 comments on the changed lines, 1 with a change to apply."), "{text}");
+    assert!(text.contains("1 suggested change did not match the code"), "{text}");
+
+    // the bot never commits: a person applies it
+    let r =
+        owner.ok_post(&format!("/api/v1/projects/{project}/merge_requests/{iid}/notes/{}/apply_suggestion", fix["id"]), json!({})).await;
+    let head = r["head_sha"].as_str().unwrap().to_string();
+    let b = srv.state.storage.blob(project, &head, "src/main.rs", 1 << 20).await.unwrap();
+    assert_eq!(String::from_utf8(b.data).unwrap(), "fn main() {\n    println!(\"hello, world\");\n    let x = 1;\n}\n");
+    let email: String = sqlx::query_scalar("SELECT email FROM users WHERE username = 'olivia'").fetch_one(&srv.state.db).await.unwrap();
+    let commit = srv.state.storage.commit(project, &head).await.unwrap().unwrap();
+    assert_eq!(commit.author.email, email, "committed as who applied it, not the bot: {commit:?}");
+}
