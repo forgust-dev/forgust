@@ -2912,6 +2912,7 @@ export interface components {
             available: boolean;
             /** @description The viewer may ask for a review. */
             can_request: boolean;
+            /** @description Where a review sends the code (for who can push). */
             endpoint?: string | null;
             latest?: components["schemas"]["AiReviewRun"] | null;
         };

@@ -383,7 +383,7 @@ async fn job_payload(state: &AppState, runner: &Runner, build: &Build, token: &s
         user.as_ref()
             .filter(|u| u.user_type == "ai_review_bot" && review.as_ref().and_then(|s| s.bot_user_id) == Some(u.id))
             .ok_or_else(|| anyhow::anyhow!("an AI review job not run by the project's AI review bot, or AI review is off"))?;
-        predefined.extend(crate::services::ai_review::job_variables(state).await?);
+        predefined.extend(crate::services::ai_review::job_variables(state, mr.as_ref()).await?);
     }
     // the job's environment
     let mut environment = None;
@@ -445,7 +445,8 @@ async fn job_payload(state: &AppState, runner: &Runner, build: &Build, token: &s
             token,
             variables: vars,
             dependencies,
-            git_depth: settings.default_git_depth,
+            // a review's base may be any older commit of the merge request
+            git_depth: if pipeline.source == crate::services::ai_review::SOURCE { 0 } else { settings.default_git_depth },
             cache_keys,
         },
     )?;

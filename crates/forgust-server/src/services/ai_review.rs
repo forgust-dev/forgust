@@ -218,7 +218,7 @@ pub async fn request(state: &AppState, principal: &Principal, project: &Project,
 /// The job's variables, given when a runner takes it: where the model is,
 /// and its key (masked). Nothing from the project's, groups' or instance's
 /// CI variables, and no token of the forge.
-pub async fn job_variables(state: &AppState) -> anyhow::Result<Vec<Var>> {
+pub async fn job_variables(state: &AppState, mr: Option<&MergeRequest>) -> anyhow::Result<Vec<Var>> {
     let cfg = config(state).await?;
     anyhow::ensure!(usable(&cfg), "AI review is turned off on this instance");
     let public = |k: &str, v: String| Var { key: k.into(), value: v, public: true, masked: false, file: false, raw: true };
@@ -229,6 +229,9 @@ pub async fn job_variables(state: &AppState) -> anyhow::Result<Vec<Var>> {
         public("AI_REVIEW_MAX_COMMENTS", cfg.max_comments.to_string()),
         public("AI_REVIEW_MAX_DIFF_BYTES", cfg.max_diff_bytes.to_string()),
     ];
+    if let Some(m) = mr.filter(|m| !m.description.trim().is_empty()) {
+        v.push(public("CI_MERGE_REQUEST_DESCRIPTION", clip(&m.description, 8_000)));
+    }
     if let Some(k) = cfg.api_key.filter(|k| !k.is_empty()) {
         v.push(Var { key: "AI_REVIEW_API_KEY".into(), value: k, public: false, masked: true, file: false, raw: true });
     }
@@ -306,11 +309,18 @@ pub async fn ingest(state: &AppState, build_id: i64) -> anyhow::Result<()> {
         return fail("the review did not run as the project's AI review bot".into()).await;
     };
     let cfg = config(state).await?;
-    let (posted, dropped) = post(state, &project, &mr, &latest, &run, &rep, &bot, cfg.max_comments as usize).await?;
-    if forgust_db::ai_review::finish(&state.db, pl.id, "posted", posted as i32, dropped as i32, None).await? {
-        state.events.publish(Event::MergeRequest { project_id: project.id, iid: mr.iid });
+    // claimed before posting: a retry of this read posts nothing twice
+    if !forgust_db::ai_review::finish(&state.db, pl.id, "posted", 0, 0, None).await? {
+        return Ok(());
     }
-    Ok(())
+    let r = post(state, &project, &mr, &latest, &run, &rep, &bot, cfg.max_comments as usize).await;
+    let (posted, dropped) = match &r {
+        Ok(counts) => *counts,
+        Err(_) => (0, 0),
+    };
+    forgust_db::ai_review::set_counts(&state.db, pl.id, posted as i32, dropped as i32).await?;
+    state.events.publish(Event::MergeRequest { project_id: project.id, iid: mr.iid });
+    r.map(|_| ())
 }
 
 async fn fail_run(state: &AppState, pipeline_id: i64, why: String) -> anyhow::Result<()> {

@@ -163,6 +163,19 @@ pub async fn finish(e: impl PgExecutor<'_>, pipeline_id: i64, state: &str, poste
         > 0)
 }
 
+/// What a posted run posted.
+pub async fn set_counts(e: impl PgExecutor<'_>, pipeline_id: i64, posted: i32, dropped: i32) -> Result<()> {
+    sqlx::query!(
+        "UPDATE ai_review_runs SET comments_posted = $2, comments_dropped = $3 WHERE pipeline_id = $1",
+        pipeline_id,
+        posted,
+        dropped
+    )
+    .execute(e)
+    .await?;
+    Ok(())
+}
+
 /// Review pipelines not finished yet: of one merge request, or of the instance.
 pub async fn active(e: impl PgExecutor<'_>, merge_request_id: Option<i64>) -> Result<i64> {
     sqlx::query_scalar!(

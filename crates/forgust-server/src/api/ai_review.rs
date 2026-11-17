@@ -87,6 +87,7 @@ pub struct AiReviewStatus {
     pub available: bool,
     /// The viewer may ask for a review.
     pub can_request: bool,
+    /// Where a review sends the code (for who can push).
     pub endpoint: Option<String>,
     pub latest: Option<AiReviewRun>,
 }
@@ -96,7 +97,9 @@ async fn status_of(state: &AppState, principal: &crate::auth::Principal, id: &st
     let mr = forgust_db::merge_requests::find(&state.db, p.id, iid).await?.ok_or(ApiError::NotFound)?;
     let c = svc::config(state).await.map_err(ApiError::Internal)?;
     let on = svc::usable(&c) && forgust_db::ai_review::get(&state.db, p.id).await?.is_some_and(|s| s.enabled);
-    let can_request = on && mr.state == "opened" && !p.archived() && can_project(state, principal, ProjectAction::Push, &p).await?;
+    // where the code goes and why a review failed are for who can push
+    let pusher = can_project(state, principal, ProjectAction::Push, &p).await?;
+    let can_request = on && mr.state == "opened" && !p.archived() && pusher;
     let latest = match forgust_db::ai_review::latest(&state.db, mr.id).await? {
         Some(r) => {
             let head = forgust_db::merge_requests::latest_diff(&state.db, mr.id).await?.map(|d| d.head_sha);
@@ -110,14 +113,14 @@ async fn status_of(state: &AppState, principal: &crate::auth::Principal, id: &st
                 head_sha: r.head_sha,
                 comments_posted: r.comments_posted,
                 comments_dropped: r.comments_dropped,
-                error: r.error,
+                error: r.error.filter(|_| pusher),
                 created_at: r.created_at,
                 finished_at: r.finished_at,
             })
         }
         None => None,
     };
-    Ok(AiReviewStatus { available: on, can_request, endpoint: on.then(|| svc::endpoint_host(&c)).flatten(), latest })
+    Ok(AiReviewStatus { available: on, can_request, endpoint: (on && pusher).then(|| svc::endpoint_host(&c)).flatten(), latest })
 }
 
 /// The merge request's latest AI review.

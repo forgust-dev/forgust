@@ -5481,7 +5481,8 @@
             "type": [
               "string",
               "null"
-            ]
+            ],
+            "description": "Where a review sends the code (for who can push)."
           },
           "latest": {
             "oneOf": [

@@ -128,8 +128,12 @@ async fn a_review_runs_as_a_reporter_bot_and_only_what_holds_up_is_posted(pool: 
     let rep = srv.user("rita", false).await;
     owner.ok_post(&format!("/api/v1/projects/{project}/members"), json!({ "username": "dave", "access_level": "developer" })).await;
     owner.ok_post(&format!("/api/v1/projects/{project}/members"), json!({ "username": "rita", "access_level": "reporter" })).await;
-    let mr =
-        dev.ok_post(&format!("/api/v1/projects/{project}/merge_requests"), json!({ "source_branch": "topic", "title": "Divide" })).await;
+    let mr = dev
+        .ok_post(
+            &format!("/api/v1/projects/{project}/merge_requests"),
+            json!({ "source_branch": "topic", "title": "Divide", "description": "Why: speed." }),
+        )
+        .await;
     let iid = mr["iid"].as_i64().unwrap();
     let mr_id = mr["id"].as_i64().unwrap();
     wait_jobs(&srv.state).await;
@@ -160,6 +164,7 @@ async fn a_review_runs_as_a_reporter_bot_and_only_what_holds_up_is_posted(pool: 
     let st = rep.ok_get(&path).await;
     assert_eq!(st["available"], true);
     assert_eq!(st["can_request"], false);
+    assert!(st["endpoint"].is_null());
     assert_eq!(rep.post(&path, json!({})).await.0, 403);
     let st = dev.ok_get(&path).await;
     assert_eq!(st["can_request"], true, "{st}");
@@ -184,6 +189,8 @@ async fn a_review_runs_as_a_reporter_bot_and_only_what_holds_up_is_posted(pool: 
     assert_eq!(var(&job, "FORGUST_REVIEW_BASE_SHA"), Some(main_head.clone()));
     assert_eq!(var(&job, "FORGUST_REVIEW_TARGET_SHA"), Some(main_head.clone()));
     assert_eq!(var(&job, "PROJECT_SECRET"), None);
+    assert_eq!(var(&job, "CI_MERGE_REQUEST_DESCRIPTION").as_deref(), Some("Why: speed."));
+    assert_eq!(job["git_info"]["depth"], 0, "a full clone: the base can be any older commit");
 
     // what holds up: on a line of the diff, at most 2, once
     let comments = json!([
@@ -253,6 +260,9 @@ async fn a_review_runs_as_a_reporter_bot_and_only_what_holds_up_is_posted(pool: 
     let st = dev.ok_get(&path).await;
     assert_eq!(st["latest"]["state"], "failed");
     assert!(st["latest"]["error"].as_str().unwrap().contains("connection refused"));
+    // not for who cannot push: the error and the endpoint name internal hosts
+    let seen = rep.ok_get(&path).await;
+    assert!(seen["latest"]["error"].is_null() && seen["endpoint"].is_null(), "{seen}");
     let n = dev.ok_get(&format!("/api/v1/projects/{project}/merge_requests/{iid}/notes")).await.as_array().unwrap().len();
 
     // a job that ends without a report: failed once the sweep sees it
@@ -285,4 +295,140 @@ async fn a_review_runs_as_a_reporter_bot_and_only_what_holds_up_is_posted(pool: 
     assert_eq!(st["available"], false);
     assert_eq!(st["latest"]["pipeline_status"], "canceled");
     assert_eq!(dev.post(&path, json!({})).await.0, 409);
+}
+
+/// A stock runner (Docker executor) runs a review with Forgust's image, as
+/// that image's user, against a model the test plays: the report it uploads
+/// is read and posted. Opt in with `FORGUST_TEST_RUNNER=gitlab/gitlab-runner:<version>`
+/// and `FORGUST_TEST_AI_REVIEW_IMAGE=<an image with this build's forgust>`.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn a_stock_runner_runs_a_review(pool: sqlx::PgPool) {
+    let (Ok(runner_image), Ok(review_image)) = (std::env::var("FORGUST_TEST_RUNNER"), std::env::var("FORGUST_TEST_AI_REVIEW_IMAGE")) else {
+        eprintln!("skipped: set FORGUST_TEST_RUNNER and FORGUST_TEST_AI_REVIEW_IMAGE to run a review on a real runner");
+        return;
+    };
+    // the model: answers one comment on the added line
+    let model = axum::Router::new().route(
+        "/v1/chat/completions",
+        axum::routing::post(|axum::Json(b): axum::Json<Value>| async move {
+            let user = b["messages"][1]["content"].as_str().unwrap_or_default().to_string();
+            let line = if user.contains("L3 +     let x = 1 / 0;") { 3 } else { 1 };
+            let answer =
+                json!({ "summary": "Divides by zero.", "comments": [{ "path": "src/main.rs", "line": line, "body": "This panics." }] });
+            axum::Json(json!({ "choices": [{ "message": { "content": answer.to_string() }, "finish_reason": "stop" }] }))
+        }),
+    );
+    let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let model_url = format!("http://{}/v1", l.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(l, model).await.unwrap() });
+
+    let srv = TestServer::start_with(pool, |c| {
+        c.ai_review.enabled = true;
+        c.ai_review.base_url = model_url.clone();
+        c.ai_review.model = "stub".into();
+        c.ai_review.image = review_image.clone();
+        c.ai_review.tags = vec!["ai".into()];
+    })
+    .await;
+    let owner = srv.user("olivia", false).await;
+    let (_, _, project) = org_project(&owner).await;
+    let work = srv.work_dir("ai-real");
+    seed_repo(&work).await;
+    must(git(&work, &["push", "-q", &srv.http_url("olivia", "acme/platform/api"), "main"]).await);
+    must(git(&work, &["checkout", "-q", "-b", "topic"]).await);
+    commit_file(&work, "src/main.rs", "fn main() {\n    println!(\"hello, world\");\n    let x = 1 / 0;\n}\n", "divide").await;
+    must(git(&work, &["push", "-q", &srv.http_url("olivia", "acme/platform/api"), "topic"]).await);
+    wait_jobs(&srv.state).await;
+    let iid = owner
+        .ok_post(&format!("/api/v1/projects/{project}/merge_requests"), json!({ "source_branch": "topic", "title": "Divide" }))
+        .await["iid"]
+        .as_i64()
+        .unwrap();
+    owner.ok_put(&format!("/api/v1/projects/{project}/ai_review"), json!({ "enabled": true })).await;
+    let admin = srv.user("root", true).await;
+    let token =
+        admin.ok_post("/api/v1/admin/runners", json!({ "description": "real", "tags": ["ai"], "run_untagged": false })).await["token"]
+            .as_str()
+            .unwrap()
+            .to_string();
+
+    let name = format!("forgust-test-ai-runner-{}", std::process::id());
+    async fn docker(args: Vec<String>) -> (bool, String) {
+        let out = tokio::process::Command::new("docker").args(&args).output().await.unwrap();
+        (out.status.success(), format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr)))
+    }
+    struct Gone(String);
+    impl Drop for Gone {
+        fn drop(&mut self) {
+            let _ = std::process::Command::new("docker").args(["rm", "-f", &self.0]).output();
+            let _ = std::process::Command::new("docker").args(["volume", "rm", "-f", &format!("{}-config", self.0)]).output();
+        }
+    }
+    let _gone = Gone(name.clone());
+    let conf = format!("{name}-config:/etc/gitlab-runner");
+    let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+    let (ok, out) = docker(s(&[
+        "run",
+        "--rm",
+        "--network",
+        "host",
+        "-v",
+        &conf,
+        &runner_image,
+        "register",
+        "--non-interactive",
+        "--url",
+        &srv.base,
+        "--token",
+        &token,
+        "--executor",
+        "docker",
+        "--docker-image",
+        "alpine:3.20",
+        "--docker-network-mode",
+        "host",
+        "--docker-pull-policy",
+        "if-not-present",
+        "--name",
+        &name,
+    ]))
+    .await;
+    assert!(ok, "register: {out}");
+    let (ok, out) = docker(s(&[
+        "run",
+        "-d",
+        "--name",
+        &name,
+        "--network",
+        "host",
+        "-v",
+        "/var/run/docker.sock:/var/run/docker.sock",
+        "-v",
+        &conf,
+        &runner_image,
+    ]))
+    .await;
+    assert!(ok, "runner: {out}");
+
+    let path = format!("/api/v1/projects/{project}/merge_requests/{iid}/ai_review");
+    owner.ok_post(&path, json!({})).await;
+    let start = std::time::Instant::now();
+    let st = loop {
+        wait_jobs(&srv.state).await;
+        let st = owner.ok_get(&path).await;
+        if st["latest"]["state"] != "pending" || start.elapsed() > std::time::Duration::from_secs(240) {
+            break st;
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    };
+    let job =
+        owner.ok_get(&format!("/api/v1/projects/{project}/pipelines/{}", st["latest"]["pipeline_iid"])).await["jobs"][0]["id"].clone();
+    let log = owner.ok_get(&format!("/api/v1/projects/{project}/jobs/{job}/trace")).await;
+    assert_eq!(st["latest"]["state"], "posted", "{st}\n{}", log["content"].as_str().unwrap_or_default());
+    assert_eq!(st["latest"]["comments_posted"], 1, "{st}");
+    let notes = owner.ok_get(&format!("/api/v1/projects/{project}/merge_requests/{iid}/notes")).await;
+    assert!(
+        notes.as_array().unwrap().iter().any(|n| n["new_line"] == 3 && n["body"] == "This panics." && n["author_bot"] == true),
+        "{notes}"
+    );
 }
