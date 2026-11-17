@@ -1746,6 +1746,22 @@ pub async fn upstream_pipeline(e: impl PgExecutor<'_>, pipeline_id: i64) -> Resu
     }))
 }
 
+/// Of `pipeline_ids`, the child pipelines (started by a bridge job of another
+/// pipeline of the same project): `(child id, parent iid)`, in one query for a list.
+pub async fn parent_iids(e: impl PgExecutor<'_>, pipeline_ids: &[i64]) -> Result<Vec<(i64, i64)>> {
+    Ok(sqlx::query!(
+        "SELECT p.id, u.iid
+           FROM ci_pipelines p JOIN ci_builds b ON b.id = p.upstream_build_id JOIN ci_pipelines u ON u.id = b.pipeline_id
+          WHERE p.id = ANY ($1) AND u.project_id = p.project_id",
+        pipeline_ids
+    )
+    .fetch_all(e)
+    .await?
+    .into_iter()
+    .map(|r| (r.id, r.iid))
+    .collect())
+}
+
 pub async fn instance_key(e: impl PgExecutor<'_>, name: &str) -> Result<Option<String>> {
     sqlx::query_scalar!("SELECT value_enc FROM instance_keys WHERE name = $1", name).fetch_optional(e).await
 }

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, Clock3, GitBranch, Play, RotateCcw, Square, Tag, Timer, Plus, X } from "lucide-react";
+import { CalendarClock, Clock3, CornerDownRight, GitBranch, Play, RotateCcw, Server, ServerOff, Square, Tag, Timer, Plus, X } from "lucide-react";
 import { api, qs, refLink, timeAgo, type S } from "../../../api/client";
 import { Empty, ErrorBox, Field, FieldGroup, FilterTabs, ListHead, Q, SearchField } from "../../../components/ui";
 import { Select } from "../../../components/controls";
@@ -10,7 +10,8 @@ import { useAct } from "../../../shell/toast";
 import { useConfirm } from "../../../shell/dialog";
 import type { Ctx } from "../Project";
 import { PipelineTests } from "./Tests";
-import { MiniPipeline, RETRYABLE, StatusBadge, StatusIcon, duration, isActive } from "./Status";
+import { MiniPipeline, RETRYABLE, StatusBadge, StatusIcon, duration, isActive, statusLabel } from "./Status";
+import { DecideCard } from "../../../components/decide";
 import { useBranches, useTags } from "../Code";
 
 export const SOURCE: Record<string, string> = {
@@ -37,7 +38,9 @@ export function useConfirmRun() {
   return (j: S["JobDto"]) => (j.manual_confirmation ? confirm({ title: `Run ${j.name}?`, body: j.manual_confirmation, action: `Run ${j.name}` }) : Promise.resolve(true));
 }
 
-export function PipelineRow({ ctx, p }: { ctx: Ctx; p: S["PipelineSummary"] }) {
+/** A pipeline in the list; the child pipelines it started (`trigger: include`) go
+ *  under it, rather than in rows of their own with the same title. */
+export function PipelineRow({ ctx, p, kids = [] }: { ctx: Ctx; p: S["PipelineSummary"]; kids?: S["PipelineSummary"][] }) {
   const to = `${ctx.web}/-/pipelines/${p.iid}`;
   return (
     <div className="item pipeline-row">
@@ -62,14 +65,82 @@ export function PipelineRow({ ctx, p }: { ctx: Ctx; p: S["PipelineSummary"] }) {
           <Link to={`${ctx.web}/-/commit/${p.sha}`} className="sha">
             {p.sha.slice(0, 8)}
           </Link>
-          <span>{SOURCE[p.source] ?? p.source}</span>
-          {p.username && <span>{p.username}</span>}
+          {/* a child whose parent is not listed here (another page, a filter) says whose it is */}
+          {p.parent_iid != null ? <Link to={`${ctx.web}/-/pipelines/${p.parent_iid}`}>child of #{p.parent_iid}</Link> : <span>{SOURCE[p.source] ?? p.source}</span>}
+          {p.username && <span>by {p.username}</span>}
           <span>{timeAgo(p.created_at)}</span>
         </div>
         {p.yaml_errors && <div className="small" style={{ color: "var(--danger)" }}>{p.yaml_errors}</div>}
+        {kids.length > 0 && (
+          <ul className="pipe-kids" aria-label="Child pipelines">
+            {kids.map((k) => (
+              <li key={k.id}>
+                <CornerDownRight size={13} aria-hidden className="faint" />
+                <span className={`st-${k.status}`}>
+                  <StatusIcon status={k.status} size={14} />
+                </span>
+                <Link to={`${ctx.web}/-/pipelines/${k.iid}`}>Child pipeline #{k.iid}</Link>
+                <span className="faint">
+                  {statusLabel(k.status).toLowerCase()}
+                  {k.duration != null && ` · ${duration(k.duration)}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
       <MiniPipeline stages={p.stages} to={to} />
     </div>
+  );
+}
+
+/** Pipeline states that wait for runners to take their jobs. */
+const WAITING = ["created", "pending", "running", "preparing", "waiting_for_resource"];
+
+/**
+ * The list's emphasized card, for maintainers: pipelines wait and no runner the
+ * project may use is online, so nothing will run (a "running" one there only
+ * waits). None when a runner is online, or nothing waits.
+ */
+function NoRunner({ ctx, list }: { ctx: Ctx; list: S["PipelineSummary"][] }) {
+  // the CI/CD settings' request: the project's runners, its groups' and the instance's
+  const runners = useQuery({
+    queryKey: ["runners", `/projects/${ctx.p.id}/runners`],
+    queryFn: () => api.get<S["RunnerDto"][]>(`/projects/${ctx.p.id}/runners`),
+    enabled: ctx.p.can_admin,
+    retry: false,
+  });
+  const waiting = list.filter((p) => WAITING.includes(p.status)).length;
+  const rs = runners.data;
+  if (!rs || waiting === 0 || rs.some((r) => r.status === "online")) return null;
+  return (
+    <DecideCard
+      label="No runner online"
+      late
+      eyebrow={
+        <>
+          <ServerOff size={14} aria-hidden /> Nothing runs
+        </>
+      }
+      title={`${waiting} pipeline${waiting === 1 ? " waits" : "s wait"} for a runner`}
+      sub={
+        rs.length === 0
+          ? "This project has no runner: neither its own, nor its groups', nor the instance's. Jobs stay pending until one takes them."
+          : `${rs.length === 1 ? "Its runner is" : `Its ${rs.length} runners are`} offline or paused: jobs stay pending until one is back.`
+      }
+      actions={
+        <Link className="btn run" to={`${ctx.web}/-/settings/ci_cd`}>
+          <Server size={14} /> Set up a runner
+        </Link>
+      }
+      rows={rs.slice(0, 4).map((r) => ({
+        key: String(r.id),
+        tone: "warn" as const,
+        icon: <Server size={15} className="row-ic" />,
+        text: r.description || `Runner #${r.id}`,
+        aside: r.status === "paused" ? "paused" : r.contacted_at ? `seen ${timeAgo(r.contacted_at)}` : "never connected",
+      }))}
+    />
   );
 }
 
@@ -124,11 +195,25 @@ export function PipelineList({ ctx }: { ctx: Ctx }) {
               )}
             </Empty>
           ) : (
-            <div className="list rows">
-              {list.map((p) => (
-                <PipelineRow key={p.id} ctx={ctx} p={p} />
-              ))}
-            </div>
+            (() => {
+              // child pipelines go under their parent when it is listed too
+              const listed = new Set(list.map((p) => p.iid));
+              const kids = new Map<number, S["PipelineSummary"][]>();
+              for (const p of list) if (p.parent_iid != null && listed.has(p.parent_iid)) kids.set(p.parent_iid, [...(kids.get(p.parent_iid) ?? []), p]);
+              const rows = list.filter((p) => !(p.parent_iid != null && listed.has(p.parent_iid)));
+              return (
+                <>
+                  {/* counts every pipeline, children too: a parent that triggered
+                      one (without strategy: depend) is done while its child waits */}
+                  <NoRunner ctx={ctx} list={list} />
+                  <div className="list rows">
+                    {rows.map((p) => (
+                      <PipelineRow key={p.id} ctx={ctx} p={p} kids={kids.get(p.iid)} />
+                    ))}
+                  </div>
+                </>
+              );
+            })()
           )
         }
       </Q>

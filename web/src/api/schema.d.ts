@@ -4860,6 +4860,11 @@ export interface components {
         PipelineSummary: components["schemas"]["Pipeline"] & {
             /** Format: double */
             duration?: number | null;
+            /**
+             * Format: int64
+             * @description A child pipeline: the iid of the pipeline of this project that started it.
+             */
+            parent_iid?: number | null;
             /** @description `[stage, status]` for the mini graph. */
             stages: [
                 string,

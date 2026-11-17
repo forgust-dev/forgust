@@ -3983,6 +3983,33 @@ a.status-badge:hover {
   font-weight: 600;
 }
 
+/* pipelines: the child pipelines under the one that started them */
+.pipe-kids {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 7px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12.5px;
+}
+.pipe-kids li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.pipe-kids li > span {
+  display: inline-flex;
+}
+.pipe-kids a {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.pipe-kids a:hover {
+  color: var(--accent);
+}
+
 /* environments: the review apps' folders fold, their environments sit under them;
    a deployment's ref, and the one live now */
 .list.rows > .list-group > .item {

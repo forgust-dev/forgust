@@ -455,6 +455,8 @@ pub struct PipelineSummary {
     /// `[stage, status]` for the mini graph.
     pub stages: Vec<(String, String)>,
     pub duration: Option<f64>,
+    /// A child pipeline: the iid of the pipeline of this project that started it.
+    pub parent_iid: Option<i64>,
 }
 
 /// Stage names in order (only stages that have jobs).
@@ -494,15 +496,22 @@ pub async fn list_pipelines(
     Ok(Json(summaries(&state, list).await?))
 }
 
-/// List rows with their stage statuses (one query for all pipelines).
+/// List rows with their stage statuses and, for child pipelines, their parent
+/// (one query each for all pipelines).
 async fn summaries(state: &AppState, list: Vec<Pipeline>) -> ApiResult<Vec<PipelineSummary>> {
     let ids: Vec<i64> = list.iter().map(|p| p.id).collect();
     let builds = cidb::live_builds_of_pipelines(&state.db, &ids).await?;
+    let parents: std::collections::HashMap<i64, i64> = cidb::parent_iids(&state.db, &ids).await?.into_iter().collect();
     Ok(list
         .into_iter()
         .map(|pipeline| {
             let live: Vec<&Build> = builds.iter().filter(|b| b.pipeline_id == pipeline.id).collect();
-            PipelineSummary { stages: stage_statuses(&live), duration: secs_between(pipeline.started_at, pipeline.finished_at), pipeline }
+            PipelineSummary {
+                stages: stage_statuses(&live),
+                duration: secs_between(pipeline.started_at, pipeline.finished_at),
+                parent_iid: parents.get(&pipeline.id).copied(),
+                pipeline,
+            }
         })
         .collect())
 }

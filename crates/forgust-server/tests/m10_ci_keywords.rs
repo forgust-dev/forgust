@@ -282,6 +282,11 @@ async fn child_pipelines_and_strategy_depend(pool: sqlx::PgPool) {
     assert_eq!(var(&job, "CI_PARENT_PIPELINE_ID").as_deref(), Some(p["id"].to_string().as_str()));
     let childp = pipeline(&fx, 2).await;
     assert_eq!(childp["upstream"]["iid"], 1);
+    // the list says whose child it is: the list page shows it under its parent
+    let list = fx.owner.ok_get(&format!("/api/v1/projects/{}/pipelines", fx.project)).await;
+    let parents: Vec<(Option<i64>, Option<i64>)> =
+        list.as_array().unwrap().iter().map(|p| (p["iid"].as_i64(), p["parent_iid"].as_i64())).collect();
+    assert_eq!(parents, [(Some(2), Some(1)), (Some(1), None)], "{list}");
     finish(&fx, &job, "success").await;
     let p = pipeline(&fx, 1).await;
     assert_eq!(job_named(&p, "child")["status"], "success");

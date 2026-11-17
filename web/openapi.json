@@ -11919,6 +11919,14 @@
                 ],
                 "format": "double"
               },
+              "parent_iid": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "int64",
+                "description": "A child pipeline: the iid of the pipeline of this project that started it."
+              },
               "stages": {
                 "type": "array",
                 "items": {
