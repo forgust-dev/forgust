@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Popover } from "radix-ui";
+import { Popover } from "@base-ui/react/popover";
 import { SmilePlus } from "lucide-react";
 import { api, type S } from "../api/client";
 import { useSession } from "../session";
@@ -62,21 +62,19 @@ export function ReactionBar({ base, noteId }: { base: string; noteId?: number })
       })}
       {user && (
         <Popover.Root>
-          <Popover.Trigger asChild>
-            <button type="button" className="reaction add" aria-label="Add a reaction" title="Add a reaction">
-              <SmilePlus size={14} />
-            </button>
+          <Popover.Trigger className="reaction add" aria-label="Add a reaction" title="Add a reaction">
+            <SmilePlus size={14} />
           </Popover.Trigger>
           <Popover.Portal>
-            <Popover.Content className="reaction-picker" sideOffset={4} align="start">
-              {Object.entries(EMOJI).map(([name, e]) => (
-                <Popover.Close asChild key={name}>
-                  <button type="button" aria-label={name} title={`:${name}:`} onClick={() => toggle(name)}>
+            <Popover.Positioner className="positioner" sideOffset={4} align="start">
+              <Popover.Popup className="reaction-picker">
+                {Object.entries(EMOJI).map(([name, e]) => (
+                  <Popover.Close key={name} aria-label={name} title={`:${name}:`} onClick={() => toggle(name)}>
                     {e}
-                  </button>
-                </Popover.Close>
-              ))}
-            </Popover.Content>
+                  </Popover.Close>
+                ))}
+              </Popover.Popup>
+            </Popover.Positioner>
           </Popover.Portal>
         </Popover.Root>
       )}

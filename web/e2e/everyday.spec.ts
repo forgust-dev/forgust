@@ -161,10 +161,10 @@ test("usernames and the user menu lead to profiles", async ({ page }) => {
   await expect(page.locator(".profile-sub")).toContainText("@root");
   await expect(page.getByRole("link", { name: "Edit profile" })).toBeVisible();
   await expect(page.locator(".contrib")).toBeVisible();
-  // the name at the top of the user menu
+  // "Your profile" in the user menu (the name above it is not a link)
   await page.goto("/explore");
   await page.locator(".avatar-btn").click();
-  await page.getByRole("menuitem", { name: /@root/ }).click();
+  await page.getByRole("menuitem", { name: "Your profile" }).click();
   await expect(page.locator(".profile-sub")).toContainText("@root");
   await page.locator(".avatar-btn").click();
   await page.getByRole("menuitem", { name: "Settings" }).click();

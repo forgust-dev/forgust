@@ -1,12 +1,13 @@
 import { HostRules } from "../components/HostRules";
 import { AuditEvents } from "../components/AuditEvents";
 import { useState, type FormEvent } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, useLocation } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, enc, qs, timeAgo, type S } from "../api/client";
 import { useProviders } from "../prefetch";
 import { useSession } from "../session";
-import { Avatar, Badge, Card, ErrorBox, Field, FilterTabs, NotFound, Q, SearchField, Tabs, UserLink, useDebounced } from "../components/ui";
+import { Avatar, Badge, Card, ErrorBox, Field, FilterTabs, NotFound, Q, SearchField, UserLink, useDebounced } from "../components/ui";
+import { adminPage } from "./adminPages";
 import { Menu, type MenuItem } from "../components/controls";
 import { MoreHorizontal } from "lucide-react";
 import { useAct, useToast } from "../shell/toast";
@@ -15,26 +16,15 @@ import { AdminBackups, AdminHealth, AdminJobs, AdminOverview, AdminProjects, Adm
 
 export function Admin() {
   const { user } = useSession();
+  const loc = useLocation();
   if (!user?.is_admin) return <NotFound />;
+  // the area's pages are in the sidebar (shell/Shell.tsx): here, which one this is
   return (
     <div className="page">
-      <h1>Administration</h1>
-      <Tabs
-        items={[
-          { to: "/admin", label: "Overview", end: true },
-          { to: "/admin/users", label: "Users" },
-          { to: "/admin/projects", label: "Projects" },
-          { to: "/admin/storage", label: "Storage" },
-          { to: "/admin/runners", label: "Runners" },
-          { to: "/admin/jobs", label: "Jobs" },
-          { to: "/admin/health", label: "Health" },
-          { to: "/admin/backups", label: "Backups" },
-          { to: "/admin/settings", label: "Settings" },
-          { to: "/admin/dependency-updates", label: "Dependency updates" },
-          { to: "/admin/security-scanning", label: "Security scanning" },
-          { to: "/admin/audit", label: "Audit log" },
-        ]}
-      />
+      <div className="admin-head">
+        <p className="eyebrow">Admin area</p>
+        <h1>{adminPage(loc.pathname)?.label ?? "Administration"}</h1>
+      </div>
       <Routes>
         <Route index element={<AdminOverview />} />
         <Route path="users" element={<Users />} />

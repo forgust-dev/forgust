@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, GitBranch, Play, RotateCcw, Square, Tag, Timer, Plus, X } from "lucide-react";
+import { CalendarClock, Clock3, GitBranch, Play, RotateCcw, Square, Tag, Timer, Plus, X } from "lucide-react";
 import { api, qs, refLink, timeAgo, type S } from "../../../api/client";
 import { Empty, ErrorBox, Field, FieldGroup, FilterTabs, ListHead, Q, SearchField } from "../../../components/ui";
 import { Select } from "../../../components/controls";
@@ -265,57 +265,60 @@ export function PipelineHeader({ ctx, p, tab }: { ctx: Ctx; p: S["PipelineDetail
           </button>
         )}
       </div>
-      <dl className="facts-bar">
-        <div>
-          <dt>Trigger</dt>
-          <dd>
-            {SOURCE[p.source] ?? p.source}
-            {p.username && <span className="muted"> by {p.username}</span>}
-          </dd>
-        </div>
-        <div>
-          <dt>Ref</dt>
-          <dd className="mono">
-            {p.tag ? <Tag size={12} /> : <GitBranch size={12} />} <Link to={refLink(ctx.web, "tree", p.ref)}>{p.ref}</Link>{" "}
-            <Link to={`${ctx.web}/-/commit/${p.sha}`} className="muted">
-              @{p.sha.slice(0, 8)}
-            </Link>
-            {p.protected && <span className="badge">protected</span>}
-          </dd>
-        </div>
-        <div>
-          <dt>Created</dt>
-          <dd>{timeAgo(p.created_at)}</dd>
-        </div>
-        {p.upstream && (
+      <div className="pipe-summary">
+        <dl className="facts-bar">
           <div>
-            <dt>Upstream</dt>
+            <dt>Trigger</dt>
             <dd>
-              <Link to={pipelineHref(ctx, p.upstream)}>
-                {p.upstream.project_id === ctx.p.id ? "" : `${p.upstream.project_path} `}#{p.upstream.iid}
-              </Link>
+              {SOURCE[p.source] ?? p.source}
+              {p.username && <span className="muted"> by {p.username}</span>}
             </dd>
           </div>
-        )}
-        {p.coverage != null && (
           <div>
-            <dt>Coverage</dt>
-            <dd className="mono">{p.coverage.toFixed(2)}%</dd>
+            <dt>Ref</dt>
+            <dd className="mono">
+              {p.tag ? <Tag size={12} /> : <GitBranch size={12} />} <Link to={refLink(ctx.web, "tree", p.ref)}>{p.ref}</Link>{" "}
+              <Link to={`${ctx.web}/-/commit/${p.sha}`} className="muted">
+                @{p.sha.slice(0, 8)}
+              </Link>
+              {p.protected && <span className="badge">protected</span>}
+            </dd>
           </div>
-        )}
-        <div>
-          <dt>Duration</dt>
-          <dd className="mono">
-            <Timer size={12} /> {p.duration != null ? duration(p.duration) : "—"}
-          </dd>
-        </div>
-        <div className="grow">
-          <dt>Stages</dt>
-          <dd>
-            <StageDots p={p} />
-          </dd>
-        </div>
-      </dl>
+          <div>
+            <dt>Created</dt>
+            <dd>{timeAgo(p.created_at)}</dd>
+          </div>
+          {p.upstream && (
+            <div>
+              <dt>Upstream</dt>
+              <dd>
+                <Link to={pipelineHref(ctx, p.upstream)}>
+                  {p.upstream.project_id === ctx.p.id ? "" : `${p.upstream.project_path} `}#{p.upstream.iid}
+                </Link>
+              </dd>
+            </div>
+          )}
+          {p.coverage != null && (
+            <div>
+              <dt>Coverage</dt>
+              <dd className="mono">{p.coverage.toFixed(2)}%</dd>
+            </div>
+          )}
+          <div>
+            <dt>Duration</dt>
+            <dd className="mono">
+              <Timer size={12} /> {p.duration != null ? duration(p.duration) : "—"}
+            </dd>
+          </div>
+          <div className="grow">
+            <dt>Stages</dt>
+            <dd>
+              <StageDots p={p} />
+            </dd>
+          </div>
+        </dl>
+        <ManualCard ctx={ctx} p={p} />
+      </div>
       {p.yaml_errors && (
         <div className="alert error">
           <strong>This pipeline could not run.</strong> {p.yaml_errors}
@@ -334,6 +337,37 @@ export function PipelineHeader({ ctx, p, tab }: { ctx: Ctx; p: S["PipelineDetail
         )}
       </nav>
     </div>
+  );
+}
+
+/** A manual job the pipeline waits on: the next step is someone's to take, so it
+ *  gets the page's emphasized card (the first such job; the graph shows the rest). */
+function ManualCard({ ctx, p }: { ctx: Ctx; p: S["PipelineDetail"] }) {
+  const qc = useQueryClient();
+  const run = useAct(() => qc.invalidateQueries({ queryKey: ["pipeline", ctx.p.id] }));
+  const waiting = p.jobs.filter((j) => !j.retried && j.status === "manual");
+  if (!p.can_run || waiting.length === 0) return null;
+  const j = waiting[0];
+  const env = j.environment && j.environment.action === "start" ? j.environment.name : null;
+  const play = async () => {
+    if (!confirmRun(j)) return;
+    await run(() => api.post(`/projects/${ctx.p.id}/jobs/${j.id}/play`), `Started ${j.name}`);
+  };
+  return (
+    <section className="manual-card" aria-label="Waiting for you">
+      <span className="eyebrow">
+        <Clock3 size={14} aria-hidden /> Waiting for you
+      </span>
+      <h2>{env ? `Deploy to ${env}` : `Run ${j.name}`}</h2>
+      <p>
+        {waiting.length === 1
+          ? `${j.name} is a manual job: it runs when someone starts it.`
+          : `${j.name} and ${waiting.length - 1} more manual job${waiting.length === 2 ? "" : "s"} run when someone starts them.`}
+      </p>
+      <button className="btn run" onClick={play}>
+        <Play size={14} /> Run {j.name}
+      </button>
+    </section>
   );
 }
 
@@ -380,7 +414,7 @@ export function JobCard({ ctx, j, canRun, rel, onHover }: { ctx: Ctx; j: S["JobD
     ) : null;
   return (
     <div
-      className={`job-card ${j.retried ? "retried" : ""} ${rel ?? ""}`}
+      className={`job-card ${j.retried ? "retried" : ""} ${j.status === "manual" ? "manual" : ""} ${rel ?? ""}`}
       onMouseEnter={() => onHover?.(j.name)}
       onMouseLeave={() => onHover?.(null)}
       onFocus={() => onHover?.(j.name)}

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -43,8 +43,10 @@ import { useNav } from "./nav";
 import { HoverCards } from "../components/HoverCards";
 import { Avatar, Tile } from "../components/ui";
 import { ResendLink } from "../components/ResendLink";
+import { Logo } from "../components/Logo";
 import { useWork } from "../prefetch";
 import { SETTINGS_PAGES } from "../pages/project/settingsPages";
+import { ADMIN_PAGES } from "../pages/adminPages";
 import { InboxBell } from "../components/Inbox";
 
 /** A nav entry; `children` show under it while its section is active. */
@@ -62,8 +64,9 @@ function SideLink({ item, collapsed, onNavigate, sub }: { item: Item; collapsed:
       className={({ isActive }) => `side-link ${sub ? "sub" : ""} ${(active ?? isActive) ? "active" : ""}`}
     >
       {item.icon}
-      {!collapsed && <span className="grow">{item.label}</span>}
-      {!collapsed && item.count != null && item.count > 0 && <span className="count">{item.count}</span>}
+      {/* kept while folded: the sidebar clips and fades them (styles.css) */}
+      <span className="side-label grow">{item.label}</span>
+      {item.count != null && item.count > 0 && <span className="side-label count">{item.count}</span>}
     </NavLink>
   );
 }
@@ -71,15 +74,18 @@ function SideLink({ item, collapsed, onNavigate, sub }: { item: Item; collapsed:
 /** A top-level entry, plus its sub-entries when its section is open. */
 function SideEntry({ item, collapsed, onNavigate }: { item: Item; collapsed: boolean; onNavigate: () => void }) {
   const loc = useLocation();
-  const open = !!item.match?.test(loc.pathname) && !collapsed && (item.children?.length ?? 0) > 1;
+  const open = !!item.match?.test(loc.pathname) && (item.children?.length ?? 0) > 1;
   return (
     <>
       <SideLink item={item} collapsed={collapsed} onNavigate={onNavigate} />
       {open && (
-        <div className="side-sub">
-          {item.children!.map((c) => (
-            <SideLink key={c.to + c.label} item={c} collapsed={false} onNavigate={onNavigate} sub />
-          ))}
+        // folded, not removed, while the sidebar is: it unfolds again with it
+        <div className={`side-sub${collapsed ? " folded" : ""}`} inert={collapsed}>
+          <div className="side-sub-inner">
+            {item.children!.map((c) => (
+              <SideLink key={c.to + c.label} item={c} collapsed={false} onNavigate={onNavigate} sub />
+            ))}
+          </div>
         </div>
       )}
     </>
@@ -204,7 +210,10 @@ function Sidebar({ collapsed, setCollapsed, mobileOpen, closeMobile }: { collaps
     header = (
       <Link to={`/${nav.project.full_path}`} className="side-context" title={nav.project.full_path} onClick={closeMobile}>
         <Tile name={nav.project.name} src={nav.project.avatar_url} />
-        {!c && <span className="ellipsis">{nav.project.name}</span>}
+        <span className="side-context-text">
+          <span className="ellipsis">{nav.project.name}</span>
+          {nav.project.ancestors.length > 0 && <span className="side-context-ns ellipsis">{nav.project.ancestors.map((a) => a.name).join(" / ")}</span>}
+        </span>
       </Link>
     );
     items = projectItems(nav.project, nav.ref ?? nav.project.default_branch ?? "main", mrs.data?.opened, issues.data?.opened);
@@ -212,7 +221,9 @@ function Sidebar({ collapsed, setCollapsed, mobileOpen, closeMobile }: { collaps
     header = (
       <Link to={`/${nav.group.full_path}`} className="side-context" title={nav.group.full_path} onClick={closeMobile}>
         <Tile name={nav.group.name} src={nav.group.avatar_url} group />
-        {!c && <span className="ellipsis">{nav.group.name}</span>}
+        <span className="side-context-text">
+          <span className="ellipsis">{nav.group.name}</span>
+        </span>
       </Link>
     );
     items = groupItems(nav.group);
@@ -221,16 +232,32 @@ function Sidebar({ collapsed, setCollapsed, mobileOpen, closeMobile }: { collaps
       { to: "/", label: "Your work", icon: <Inbox size={16} />, end: true, count: waiting },
       { to: "/dashboard/projects", label: "Projects", icon: <FolderGit2 size={16} /> },
       { to: "/explore", label: "Explore", icon: <Compass size={16} /> },
-      ...(user?.is_admin ? [{ to: "/admin", label: "Admin area", icon: <Shield size={16} /> }] : []),
+      ...(user?.is_admin
+        ? [
+            {
+              to: "/admin",
+              label: "Admin area",
+              icon: <Shield size={16} />,
+              match: /^\/admin(\/|$)/,
+              // the area's pages, under it while one of them is open
+              children: ADMIN_PAGES.map(({ path, label }) => ({
+                to: path ? `/admin/${path}` : "/admin",
+                label,
+                match: path ? new RegExp(`^/admin/${path}(/|$)`) : /^\/admin\/?$/,
+              })),
+            },
+          ]
+        : []),
     ];
   }
 
   return (
-    <aside className={`sidebar ${c ? "collapsed" : ""} ${mobileOpen ? "open" : ""}`} aria-label="Navigation">
+    // folded, its icons' tips show beside the rail rather than over the page
+    <aside className={`sidebar ${c ? "collapsed" : ""} ${mobileOpen ? "open" : ""}`} aria-label="Navigation" data-tip-side={c ? "right" : undefined}>
       {nav.kind !== "global" && (
         <Link to="/" className="side-link back" onClick={closeMobile} title="Your work">
           <Home size={16} />
-          {!c && <span>Your work</span>}
+          <span className="side-label">Your work</span>
         </Link>
       )}
       {header}
@@ -242,9 +269,11 @@ function Sidebar({ collapsed, setCollapsed, mobileOpen, closeMobile }: { collaps
       <div className="spacer" />
       <button className="side-link collapse-btn" onClick={() => setCollapsed(!collapsed)} title={collapsed ? "Expand sidebar" : "Collapse sidebar"} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}>
         {collapsed ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
-        {!c && <span>Collapse</span>}
+        <span className="side-label">Collapse</span>
       </button>
-      {!c && <SideVersion />}
+      <div inert={c}>
+        <SideVersion />
+      </div>
     </aside>
   );
 }
@@ -272,10 +301,21 @@ function Breadcrumbs() {
 
 function ThemeButton() {
   const { theme, setTheme } = useTheme();
+  // the icon a change brings turns in (styles.css); the one shown on load just shows
+  const [changed, setChanged] = useState(false);
   const next = theme === "system" ? "light" : theme === "light" ? "dark" : "system";
-  const icon = theme === "light" ? <Sun size={16} /> : theme === "dark" ? <Moon size={16} /> : <Monitor size={16} />;
+  const cls = changed ? "theme-icon" : undefined;
+  const icon = theme === "light" ? <Sun size={16} className={cls} /> : theme === "dark" ? <Moon size={16} className={cls} /> : <Monitor size={16} className={cls} />;
   return (
-    <button className="icon-btn" onClick={() => setTheme(next)} title={`Theme: ${theme} (click for ${next})`} aria-label={`Theme: ${theme}`}>
+    <button
+      className="icon-btn"
+      onClick={() => {
+        setChanged(true);
+        setTheme(next);
+      }}
+      title={`Theme: ${theme} (click for ${next})`}
+      aria-label={`Theme: ${theme}`}
+    >
       {icon}
     </button>
   );
@@ -292,10 +332,11 @@ function UserMenu() {
       </button>
       {open && (
         <div className="menu" role="menu">
-          <Link role="menuitem" className="menu-head" to={`/${user.username}`} onClick={() => setOpen(false)} title="Your profile">
+          {/* who is signed in; "Your profile" below goes to their page */}
+          <div className="menu-head" role="presentation">
             <strong>{user.name || user.username}</strong>
             <span className="faint small">@{user.username}</span>
-          </Link>
+          </div>
           <Link role="menuitem" to={`/${user.username}`} onClick={() => setOpen(false)}>
             <User size={15} /> Your profile
           </Link>
@@ -499,6 +540,22 @@ export function Shell({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const loc = useLocation();
   useEffect(() => setMobileOpen(false), [loc.pathname]);
+  // the page slides along as the sidebar folds or unfolds (FLIP: its margin
+  // changes at once, a transform eases it over); the sidebar itself is clipped
+  const mainRef = useRef<HTMLElement>(null);
+  const mainLeft = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const el = mainRef.current;
+    if (!el) return;
+    el.getAnimations().forEach((a) => a.cancel());
+    const left = el.getBoundingClientRect().left;
+    const from = mainLeft.current;
+    mainLeft.current = left;
+    if (from == null || from === left || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    // the sidebar's own curve and duration (styles.css)
+    const easing = getComputedStyle(el).getPropertyValue("--ease-in-out").trim() || "ease-in-out";
+    el.animate([{ transform: `translateX(${from - left}px)` }, { transform: "none" }], { duration: 240, easing });
+  }, [collapsed, !!user]);
   // Escape closes the menu on small screens
   useEffect(() => {
     if (!mobileOpen) return;
@@ -512,7 +569,7 @@ export function Shell({ children }: { children: ReactNode }) {
       <>
         <header className="topbar">
           <Link to="/" className="brand">
-            <img src="/favicon.svg" width={24} height={24} alt="" />
+            <Logo size={24} />
             Forgust
           </Link>
           <div className="grow" />
@@ -535,7 +592,7 @@ export function Shell({ children }: { children: ReactNode }) {
           <Menu size={18} />
         </button>
         <Link to="/" className="brand">
-          <img src="/favicon.svg" width={24} height={24} alt="" />
+          <Logo size={24} />
           <span className="brand-name">Forgust</span>
         </Link>
         <Breadcrumbs />
@@ -551,7 +608,7 @@ export function Shell({ children }: { children: ReactNode }) {
       </header>
       {mobileOpen && <div className="scrim" onClick={() => setMobileOpen(false)} />}
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} mobileOpen={mobileOpen} closeMobile={() => setMobileOpen(false)} />
-      <main className="main">
+      <main className="main" ref={mainRef}>
         <ImpersonationBanner />
         <UpdateNotice />
         <SiteBanner />

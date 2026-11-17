@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset=".github/images/forgust-logo-dark.svg" />
-    <img src=".github/images/forgust-logo-light.svg" alt="Forgust" width="300" />
+    <source media="(prefers-color-scheme: dark)" srcset=".github/images/forgust-logo-dark.png" />
+    <img src=".github/images/forgust-logo-light.png" alt="Forgust" width="300" />
   </picture>
 </p>
 

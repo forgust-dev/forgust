@@ -71,16 +71,27 @@ const SHOW_MS = 350;
 const HIDE_MS = 200;
 const TIP_MS = 300;
 
-/** A plain tooltip, styled like the cards: for the `title` of anything that has no card. */
-function Tip({ text, rect }: { text: string; rect: DOMRect }) {
-  const above = rect.top > 44;
-  const left = Math.max(8, Math.min(rect.left + rect.width / 2, window.innerWidth - 8));
+/**
+ * A plain tooltip, styled like the cards: for the `title` of anything that has no card.
+ * Above its element (below near the top of the screen), or beside it when asked.
+ */
+function Tip({ text, rect, side }: { text: string; rect: DOMRect; side?: string }) {
+  const place = side === "right" ? "right" : rect.top > 44 ? "above" : "below";
+  const style =
+    place === "right"
+      ? { left: rect.right + 8, top: rect.top + rect.height / 2 }
+      : { left: Math.max(8, Math.min(rect.left + rect.width / 2, window.innerWidth - 8)), top: place === "above" ? rect.top - 6 : rect.bottom + 6 };
   return createPortal(
-    <div className={`tip ${above ? "above" : "below"}`} role="tooltip" style={{ left, top: above ? rect.top - 6 : rect.bottom + 6 }}>
+    <div className={`tip ${place}`} role="tooltip" style={style}>
       {text}
     </div>,
     document.body,
   );
+}
+
+/** The side an element, or the part of the page it is in, asks its tips to show on (`data-tip-side`). */
+function tipSide(el: Element) {
+  return el.closest("[data-tip-side]")?.getAttribute("data-tip-side") ?? undefined;
 }
 
 /**
@@ -109,7 +120,7 @@ function wanted(el: Element) {
  * keep it).
  */
 function useTips() {
-  const [tip, setTip] = useState<{ text: string; rect: DOMRect } | null>(null);
+  const [tip, setTip] = useState<{ text: string; rect: DOMRect; side?: string } | null>(null);
   const t = useRef<number | undefined>(undefined);
   useEffect(() => {
     const enter = (e: Event) => {
@@ -127,7 +138,7 @@ function useTips() {
       const text = el.getAttribute("data-title");
       if (!text) return;
       clearTimeout(t.current);
-      t.current = window.setTimeout(() => wanted(el) && setTip({ text, rect: el.getBoundingClientRect() }), TIP_MS);
+      t.current = window.setTimeout(() => wanted(el) && setTip({ text, rect: el.getBoundingClientRect(), side: tipSide(el) }), TIP_MS);
     };
     const leave = (e: Event) => {
       const el = (e.target as Element | null)?.closest?.("[data-title]");
@@ -236,7 +247,7 @@ export function HoverCards() {
     };
   }, []);
 
-  if (!card) return tip && <Tip text={tip.text} rect={tip.rect} />;
+  if (!card) return tip && <Tip text={tip.text} rect={tip.rect} side={tip.side} />;
   const width = 340;
   const left = Math.max(8, Math.min(card.rect.left, window.innerWidth - width - 8));
   const below = card.rect.bottom + 8 + 180 < window.innerHeight;

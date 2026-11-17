@@ -153,9 +153,19 @@ export function CopyField({ value }: { value: string }) {
         type="button"
         onClick={() => copy(value)}
       >
-        {copied ? "Copied" : "Copy"}
+        <CopyLabel copied={copied} />
       </button>
     </div>
+  );
+}
+
+/** "Copy", or "Copied" for a moment, in one cell: the button keeps its width, nothing beside it moves. */
+export function CopyLabel({ copied }: { copied: boolean }) {
+  return (
+    <span className="copy-label" data-copied={copied || undefined}>
+      <span>Copy</span>
+      <span>Copied</span>
+    </span>
   );
 }
 
@@ -271,7 +281,7 @@ export function ShaCopy({ sha, to }: { sha: string; to?: string }) {
         aria-label="Copy the full SHA"
         onClick={() => copy(sha)}
       >
-        {copied ? <Check size={13} /> : <Copy size={13} />}
+        {copied ? <Check size={13} className="copied-icon" /> : <Copy size={13} />}
       </button>
     </span>
   );

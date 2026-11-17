@@ -31,12 +31,17 @@ test("theme switch cycles and persists", async ({ page }) => {
   const theme = () => page.evaluate(() => document.documentElement.dataset.theme ?? "system");
   const start = await theme();
   await btn.click();
+  // the new theme lands with the page's crossfade, a frame after the click
+  await expect.poll(theme).not.toBe(start);
   const next = await theme();
-  expect(next).not.toBe(start);
   await page.reload();
   expect(await theme()).toBe(next);
   // back to system so other tests see the default
-  while ((await theme()) !== "system") await page.getByRole("button", { name: /^Theme:/ }).click();
+  while ((await theme()) !== "system") {
+    const was = await theme();
+    await page.getByRole("button", { name: /^Theme:/ }).click();
+    await expect.poll(theme).not.toBe(was);
+  }
 });
 
 test("sidebar collapse is remembered", async ({ page }) => {

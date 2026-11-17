@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { DropdownMenu } from "radix-ui";
+import { Menu } from "@base-ui/react/menu";
 import { Bell, BellOff, BellRing, Check } from "lucide-react";
 import { api, type S } from "../api/client";
 import { useNotificationChannels } from "../prefetch";
@@ -161,25 +161,25 @@ export function NotificationBell({ projectId }: { projectId: number }) {
   const current = q.data?.level ?? "global";
   const items = [{ value: "global", label: "Your default", hint: "As in your settings" }, ...LEVELS];
   return (
-    <DropdownMenu.Root modal={false}>
-      <DropdownMenu.Trigger asChild>
-        <button className="btn small" aria-label={`Notifications: ${label(effective)}`} title="Notifications for this project">
-          <Icon size={14} /> <span className="hide-narrow">{label(effective)}</span>
-        </button>
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content className="dropdown notif-menu" align="end" sideOffset={6}>
-          {items.map((l) => (
-            <DropdownMenu.Item key={l.value} className="dropdown-item" onSelect={() => set(l.value)}>
-              <span className="notif-check">{current === l.value && <Check size={14} />}</span>
-              <span>
-                <strong>{l.label}</strong>
-                <span className="muted small notif-hint">{l.hint}</span>
-              </span>
-            </DropdownMenu.Item>
-          ))}
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
+    <Menu.Root modal={false}>
+      <Menu.Trigger className="btn small" aria-label={`Notifications: ${label(effective)}`} title="Notifications for this project">
+        <Icon size={14} /> <span className="hide-narrow">{label(effective)}</span>
+      </Menu.Trigger>
+      <Menu.Portal>
+        <Menu.Positioner className="positioner" align="end" sideOffset={6}>
+          <Menu.Popup className="dropdown notif-menu">
+            {items.map((l) => (
+              <Menu.Item key={l.value} className="dropdown-item" onClick={() => set(l.value)}>
+                <span className="notif-check">{current === l.value && <Check size={14} />}</span>
+                <span>
+                  <strong>{l.label}</strong>
+                  <span className="muted small notif-hint">{l.hint}</span>
+                </span>
+              </Menu.Item>
+            ))}
+          </Menu.Popup>
+        </Menu.Positioner>
+      </Menu.Portal>
+    </Menu.Root>
   );
 }

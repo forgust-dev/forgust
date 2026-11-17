@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, qs, refLink, timeAgo, type S } from "../../api/client";
@@ -490,7 +490,7 @@ function MrAside({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
                   Revoke
                 </button>
               ) : (
-                <button className="btn small primary" onClick={() => act(() => api.post(`${path}/approve`), "Approved")}>
+                <button className="btn small accent" onClick={() => act(() => api.post(`${path}/approve`), "Approved")}>
                   Approve
                 </button>
               ))}
@@ -712,8 +712,9 @@ function Readiness({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
     await act(f, done);
     setBusy(false);
   };
+  // the checks are the page's emphasized card; what to do about them (merge, the train, auto-merge) follows
   return (
-    <section className="mr-card readiness">
+    <div className="readiness">
       <Q q={st}>
         {(s) => {
           const p = pipelines.data?.[0];
@@ -772,36 +773,39 @@ function Readiness({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
           const other = s.blockers.filter((b) => !/^(there are merge conflicts|approval rule|the pipeline must succeed)/.test(b));
           const scored = checks.filter((c) => c.tone !== "none");
           const passed = scored.filter((c) => c.tone === "ok").length;
+          const left = scored.length - passed;
           return (
             <>
-              <div className="readiness-head">
-                <h2 className="mr-card-title">{s.can_merge ? "Ready to merge" : "Not ready yet"}</h2>
-                <span className="mono small muted">
-                  {passed} / {scored.length}
-                </span>
-              </div>
-              <div className="meter" role="img" aria-label={`${passed} of ${scored.length} checks pass`}>
-                {scored.map((c) => (
-                  <span key={c.key} className={c.tone} />
-                ))}
-              </div>
-              <ul className="checks">
-                {checks.map((c) => (
-                  <li key={c.key} className={c.tone}>
-                    <CheckIcon tone={c.tone} />
-                    <span className="grow">{c.text}</span>
-                    {c.action}
-                  </li>
-                ))}
-              </ul>
-              {p && <MrJobs ctx={ctx} iid={p.iid} />}
-              {other.length > 0 && (
-                <ul className="blockers">
-                  {other.map((b) => (
-                    <li key={b}>{b[0].toUpperCase() + b.slice(1)}</li>
+              <section className="mr-card ready-card" aria-label="Merge readiness">
+                <div className="readiness-head">
+                  <ReadyRing passed={passed} total={scored.length} />
+                  <div className="grow">
+                    <h2 className="mr-card-title">{s.can_merge ? "Ready to merge" : "Not ready yet"}</h2>
+                    {!s.can_merge && left > 0 && (
+                      <p className="readiness-sub">
+                        {left} check{left === 1 ? "" : "s"} left before merging
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <ul className="checks">
+                  {checks.map((c) => (
+                    <li key={c.key} className={c.tone}>
+                      <CheckIcon tone={c.tone} />
+                      <span className="grow">{c.text}</span>
+                      {c.action}
+                    </li>
                   ))}
                 </ul>
-              )}
+                {p && <MrJobs ctx={ctx} iid={p.iid} />}
+                {other.length > 0 && (
+                  <ul className="blockers">
+                    {other.map((b) => (
+                      <li key={b}>{b[0].toUpperCase() + b.slice(1)}</li>
+                    ))}
+                  </ul>
+                )}
+              </section>
               {m.auto_merge_user ? (
                 <div className="auto-merge-on">
                   <Clock3 size={15} />
@@ -929,7 +933,37 @@ function Readiness({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
           );
         }}
       </Q>
-    </section>
+    </div>
+  );
+}
+
+/** How many of the checks pass, as a ring around the count. */
+function ReadyRing({ passed, total }: { passed: number; total: number }) {
+  const r = 22;
+  const around = 2 * Math.PI * r;
+  const done = total === 0 ? 0 : (passed / total) * around;
+  return (
+    <svg className="ready-ring" width="56" height="56" viewBox="0 0 56 56" role="img" aria-label={`${passed} of ${total} checks pass`}>
+      <circle className="track" cx="28" cy="28" r={r} fill="none" strokeWidth="6" />
+      {done > 0 && (
+        <circle
+          className="done"
+          cx="28"
+          cy="28"
+          r={r}
+          fill="none"
+          strokeWidth="6"
+          strokeLinecap="round"
+          strokeDasharray={around}
+          // fills from empty on arrival, and moves when a check changes (styles.css)
+          style={{ strokeDashoffset: around - done, "--around": `${around}px` } as CSSProperties}
+          transform="rotate(-90 28 28)"
+        />
+      )}
+      <text x="28" y="33" textAnchor="middle" aria-hidden="true">
+        {passed}/{total}
+      </text>
+    </svg>
   );
 }
 
