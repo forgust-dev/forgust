@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT user_id, provider_sync FROM login_challenges WHERE token_hash = $1 AND expires_at > now()",
+  "query": "SELECT user_id, provider_sync FROM login_challenges WHERE token_hash = $1 AND expires_at > now() FOR UPDATE",
   "describe": {
     "columns": [
       {
@@ -36,5 +36,5 @@
       true
     ]
   },
-  "hash": "5b116c2f8015423a63f59e10fad1d80c8503d62e2a3475320de48aba7fd9304c"
+  "hash": "3e87112ee3ea2caefae9f5f184e1081b27405eeaf4404b4e4e74f8289e9af8b5"
 }

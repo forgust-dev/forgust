@@ -103,16 +103,63 @@ pub fn new_totp_secret() -> String {
     Secret::generate().to_base32()
 }
 
-/// Check a code against the user's stored (encrypted) TOTP seed.
-pub async fn verify_totp(state: &AppState, user: &User, code: &str) -> ApiResult<bool> {
-    let Some(sealed) = forgust_db::users::totp_secret(&state.db, user.id).await? else { return Ok(false) };
+/// Check a code against the user's stored (encrypted) TOTP seed, on `c` (the
+/// caller's transaction, when it holds one).
+pub async fn verify_totp(state: &AppState, c: &mut sqlx::PgConnection, user: &User, code: &str) -> ApiResult<bool> {
+    let Some(sealed) = forgust_db::users::totp_secret(&mut *c, user.id).await? else { return Ok(false) };
     let secret = String::from_utf8(state.secrets.decrypt(&sealed)?).map_err(|e| ApiError::Internal(e.into()))?;
     let totp = totp_for(&secret, &user.username)?;
     let code = code.trim();
     let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_err(|e| ApiError::Internal(e.into()))?.as_secs();
     // the step before, this one and the next (clock skew), each accepted once
     let Some(step) = totp.check(code, now) else { return Ok(false) };
-    Ok(forgust_db::users::use_totp_step(&state.db, user.id, step as i64).await?)
+    Ok(forgust_db::users::use_totp_step(&mut *c, user.id, step as i64).await?)
+}
+
+/// Recovery codes given at once: each stands in for the second factor once.
+const RECOVERY_CODES: usize = 10;
+
+/// New recovery codes, as shown to the user: 16 characters of base32 (80
+/// bits, so a plain hash is enough), in groups of four.
+fn new_recovery_codes() -> Vec<String> {
+    (0..RECOVERY_CODES)
+        .map(|_| {
+            let raw = crypto::random_chars(b"abcdefghijklmnopqrstuvwxyz234567", 16);
+            format!("{}-{}-{}-{}", &raw[..4], &raw[4..8], &raw[8..12], &raw[12..])
+        })
+        .collect()
+}
+
+/// What is stored for a recovery code, however it was typed (case, dashes, spaces).
+pub fn recovery_code_hash(code: &str) -> Vec<u8> {
+    let normal: String = code.chars().filter(|c| c.is_ascii_alphanumeric()).map(|c| c.to_ascii_lowercase()).collect();
+    crypto::token_hash(&normal)
+}
+
+/// Give the account a new set of recovery codes (the old ones stop working),
+/// on the caller's transaction; returns them, to show once.
+pub async fn reset_recovery_codes(c: &mut sqlx::PgConnection, user_id: i64) -> ApiResult<Vec<String>> {
+    let codes = new_recovery_codes();
+    let hashes: Vec<Vec<u8>> = codes.iter().map(|c| recovery_code_hash(c)).collect();
+    forgust_db::recovery_codes::replace(c, user_id, &hashes).await?;
+    Ok(codes)
+}
+
+#[cfg(test)]
+mod recovery_tests {
+    use super::*;
+
+    #[test]
+    fn codes_are_distinct_and_typed_loosely() {
+        let codes = new_recovery_codes();
+        assert_eq!(codes.len(), RECOVERY_CODES);
+        assert_eq!(codes.iter().collect::<std::collections::HashSet<_>>().len(), RECOVERY_CODES);
+        let c = &codes[0];
+        assert_eq!(c.len(), 19);
+        let sloppy = format!(" {} ", c.replace('-', " ").to_uppercase());
+        assert_eq!(recovery_code_hash(&sloppy), recovery_code_hash(c));
+        assert_ne!(recovery_code_hash(&codes[1]), recovery_code_hash(c));
+    }
 }
 
 #[cfg(test)]

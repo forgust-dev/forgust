@@ -392,22 +392,33 @@ pub struct TotpCode {
     pub password: String,
 }
 
+#[derive(Serialize, ToSchema)]
+pub struct TotpEnabled {
+    pub user: UserDto,
+    /// Shown this once: each stands in for the authenticator at sign-in, once.
+    pub recovery_codes: Vec<String>,
+}
+
 pub async fn totp_enable(
     State(state): State<AppState>,
     SignedIn(u, p): SignedIn,
     jar: axum_extra::extract::CookieJar,
     Json(req): Json<TotpCode>,
-) -> ApiResult<Json<UserDto>> {
+) -> ApiResult<Json<TotpEnabled>> {
     require_interactive(&u, &p)?;
     reauth(&state, &jar, u.id, &req.password).await?;
-    if !session::verify_totp(&state, &u, &req.code).await? {
+    // the app and its recovery codes come together, or not at all
+    let mut tx = state.db.begin().await?;
+    if !session::verify_totp(&state, &mut tx, &u, &req.code).await? {
         return Err(ApiError::bad("the code is not valid; check your device clock"));
     }
-    let sealed = forgust_db::users::totp_secret(&state.db, u.id).await?.ok_or_else(|| ApiError::bad("run setup first"))?;
-    forgust_db::users::set_totp(&state.db, u.id, Some(&sealed), true).await?;
+    let sealed = forgust_db::users::totp_secret(&mut *tx, u.id).await?.ok_or_else(|| ApiError::bad("run setup first"))?;
+    forgust_db::users::set_totp(&mut *tx, u.id, Some(&sealed), true).await?;
+    let recovery_codes = session::reset_recovery_codes(&mut tx, u.id).await?;
+    tx.commit().await?;
     services::audit(&state, &p, "two_factor_enabled", Some(("user", u.id)), json!({}), None).await;
     let u = forgust_db::users::find(&state.db, u.id).await?.ok_or(ApiError::NotFound)?;
-    Ok(Json(UserDto::from(&u, true)))
+    Ok(Json(TotpEnabled { user: UserDto::from(&u, true), recovery_codes }))
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -423,10 +434,48 @@ pub async fn totp_disable(
 ) -> ApiResult<Json<UserDto>> {
     require_interactive(&u, &p)?;
     reauth(&state, &jar, u.id, &req.password).await?;
-    forgust_db::users::set_totp(&state.db, u.id, None, false).await?;
+    let mut tx = state.db.begin().await?;
+    forgust_db::users::disable_two_factor(&mut tx, u.id).await?;
+    tx.commit().await?;
     services::audit(&state, &p, "two_factor_disabled", Some(("user", u.id)), json!({}), None).await;
     let u = forgust_db::users::find(&state.db, u.id).await?.ok_or(ApiError::NotFound)?;
     Ok(Json(UserDto::from(&u, true)))
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct RecoveryCodesLeft {
+    /// How many unused codes are left.
+    pub remaining: i64,
+}
+
+pub async fn recovery_codes(State(state): State<AppState>, SignedIn(u, p): SignedIn) -> ApiResult<Json<RecoveryCodesLeft>> {
+    require_interactive(&u, &p)?;
+    Ok(Json(RecoveryCodesLeft { remaining: forgust_db::recovery_codes::remaining(&state.db, u.id).await? }))
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct NewRecoveryCodes {
+    /// Shown this once: each stands in for the authenticator at sign-in, once.
+    pub recovery_codes: Vec<String>,
+}
+
+/// New recovery codes; the old ones stop working.
+pub async fn recovery_codes_reset(
+    State(state): State<AppState>,
+    SignedIn(u, p): SignedIn,
+    jar: axum_extra::extract::CookieJar,
+    Json(req): Json<ConfirmPassword>,
+) -> ApiResult<Json<NewRecoveryCodes>> {
+    require_interactive(&u, &p)?;
+    reauth(&state, &jar, u.id, &req.password).await?;
+    if !u.totp_enabled {
+        return Err(ApiError::conflict("turn on two-factor authentication first"));
+    }
+    let mut tx = state.db.begin().await?;
+    let recovery_codes = session::reset_recovery_codes(&mut tx, u.id).await?;
+    tx.commit().await?;
+    services::audit(&state, &p, "recovery_codes_reset", Some(("user", u.id)), json!({}), None).await;
+    Ok(Json(NewRecoveryCodes { recovery_codes }))
 }
 
 // ------------------------------------------------------------------ lists

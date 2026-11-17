@@ -91,12 +91,16 @@ pub async fn create_challenge(
     Ok(())
 }
 
-/// Look up (without consuming) a pending second-factor challenge: whose it
-/// is, and what its provider sign-in left to apply.
-pub async fn find_challenge(e: impl PgExecutor<'_>, token_hash: &[u8]) -> Result<Option<(i64, Option<serde_json::Value>)>> {
-    let r = sqlx::query!("SELECT user_id, provider_sync FROM login_challenges WHERE token_hash = $1 AND expires_at > now()", token_hash)
-        .fetch_optional(e)
-        .await?;
+/// Take a pending second-factor challenge for checking, locked until `c`'s
+/// transaction ends: two answers sent at once are checked one after the other,
+/// and the second finds the challenge gone once the first succeeded.
+pub async fn lock_challenge(c: &mut sqlx::PgConnection, token_hash: &[u8]) -> Result<Option<(i64, Option<serde_json::Value>)>> {
+    let r = sqlx::query!(
+        "SELECT user_id, provider_sync FROM login_challenges WHERE token_hash = $1 AND expires_at > now() FOR UPDATE",
+        token_hash
+    )
+    .fetch_optional(&mut *c)
+    .await?;
     Ok(r.map(|r| (r.user_id, r.provider_sync)))
 }
 

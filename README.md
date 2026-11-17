@@ -136,7 +136,8 @@ volumes: { forgust-data: {}, db-data: {} }
 ### 🔐 Security
 - Built-in scanners (code, secrets, dependencies, containers, infrastructure as code)
   with a Security tab, merge request checks and alerts
-- OIDC sign-in, two-factor authentication, personal, project and deploy tokens
+- OIDC sign-in, two-factor authentication with recovery codes, personal, project and
+  deploy tokens
 - Strict CSP, an image proxy for Markdown images, rate limits
 
 ### 🛠️ Administration

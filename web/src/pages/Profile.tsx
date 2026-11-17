@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { Route, Routes, useSearchParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, enc, timeAgo, type S } from "../api/client";
 import { useSession } from "../session";
-import { Avatar, Badge, Card, ErrorBox, Field, ListHead, NewSecret, Q, Tabs, Section, useFormRun } from "../components/ui";
+import { Avatar, Badge, Card, CopyLabel, ErrorBox, Field, ListHead, NewSecret, Q, Tabs, Section, useCopy, useFormRun } from "../components/ui";
 import { ScopePicker, useCrudList } from "../components/Tokens";
 import { ResendLink } from "../components/ResendLink";
 import { AvatarUpload } from "../components/AvatarUpload";
@@ -384,7 +384,10 @@ function Security() {
   const [setup, setSetup] = useState<S["TotpSetup"] | null>(null);
   const [code, setCode] = useState("");
   const [disablePw, setDisablePw] = useState("");
+  // just made: shown this once
+  const [codes, setCodes] = useState<string[] | null>(null);
   const refresh = async () => setSession(await api.get<S["SessionInfo"]>("/session"));
+  const queryClient = useQueryClient();
   const { run, msg, error } = useFormRun();
   return (
     <div className="settings-page">
@@ -411,6 +414,7 @@ function Security() {
         </form>
       </Section>
       <Section title={<>Two-factor authentication {user?.two_factor_enabled ? <Badge tone="ok">enabled</Badge> : <Badge>off</Badge>}</>} description="A code from an authenticator app, asked for after your password.">
+        {codes && <NewRecoveryCodes codes={codes} onDone={() => setCodes(null)} />}
         {user?.two_factor_enabled ? (
           <form
             className="stack"
@@ -422,15 +426,30 @@ function Security() {
             <Field label="Confirm with your password">
               <input type="password" value={disablePw} onChange={(e) => setDisablePw(e.target.value)} />
             </Field>
-            <div>
+            <div className="row">
+              <button
+                type="button"
+                className="btn"
+                onClick={run(async () => {
+                  const r = await api.post<S["NewRecoveryCodes"]>("/user/two_factor/recovery_codes", { password: disablePw });
+                  setCodes(r.recovery_codes);
+                  setDisablePw("");
+                  await queryClient.invalidateQueries({ queryKey: ["recovery_codes"] });
+                }, "")}
+              >
+                New recovery codes
+              </button>
               <button className="btn danger">Disable 2FA</button>
             </div>
+            <RecoveryCodesLeft />
           </form>
         ) : setup ? (
           <form
             className="stack"
             onSubmit={run(async () => {
-              await api.post("/user/two_factor/enable", { code, password: disablePw });
+              const r = await api.post<S["TotpEnabled"]>("/user/two_factor/enable", { code, password: disablePw });
+              setCodes(r.recovery_codes);
+              await queryClient.invalidateQueries({ queryKey: ["recovery_codes"] });
               setSetup(null);
               setDisablePw("");
               await refresh();
@@ -466,6 +485,44 @@ function Security() {
       </Section>
       <SignInProviders />
     </div>
+  );
+}
+
+/** Codes just made: to save now, they are not shown again. */
+function NewRecoveryCodes({ codes, onDone }: { codes: string[]; onDone: () => void }) {
+  const [copied, copy] = useCopy();
+  const text = codes.join("\n") + "\n";
+  return (
+    <div className="alert ok stack">
+      <strong>Save your recovery codes</strong>
+      <p style={{ margin: 0 }}>
+        Each one signs you in once if you lose your authenticator. Keep them somewhere safe, apart from your password: they are not shown again.
+      </p>
+      <pre className="recovery-codes">{text}</pre>
+      <div className="row">
+        <button type="button" className="btn small" onClick={() => copy(text)}>
+          <CopyLabel copied={copied} />
+        </button>
+        <a className="btn small" download="forgust-recovery-codes.txt" href={`data:text/plain;charset=utf-8,${encodeURIComponent(text)}`}>
+          Download
+        </a>
+        <button type="button" className="btn small" onClick={onDone}>
+          I saved them
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function RecoveryCodesLeft() {
+  const q = useQuery({ queryKey: ["recovery_codes"], queryFn: () => api.get<S["RecoveryCodesLeft"]>("/user/two_factor/recovery_codes") });
+  if (!q.data) return null;
+  const n = q.data.remaining;
+  return (
+    <p className={`small ${n < 3 ? "" : "muted"}`} style={{ margin: 0 }}>
+      {n === 0 ? "No recovery codes left: make new ones." : `${n} recovery code${n === 1 ? "" : "s"} left.`}
+      {n > 0 && n < 3 && " Make new ones soon."}
+    </p>
   );
 }
 

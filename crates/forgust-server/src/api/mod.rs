@@ -42,6 +42,7 @@ pub fn router() -> Router<AppState> {
         // session and sign-in
         .route("/auth/login", post(auth::login))
         .route("/auth/login/totp", post(auth::login_totp))
+        .route("/auth/login/recovery", post(auth::login_recovery))
         .route("/auth/logout", post(auth::logout))
         .route("/auth/password/forgot", post(auth::forgot_password))
         .route("/auth/password/reset", post(auth::reset_password))
@@ -69,6 +70,7 @@ pub fn router() -> Router<AppState> {
         .route("/user/two_factor/setup", post(user::totp_setup))
         .route("/user/two_factor/enable", post(user::totp_enable))
         .route("/user/two_factor/disable", post(user::totp_disable))
+        .route("/user/two_factor/recovery_codes", get(user::recovery_codes).post(user::recovery_codes_reset))
         .route("/user/projects", get(user::my_projects))
         .route("/user/work", get(user::work))
         .route("/user/todos", get(user::todos))
