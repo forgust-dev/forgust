@@ -10,6 +10,13 @@ export default defineConfig({
     proxy: {
       "/api": backend,
       "/health": backend,
+      "/metrics": backend,
+      // the files the server answers itself under /-/ (crates/forgust-server/src/web.rs):
+      // raw files, uploads, release downloads, images from other sites. The app's own
+      // pages under /-/ (issues, merge requests…) stay with Vite.
+      "^/-/(project|image)/": backend,
+      "^/[^?]+/-/(raw|uploads)/": backend,
+      "^/[^?]+/-/releases/[^/?]+/downloads/": backend,
     },
   },
   build: {
