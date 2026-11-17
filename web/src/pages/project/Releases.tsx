@@ -7,6 +7,7 @@ import { AuthorLink, Empty, ErrorBox, Field, ListHead, Q } from "../../component
 import { DecideCard, type DecideRow } from "../../components/decide";
 import { MarkdownEditor } from "../../components/MarkdownEditor";
 import { useToast } from "../../shell/toast";
+import { useConfirm } from "../../shell/dialog";
 import type { Ctx } from "./Project";
 import { useTags } from "./Code";
 import { Markdown } from "../../components/Markdown";
@@ -23,9 +24,10 @@ function ReleaseCard({ ctx, r, single }: { ctx: Ctx; r: S["ReleaseDto"]; single?
   const nav = useNavigate();
   const qc = useQueryClient();
   const toast = useToast();
+  const confirm = useConfirm();
   const page = `${ctx.web}/-/releases/${enc(r.tag_name)}`;
   const remove = async () => {
-    if (!confirm(`Delete the release ${r.name}? The tag ${r.tag_name} stays.`)) return;
+    if (!(await confirm({ title: `Delete the release ${r.name}?`, body: `The tag ${r.tag_name} stays.`, action: "Delete release", danger: true }))) return;
     try {
       await api.del(`/projects/${ctx.p.id}/releases/${enc(r.tag_name)}`);
       toast.ok(`Release ${r.name} deleted`);

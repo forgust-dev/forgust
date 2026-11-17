@@ -21,8 +21,8 @@ test("an environment from a pipeline shows, and stops", async ({ page }) => {
     await expect(row.getByRole("link", { name: "Open" })).toHaveCount(0);
     await row.getByRole("button", { name: `e2e-review/${n}` }).click();
     await expect(row.locator(".item", { hasText: branch })).toBeVisible();
-    page.once("dialog", (d) => d.accept());
     await row.getByRole("button", { name: "Stop" }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Stop environment" }).click();
     await expect(row).toHaveCount(0);
     await page.getByRole("link", { name: "Stopped" }).click();
     await expect(page.getByRole("region", { name: `Environment e2e-review/${n}` })).toBeVisible();

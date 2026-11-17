@@ -8,6 +8,7 @@ import { DecideCard, Ring, type DecideRow } from "../../components/decide";
 import { Select } from "../../components/controls";
 import { MarkdownEditor } from "../../components/MarkdownEditor";
 import { useToast } from "../../shell/toast";
+import { useConfirm } from "../../shell/dialog";
 import type { Ctx } from "./Project";
 
 type M = S["Milestone"];
@@ -273,6 +274,7 @@ export function MilestonePage({ ctx, id }: { ctx: Ctx; id: number }) {
   const nav = useNavigate();
   const qc = useQueryClient();
   const toast = useToast();
+  const confirm = useConfirm();
   const path = `/projects/${ctx.p.id}/milestones/${id}`;
   const q = useQuery({ queryKey: ["milestone", ctx.p.id, id], queryFn: () => api.get<M>(path) });
   const issues = useQuery({
@@ -298,7 +300,13 @@ export function MilestonePage({ ctx, id }: { ctx: Ctx; id: number }) {
     }
   };
   const remove = async (m: M) => {
-    if (!confirm(`Delete the milestone ${m.title}? Its issues and merge requests stay, without a milestone.`)) return;
+    const ok = await confirm({
+      title: `Delete the milestone ${m.title}?`,
+      body: "Its issues and merge requests stay, without a milestone.",
+      action: "Delete milestone",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await api.del(path);
       qc.invalidateQueries({ queryKey: ["milestones", ctx.p.id] });

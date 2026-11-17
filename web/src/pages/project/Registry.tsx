@@ -4,6 +4,7 @@ import { Container } from "lucide-react";
 import { api, bytes, timeAgo, type S } from "../../api/client";
 import { Badge, CopyLabel, Empty, ErrorBox, Field, ListHead, Q, Section, useCopy } from "../../components/ui";
 import type { Ctx } from "./Project";
+import { useConfirm } from "../../shell/dialog";
 
 /** The project's container images (ADR-0022): how to push, images, tags, cleanup. */
 export function Registry({ ctx }: { ctx: Ctx }) {
@@ -59,6 +60,7 @@ function HowTo({ info }: { info: S["RegistryInfo"] }) {
 
 function ImageRepo({ ctx, repo }: { ctx: Ctx; repo: S["ImageRepository"] }) {
   const qc = useQueryClient();
+  const confirm = useConfirm();
   const [open, setOpen] = useState(false);
   const key = ["registry-tags", ctx.p.id, repo.id];
   const tags = useQuery({
@@ -94,8 +96,8 @@ function ImageRepo({ ctx, repo }: { ctx: Ctx; repo: S["ImageRepository"] }) {
         {ctx.p.can_admin && (
           <button
             className="btn small danger"
-            onClick={() => {
-              if (window.confirm(`Delete ${repo.location} and all its tags?`)) delRepo.mutate();
+            onClick={async () => {
+              if (await confirm({ title: `Delete ${repo.location}?`, body: "The image goes with all its tags.", action: "Delete image", danger: true })) delRepo.mutate();
             }}
           >
             Delete image

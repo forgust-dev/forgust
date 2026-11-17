@@ -7,6 +7,7 @@ import { Empty, ErrorBox, Field, FieldGroup, FilterTabs, ListHead, Q, SearchFiel
 import { Select } from "../../../components/controls";
 import { useCiLive } from "../../../shell/live";
 import { useAct } from "../../../shell/toast";
+import { useConfirm } from "../../../shell/dialog";
 import type { Ctx } from "../Project";
 import { PipelineTests } from "./Tests";
 import { MiniPipeline, RETRYABLE, StatusBadge, StatusIcon, duration, isActive } from "./Status";
@@ -29,9 +30,11 @@ export function pipelineHref(ctx: Ctx, l: S["PipelineLink"]) {
   return l.project_id === ctx.p.id ? `${ctx.web}/-/pipelines/${l.iid}` : `/${l.project_path}/-/pipelines/${l.iid}`;
 }
 
-/** Run a job that asks for confirmation first (`manual_confirmation`). */
-export function confirmRun(j: S["JobDto"]): boolean {
-  return !j.manual_confirmation || window.confirm(j.manual_confirmation);
+/** Before running a job: those that ask for a confirmation (`manual_confirmation`)
+ *  ask it in the app's dialog. True to go on. */
+export function useConfirmRun() {
+  const confirm = useConfirm();
+  return (j: S["JobDto"]) => (j.manual_confirmation ? confirm({ title: `Run ${j.name}?`, body: j.manual_confirmation, action: `Run ${j.name}` }) : Promise.resolve(true));
 }
 
 export function PipelineRow({ ctx, p }: { ctx: Ctx; p: S["PipelineSummary"] }) {
@@ -344,13 +347,14 @@ export function PipelineHeader({ ctx, p, tab }: { ctx: Ctx; p: S["PipelineDetail
  *  gets the page's emphasized card (the first such job; the graph shows the rest). */
 function ManualCard({ ctx, p }: { ctx: Ctx; p: S["PipelineDetail"] }) {
   const qc = useQueryClient();
+  const confirmRun = useConfirmRun();
   const run = useAct(() => qc.invalidateQueries({ queryKey: ["pipeline", ctx.p.id] }));
   const waiting = p.jobs.filter((j) => !j.retried && j.status === "manual");
   if (!p.can_run || waiting.length === 0) return null;
   const j = waiting[0];
   const env = j.environment && j.environment.action === "start" ? j.environment.name : null;
   const play = async () => {
-    if (!confirmRun(j)) return;
+    if (!(await confirmRun(j))) return;
     await run(() => api.post(`/projects/${ctx.p.id}/jobs/${j.id}/play`), `Started ${j.name}`);
   };
   // as tall as the facts beside it: what waits and its button on one line, the why in its tip
@@ -401,9 +405,10 @@ function StageDots({ p }: { p: S["PipelineDetail"] }) {
 
 export function JobCard({ ctx, j, canRun, rel, onHover }: { ctx: Ctx; j: S["JobDto"]; canRun: boolean; rel?: "focus" | "up" | "down" | "dim"; onHover?: (name: string | null) => void }) {
   const qc = useQueryClient();
+  const confirmRun = useConfirmRun();
   const run = useAct(() => qc.invalidateQueries({ queryKey: ["pipeline", ctx.p.id] }));
   const act = async (what: "retry" | "play" | "cancel") => {
-    if (what === "play" && !confirmRun(j)) return;
+    if (what === "play" && !(await confirmRun(j))) return;
     await run(() => api.post(`/projects/${ctx.p.id}/jobs/${j.id}/${what}`), what === "retry" ? `Retrying ${j.name}` : what === "play" ? `Started ${j.name}` : `Canceling ${j.name}`);
   };
   const action =

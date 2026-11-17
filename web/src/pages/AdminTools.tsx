@@ -5,6 +5,7 @@ import { AlertTriangle, ArrowUpCircle, CheckCircle2, RefreshCw, ShieldAlert, XCi
 import { api, bytes, qs, timeAgo, type S } from "../api/client";
 import { Card, ErrorBox, Field, Q, SearchField, useDebounced } from "../components/ui";
 import { DecideCard, type DecideRow } from "../components/decide";
+import { useConfirm } from "../shell/dialog";
 import { Segmented } from "../components/controls";
 import { useAct, useToast } from "../shell/toast";
 
@@ -417,6 +418,7 @@ export function AdminStorage() {
 
 export function AdminJobs() {
   const qc = useQueryClient();
+  const confirm = useConfirm();
   const q = useQuery({ queryKey: ["admin-jobs"], queryFn: () => api.get<S["JobsOverview"]>("/admin/jobs"), refetchInterval: 10_000 });
   const tasks = useQuery({ queryKey: ["admin-tasks"], queryFn: () => api.get<S["Runnable"][]>("/admin/tasks") });
   const act = useAct(() => qc.invalidateQueries({ queryKey: ["admin-jobs"] }), { always: true });
@@ -496,7 +498,10 @@ export function AdminJobs() {
                     </button>
                     <button
                       className="btn small danger"
-                      onClick={() => window.confirm(`Drop this ${f.task} job? Whatever it was doing will not happen.`) && act(() => api.del(`/admin/jobs/${f.id}`), "Job dropped")}
+                      onClick={async () => {
+                        const ok = await confirm({ title: `Drop this ${f.task} job?`, body: "Whatever it was doing will not happen.", action: "Drop job", danger: true });
+                        if (ok) act(() => api.del(`/admin/jobs/${f.id}`), "Job dropped");
+                      }}
                     >
                       Drop
                     </button>
@@ -765,6 +770,7 @@ export function AdminProjects() {
 /** Backups of the database and the repositories, made in the background. */
 export function AdminBackups() {
   const qc = useQueryClient();
+  const confirm = useConfirm();
   const q = useQuery({ queryKey: ["admin-backups"], queryFn: () => api.get<S["Backups"]>("/admin/backups"), refetchInterval: (r) => (r.state.data?.running ? 3000 : false) });
   const act = useAct(() => qc.invalidateQueries({ queryKey: ["admin-backups"] }), { always: true });
   return (
@@ -797,7 +803,13 @@ export function AdminBackups() {
                   <span className="muted">{x.complete ? `${x.repositories} repositories` : b.running ? "in progress" : "incomplete (failed?)"}</span>
                   <span className="mono">{bytes(x.bytes)}</span>
                   {x.created_at && <span className="faint nowrap">{timeAgo(x.created_at)}</span>}
-                  <button className="btn small danger" onClick={() => window.confirm(`Delete ${x.name}?`) && act(() => api.del(`/admin/backups/${x.name}`), "Backup deleted")}>
+                  <button
+                    className="btn small danger"
+                    onClick={async () => {
+                      const ok = await confirm({ title: `Delete the backup ${x.name}?`, body: "Its files are removed from the server.", action: "Delete backup", danger: true });
+                      if (ok) act(() => api.del(`/admin/backups/${x.name}`), "Backup deleted");
+                    }}
+                  >
                     Delete
                   </button>
                 </div>

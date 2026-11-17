@@ -20,6 +20,8 @@
   --tab-mark: #e65b00;
   --danger: #c4314b;
   --danger-soft: #fdecef;
+  /* text on --danger (a destructive confirmation's button) */
+  --danger-text: #ffffff;
   --ok: #1f7a3d;
   --ok-soft: #e3f2e7;
   --warn: #9a6200;
@@ -104,6 +106,7 @@
     --accent-text: #0d0e12;
     --danger: #f0738a;
     --danger-soft: #3a1c24;
+    --danger-text: #0d0e12;
     --ok: #5fcf98;
     --ok-soft: #173326;
     --warn: #f2b04f;
@@ -178,6 +181,7 @@
   --accent-text: #0d0e12;
   --danger: #f0738a;
   --danger-soft: #3a1c24;
+  --danger-text: #0d0e12;
   --ok: #5fcf98;
   --ok-soft: #173326;
   --warn: #f2b04f;
@@ -1966,6 +1970,84 @@ kbd {
 .shortcuts td:first-child {
   white-space: nowrap;
   width: 1%;
+}
+
+/* the app's dialog (shell/dialog.tsx): the browser's confirm() and prompt() in
+   the site's look. Over everything but the toasts, so a failure still shows */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  background: rgba(10, 12, 16, 0.45);
+  transition: opacity 150ms var(--ease-out);
+}
+.modal {
+  position: fixed;
+  z-index: 151;
+  top: 16vh;
+  right: 0;
+  left: 0;
+  width: min(460px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 20px 22px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+  transform-origin: top center;
+  transition:
+    opacity 150ms var(--ease-out),
+    transform 150ms var(--ease-out);
+}
+/* in as the menus and popovers come in, out the way it came */
+.modal-backdrop[data-starting-style],
+.modal-backdrop[data-ending-style] {
+  opacity: 0;
+}
+.modal[data-starting-style],
+.modal[data-ending-style] {
+  opacity: 0;
+  transform: scale(0.97);
+}
+.modal-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  overflow-wrap: anywhere;
+}
+.modal-body {
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.modal-body p {
+  margin: 0;
+}
+.modal-body p + p {
+  margin-top: 8px;
+}
+.modal-field {
+  margin-top: 14px;
+}
+.modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+/* what cannot be undone, confirmed: the one red button */
+.btn.danger.solid {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: var(--danger-text);
+  font-weight: 600;
+}
+.btn.danger.solid:hover {
+  background: var(--danger);
+  filter: brightness(0.94);
 }
 
 /* ---- toasts + banner */
@@ -6737,12 +6819,15 @@ button.test-case-row:hover {
   .dropdown,
   .popover,
   .menu,
+  .modal,
   .toast {
     transition: opacity 150ms ease;
   }
   .select-menu[data-starting-style],
   .dropdown[data-starting-style],
-  .popover[data-starting-style] {
+  .popover[data-starting-style],
+  .modal[data-starting-style],
+  .modal[data-ending-style] {
     transform: none;
   }
   @starting-style {

@@ -3,6 +3,7 @@ import { Check, Copy, Search } from "lucide-react";
 import { Link, NavLink } from "react-router-dom";
 import { ApiError, LEVELS, bytes } from "../api/client";
 import { Select } from "./controls";
+import { useConfirm, type Ask } from "../shell/dialog";
 
 export function Spinner({ label = "Loading…" }: { label?: string }) {
   return <div className="spinner">{label}</div>;
@@ -182,14 +183,15 @@ export function VisibilitySelect({ value, onChange, label }: { value: string; on
 /**
  * A settings form's submit: clears the messages, runs `f`, then says `done`
  * and calls `onDone` (its cache refresh), or shows the error. With `ask`, it
- * asks first: cancelling changes nothing and says nothing.
+ * asks first, in the app's dialog: cancelling changes nothing and says nothing.
  */
 export function useFormRun(onDone: () => void = () => {}) {
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
-  const run = (f: () => Promise<unknown>, done: string, ask?: string) => async (e?: FormEvent) => {
+  const confirm = useConfirm();
+  const run = (f: () => Promise<unknown>, done: string, ask?: Omit<Ask, "input">) => async (e?: FormEvent) => {
     e?.preventDefault();
-    if (ask && !confirm(ask)) return;
+    if (ask && !(await confirm(ask))) return;
     setError(null);
     setMsg(null);
     try {

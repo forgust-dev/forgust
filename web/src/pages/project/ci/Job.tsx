@@ -11,7 +11,7 @@ import { usePref } from "../../../shell/theme";
 import type { Ctx } from "../Project";
 import { LogParser, sectionDuration, type LogLine, type Span } from "./log";
 import { RETRYABLE, StatusBadge, StatusIcon, duration, isActive } from "./Status";
-import { PipelineHeader, confirmRun, pipelineHref, usePipeline } from "./Pipelines";
+import { PipelineHeader, pipelineHref, useConfirmRun, usePipeline } from "./Pipelines";
 
 /** The job log, fetched incrementally while the job runs. */
 function useTrace(pid: number, jobId: number, status: string | undefined) {
@@ -239,6 +239,7 @@ function timeUntil(ts: string): string {
 
 export function JobPage({ ctx, jobId }: { ctx: Ctx; jobId: number }) {
   const qc = useQueryClient();
+  const confirmRun = useConfirmRun();
   const nav = useNavigate();
   const q = useQuery({ queryKey: ["job", ctx.p.id, jobId], queryFn: () => api.get<S["JobDetail"]>(`/projects/${ctx.p.id}/jobs/${jobId}`) });
   // status changes: through usePipeline's live updates (the "job" queries too)
@@ -249,7 +250,7 @@ export function JobPage({ ctx, jobId }: { ctx: Ctx; jobId: number }) {
     qc.invalidateQueries({ queryKey: ["pipeline", ctx.p.id] });
   });
   const act = async (what: "retry" | "play" | "cancel" | "unschedule") => {
-    if (what === "play" && q.data && !confirmRun(q.data)) return;
+    if (what === "play" && q.data && !(await confirmRun(q.data))) return;
     let retried: number | null = null;
     const done = what === "retry" ? "Retrying" : what === "play" ? "Started" : what === "unschedule" ? "Unscheduled: it waits for someone to run it" : "Canceling";
     if (await run(async () => (retried = (await api.post<S["JobDto"]>(`/projects/${ctx.p.id}/jobs/${jobId}/${what}`)).id), done) && what === "retry" && retried != null) {

@@ -6,6 +6,7 @@ import { api, type S } from "../../../api/client";
 import { Empty, ErrorBox, Field, FieldGroup, Q, ListHead } from "../../../components/ui";
 import { Select } from "../../../components/controls";
 import { useToast } from "../../../shell/toast";
+import { useConfirm } from "../../../shell/dialog";
 import type { Ctx } from "../Project";
 import { VariableRows } from "./Pipelines";
 import { StatusIcon } from "./Status";
@@ -33,6 +34,7 @@ function zones(): string[] {
 export function Schedules({ ctx }: { ctx: Ctx }) {
   const qc = useQueryClient();
   const toast = useToast();
+  const confirm = useConfirm();
   const base = `/projects/${ctx.p.id}/pipeline_schedules`;
   const q = useQuery({ queryKey: ["schedules", ctx.p.id], queryFn: () => api.get<S["ScheduleDto"][]>(base) });
   const branches = useBranches(ctx);
@@ -68,7 +70,7 @@ export function Schedules({ ctx }: { ctx: Ctx }) {
     }
   };
   const remove = async (id: number) => {
-    if (!confirm("Delete this schedule?")) return;
+    if (!(await confirm({ title: "Delete this schedule?", body: "Its pipelines stop being started; those it started stay.", action: "Delete schedule", danger: true }))) return;
     try {
       await api.del(`${base}/${id}`);
       qc.invalidateQueries({ queryKey: ["schedules", ctx.p.id] });

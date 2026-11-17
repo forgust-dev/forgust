@@ -7,6 +7,7 @@ import { Section, Empty, ErrorBox, Field, Q, ListHead } from "../../../component
 import { RunnersPanel } from "./Runners";
 import { Select } from "../../../components/controls";
 import { useToast } from "../../../shell/toast";
+import { useConfirm } from "../../../shell/dialog";
 import type { Ctx } from "../Project";
 
 // ---------------------------------------------------------------- variables
@@ -18,6 +19,7 @@ const EMPTY: VarForm = { key: "", value: "", variable_type: "env_var", protected
 export function VariablesPanel({ base }: { base: string }) {
   const qc = useQueryClient();
   const toast = useToast();
+  const confirm = useConfirm();
   const q = useQuery({ queryKey: ["variables", base], queryFn: () => api.get<S["VariableDto"][]>(`${base}/variables`) });
   const [form, setForm] = useState<VarForm | null>(null);
   const [editing, setEditing] = useState(false);
@@ -39,7 +41,7 @@ export function VariablesPanel({ base }: { base: string }) {
     }
   };
   const remove = async (key: string) => {
-    if (!confirm(`Delete the variable ${key}?`)) return;
+    if (!(await confirm({ title: `Delete the variable ${key}?`, body: "Jobs that start from now on no longer get it.", action: "Delete variable", danger: true }))) return;
     try {
       await api.del(`${base}/variables/${encodeURIComponent(key)}`);
       toast.ok(`Deleted ${key}`);
@@ -394,6 +396,7 @@ function ProtectedEnvironments({ ctx }: { ctx: Ctx }) {
 function PagesSite({ ctx }: { ctx: Ctx }) {
   const qc = useQueryClient();
   const toast = useToast();
+  const confirm = useConfirm();
   const q = useQuery({ queryKey: ["pages", ctx.p.id], queryFn: () => api.get<S["PagesInfo"]>(`/projects/${ctx.p.id}/pages`) });
   return (
     <Q q={q}>
@@ -424,7 +427,7 @@ function PagesSite({ ctx }: { ctx: Ctx }) {
                   <button
                     className="btn small danger"
                     onClick={async () => {
-                      if (!confirm("Take the site down? The next Pages job publishes it again.")) return;
+                      if (!(await confirm({ title: "Take the site down?", body: "The next Pages job publishes it again.", action: "Take the site down", danger: true }))) return;
                       try {
                         await api.del(`/projects/${ctx.p.id}/pages`);
                         toast.ok("Site removed");

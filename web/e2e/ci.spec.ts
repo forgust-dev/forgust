@@ -57,8 +57,8 @@ test("CI/CD settings: runner token, variables", async ({ page }) => {
   const item = page.locator(".item", { hasText: key });
   await expect(item).toContainText("masked");
   await expect(item).not.toContainText("super-secret-value");
-  page.once("dialog", (d) => d.accept());
   await item.getByRole("button", { name: `Delete ${key}` }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Delete variable" }).click();
   await expect(page.locator(".item", { hasText: key })).toHaveCount(0);
 });
 
@@ -76,7 +76,7 @@ test("schedules", async ({ page }) => {
   await page.getByRole("button", { name: "Save schedule" }).click();
   const row = page.locator(".item", { hasText: "Nightly e2e" }).first();
   await expect(row).toContainText("0 3 * * 1-5");
-  page.once("dialog", (d) => d.accept());
   await row.getByRole("button", { name: "Delete schedule" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Delete schedule" }).click();
   await expect(page.locator(".item", { hasText: "Nightly e2e" })).toHaveCount(0);
 });

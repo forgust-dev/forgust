@@ -15,6 +15,7 @@ import { StatusIcon, duration, isActive, statusLabel } from "./ci/Status";
 import { usePipeline } from "./ci/Pipelines";
 import { usePref } from "../../shell/theme";
 import { useAct, useToast } from "../../shell/toast";
+import { useConfirm } from "../../shell/dialog";
 import { useCiLive, useProjectEvents } from "../../shell/live";
 import { PagedDiff, lineKey, type LineKey, type NewComment, type Review } from "./Diff";
 import { CommitList, CommitRow } from "./History";
@@ -992,6 +993,7 @@ function CheckIcon({ tone }: { tone: Check["tone"] }) {
 function Thread({ ctx, m, root, replies, boxed }: { ctx: Ctx; m: S["MrDetail"]; root: S["NoteDto"]; replies: S["NoteDto"][]; boxed?: boolean }) {
   const qc = useQueryClient();
   const toast = useToast();
+  const confirm = useConfirm();
   const { user } = useSession();
   const [reply, setReply] = useState("");
   const [open, setOpen] = useState(false);
@@ -1062,7 +1064,7 @@ function Thread({ ctx, m, root, replies, boxed }: { ctx: Ctx; m: S["MrDetail"]; 
                   <button
                     className="link-btn small"
                     onClick={async () => {
-                      if (!confirm("Delete this comment?")) return;
+                      if (!(await confirm({ title: "Delete this comment?", action: "Delete comment", danger: true }))) return;
                       await api.del(`${path}/notes/${n.id}`).catch(setError);
                       refresh();
                     }}

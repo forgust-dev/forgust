@@ -729,7 +729,11 @@ function SignInProviders() {
                     setPassword("");
                   },
                   `${p.display_name} unlinked.`,
-                  `Stop signing in with ${p.display_name}?`,
+                  {
+                    title: `Stop signing in with ${p.display_name}?`,
+                    action: `Unlink ${p.display_name}`,
+                    danger: true,
+                  },
                 )}
               >
                 Unlink

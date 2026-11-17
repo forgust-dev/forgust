@@ -367,8 +367,8 @@ test("edit a file in the browser onto a new branch, add and delete files, manage
     await page.getByLabel("Branch name").fill(`${branch}-b`);
     await page.getByRole("button", { name: "Create branch" }).click();
     await expect(page.locator(".toast.ok").last()).toContainText("created");
-    page.once("dialog", (d) => d.accept());
     await page.getByRole("button", { name: `Delete branch ${branch}-b` }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Delete branch" }).click();
     await expect(page.getByRole("link", { name: `${branch}-b`, exact: true })).toHaveCount(0);
   } finally {
     // keep the "recently pushed branches" banner of the other tests intact
@@ -417,8 +417,8 @@ test("tag, release with a file, download it, edit and delete", async ({ page }) 
     await page.getByRole("button", { name: "Save changes" }).click();
     await expect(page.getByRole("heading", { name: `Shop ${tag} final` })).toBeVisible();
     // deleted: the tag stays
-    page.once("dialog", (d) => d.accept());
     await page.getByRole("button", { name: `Delete release Shop ${tag} final` }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Delete release" }).click();
     await expect(page).toHaveURL(new RegExp(`${P}/-/releases$`));
     await expect(page.getByRole("article", { name: `Release Shop ${tag} final` })).toHaveCount(0);
   } finally {

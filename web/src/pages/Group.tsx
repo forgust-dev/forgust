@@ -377,7 +377,12 @@ function GroupSettings({ group }: { group: S["GroupDetail"] }) {
                   nav("/");
                 },
                 "Deleted.",
-                `Delete ${group.full_path}? It must be empty.`,
+                {
+                  title: `Delete ${group.full_path}?`,
+                  body: "Only an empty group can go: move or delete its projects and subgroups first.",
+                  action: "Delete group",
+                  danger: true,
+                },
               )}
             >
               Delete group

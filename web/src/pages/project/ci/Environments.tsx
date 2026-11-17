@@ -5,6 +5,7 @@ import { ExternalLink, Server } from "lucide-react";
 import { api, timeAgo, type S } from "../../../api/client";
 import { Badge, Empty, ListHead, Q, Tabs } from "../../../components/ui";
 import { useToast } from "../../../shell/toast";
+import { useConfirm } from "../../../shell/dialog";
 import { useCiLive } from "../../../shell/live";
 import type { Ctx } from "../Project";
 import { StatusIcon } from "./Status";
@@ -49,13 +50,22 @@ function EnvironmentRow({ ctx, e }: { ctx: Ctx; e: S["EnvironmentSummary"] }) {
   const [open, setOpen] = useState(false);
   const qc = useQueryClient();
   const toast = useToast();
+  const confirm = useConfirm();
   const detail = useQuery({
     queryKey: ["environment", ctx.p.id, e.id],
     queryFn: () => api.get<S["EnvironmentDetail"]>(`/projects/${ctx.p.id}/environments/${e.id}`),
     enabled: open,
   });
   const stop = async () => {
-    if (!window.confirm(`Stop ${e.name}?`)) return;
+    const ok = await confirm({
+      title: `Stop ${e.name}?`,
+      body: e.stop_build_id
+        ? "Its stop job runs, as you: the environment is stopped once it is done. Its deployments stay in its history."
+        : "It has no stop job: it is marked stopped at once. Its deployments stay in its history.",
+      action: "Stop environment",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await api.post(`/projects/${ctx.p.id}/environments/${e.id}/stop`);
       toast.ok(`Stopping ${e.name}`);
