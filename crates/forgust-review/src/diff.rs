@@ -13,6 +13,14 @@ use crate::report::Skipped;
 /// Lines kept per file; a longer file is not reviewed.
 const MAX_LINES_PER_FILE: usize = 3000;
 
+/// git in `dir`. The runner's clone may belong to another user than the one
+/// the image runs as: git would refuse it as of "dubious ownership".
+fn git(dir: &Path) -> Command {
+    let mut c = Command::new("git");
+    c.args(["-c", "safe.directory=*", "-C"]).arg(dir);
+    c
+}
+
 /// `git diff base..head` in `dir`.
 pub fn git_diff(dir: &Path, base: &str, head: &str) -> anyhow::Result<String> {
     for rev in [base, head] {
@@ -20,9 +28,7 @@ pub fn git_diff(dir: &Path, base: &str, head: &str) -> anyhow::Result<String> {
             bail!("not a commit id: `{rev}`");
         }
     }
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(dir)
+    let out = git(dir)
         .args(["diff", "--no-color", "--no-ext-diff", "-M", "--unified=3", "--src-prefix=a/", "--dst-prefix=b/"])
         .arg(format!("{base}..{head}"))
         .output()
@@ -38,7 +44,7 @@ pub fn git_show(dir: &Path, rev: &str, path: &str, max: usize) -> Option<String>
     if !rev.bytes().all(|b| b.is_ascii_hexdigit()) {
         return None;
     }
-    let out = Command::new("git").arg("-C").arg(dir).arg("show").arg(format!("{rev}:{path}")).output().ok()?;
+    let out = git(dir).arg("show").arg(format!("{rev}:{path}")).output().ok()?;
     if !out.status.success() {
         return None;
     }
