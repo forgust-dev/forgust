@@ -104,11 +104,13 @@ async fn status_of(state: &AppState, principal: &crate::auth::Principal, id: &st
         Some(r) => {
             let head = forgust_db::merge_requests::latest_diff(&state.db, mr.id).await?.map(|d| d.head_sha);
             let pl = forgust_db::ci::pipeline(&state.db, r.pipeline_id).await?;
+            // a retried job goes on: reviewing again
+            let going = pl.as_ref().is_some_and(|pl| forgust_db::ci::ACTIVE.contains(&pl.status.as_str()));
             Some(AiReviewRun {
                 pipeline_iid: pl.as_ref().map_or(0, |pl| pl.iid),
                 pipeline_status: pl.map_or_else(String::new, |pl| pl.status),
                 current: head.as_deref() == Some(r.head_sha.as_str()),
-                state: r.state,
+                state: if going { "pending".into() } else { r.state },
                 base_sha: r.base_sha,
                 head_sha: r.head_sha,
                 comments_posted: r.comments_posted,

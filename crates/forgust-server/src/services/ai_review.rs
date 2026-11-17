@@ -154,7 +154,8 @@ fn job_config(cfg: &AiReviewConfig, base: &str, head: &str, target: &str) -> Str
 
 /// Ask for a review of a merge request's latest version: of what changed
 /// since the last posted review when that is still in its history, else of
-/// all of it. Returns the pipeline's id.
+/// all of it (a version reviewed already is reviewed whole again). Returns
+/// the pipeline's id.
 pub async fn request(state: &AppState, principal: &Principal, project: &Project, mr: &MergeRequest) -> ApiResult<i64> {
     require_project(state, principal, ProjectAction::Push, project).await?;
     crate::auth::authz::writable(project)?;
@@ -179,11 +180,14 @@ pub async fn request(state: &AppState, principal: &Principal, project: &Project,
     if forgust_db::ai_review::active(&state.db, None).await? >= cfg.max_concurrent as i64 {
         return Err(ApiError::conflict("the instance is reviewing as many merge requests as it may: try again in a few minutes"));
     }
+    // asked again on a reviewed version (another model, another try): all of
+    // it again; what was posted already is not posted twice
     let base = match forgust_db::ai_review::last_posted_head(&state.db, mr.id).await? {
-        Some(prev) if prev == latest.head_sha => {
-            return Err(ApiError::conflict("this version was reviewed already: push changes to review them"));
-        }
-        Some(prev) if prev != latest.base_sha && state.storage.is_ancestor(project.id, &prev, &latest.head_sha).await.unwrap_or(false) => {
+        Some(prev)
+            if prev != latest.head_sha
+                && prev != latest.base_sha
+                && state.storage.is_ancestor(project.id, &prev, &latest.head_sha).await.unwrap_or(false) =>
+        {
             prev
         }
         _ => latest.base_sha.clone(),
@@ -251,7 +255,7 @@ pub async fn sweep(state: &AppState) -> anyhow::Result<()> {
     }
     for (id, status) in forgust_db::ai_review::ended_pending(&state.db).await? {
         let why = format!("the review job ended ({status}) without a report");
-        if forgust_db::ai_review::finish(&state.db, id, "failed", 0, 0, Some(&why)).await? {
+        if forgust_db::ai_review::finish(&state.db, id, None, "failed", Some(&why)).await? {
             publish_for(state, id).await;
         }
     }
@@ -273,8 +277,8 @@ pub async fn ingest(state: &AppState, build_id: i64) -> anyhow::Result<()> {
     if pl.source != SOURCE {
         return Ok(());
     }
-    let Some(run) = forgust_db::ai_review::run(&state.db, pl.id).await?.filter(|r| r.state == "pending") else { return Ok(()) };
-    let fail = |why: String| fail_run(state, pl.id, why);
+    let Some(run) = forgust_db::ai_review::run(&state.db, pl.id).await? else { return Ok(()) };
+    let fail = |why: String| fail_run(state, pl.id, b.id, why);
     let Some(art) = forgust_db::ci::artifacts_of_build(&state.db, b.id).await?.into_iter().find(|a| a.file_type == REPORT) else {
         return fail("the review job uploaded no report".into()).await;
     };
@@ -296,8 +300,9 @@ pub async fn ingest(state: &AppState, build_id: i64) -> anyhow::Result<()> {
     let latest = mrdb::latest_diff(&state.db, mr.id).await?;
     let current = latest.as_ref().is_some_and(|d| d.head_sha == run.head_sha);
     if mr.state != "opened" || !current || project.archived() {
-        forgust_db::ai_review::finish(&state.db, pl.id, "outdated", 0, 0, None).await?;
-        publish_for(state, pl.id).await;
+        if forgust_db::ai_review::finish(&state.db, pl.id, Some(b.id), "outdated", None).await? {
+            publish_for(state, pl.id).await;
+        }
         return Ok(());
     }
     let latest = latest.expect("current");
@@ -309,8 +314,9 @@ pub async fn ingest(state: &AppState, build_id: i64) -> anyhow::Result<()> {
         return fail("the review did not run as the project's AI review bot".into()).await;
     };
     let cfg = config(state).await?;
-    // claimed before posting: a retry of this read posts nothing twice
-    if !forgust_db::ai_review::finish(&state.db, pl.id, "posted", 0, 0, None).await? {
+    // claimed before posting: reading this report again posts nothing twice
+    // (a retried job is another report: what it repeats is not posted again)
+    if !forgust_db::ai_review::finish(&state.db, pl.id, Some(b.id), "posted", None).await? {
         return Ok(());
     }
     let r = post(state, &project, &mr, &latest, &run, &rep, &bot, cfg.max_comments as usize).await;
@@ -323,8 +329,8 @@ pub async fn ingest(state: &AppState, build_id: i64) -> anyhow::Result<()> {
     r.map(|_| ())
 }
 
-async fn fail_run(state: &AppState, pipeline_id: i64, why: String) -> anyhow::Result<()> {
-    if forgust_db::ai_review::finish(&state.db, pipeline_id, "failed", 0, 0, Some(&why)).await? {
+async fn fail_run(state: &AppState, pipeline_id: i64, build_id: i64, why: String) -> anyhow::Result<()> {
+    if forgust_db::ai_review::finish(&state.db, pipeline_id, Some(build_id), "failed", Some(&why)).await? {
         publish_for(state, pipeline_id).await;
     }
     Ok(())

@@ -145,16 +145,20 @@ pub async fn last_posted_head(e: impl PgExecutor<'_>, merge_request_id: i64) -> 
     .await
 }
 
-/// Record how a run ended. Only a pending run changes: a report read twice
-/// posts once.
-pub async fn finish(e: impl PgExecutor<'_>, pipeline_id: i64, state: &str, posted: i32, dropped: i32, error: Option<&str>) -> Result<bool> {
+/// Record how a run ended. With `build_id` (the job whose report says so):
+/// when that job is the pipeline's newest and did not settle the run already,
+/// so a report read twice posts once and a retried job settles it again.
+/// Without (no report): only a run still pending.
+pub async fn finish(e: impl PgExecutor<'_>, pipeline_id: i64, build_id: Option<i64>, state: &str, error: Option<&str>) -> Result<bool> {
     Ok(sqlx::query!(
-        "UPDATE ai_review_runs SET state = $2, comments_posted = $3, comments_dropped = $4, error = $5, finished_at = now()
-          WHERE pipeline_id = $1 AND state = 'pending'",
+        "UPDATE ai_review_runs SET state = $3, comments_posted = 0, comments_dropped = 0, error = $4, finished_at = now(),
+                build_id = coalesce($2, build_id)
+          WHERE pipeline_id = $1
+            AND CASE WHEN $2::bigint IS NULL THEN state = 'pending'
+                     ELSE build_id IS DISTINCT FROM $2 AND $2 = (SELECT max(id) FROM ci_builds WHERE pipeline_id = $1) END",
         pipeline_id,
+        build_id,
         state,
-        posted,
-        dropped,
         error
     )
     .execute(e)

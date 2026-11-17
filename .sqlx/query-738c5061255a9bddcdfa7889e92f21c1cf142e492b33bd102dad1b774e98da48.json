@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE ai_review_runs SET state = $3, comments_posted = 0, comments_dropped = 0, error = $4, finished_at = now(),\n                build_id = coalesce($2, build_id)\n          WHERE pipeline_id = $1\n            AND CASE WHEN $2::bigint IS NULL THEN state = 'pending'\n                     ELSE build_id IS DISTINCT FROM $2 AND $2 = (SELECT max(id) FROM ci_builds WHERE pipeline_id = $1) END",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "738c5061255a9bddcdfa7889e92f21c1cf142e492b33bd102dad1b774e98da48"
+}

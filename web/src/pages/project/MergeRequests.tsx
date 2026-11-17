@@ -639,11 +639,11 @@ function AiReviewFact({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
         {s.can_request && (
           <button
             className="btn small"
-            disabled={pending || (r?.state === "posted" && r.current)}
+            disabled={pending}
             title={s.endpoint ? `Sends the changes to ${s.endpoint}` : undefined}
             onClick={() => act(() => api.post(path), "AI review requested")}
           >
-            {r && r.state !== "failed" ? "Review new changes" : "Request AI review"}
+            {!r || r.state === "failed" ? "Request AI review" : r.current ? "Review again" : "Review new changes"}
           </button>
         )}
       </div>

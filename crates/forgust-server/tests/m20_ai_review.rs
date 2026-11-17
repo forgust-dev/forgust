@@ -221,8 +221,25 @@ async fn a_review_runs_as_a_reporter_bot_and_only_what_holds_up_is_posted(pool: 
     assert_eq!(lines, vec![3, 1]);
     // nobody is notified or mentioned by what a model wrote
     assert!(owner.ok_get("/api/v1/user/todos").await.as_array().unwrap().is_empty());
-    // the version is reviewed
-    assert_eq!(dev.post(&path, json!({})).await.0, 409);
+    // asked again on the same version: all of it again, nothing posted twice
+    dev.ok_post(&path, json!({})).await;
+    let job = request(&srv, &runner).await.expect("the review asked again");
+    assert_eq!(var(&job, "FORGUST_REVIEW_BASE_SHA"), Some(main_head.clone()));
+    let again = json!([{ "path": "src/main.rs", "new_line": 3, "body": "Division by zero: this panics. @olivia" }]);
+    report_and_finish(&srv, &job, Some(review(&job, again)), "success").await;
+    let st = dev.ok_get(&path).await;
+    assert_eq!((st["latest"]["state"].as_str(), st["latest"]["comments_posted"].as_i64()), (Some("posted"), Some(0)), "{st}");
+    // its job retried (another model): the retry's report is read, and posts what is new
+    let retry = dev.ok_post(&format!("/api/v1/projects/{project}/jobs/{}/retry", job["id"]), json!({})).await;
+    assert!(retry["id"].is_i64(), "{retry}");
+    assert_eq!(dev.ok_get(&path).await["latest"]["state"], "pending", "reviewing again");
+    let job = request(&srv, &runner).await.expect("the retried job");
+    let newer = json!([{ "path": "src/main.rs", "new_line": 1, "body": "From the retry." }]);
+    report_and_finish(&srv, &job, Some(review(&job, newer)), "success").await;
+    let st = dev.ok_get(&path).await;
+    assert_eq!((st["latest"]["state"].as_str(), st["latest"]["comments_posted"].as_i64()), (Some("posted"), Some(1)), "{st}");
+    let notes = dev.ok_get(&format!("/api/v1/projects/{project}/merge_requests/{iid}/notes")).await;
+    assert!(notes.to_string().contains("From the retry."));
 
     // the bot's review is advice: it cannot approve or request changes
     let bot_user = forgust_db::users::find_by_username(&srv.state.db, &bot).await.unwrap().unwrap();
