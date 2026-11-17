@@ -24,6 +24,7 @@ export const SOURCE: Record<string, string> = {
   parent_pipeline: "parent pipeline",
   pipeline: "upstream pipeline",
   renovate: "dependency updates",
+  ai_review: "AI review",
 };
 
 /** Where a pipeline lives on this server (another project's for multi-project pipelines). */

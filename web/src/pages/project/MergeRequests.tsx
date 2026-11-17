@@ -501,6 +501,7 @@ function MrAside({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
             {m.can_approve && <RequestChanges onSubmit={async (body) => void (await act(() => api.post(`${path}/request_changes`, { body }), "Changes requested"))} />}
           </div>
         </div>
+        <AiReviewFact ctx={ctx} m={m} />
         <div className="fact">
           <span className="fact-label">Assignees</span>
           <div className="fact-value column">
@@ -596,6 +597,57 @@ function MrAside({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
         )}
       </section>
     </aside>
+  );
+}
+
+const AI_REVIEW_STATE: Record<string, string> = {
+  pending: "Reviewing…",
+  outdated: "Reviewed an older version",
+  failed: "Failed",
+};
+
+/** AI review: the latest review of this merge request, and asking for one. */
+function AiReviewFact({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
+  const qc = useQueryClient();
+  const path = `/projects/${ctx.p.id}/merge_requests/${m.iid}/ai_review`;
+  const key = ["mr", ctx.p.id, m.iid, "ai_review"];
+  const q = useQuery({
+    queryKey: key,
+    queryFn: () => api.get<S["AiReviewStatus"]>(path),
+    // the run's end also comes as a merge request event; this covers a missed one
+    refetchInterval: (query) => (query.state.data?.latest?.state === "pending" ? 15_000 : false),
+  });
+  const act = useAct(() => qc.invalidateQueries({ queryKey: key }));
+  const s = q.data;
+  if (!s || (!s.available && !s.latest)) return null;
+  const r = s.latest;
+  const pending = r?.state === "pending";
+  const label = !r
+    ? "Not reviewed yet"
+    : r.state === "posted"
+      ? `${r.comments_posted} comment${r.comments_posted === 1 ? "" : "s"}${r.current ? "" : " on an older version"}`
+      : (AI_REVIEW_STATE[r.state] ?? r.state);
+  return (
+    <div className="fact">
+      <span className="fact-label">AI review</span>
+      <div className="fact-value column">
+        <span className={r?.state === "failed" ? "small" : "small muted"}>
+          {r ? <Link to={`${ctx.web}/-/pipelines/${r.pipeline_iid}`}>{label}</Link> : label}
+          {r?.finished_at && ` · ${timeAgo(r.finished_at)}`}
+        </span>
+        {r?.state === "failed" && r.error && <span className="small faint">{r.error}</span>}
+        {s.can_request && (
+          <button
+            className="btn small"
+            disabled={pending || (r?.state === "posted" && r.current)}
+            title={s.endpoint ? `Sends the changes to ${s.endpoint}` : undefined}
+            onClick={() => act(() => api.post(path), "AI review requested")}
+          >
+            {r && r.state !== "failed" ? "Review new changes" : "Request AI review"}
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -1058,7 +1110,7 @@ function Thread({ ctx, m, root, replies, boxed }: { ctx: Ctx; m: S["MrDetail"]; 
                 <strong>
                   <AuthorLink x={n} name />
                 </strong>{" "}
-                <span className="faint">{timeAgo(n.created_at)}</span>
+                {n.author_bot && <Badge>bot</Badge>} <span className="faint">{timeAgo(n.created_at)}</span>
                 <ImportedMark x={n} />
                 {user?.id === n.author_id && (
                   <button

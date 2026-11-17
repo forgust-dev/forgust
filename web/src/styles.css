@@ -774,6 +774,11 @@ form.stack {
   background: var(--ok-soft);
   color: var(--ok);
 }
+.alert.warn {
+  border-color: var(--warn-border);
+  background: var(--warn-soft);
+  color: var(--warn);
+}
 
 .tabs {
   display: flex;

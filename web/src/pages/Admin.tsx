@@ -41,6 +41,7 @@ export function Admin() {
         <Route path="settings" element={<Settings />} />
         <Route path="dependency-updates" element={<DependencyUpdatesAdmin />} />
         <Route path="security-scanning" element={<SecurityScanningAdmin />} />
+        <Route path="ai-review" element={<AiReviewAdmin />} />
         <Route path="audit" element={<AdminAuditLog />} />
       </Routes>
     </div>
@@ -517,6 +518,109 @@ function DependencyUpdatesForm({ initial }: { initial: S["AdminRenovateStatus"] 
       />
     </div>
     </>
+  );
+}
+
+function AiReviewAdmin() {
+  const q = useQuery({ queryKey: ["admin-ai-review"], queryFn: () => api.get<S["AdminAiReviewStatus"]>("/admin/ai_review") });
+  return <Q q={q}>{(s) => <AiReviewForm initial={s} />}</Q>;
+}
+
+/** Where AI reviews send the code, which model they ask, and their limits. */
+function AiReviewForm({ initial }: { initial: S["AdminAiReviewStatus"] }) {
+  const qc = useQueryClient();
+  const [s, setS] = useState(initial);
+  const [key, setKey] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  const save = async (e: FormEvent, clearKey = false) => {
+    e.preventDefault();
+    setError(null);
+    setMsg(null);
+    try {
+      const r = await api.put<S["AdminAiReviewStatus"]>("/admin/ai_review", {
+        ...s,
+        ca_pem: s.ca_pem || null,
+        api_key: clearKey ? "" : key || undefined,
+      });
+      setS(r);
+      setKey("");
+      setMsg("Saved.");
+      qc.invalidateQueries({ queryKey: ["admin-ai-review"] });
+    } catch (err) {
+      setError(err);
+    }
+  };
+  let host = "";
+  try {
+    host = s.base_url ? new URL(s.base_url).host : "";
+  } catch {
+    host = "";
+  }
+  return (
+    <form className="stack" style={{ maxWidth: 640 }} onSubmit={(e) => save(e)}>
+      <p className="muted small">
+        Projects turn on AI review in their settings; then people who can push ask for a review on a merge request. Forgust runs the review on the instance runners
+        and posts the model&apos;s comments as a bot of the project; the bot never approves. {initial.enabled_projects} project(s) use it, {initial.active_runs}{" "}
+        review(s) going on. These settings apply over the config file&apos;s <code>[ai_review]</code>.
+      </p>
+      <div className="alert warn">
+        The changes of every reviewed merge request are sent to {host ? <strong>{host}</strong> : "the endpoint below"}. Use an endpoint you trust with this code.
+      </div>
+      <ErrorBox error={error} />
+      {msg && <div className="alert ok">{msg}</div>}
+      <label className="check">
+        <input type="checkbox" checked={s.enabled} onChange={(e) => setS({ ...s, enabled: e.target.checked })} /> Offer AI review to projects
+      </label>
+      <div className="grid2">
+        <Field label="Endpoint" hint="OpenAI-compatible API base, reached from the runners: https://api.openai.com/v1, http://ollama:11434/v1">
+          <input className="mono" value={s.base_url} placeholder="https://api.openai.com/v1" onChange={(e) => setS({ ...s, base_url: e.target.value })} />
+        </Field>
+        <Field label="Model">
+          <input className="mono" value={s.model} placeholder="qwen2.5-coder:32b" onChange={(e) => setS({ ...s, model: e.target.value })} />
+        </Field>
+      </div>
+      <Field label="API key" hint={initial.api_key_set ? "Set. Type a new one to replace it." : "Sent as a bearer token, masked in the job; none for a local model"}>
+        <input type="password" autoComplete="new-password" value={key} onChange={(e) => setKey(e.target.value)} />
+      </Field>
+      <div className="grid2">
+        <Field label="Comments per review">
+          <input type="number" min={1} max={50} value={s.max_comments} onChange={(e) => setS({ ...s, max_comments: Number(e.target.value) })} />
+        </Field>
+        <Field label="Changes per review (kB)" hint="Files past it are listed as not reviewed">
+          <input
+            type="number"
+            min={10}
+            max={5000}
+            value={Math.round(s.max_diff_bytes / 1000)}
+            onChange={(e) => setS({ ...s, max_diff_bytes: Number(e.target.value) * 1000 })}
+          />
+        </Field>
+        <Field label="Reviews at once">
+          <input type="number" min={1} max={50} value={s.max_concurrent} onChange={(e) => setS({ ...s, max_concurrent: Number(e.target.value) })} />
+        </Field>
+        <Field label="Timeout (minutes)">
+          <input type="number" min={1} max={120} value={Math.round(s.timeout_secs / 60)} onChange={(e) => setS({ ...s, timeout_secs: Number(e.target.value) * 60 })} />
+        </Field>
+        <Field label="Image" hint="Runs forgust ai-review; the server's version is the default">
+          <input className="mono" value={s.image} onChange={(e) => setS({ ...s, image: e.target.value })} />
+        </Field>
+        <Field label="Runner tags" hint="Comma-separated; instance runners only">
+          <input value={s.tags.join(", ")} onChange={(e) => setS({ ...s, tags: e.target.value.split(",").map((t) => t.trim()) })} />
+        </Field>
+      </div>
+      <Field label="Certificate authority" hint="PEM, when the endpoint's certificate comes from an in-house CA">
+        <textarea className="mono" rows={3} value={s.ca_pem ?? ""} placeholder="-----BEGIN CERTIFICATE-----" onChange={(e) => setS({ ...s, ca_pem: e.target.value })} />
+      </Field>
+      <div className="row" style={{ gap: 8 }}>
+        <button className="btn primary">Save</button>
+        {initial.api_key_set && (
+          <button type="button" className="btn" onClick={(e) => save(e, true)}>
+            Remove the API key
+          </button>
+        )}
+      </div>
+    </form>
   );
 }
 

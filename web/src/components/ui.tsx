@@ -361,7 +361,7 @@ export function Tile({ name, src, group, big }: { name: string; src?: string | n
   );
 }
 
-type Authored = { author_username?: string | null; author_name?: string | null; imported_author?: string | null };
+type Authored = { author_username?: string | null; author_name?: string | null; imported_author?: string | null; author_bot?: boolean };
 
 /** A person's name linking to their profile at `/<username>`. */
 export function UserLink({ username, children, className }: { username: string; children?: ReactNode; className?: string }) {
@@ -390,7 +390,8 @@ export function GitPerson({ p }: { p: { name: string; email: string; username?: 
  */
 export function AuthorLink({ x, name }: { x: Authored; name?: boolean }) {
   const label = name ? noteAuthor(x) : authorOf(x);
-  return x.author_username ? <UserLink username={x.author_username}>{label}</UserLink> : <>{label}</>;
+  // bots have no profile page
+  return x.author_username && !x.author_bot ? <UserLink username={x.author_username}>{label}</UserLink> : <>{label}</>;
 }
 
 /** Who wrote something: their username here, or their name on the forge it was imported from. */
