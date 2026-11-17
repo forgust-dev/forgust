@@ -4010,6 +4010,99 @@ a.status-badge:hover {
   color: var(--accent);
 }
 
+/* schedules: a card each, in time (how often, when next, how the latest runs went),
+   not rows like the pipelines' */
+.sched-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr));
+  gap: 14px;
+}
+.sched-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px;
+}
+.sched-card.paused {
+  background: var(--bg-subtle);
+}
+.sched-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.sched-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.sched-card.paused .sched-icon {
+  background: var(--bg-hover);
+  color: var(--text-faint);
+}
+.sched-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 650;
+}
+.sched-when {
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  font-size: 13.5px;
+}
+.sched-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+  margin: 0;
+}
+.sched-facts dt {
+  color: var(--text-faint);
+  font-size: 12px;
+  font-weight: 600;
+}
+.sched-facts dd {
+  min-width: 0;
+  margin: 2px 0 0;
+  font-size: 13.5px;
+  overflow-wrap: anywhere;
+}
+.sched-facts dd.mono {
+  font-size: 12.5px;
+}
+.sched-runs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.sched-runs-label {
+  color: var(--text-faint);
+  font-size: 12px;
+  font-weight: 600;
+}
+.sched-dots {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.sched-dots a {
+  display: inline-flex;
+}
+.sched-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* environments: the review apps' folders fold, their environments sit under them;
    a deployment's ref, and the one live now */
 .list.rows > .list-group > .item {

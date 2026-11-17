@@ -444,6 +444,8 @@ pub struct PipelineQuery {
     git_ref: Option<String>,
     status: Option<String>,
     sha: Option<String>,
+    /// those this schedule started (the others are left out)
+    schedule_id: Option<i64>,
     page: Option<i64>,
     per_page: Option<i64>,
 }
@@ -483,16 +485,21 @@ pub async fn list_pipelines(
 ) -> ApiResult<Json<Vec<PipelineSummary>>> {
     let p = project_for(&state, &v, &id, ProjectAction::ReadCode).await?;
     let paging = super::Paging { page: q.page.unwrap_or(1), per_page: q.per_page.unwrap_or(20), search: String::new() };
-    let list = cidb::list_pipelines(
-        &state.db,
-        p.id,
-        q.git_ref.as_deref().filter(|s| !s.is_empty()),
-        q.status.as_deref().filter(|s| !s.is_empty()),
-        q.sha.as_deref().filter(|s| !s.is_empty()),
-        paging.limit(),
-        paging.offset(),
-    )
-    .await?;
+    let list = match q.schedule_id {
+        Some(schedule) => cidb::schedule_pipelines(&state.db, p.id, schedule, paging.limit(), paging.offset()).await?,
+        None => {
+            cidb::list_pipelines(
+                &state.db,
+                p.id,
+                q.git_ref.as_deref().filter(|s| !s.is_empty()),
+                q.status.as_deref().filter(|s| !s.is_empty()),
+                q.sha.as_deref().filter(|s| !s.is_empty()),
+                paging.limit(),
+                paging.offset(),
+            )
+            .await?
+        }
+    };
     Ok(Json(summaries(&state, list).await?))
 }
 
