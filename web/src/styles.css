@@ -6312,6 +6312,19 @@ button.test-case-row:hover {
   height: 28px;
   max-width: 100%;
 }
+/* where the search looks (a project or a group): as tall as the inputs beside it */
+.code-search-filters .pill {
+  height: 28px;
+  padding: 0 2px 0 10px;
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 13px;
+}
+.code-search-filters .pill .icon-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+}
 .code-search-filters .btn[aria-pressed="true"] {
   border-color: var(--accent);
   background: var(--accent-soft);
