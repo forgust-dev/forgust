@@ -14,7 +14,7 @@ use super::{
     paths(
         auth::login, auth::login_totp, auth::login_recovery, auth::second_factors, auth::security_key_start, auth::login_webauthn, auth::passkey_start, auth::passkey_finish, auth::session, auth::forgot_password, auth::reset_password, auth::confirm_email,
         user::me, user::list_identities, user::list_keys, user::list_tokens, crate::oauth::authorize_info, crate::oauth::authorize, user::my_projects, user::work, user::todos, user::contributions, user::profile,
-        groups::list_top, groups::create, groups::show, groups::subgroups, groups::projects, groups::members, groups::storage,
+        groups::list_top, groups::create, groups::show, groups::subgroups, groups::projects, groups::project_states, groups::members, groups::storage,
         projects::explore, projects::protected_tags, projects::storage, projects::pages, projects::protect_tag, projects::unprotect_tag, projects::create, projects::show, projects::members, projects::users, projects::protected_branches,
         repo::tree, repo::last_commits, repo::stats, repo::blob, repo::commits, repo::commit, repo::commit_diff, repo::branches, repo::blame, repo::templates, repo::create_branch, repo::create_commit, repo::create_tag, repo::delete_tag,
         mr::list, mr::count, mr::create, mr::show, mr::stack_on, mr::auto_merge, mr::merge_status, mr::merge, mr::diff, mr::notes, mr::set_labels,
@@ -61,7 +61,7 @@ use super::{
         forgust_db::admin::InstanceCounts, forgust_db::admin::CiActivity, forgust_db::admin::PipelineDay, forgust_db::admin::BusyProject,
         forgust_db::admin::StorageKinds, forgust_db::admin::ProjectStorage, forgust_db::admin::GroupStorage,
         forgust_db::admin::BlobScan, forgust_db::admin::PrefixUsage, forgust_db::admin::TaskQueue, forgust_db::admin::FailedJob,
-        dto::Resolved, dto::UserDto, dto::GroupDto, dto::GroupDetail, dto::OrgPolicyDto, dto::Breadcrumb, dto::ProjectDto, dto::ProjectDetail,
+        dto::Resolved, dto::UserDto, dto::GroupDto, dto::GroupDetail, dto::OrgPolicyDto, dto::Breadcrumb, dto::ProjectDto, forgust_db::projects::ProjectState, dto::ProjectDetail,
         dto::MemberDto, dto::ShareDto, dto::ProtectedBranchDto, dto::NewToken, dto::AccessTokenDto,
         forgust_db::ssh_keys::SshKey, forgust_db::ssh_keys::KeyUsage, forgust_db::ssh_keys::DeployKey, forgust_db::tokens::AccessToken, forgust_db::tokens::DeployToken,
         forgust_db::audit::AuditEvent, forgust_db::settings::InstanceSettings, super::admin::UpdateInstanceSettings,

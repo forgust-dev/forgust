@@ -11,7 +11,8 @@ import { EditLabelsButton, LabelChip, LabelList, LabelPicker, MilestoneChip, Sys
 import { EditPeopleButton, PeopleAvatars, PeopleList, PeoplePicker } from "../../components/people";
 import { useSession } from "../../session";
 import { useToast } from "../../shell/toast";
-import { Timeline, systemEvent, type LogEntry } from "./MergeRequests";
+import { systemEvent } from "./MergeRequests";
+import { Timeline, type LogEntry } from "../../components/timeline";
 import type { Ctx } from "./Project";
 import { DueDateFact, MilestoneFact, day, overdue, useMilestones } from "./Milestones";
 import { ReactionBar } from "../../components/Reactions";

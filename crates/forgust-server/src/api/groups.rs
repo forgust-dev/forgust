@@ -196,6 +196,31 @@ pub async fn projects(State(state): State<AppState>, Viewer(p): Viewer, Path(id)
     Ok(Json(list.iter().map(|x| ProjectDto::from(x, &state.cfg)).collect()))
 }
 
+/// How many of a group's projects [`project_states`] reports on: the first, most
+/// active, that are not archived (the list shows the state of those).
+const STATE_LIMIT: usize = 20;
+
+/// How the group's projects are doing, as on their own pages (open merge
+/// requests, the default branch's latest pipeline): one request for the list,
+/// not two for each project. Those whose code the viewer may not read are left out.
+#[utoipa::path(get, path = "/api/v1/groups/{id}/project_states", responses((status = 200, body = [forgust_db::projects::ProjectState])), tag = "groups")]
+pub async fn project_states(
+    State(state): State<AppState>,
+    Viewer(p): Viewer,
+    Path(id): Path<String>,
+) -> ApiResult<Json<Vec<forgust_db::projects::ProjectState>>> {
+    let ns = group_for(&state, &p, &id, GroupAction::Read).await?;
+    let list = forgust_db::projects::in_namespace_visible(&state.db, ns.id, p.direct_user().map(|u| u.id), p.is_admin(), p.sees_internal())
+        .await?;
+    let mut ids = Vec::new();
+    for x in list.iter().filter(|x| !x.archived()).take(STATE_LIMIT) {
+        if crate::auth::authz::can_project(&state, &p, crate::auth::authz::ProjectAction::ReadCode, x).await? {
+            ids.push(x.id);
+        }
+    }
+    Ok(Json(forgust_db::projects::states(&state.db, &ids).await?))
+}
+
 #[utoipa::path(get, path = "/api/v1/groups/{id}/members", responses((status = 200, body = [MemberDto])), tag = "groups")]
 pub async fn members(State(state): State<AppState>, Viewer(p): Viewer, Path(id): Path<String>) -> ApiResult<Json<Vec<MemberDto>>> {
     let ns = group_for(&state, &p, &id, GroupAction::Read).await?;

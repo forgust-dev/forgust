@@ -3836,6 +3836,54 @@ a.status-badge:hover {
   color: var(--emph-link);
   font-family: var(--sans);
 }
+/* on a phone, a group's and a person's page show their list first, then the facts
+   (a project's page puts its pipeline card first) */
+@media (max-width: 900px) {
+  .group-layout .repo-about,
+  .profile-page .repo-about {
+    order: 0;
+  }
+}
+/* a project's state in a list (a group's page): open merge requests, latest pipeline */
+.project-state {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-muted);
+  font: 12.5px var(--mono);
+}
+.project-state a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.project-state a:not([class*="st-"]) {
+  color: inherit;
+}
+.project-state a:hover {
+  color: var(--accent);
+}
+/* people in a right-column card (a group's members) */
+.repo-about .side-people {
+  gap: 9px;
+  margin-top: 12px;
+}
+.side-people li {
+  min-width: 0;
+}
+.repo-about .side-people a {
+  color: var(--text);
+}
+.side-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
 /* a row that opens what it names on the page (a finding) */
 .decide-link {
   display: block;
@@ -5492,17 +5540,18 @@ a.item.import-row:hover {
 .contrib-cell.l0 {
   background: var(--bg-hover);
 }
+/* the logo's orange, as what is active across the site */
 .contrib-cell.l1 {
-  background: color-mix(in srgb, var(--ok) 28%, var(--bg));
+  background: color-mix(in srgb, var(--brand) 26%, var(--bg));
 }
 .contrib-cell.l2 {
-  background: color-mix(in srgb, var(--ok) 52%, var(--bg));
+  background: color-mix(in srgb, var(--brand) 50%, var(--bg));
 }
 .contrib-cell.l3 {
-  background: color-mix(in srgb, var(--ok) 76%, var(--bg));
+  background: color-mix(in srgb, var(--brand) 75%, var(--bg));
 }
 .contrib-cell.l4 {
-  background: var(--ok);
+  background: var(--brand);
 }
 .contrib-legend {
   display: flex;
@@ -5516,24 +5565,6 @@ a.item.import-row:hover {
 .contrib-legend .contrib-cell {
   width: 11px;
   height: 11px;
-}
-.activity-list {
-  display: flex;
-  flex-direction: column;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.activity-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 2px;
-  border-bottom: 1px solid var(--border);
-  font-size: 13px;
-}
-.activity-row:last-child {
-  border-bottom: 0;
 }
 
 /* auto-merge set */
@@ -5578,16 +5609,33 @@ a.item.import-row:hover {
 .profile-page {
   gap: 20px;
 }
+/* as a project's page: the name large, the facts in the right column */
 .profile-head {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
 }
 .profile-head h1 {
   margin: 0;
-  font-size: 22px;
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.user-activity .activity-head {
+  margin-bottom: 0;
+}
+.repo-about .side-places {
+  gap: 7px;
+}
+.repo-about .side-places a {
+  color: var(--text);
+  font-weight: 500;
+}
+.repo-about .side-places a:hover {
+  color: var(--accent);
 }
 .avatar.profile-avatar {
   width: 64px;

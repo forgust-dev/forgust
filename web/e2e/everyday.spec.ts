@@ -132,7 +132,7 @@ test("a user's page shows the contribution calendar and recent activity", async 
     await expect(page.locator(".contrib-caption")).toContainText(/[1-9]\d* contributions? in the last year/);
     await expect(cal.locator(".contrib-cell.l0, .contrib-cell.l1, .contrib-cell.l2, .contrib-cell.l3, .contrib-cell.l4").first()).toBeVisible();
     await expect(page.locator(".contrib-cell:not(.l0):not(.future)").first()).toBeAttached();
-    const row = page.locator(".activity-list li", { has: page.getByRole("link", { name: title }) });
+    const row = page.locator(".user-activity .tl-row", { has: page.getByRole("link", { name: title }) });
     await expect(row).toContainText("opened");
   } finally {
     await remove();

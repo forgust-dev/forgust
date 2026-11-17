@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT pr.id AS \"project_id!\",\n                  (SELECT count(*) FROM merge_requests m WHERE m.project_id = pr.id AND m.state = 'opened') AS \"open_merge_requests!\",\n                  l.iid AS \"pipeline_iid?\", l.status AS \"pipeline_status?\", l.ref AS \"pipeline_ref?\"\n           FROM projects pr\n           LEFT JOIN LATERAL (\n               SELECT p.iid, p.status, p.ref FROM ci_pipelines p\n                WHERE p.project_id = pr.id AND p.ref = coalesce(pr.default_branch, 'main') AND NOT is_system_source(p.source)\n                ORDER BY p.id DESC LIMIT 1\n           ) l ON true\n           WHERE pr.id = ANY($1)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project_id!",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "projects",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "open_merge_requests!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "pipeline_iid?",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "iid"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "pipeline_status?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "pipeline_ref?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "ref"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8Array"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "1464995a892f8db429269101fcb952528285f9d584a2530d42aaf6bb583dc8d6"
+}

@@ -2,8 +2,9 @@ import { useEffect, useMemo, useRef, type ReactElement } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { CircleDot, GitCommitHorizontal, GitMerge, MessageSquare, ThumbsUp } from "lucide-react";
-import { api, enc, qs, timeAgo, type S } from "../api/client";
+import { api, enc, qs, type S } from "../api/client";
 import { Q } from "./ui";
+import { Timeline, type LogEntry } from "./timeline";
 
 const DAY = 86_400_000;
 const WEEKS = 53;
@@ -102,18 +103,19 @@ export function ContributionCalendar({ days }: { days: S["Day"][] }) {
   );
 }
 
-const ACTIVITY: Record<string, { icon: ReactElement; verb: string }> = {
-  pushed: { icon: <GitCommitHorizontal size={14} />, verb: "pushed to" },
-  opened_merge_request: { icon: <GitMerge size={14} />, verb: "opened" },
-  merged_merge_request: { icon: <GitMerge size={14} />, verb: "merged" },
-  opened_issue: { icon: <CircleDot size={14} />, verb: "opened" },
-  closed_issue: { icon: <CircleDot size={14} />, verb: "closed" },
-  commented_merge_request: { icon: <MessageSquare size={14} />, verb: "commented on" },
-  commented_issue: { icon: <MessageSquare size={14} />, verb: "commented on" },
-  approved: { icon: <ThumbsUp size={14} />, verb: "approved" },
+/** Icon, tone and verb of each kind of activity, as in a merge request's log. */
+const ACTIVITY: Record<string, { icon: ReactElement; verb: string; tone?: string }> = {
+  pushed: { icon: <GitCommitHorizontal size={12} />, verb: "pushed to" },
+  opened_merge_request: { icon: <GitMerge size={12} />, verb: "opened" },
+  merged_merge_request: { icon: <GitMerge size={12} />, verb: "merged", tone: "accent" },
+  opened_issue: { icon: <CircleDot size={12} />, verb: "opened" },
+  closed_issue: { icon: <CircleDot size={12} />, verb: "closed" },
+  commented_merge_request: { icon: <MessageSquare size={12} />, verb: "commented on" },
+  commented_issue: { icon: <MessageSquare size={12} />, verb: "commented on" },
+  approved: { icon: <ThumbsUp size={12} />, verb: "approved", tone: "ok-solid" },
 };
 
-function ActivityRow({ a }: { a: S["Activity"] }) {
+function activityEntry(a: S["Activity"], i: number): LogEntry {
   const k = ACTIVITY[a.action] ?? ACTIVITY.pushed;
   const isMr = a.action.endsWith("merge_request") || a.action === "approved";
   const target =
@@ -127,38 +129,45 @@ function ActivityRow({ a }: { a: S["Activity"] }) {
         {a.iid} {a.title}
       </Link>
     );
-  return (
-    <li className="activity-row">
-      <span className="faint">{k.icon}</span>
-      <span className="grow" style={{ minWidth: 0 }}>
+  return {
+    at: a.at,
+    key: `${i}:${a.at}`,
+    icon: k.icon,
+    tone: k.tone,
+    body: (
+      <>
         {k.verb} {target} in <Link to={`/${a.project_path}`}>{a.project_path}</Link>
-      </span>
-      <span className="row-time">{timeAgo(a.at)}</span>
-    </li>
-  );
+      </>
+    ),
+  };
 }
 
-/** A user's calendar and latest activity (only what the viewer may see). */
-export function UserContributions({ username }: { username: string }) {
+/** A user's contributions per day and latest activity, in the viewer's time zone. */
+export function useContributions(username: string) {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const q = useQuery({
+  return useQuery({
     queryKey: ["contributions", username, tz],
     queryFn: () => api.get<S["Contributions"]>(`/users/${enc(username)}/contributions${qs({ tz })}`),
   });
+}
+
+/** A user's calendar and latest activity (only what the viewer may see), the
+ *  activity as a merge request's log: by day, each with its time. */
+export function UserContributions({ username }: { username: string }) {
+  const q = useContributions(username);
   return (
     <Q q={q}>
       {(c) => (
         <section className="stack user-contrib" aria-label="Contributions">
           <ContributionCalendar days={c.days} />
           {c.activity.length > 0 && (
-            <div className="stack" style={{ gap: 6 }}>
-              <h2 className="section-title">Recent activity</h2>
-              <ul className="activity-list">
-                {c.activity.map((a, i) => (
-                  <ActivityRow key={i} a={a} />
-                ))}
-              </ul>
-            </div>
+            <section className="activity user-activity" aria-label="Recent activity">
+              <div className="activity-head">
+                <h2>Recent activity</h2>
+                <span className="rule" />
+              </div>
+              <Timeline entries={c.activity.map(activityEntry)} />
+            </section>
           )}
         </section>
       )}

@@ -29,6 +29,7 @@ import { useBranches } from "./Code";
 import { Markdown } from "../../components/Markdown";
 import { Ring } from "../../components/decide";
 import { readinessChecks, readinessScore } from "../../components/readiness";
+import { Timeline, type LogEntry } from "../../components/timeline";
 
 /** Invalidate MR queries when the server reports a change (shared SSE stream). */
 export function useLiveUpdates(projectId: number) {
@@ -1141,17 +1142,6 @@ function threadsOf(notes: S["NoteDto"][]) {
   return { roots, replies };
 }
 
-const hhmm = (at: string) => new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-
-export function dayLabel(at: string) {
-  const d = new Date(at);
-  const today = new Date();
-  const days = Math.round((new Date(today.toDateString()).getTime() - new Date(d.toDateString()).getTime()) / 86_400_000);
-  if (days === 0) return "Today";
-  if (days === 1) return "Yesterday";
-  return d.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short", year: d.getFullYear() === today.getFullYear() ? undefined : "numeric" });
-}
-
 /** Icon and wording for a system note. */
 export function systemEvent(body: string): { icon: ReactNode; tone: string } {
   if (body.startsWith("merged")) return { icon: <GitMerge size={12} />, tone: "accent" };
@@ -1164,35 +1154,6 @@ export function systemEvent(body: string): { icon: ReactNode; tone: string } {
   if (body === "requested changes") return { icon: <FileWarning size={12} />, tone: "bad" };
   return { icon: <Dot size={12} />, tone: "" };
 }
-
-/** Entries by day, each with its time and icon. */
-export function Timeline({ entries }: { entries: LogEntry[] }) {
-  let lastDay = "";
-  return (
-    <div className="timeline">
-      {entries.length === 0 && <p className="muted small">Nothing yet.</p>}
-      {entries.map((e) => {
-        const day = dayLabel(e.at);
-        const sep = day !== lastDay;
-        lastDay = day;
-        return (
-          <div key={e.key}>
-            {sep && <div className="tl-day">{day}</div>}
-            <div className={`tl-row ${e.boxed ? "boxed" : ""}`}>
-              <time dateTime={e.at} title={new Date(e.at).toLocaleString()}>
-                {hhmm(e.at)}
-              </time>
-              <span className={`tl-icon ${e.tone ?? ""}`}>{e.icon}</span>
-              <div className="tl-body">{e.body}</div>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-export type LogEntry = { at: string; key: string; icon: ReactNode; tone?: string; boxed?: boolean; body: ReactNode };
 
 function Activity({ ctx, m, notes }: { ctx: Ctx; m: S["MrDetail"]; notes: S["NoteDto"][] }) {
   const qc = useQueryClient();

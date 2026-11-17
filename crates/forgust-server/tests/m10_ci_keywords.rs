@@ -809,3 +809,33 @@ async fn a_retried_attempt_is_not_the_jobs_failure(pool: sqlx::PgPool) {
     assert_eq!(job_named(&p, "later")["status"], "skipped", "{p}");
     assert_eq!(p["status"], "failed", "{p}");
 }
+
+/// A group's list says how each project is doing in one request: its open
+/// merge requests and the latest pipeline of its default branch (not another
+/// branch's); an archived project is left out.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn a_groups_project_states_come_in_one_request(pool: sqlx::PgPool) {
+    let fx = fixture(pool, &[(".gitlab-ci.yml", "build:\n  script: [make]\n")]).await;
+    must(git(&fx.work, &["checkout", "-q", "-b", "feature"]).await);
+    commit_file(&fx.work, "f.txt", "f\n", "feature").await;
+    must(git(&fx.work, &["push", "-q", &fx.srv.http_url("olivia", REPO), "feature"]).await);
+    wait_jobs(&fx.srv.state).await;
+    fx.owner
+        .ok_post(&format!("/api/v1/projects/{}/merge_requests", fx.project), json!({ "source_branch": "feature", "title": "Add f" }))
+        .await;
+    let group = fx.owner.ok_get("/api/v1/groups/acme%2Fplatform").await;
+    let old = fx.owner.ok_post("/api/v1/projects", json!({ "name": "Old", "path": "old", "namespace_id": group["id"] })).await;
+    fx.owner.ok_post(&format!("/api/v1/projects/{}/archive", old["id"]), json!({})).await;
+
+    let states = fx.owner.ok_get("/api/v1/groups/acme%2Fplatform/project_states").await;
+    let states = states.as_array().unwrap();
+    assert_eq!(states.len(), 1, "{states:?}");
+    let s = &states[0];
+    assert_eq!(s["project_id"], fx.project);
+    assert_eq!(s["open_merge_requests"], 1);
+    assert_eq!((s["pipeline_iid"].as_i64(), s["pipeline_ref"].as_str()), (Some(1), Some("main")), "{s}");
+    // someone who may not see the projects learns nothing of them
+    let stranger = fx.srv.user("stranger", false).await;
+    let (code, body) = stranger.get("/api/v1/groups/acme%2Fplatform/project_states").await;
+    assert!(code == 404 || body.as_array().is_some_and(|a| a.is_empty()), "{code} {body}");
+}

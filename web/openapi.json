@@ -600,6 +600,29 @@
         }
       }
     },
+    "/api/v1/groups/{id}/project_states": {
+      "get": {
+        "tags": [
+          "groups"
+        ],
+        "summary": "How the group's projects are doing, as on their own pages (open merge\nrequests, the default branch's latest pipeline): one request for the list,\nnot two for each project. Those whose code the viewer may not read are left out.",
+        "operationId": "project_states",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectState"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/groups/{id}/projects": {
       "get": {
         "tags": [
@@ -12253,6 +12276,43 @@
           "visibility": {
             "type": "integer",
             "format": "int32"
+          }
+        }
+      },
+      "ProjectState": {
+        "type": "object",
+        "description": "How a project is doing, for a list of them: its open merge requests and the\nlatest pipeline of its default branch (not Forgust's own runs).",
+        "required": [
+          "project_id",
+          "open_merge_requests"
+        ],
+        "properties": {
+          "open_merge_requests": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "pipeline_iid": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "pipeline_ref": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "pipeline_status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "project_id": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },
