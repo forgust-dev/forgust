@@ -139,24 +139,80 @@ pub async fn login_totp(
     ip: ClientIp,
     Json(req): Json<TotpLogin>,
 ) -> ApiResult<(CookieJar, Json<LoginResponse>)> {
-    let hash = crypto::token_hash(&req.challenge);
-    let (user_id, provider_sync) = forgust_db::sessions::find_challenge(&state.db, &hash).await?.ok_or(ApiError::Unauthorized)?;
+    second_factor(state, jar, headers, ip, &req.challenge, Factor::Totp(&req.code)).await
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct RecoveryLogin {
+    pub challenge: String,
+    /// One of the account's recovery codes (case, dashes and spaces do not matter).
+    pub code: String,
+}
+
+/// The second step with a recovery code instead of the authenticator: the code
+/// is used up, and the account's inbox hears of it.
+#[utoipa::path(post, path = "/api/v1/auth/login/recovery", request_body = RecoveryLogin, responses((status = 200, body = LoginResponse)), tag = "auth")]
+pub async fn login_recovery(
+    State(state): State<AppState>,
+    jar: CookieJar,
+    headers: HeaderMap,
+    ip: ClientIp,
+    Json(req): Json<RecoveryLogin>,
+) -> ApiResult<(CookieJar, Json<LoginResponse>)> {
+    second_factor(state, jar, headers, ip, &req.challenge, Factor::Recovery(&req.code)).await
+}
+
+#[derive(Clone, Copy)]
+enum Factor<'a> {
+    Totp(&'a str),
+    Recovery(&'a str),
+}
+
+/// Finish a sign-in whose password (or provider) is accepted. The challenge
+/// stays locked while the answer is checked, so it completes one sign-in at
+/// most; wrong answers, whatever the factor, share one limit per account.
+async fn second_factor(
+    state: AppState,
+    jar: CookieJar,
+    headers: HeaderMap,
+    ip: ClientIp,
+    challenge: &str,
+    factor: Factor<'_>,
+) -> ApiResult<(CookieJar, Json<LoginResponse>)> {
+    let hash = crypto::token_hash(challenge);
+    let mut tx = state.db.begin().await?;
+    let (user_id, provider_sync) = forgust_db::sessions::lock_challenge(&mut tx, &hash).await?.ok_or(ApiError::Unauthorized)?;
     if !state.login_limiter.allow(&format!("totp|{user_id}")) {
         return Err(ApiError::forbidden("too many attempts, try again in a minute"));
     }
-    let user = forgust_db::users::find(&state.db, user_id).await?.ok_or(ApiError::Unauthorized)?;
+    let user = forgust_db::users::find(&mut *tx, user_id).await?.ok_or(ApiError::Unauthorized)?;
     // wrong codes: 5 per 10 minutes per account; then the challenge is gone
     // and the password is asked again
     let acct = format!("totp|{}", user.id);
     if state.totp_failures.exceeded(&acct) {
-        forgust_db::sessions::delete_challenge(&state.db, &hash).await?;
+        forgust_db::sessions::delete_challenge(&mut *tx, &hash).await?;
+        tx.commit().await?;
         return Err(ApiError::forbidden("too many wrong codes: sign in again in a few minutes"));
     }
-    if !session::verify_totp(&state, &user, &req.code).await? {
+    let ok = match factor {
+        Factor::Totp(code) => session::verify_totp(&state, &mut tx, &user, code).await?,
+        Factor::Recovery(code) => {
+            user.totp_enabled && forgust_db::recovery_codes::consume(&mut *tx, user.id, &session::recovery_code_hash(code)).await?
+        }
+    };
+    if !ok {
         state.totp_failures.allow(&acct);
         return Err(ApiError::Unauthorized);
     }
-    forgust_db::sessions::delete_challenge(&state.db, &hash).await?;
+    let codes_left = match factor {
+        Factor::Recovery(_) => Some(forgust_db::recovery_codes::remaining(&mut *tx, user.id).await?),
+        _ => None,
+    };
+    forgust_db::sessions::delete_challenge(&mut *tx, &hash).await?;
+    tx.commit().await?;
+    if let Some(left) = codes_left {
+        recovery_code_used(&state, &user, left, ip.text().as_deref()).await;
+    }
     // a sign-in through a provider, now complete: what it says about the account
     let user = match provider_sync.map(serde_json::from_value::<PendingSync>) {
         Some(Ok(s)) => sync_from_provider(&state, &s.provider, &s.identity, user, ip.text().as_deref()).await?,
@@ -167,6 +223,23 @@ pub async fn login_totp(
         None => user,
     };
     start_session(&state, jar, &headers, ip, &user).await
+}
+
+/// A recovery code stood in for the authenticator: audited, and the account's
+/// inbox is told (a code it did not use is a stolen one).
+async fn recovery_code_used(state: &AppState, user: &forgust_db::users::User, left: i64, ip: Option<&str>) {
+    let p = Principal::User { user: user.clone(), scopes: None };
+    services::audit(state, &p, "recovery_code_used", Some(("user", user.id)), json!({ "remaining": left }), ip).await;
+    services::notify::send_to(
+        state,
+        &user.email,
+        "A recovery code was used to sign in",
+        &format!(
+            "Hello {},\n\nSomeone signed in to your Forgust account with your password and one of your recovery codes ({left} left).\n\nIf it was not you, change your password and create new recovery codes (Profile > Two-factor authentication) now.\n",
+            user.username
+        ),
+    )
+    .await;
 }
 
 /// A provider sign-in waiting for its second factor (`login_challenges.provider_sync`).

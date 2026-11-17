@@ -26,6 +26,8 @@ export function Login() {
     return m ? m[1] : null;
   });
   const [code, setCode] = useState("");
+  // a lost authenticator: one of the recovery codes instead
+  const [recovery, setRecovery] = useState(false);
   const [error, setError] = useState<unknown>(params.get("error"));
   const [busy, setBusy] = useState(false);
   const providers = useProviders();
@@ -47,7 +49,7 @@ export function Login() {
     setBusy(true);
     setError(null);
     try {
-      if (challenge) finish(await api.post<S["LoginResponse"]>("/auth/login/totp", { challenge, code }));
+      if (challenge) finish(await api.post<S["LoginResponse"]>(recovery ? "/auth/login/recovery" : "/auth/login/totp", { challenge, code }));
       else finish(await api.post<S["LoginResponse"]>("/auth/login", { login, password }));
     } catch (err) {
       setError(err);
@@ -75,9 +77,33 @@ export function Login() {
       <form className="stack" onSubmit={submit}>
         <ErrorBox error={error} />
         {challenge ? (
-          <Field label="Authentication code" hint="From your authenticator app">
-            <input autoFocus inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} />
-          </Field>
+          <>
+            <Field
+              label={recovery ? "Recovery code" : "Authentication code"}
+              hint={recovery ? "One of the codes you saved when you set up two-factor authentication; it works once" : "From your authenticator app"}
+            >
+              <input
+                key={String(recovery)}
+                autoFocus
+                inputMode={recovery ? undefined : "numeric"}
+                autoComplete={recovery ? "off" : "one-time-code"}
+                spellCheck={false}
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+              />
+            </Field>
+            <button
+              type="button"
+              className="link-btn small"
+              onClick={() => {
+                setRecovery(!recovery);
+                setCode("");
+                setError(null);
+              }}
+            >
+              {recovery ? "Use your authenticator app" : "Lost your authenticator? Use a recovery code"}
+            </button>
+          </>
         ) : (
           <>
             <Field label="Username or email">

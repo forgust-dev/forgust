@@ -119,6 +119,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/login/recovery": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The second step with a recovery code instead of the authenticator: the code
+         *     is used up, and the account's inbox hears of it.
+         */
+        post: operations["login_recovery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login/totp": {
         parameters: {
             query?: never;
@@ -4402,6 +4422,10 @@ export interface components {
              */
             version?: number | null;
         };
+        NewRecoveryCodes: {
+            /** @description Shown this once: each stands in for the authenticator at sign-in, once. */
+            recovery_codes: string[];
+        };
         NewRunnerToken: {
             /** Format: int64 */
             id: number;
@@ -4946,6 +4970,18 @@ export interface components {
         ReadmeResponse: {
             html: string;
             path: string;
+        };
+        RecoveryCodesLeft: {
+            /**
+             * Format: int64
+             * @description How many unused codes are left.
+             */
+            remaining: number;
+        };
+        RecoveryLogin: {
+            challenge: string;
+            /** @description One of the account's recovery codes (case, dashes and spaces do not matter). */
+            code: string;
         };
         RefResolved: {
             commit: string;
@@ -5733,6 +5769,11 @@ export interface components {
         TotpDisable: {
             password: string;
         };
+        TotpEnabled: {
+            /** @description Shown this once: each stands in for the authenticator at sign-in, once. */
+            recovery_codes: string[];
+            user: components["schemas"]["UserDto"];
+        };
         TotpLogin: {
             challenge: string;
             code: string;
@@ -6261,6 +6302,29 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResponse"];
+                };
+            };
+        };
+    };
+    login_recovery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecoveryLogin"];
             };
         };
         responses: {

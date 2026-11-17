@@ -30,6 +30,7 @@ pub mod projects;
 pub mod protected_branches;
 pub mod push_rules;
 pub mod quotas;
+pub mod recovery_codes;
 pub mod registry;
 pub mod releases;
 pub mod renovate;

@@ -267,6 +267,36 @@
         }
       }
     },
+    "/api/v1/auth/login/recovery": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "The second step with a recovery code instead of the authenticator: the code\nis used up, and the account's inbox hears of it.",
+        "operationId": "login_recovery",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecoveryLogin"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/login/totp": {
       "post": {
         "tags": [
@@ -10740,6 +10770,21 @@
           }
         }
       },
+      "NewRecoveryCodes": {
+        "type": "object",
+        "required": [
+          "recovery_codes"
+        ],
+        "properties": {
+          "recovery_codes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shown this once: each stands in for the authenticator at sign-in, once."
+          }
+        }
+      },
       "NewRunnerToken": {
         "type": "object",
         "required": [
@@ -12405,6 +12450,35 @@
           },
           "path": {
             "type": "string"
+          }
+        }
+      },
+      "RecoveryCodesLeft": {
+        "type": "object",
+        "required": [
+          "remaining"
+        ],
+        "properties": {
+          "remaining": {
+            "type": "integer",
+            "format": "int64",
+            "description": "How many unused codes are left."
+          }
+        }
+      },
+      "RecoveryLogin": {
+        "type": "object",
+        "required": [
+          "challenge",
+          "code"
+        ],
+        "properties": {
+          "challenge": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "description": "One of the account's recovery codes (case, dashes and spaces do not matter)."
           }
         }
       },
@@ -14689,6 +14763,25 @@
         "properties": {
           "password": {
             "type": "string"
+          }
+        }
+      },
+      "TotpEnabled": {
+        "type": "object",
+        "required": [
+          "user",
+          "recovery_codes"
+        ],
+        "properties": {
+          "recovery_codes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Shown this once: each stands in for the authenticator at sign-in, once."
+          },
+          "user": {
+            "$ref": "#/components/schemas/UserDto"
           }
         }
       },

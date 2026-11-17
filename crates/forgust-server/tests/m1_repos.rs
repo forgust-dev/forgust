@@ -531,3 +531,109 @@ async fn the_default_branch_stays(pool: sqlx::PgPool) {
     assert_eq!(merged["state"], "merged");
     assert!(srv.state.storage.resolve(proj, "refs/heads/main").await.unwrap().is_some(), "main stays");
 }
+
+/// Recovery codes: given with TOTP, each signs in once in place of the
+/// authenticator; a challenge completes one sign-in however many answers race.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn recovery_codes_stand_in_for_the_authenticator(pool: sqlx::PgPool) {
+    let srv = TestServer::start(pool).await;
+    let admin = srv.user("root", true).await;
+    let erin = srv.user("erin", false).await;
+    assert_eq!(erin.post("/api/v1/user/two_factor/recovery_codes", json!({ "password": password("erin") })).await.0, 409, "no 2FA yet");
+    let codes = enable_totp(&erin, "erin").await;
+    assert_eq!(codes.len(), 10);
+    assert_eq!(erin.ok_get("/api/v1/user/two_factor/recovery_codes").await, json!({ "remaining": 10 }), "never shown again");
+
+    // typed loosely, it signs in; the inbox hears of it; it works once
+    let mut fresh = Client::new(&srv.base);
+    let ch = challenge(&srv, "erin").await;
+    let r = recover(&srv, &ch, &codes[0].replace('-', " ").to_uppercase()).await;
+    assert_eq!(r.status(), 200);
+    fresh.take_session(r).await;
+    assert_eq!(fresh.ok_get("/api/v1/user").await["username"], "erin");
+    wait_jobs(&srv.state).await;
+    assert!(srv.state.mailer.sent().iter().any(|m| m.to == vec!["erin@example.com".to_string()] && m.subject.contains("recovery code")));
+    let ch = challenge(&srv, "erin").await;
+    assert_eq!(recover(&srv, &ch, &codes[0]).await.status(), 401, "used up");
+    assert_eq!(erin.ok_get("/api/v1/user/two_factor/recovery_codes").await["remaining"], 9);
+
+    // two good codes sent at once on one challenge: one sign-in, one code spent
+    let (a, b) = tokio::join!(recover(&srv, &ch, &codes[1]), recover(&srv, &ch, &codes[2]));
+    let mut st = [a.status().as_u16(), b.status().as_u16()];
+    st.sort();
+    assert_eq!(st, [200, 401]);
+    assert_eq!(erin.ok_get("/api/v1/user/two_factor/recovery_codes").await["remaining"], 8);
+
+    // new codes: the old ones stop working
+    assert_eq!(erin.post("/api/v1/user/two_factor/recovery_codes", json!({ "password": "wrong" })).await.0, 403);
+    let new = erin.ok_post("/api/v1/user/two_factor/recovery_codes", json!({ "password": password("erin") })).await;
+    assert_eq!(new["recovery_codes"].as_array().unwrap().len(), 10);
+    let ch = challenge(&srv, "erin").await;
+    assert_eq!(recover(&srv, &ch, &codes[3]).await.status(), 401);
+    assert_eq!(recover(&srv, &ch, new["recovery_codes"][0].as_str().unwrap()).await.status(), 200);
+
+    // an administrator's reset: no 2FA, no codes, every session ended
+    let erin_id = erin.ok_get("/api/v1/user").await["id"].as_i64().unwrap();
+    admin.ok_post(&format!("/api/v1/admin/users/{erin_id}/reset_two_factor"), json!({})).await;
+    assert_eq!(erin.get("/api/v1/user").await.0, 401);
+    assert_eq!(fresh.get("/api/v1/user").await.0, 401);
+    let left: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM recovery_codes WHERE user_id = $1").bind(erin_id).fetch_one(&srv.state.db).await.unwrap();
+    assert_eq!(left, 0);
+
+    // wrong codes share the TOTP lockout: 5, then the challenge is gone
+    let frank = srv.user("frank", false).await;
+    let codes = enable_totp(&frank, "frank").await;
+    let ch = challenge(&srv, "frank").await;
+    for _ in 0..5 {
+        assert_eq!(recover(&srv, &ch, "aaaa-aaaa-aaaa-aaaa").await.status(), 401);
+    }
+    assert_eq!(recover(&srv, &ch, &codes[0]).await.status(), 403);
+    // turning 2FA off takes the codes with it
+    frank.ok_post("/api/v1/user/two_factor/disable", json!({ "password": password("frank") })).await;
+    assert_eq!(frank.ok_get("/api/v1/user/two_factor/recovery_codes").await["remaining"], 0);
+}
+
+/// What the reset link forgets of an account whose address someone else
+/// registered: the second factor they set up goes with the rest.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn forgotten_credentials_take_the_second_factor(pool: sqlx::PgPool) {
+    let srv = TestServer::start(pool).await;
+    let squat = srv.user("gina", false).await;
+    enable_totp(&squat, "gina").await;
+    let mut tx = srv.state.db.begin().await.unwrap();
+    let id: i64 = sqlx::query_scalar("SELECT id FROM users WHERE username = 'gina'").fetch_one(&mut *tx).await.unwrap();
+    forgust_db::users::forget_credentials(&mut tx, id).await.unwrap();
+    tx.commit().await.unwrap();
+    let (on, left): (bool, i64) =
+        sqlx::query_as("SELECT totp_enabled, (SELECT count(*) FROM recovery_codes WHERE user_id = users.id) FROM users WHERE id = $1")
+            .bind(id)
+            .fetch_one(&srv.state.db)
+            .await
+            .unwrap();
+    assert_eq!((on, left), (false, 0));
+}
+
+/// Turn TOTP on for a signed-in user; their recovery codes.
+async fn enable_totp(c: &Client, username: &str) -> Vec<String> {
+    let secret = c.ok_post("/api/v1/user/two_factor/setup", json!({})).await["secret"].as_str().unwrap().to_string();
+    let on = c.ok_post("/api/v1/user/two_factor/enable", json!({ "code": totp_code(&secret), "password": password(username) })).await;
+    assert_eq!(on["user"]["two_factor_enabled"], true);
+    on["recovery_codes"].as_array().unwrap().iter().map(|c| c.as_str().unwrap().to_string()).collect()
+}
+
+/// The password step of a sign-in: its second-factor challenge.
+async fn challenge(srv: &TestServer, username: &str) -> String {
+    let v = Client::new(&srv.base).login(username, &password(username)).await;
+    assert_eq!(v["two_factor_required"], true);
+    v["challenge"].as_str().unwrap().to_string()
+}
+
+async fn recover(srv: &TestServer, challenge: &str, code: &str) -> reqwest::Response {
+    reqwest::Client::new()
+        .post(format!("{}/api/v1/auth/login/recovery", srv.base))
+        .json(&json!({ "challenge": challenge, "code": code }))
+        .send()
+        .await
+        .unwrap()
+}

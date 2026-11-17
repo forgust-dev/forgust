@@ -6435,3 +6435,14 @@ button.test-case-row:hover {
     animation: none;
   }
 }
+
+/* recovery codes, shown once: two columns to copy by hand */
+.recovery-codes {
+  margin: 0;
+  padding: 10px 12px;
+  columns: 2;
+  column-gap: 24px;
+  background: var(--bg);
+  border-radius: 6px;
+  user-select: all;
+}

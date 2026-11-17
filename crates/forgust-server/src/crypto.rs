@@ -22,9 +22,13 @@ pub mod prefix {
 const ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
 pub fn random_token(prefix: &str) -> String {
+    format!("{prefix}{}", random_chars(ALPHABET, 32))
+}
+
+/// `len` characters drawn uniformly from `alphabet`.
+pub fn random_chars(alphabet: &[u8], len: usize) -> String {
     let mut rng = rand::rng();
-    let body: String = (0..32).map(|_| ALPHABET[rng.random_range(0..ALPHABET.len())] as char).collect();
-    format!("{prefix}{body}")
+    (0..len).map(|_| alphabet[rng.random_range(0..alphabet.len())] as char).collect()
 }
 
 pub fn random_urlsafe(bytes: usize) -> String {

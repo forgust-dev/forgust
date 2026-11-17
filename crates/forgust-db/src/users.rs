@@ -175,6 +175,13 @@ pub async fn set_totp(e: impl PgExecutor<'_>, id: i64, secret_enc: Option<&str>,
     Ok(())
 }
 
+/// Turn the second factor off: the authenticator app and the recovery codes
+/// that stand in for it go together.
+pub async fn disable_two_factor(c: &mut PgConnection, id: i64) -> Result<()> {
+    set_totp(&mut *c, id, None, false).await?;
+    crate::recovery_codes::delete_for_user(&mut *c, id).await
+}
+
 pub async fn set_admin(e: impl PgExecutor<'_>, id: i64, admin: bool) -> Result<()> {
     sqlx::query!("UPDATE users SET is_admin = $2, updated_at = now() WHERE id = $1", id, admin).execute(e).await?;
     Ok(())
@@ -227,9 +234,12 @@ pub async fn delete(e: impl PgExecutor<'_>, id: i64) -> Result<()> {
     Ok(())
 }
 
-/// Every way into the account but its password: access tokens, SSH keys and
-/// provider identities (for an address that turns out to be someone else's).
+/// Every way into the account but its password: access tokens, SSH keys,
+/// provider identities and the second factor with its recovery codes (for an
+/// address that turns out to be someone else's: what they find must not be
+/// what whoever registered it set up).
 pub async fn forget_credentials(c: &mut PgConnection, user_id: i64) -> Result<()> {
+    disable_two_factor(&mut *c, user_id).await?;
     sqlx::query!("UPDATE personal_access_tokens SET revoked = true WHERE user_id = $1", user_id).execute(&mut *c).await?;
     sqlx::query!("DELETE FROM ssh_keys WHERE user_id = $1", user_id).execute(&mut *c).await?;
     sqlx::query!("DELETE FROM identities WHERE user_id = $1", user_id).execute(&mut *c).await?;
