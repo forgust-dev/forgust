@@ -2739,13 +2739,21 @@ export interface components {
             max_comments: number;
             /** Format: int32 */
             max_concurrent: number;
-            /**
-             * Format: int64
-             * @description Changes per model request (a review makes up to 8).
-             */
-            max_diff_bytes: number;
             model: string;
-            provider: components["schemas"]["AiProvider"];
+            /**
+             * @description The reviewer's options (`MAX_DIFF_BYTES`, `TEMPERATURE`...), given to
+             *     the job as `AI_REVIEW_<NAME>`. Not masked: no secrets.
+             */
+            options?: {
+                [key: string]: string;
+            };
+            /**
+             * @description Which API (`openai`: any OpenAI-compatible endpoint); the reviewer
+             *     image says which it knows.
+             */
+            provider: string;
+            /** @description Read: the names of the secret options set. Their values are never returned. */
+            secret_option_names?: string[];
             tags: string[];
             /** Format: int64 */
             timeout_secs: number;
@@ -2871,14 +2879,6 @@ export interface components {
             user_type: string;
             username: string;
         };
-        /**
-         * @description The model API an AI review talks to. Only OpenAI-compatible endpoints
-         *     (`/chat/completions`: OpenAI, Ollama, vLLM, llama.cpp, LiteLLM...) for now;
-         *     others become variants here, and the job reads which one from
-         *     `AI_REVIEW_PROVIDER`.
-         * @enum {string}
-         */
-        AiProvider: "openai";
         AiReviewRun: {
             base_sha: string;
             /** Format: int32 */

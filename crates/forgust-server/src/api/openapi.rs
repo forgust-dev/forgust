@@ -90,7 +90,7 @@ use super::{
         renovate::NewHostRule, forgust_db::renovate::HostRule, renovate::GroupRenovate, renovate::GroupRenovateStatus, renovate::AdminRenovate,
         renovate::AdminRenovateStatus,
         ai_review::AiReviewSettings, ai_review::AiReviewSettingsBody, ai_review::AiReviewRun, ai_review::AiReviewStatus,
-        ai_review::AdminAiReview, ai_review::AdminAiReviewStatus, crate::config::AiProvider,
+        ai_review::AdminAiReview, ai_review::AdminAiReviewStatus,
         environments::EnvironmentDetail, environments::ProtectEnvironment, forgust_db::environments::Environment,
         forgust_db::environments::EnvironmentSummary, environments::EnvironmentRow, forgust_db::environments::Deployment, forgust_db::environments::ProtectedEnvironment,
         ci::JobEnvironment, forgust_db::ci::PipelineLink, forgust_db::merge_trains::Car,

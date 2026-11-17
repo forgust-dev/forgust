@@ -119,6 +119,24 @@ async fn ai_review_is_off_until_an_administrator_sets_an_endpoint(pool: sqlx::Pg
     let sealed: Option<String> = sqlx::query_scalar("SELECT api_key_enc FROM ai_review_instance").fetch_one(&srv.state.db).await.unwrap();
     assert!(!sealed.unwrap().contains("sk-not-returned"), "stored encrypted");
 
+    // the reviewer's options: any provider name, names checked, secrets never returned
+    a["provider"] = json!("anthropic");
+    a["options"] = json!({ "MODEL": "x" });
+    assert_eq!(admin.put("/api/v1/admin/ai_review", a.clone()).await.0, 400, "MODEL is Forgust's");
+    a["options"] = json!({ "TEMPERATURE": "0.2", "max": "1" });
+    assert_eq!(admin.put("/api/v1/admin/ai_review", a.clone()).await.0, 400, "A-Z, 0-9, _");
+    a["options"] = json!({ "TEMPERATURE": "0.2" });
+    a["secret_options"] = json!({ "AWS_SECRET_ACCESS_KEY": "aws-not-returned" });
+    let saved = admin.ok_put("/api/v1/admin/ai_review", a.clone()).await;
+    assert_eq!((saved["provider"].as_str(), saved["options"]["TEMPERATURE"].as_str()), (Some("anthropic"), Some("0.2")));
+    assert_eq!(saved["secret_option_names"], json!(["AWS_SECRET_ACCESS_KEY"]));
+    assert!(!saved.to_string().contains("aws-not-returned"), "{saved}");
+    a.as_object_mut().unwrap().remove("secret_options");
+    assert_eq!(admin.ok_put("/api/v1/admin/ai_review", a.clone()).await["secret_option_names"], json!(["AWS_SECRET_ACCESS_KEY"]), "kept");
+    a["secret_options"] = json!({});
+    assert_eq!(admin.ok_put("/api/v1/admin/ai_review", a.clone()).await["secret_option_names"], json!([]), "removed");
+    a.as_object_mut().unwrap().remove("secret_options");
+
     let st = owner.ok_put(&settings, json!({ "enabled": true })).await;
     assert_eq!(st["available"], true);
     assert_eq!(st["enabled"], true);
@@ -135,6 +153,10 @@ async fn a_review_runs_as_a_reporter_bot_and_only_what_holds_up_is_posted(pool: 
         c.ai_review.api_key = Some("sk-model-key-123".into());
         c.ai_review.tags = vec!["ai".into()];
         c.ai_review.max_comments = 2;
+        c.ai_review.options.insert("MAX_DIFF_BYTES".into(), "50000".into());
+        // a name Forgust sets itself is never passed over it
+        c.ai_review.options.insert("BASE_URL".into(), "http://elsewhere/v1".into());
+        c.ai_review.secret_options.insert("AWS_SECRET".into(), "s3cr3t-value-42".into());
     })
     .await;
     let owner = srv.user("olivia", false).await;
@@ -208,6 +230,11 @@ async fn a_review_runs_as_a_reporter_bot_and_only_what_holds_up_is_posted(pool: 
     assert_eq!(var(&job, "AI_REVIEW_MODEL").as_deref(), Some("qwen"));
     assert_eq!(var(&job, "AI_REVIEW_API_KEY").as_deref(), Some("sk-model-key-123"));
     assert!(masked(&job, "AI_REVIEW_API_KEY"));
+    assert_eq!(var(&job, "AI_REVIEW_PROVIDER").as_deref(), Some("openai"));
+    assert_eq!(var(&job, "AI_REVIEW_MAX_DIFF_BYTES").as_deref(), Some("50000"), "the reviewer's options, passed on");
+    assert_eq!(var(&job, "AI_REVIEW_AWS_SECRET").as_deref(), Some("s3cr3t-value-42"));
+    assert!(masked(&job, "AI_REVIEW_AWS_SECRET"));
+    assert_eq!(job["image"]["name"], "ghcr.io/forgust-dev/forgust-reviewer:0.1.0");
     assert_eq!(var(&job, "FORGUST_REVIEW_HEAD_SHA"), Some(head.clone()));
     assert_eq!(var(&job, "FORGUST_REVIEW_BASE_SHA"), Some(main_head.clone()));
     assert_eq!(var(&job, "FORGUST_REVIEW_TARGET_SHA"), Some(main_head.clone()));
@@ -337,10 +364,11 @@ async fn a_review_runs_as_a_reporter_bot_and_only_what_holds_up_is_posted(pool: 
     assert_eq!(dev.post(&path, json!({})).await.0, 409);
 }
 
-/// A stock runner (Docker executor) runs a review with Forgust's image, as
+/// A stock runner (Docker executor) runs a review with the reviewer image, as
 /// that image's user, against a model the test plays: the report it uploads
 /// is read and posted. Opt in with `FORGUST_TEST_RUNNER=gitlab/gitlab-runner:<version>`
-/// and `FORGUST_TEST_AI_REVIEW_IMAGE=<an image with this build's forgust>`.
+/// and `FORGUST_TEST_AI_REVIEW_IMAGE=<a forgust-reviewer image>` (built from
+/// forgust-dev/forgust-reviewer: `docker build -t forgust-reviewer:local .`).
 #[sqlx::test(migrator = "forgust_db::MIGRATOR")]
 async fn a_stock_runner_runs_a_review(pool: sqlx::PgPool) {
     let (Ok(runner_image), Ok(review_image)) = (std::env::var("FORGUST_TEST_RUNNER"), std::env::var("FORGUST_TEST_AI_REVIEW_IMAGE")) else {

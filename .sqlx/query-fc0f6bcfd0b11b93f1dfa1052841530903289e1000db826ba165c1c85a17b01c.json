@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT overrides, api_key_enc FROM ai_review_instance WHERE id",
+  "query": "SELECT overrides, api_key_enc, secret_options_enc FROM ai_review_instance WHERE id",
   "describe": {
     "columns": [
       {
@@ -24,6 +24,17 @@
             "name": "api_key_enc"
           }
         }
+      },
+      {
+        "ordinal": 2,
+        "name": "secret_options_enc",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ai_review_instance",
+            "name": "secret_options_enc"
+          }
+        }
       }
     ],
     "parameters": {
@@ -31,8 +42,9 @@
     },
     "nullable": [
       false,
+      true,
       true
     ]
   },
-  "hash": "63073bb9f4e89015dbf4ae575bbc10e264d246437463987b944c57a4081b6987"
+  "hash": "fc0f6bcfd0b11b93f1dfa1052841530903289e1000db826ba165c1c85a17b01c"
 }

@@ -17,7 +17,6 @@ path = "src/main.rs"
 forgust-db.workspace = true
 forgust-storage.workspace = true
 forgust-ci-config.workspace = true
-forgust-review.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
 async-trait.workspace = true

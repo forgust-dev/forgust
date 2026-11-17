@@ -125,7 +125,9 @@ volumes: { forgust-data: {}, db-data: {} }
 - Keyboard-driven review: `j`/`k` to move, `c` to comment
 - AI review on request, with any OpenAI-compatible endpoint (a local model works):
   comments from a bot that never approves, each checked against the diff before
-  it is posted. Off until an administrator sets the endpoint the code is sent to
+  it is posted, some with a change to apply in one click. The review runs in
+  CI with the [reviewer image](https://github.com/forgust-dev/forgust-reviewer).
+  Off until an administrator sets the endpoint the code is sent to
 
 ### 🗂️ Planning
 - Issues with labels, milestones, due dates, assignees and templates

@@ -42,9 +42,6 @@ enum Command {
     Config,
     /// Exit 0 when the local server answers /health (container health checks).
     Health,
-    /// Review a merge request's changes with a model (what an AI review job
-    /// runs on a runner; its settings come from the job's variables).
-    AiReview,
 }
 
 #[derive(Subcommand)]
@@ -69,11 +66,6 @@ fn main() -> anyhow::Result<()> {
         let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
         let code = rt.block_on(forgust_server::hooks::run_hook(name));
         std::process::exit(code);
-    }
-    // a CI job: no config, no database, only the job's variables
-    if let Command::AiReview = &cli.command {
-        let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
-        std::process::exit(rt.block_on(forgust_review::run_from_env()));
     }
     if let Command::Openapi = &cli.command {
         println!("{}", serde_json::to_string_pretty(&forgust_server::api::openapi::document())?);
@@ -149,7 +141,7 @@ async fn run(command: Command, cfg: Config) -> anyhow::Result<()> {
             let resp = reqwest::get(format!("http://127.0.0.1:{port}/health")).await?;
             anyhow::ensure!(resp.status().is_success(), "unhealthy: {}", resp.status());
         }
-        Command::Hook { .. } | Command::Openapi | Command::AiReview => unreachable!(),
+        Command::Hook { .. } | Command::Openapi => unreachable!(),
     }
     Ok(())
 }
@@ -172,6 +164,9 @@ fn toml_like(cfg: &Config) -> String {
                 *s = serde_json::Value::String("<redacted>".into());
             }
         }
+    }
+    if let Some(serde_json::Value::Object(m)) = v.pointer_mut("/ai_review/secret_options") {
+        m.values_mut().for_each(|x| *x = serde_json::Value::String("<redacted>".into()));
     }
     serde_json::to_string_pretty(&v).unwrap_or_default()
 }

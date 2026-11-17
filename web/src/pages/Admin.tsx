@@ -531,20 +531,39 @@ function AiReviewForm({ initial }: { initial: S["AdminAiReviewStatus"] }) {
   const qc = useQueryClient();
   const [s, setS] = useState(initial);
   const [key, setKey] = useState("");
+  const lines = (m: Record<string, string>) =>
+    Object.entries(m)
+      .map(([k, v]) => `${k}=${v}`)
+      .join("\n");
+  const parse = (text: string) => {
+    const out: Record<string, string> = {};
+    for (const line of text.split("\n").map((l) => l.trim()).filter(Boolean)) {
+      const i = line.indexOf("=");
+      if (i > 0) out[line.slice(0, i).trim()] = line.slice(i + 1);
+    }
+    return out;
+  };
+  const [options, setOptions] = useState(lines(initial.options ?? {}));
+  const secretNames = initial.secret_option_names ?? [];
+  const [secrets, setSecrets] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
-  const save = async (e: FormEvent, clearKey = false) => {
+  const save = async (e: FormEvent, clearKey = false, clearSecrets = false) => {
     e.preventDefault();
     setError(null);
     setMsg(null);
     try {
       const r = await api.put<S["AdminAiReviewStatus"]>("/admin/ai_review", {
         ...s,
+        options: parse(options),
         ca_pem: s.ca_pem || null,
         api_key: clearKey ? "" : key || undefined,
+        // all of them: what is typed replaces what is stored
+        secret_options: clearSecrets ? {} : secrets.trim() ? parse(secrets) : undefined,
       });
       setS(r);
       setKey("");
+      setSecrets("");
       setMsg("Saved.");
       qc.invalidateQueries({ queryKey: ["admin-ai-review"] });
     } catch (err) {
@@ -573,7 +592,13 @@ function AiReviewForm({ initial }: { initial: S["AdminAiReviewStatus"] }) {
         <input type="checkbox" checked={s.enabled} onChange={(e) => setS({ ...s, enabled: e.target.checked })} /> Offer AI review to projects
       </label>
       <div className="grid2">
-        <Field label="Endpoint" hint="OpenAI-compatible API base, reached from the runners: https://api.openai.com/v1, http://ollama:11434/v1">
+        <Field label="Provider" hint="openai: any OpenAI-compatible API (OpenAI, Ollama, vLLM, llama.cpp); the reviewer image says which others it knows">
+          <input className="mono" value={s.provider} list="ai-providers" onChange={(e) => setS({ ...s, provider: e.target.value })} />
+          <datalist id="ai-providers">
+            <option value="openai" />
+          </datalist>
+        </Field>
+        <Field label="Endpoint" hint="The API's base, reached from the runners: https://api.openai.com/v1, http://vllm:8000/v1">
           <input className="mono" value={s.base_url} placeholder="https://api.openai.com/v1" onChange={(e) => setS({ ...s, base_url: e.target.value })} />
         </Field>
         <Field label="Model">
@@ -587,28 +612,44 @@ function AiReviewForm({ initial }: { initial: S["AdminAiReviewStatus"] }) {
         <Field label="Comments per review">
           <input type="number" min={1} max={50} value={s.max_comments} onChange={(e) => setS({ ...s, max_comments: Number(e.target.value) })} />
         </Field>
-        <Field label="Changes per model request (kB)" hint="Fit it to the model's context; a review makes up to 8 requests, then lists the files left out">
-          <input
-            type="number"
-            min={10}
-            max={5000}
-            value={Math.round(s.max_diff_bytes / 1000)}
-            onChange={(e) => setS({ ...s, max_diff_bytes: Number(e.target.value) * 1000 })}
-          />
-        </Field>
         <Field label="Reviews at once">
           <input type="number" min={1} max={50} value={s.max_concurrent} onChange={(e) => setS({ ...s, max_concurrent: Number(e.target.value) })} />
         </Field>
         <Field label="Timeout (minutes)">
           <input type="number" min={1} max={120} value={Math.round(s.timeout_secs / 60)} onChange={(e) => setS({ ...s, timeout_secs: Number(e.target.value) * 60 })} />
         </Field>
-        <Field label="Image" hint="Runs forgust ai-review; the server's version is the default">
+        <Field label="Reviewer image" hint="Runs forgust-review: ghcr.io/forgust-dev/forgust-reviewer, or an image of your own with the same contract">
           <input className="mono" value={s.image} onChange={(e) => setS({ ...s, image: e.target.value })} />
         </Field>
         <Field label="Runner tags" hint="Comma-separated; instance runners only">
           <input value={s.tags.join(", ")} onChange={(e) => setS({ ...s, tags: e.target.value.split(",").map((t) => t.trim()) })} />
         </Field>
       </div>
+      <Field
+        label="Reviewer options"
+        hint={
+          <>
+            One NAME=value per line, given to the job as AI_REVIEW_NAME and shown in its variables: no secrets. For example MAX_DIFF_BYTES (changes per model
+            request: fit the model&apos;s context) or TEMPERATURE; the{" "}
+            <a href="https://github.com/forgust-dev/forgust-reviewer#variables" target="_blank" rel="noreferrer">
+              reviewer&apos;s README
+            </a>{" "}
+            lists them.
+          </>
+        }
+      >
+        <textarea className="mono" rows={3} value={options} placeholder="MAX_DIFF_BYTES=200000" onChange={(e) => setOptions(e.target.value)} />
+      </Field>
+      <Field
+        label="Secret options"
+        hint={
+          secretNames.length
+            ? `Set: ${secretNames.join(", ")}. Typing replaces all of them.`
+            : "Like the options, masked in the job: a second key, cloud credentials"
+        }
+      >
+        <textarea className="mono" rows={2} value={secrets} autoComplete="off" placeholder="NAME=value" onChange={(e) => setSecrets(e.target.value)} />
+      </Field>
       <Field label="Certificate authority" hint="PEM, when the endpoint's certificate comes from an in-house CA">
         <textarea className="mono" rows={3} value={s.ca_pem ?? ""} placeholder="-----BEGIN CERTIFICATE-----" onChange={(e) => setS({ ...s, ca_pem: e.target.value })} />
       </Field>
@@ -617,6 +658,11 @@ function AiReviewForm({ initial }: { initial: S["AdminAiReviewStatus"] }) {
         {initial.api_key_set && (
           <button type="button" className="btn" onClick={(e) => save(e, true)}>
             Remove the API key
+          </button>
+        )}
+        {secretNames.length > 0 && (
+          <button type="button" className="btn" onClick={(e) => save(e, false, true)}>
+            Remove the secret options
           </button>
         )}
       </div>

@@ -4968,8 +4968,7 @@
           "tags",
           "max_concurrent",
           "timeout_secs",
-          "max_comments",
-          "max_diff_bytes"
+          "max_comments"
         ],
         "properties": {
           "api_key_set": {
@@ -5003,17 +5002,29 @@
             "format": "int32",
             "minimum": 0
           },
-          "max_diff_bytes": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Changes per model request (a review makes up to 8).",
-            "minimum": 0
-          },
           "model": {
             "type": "string"
           },
+          "options": {
+            "type": "object",
+            "description": "The reviewer's options (`MAX_DIFF_BYTES`, `TEMPERATURE`...), given to\nthe job as `AI_REVIEW_<NAME>`. Not masked: no secrets.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
           "provider": {
-            "$ref": "#/components/schemas/AiProvider"
+            "type": "string",
+            "description": "Which API (`openai`: any OpenAI-compatible endpoint); the reviewer\nimage says which it knows."
+          },
+          "secret_option_names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Read: the names of the secret options set. Their values are never returned."
           },
           "tags": {
             "type": "array",
@@ -5355,13 +5366,6 @@
             "type": "string"
           }
         }
-      },
-      "AiProvider": {
-        "type": "string",
-        "description": "The model API an AI review talks to. Only OpenAI-compatible endpoints\n(`/chat/completions`: OpenAI, Ollama, vLLM, llama.cpp, LiteLLM...) for now;\nothers become variants here, and the job reads which one from\n`AI_REVIEW_PROVIDER`.",
-        "enum": [
-          "openai"
-        ]
       },
       "AiReviewRun": {
         "type": "object",

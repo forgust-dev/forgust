@@ -44,24 +44,41 @@ pub async fn enabled_count(e: impl PgExecutor<'_>) -> Result<i64> {
 
 // ------------------------------------------------------------ instance
 
-/// The administrator's changes over the config file: (fields set, sealed key).
-pub async fn instance(e: impl PgExecutor<'_>) -> Result<(serde_json::Value, Option<String>)> {
-    Ok(sqlx::query!("SELECT overrides, api_key_enc FROM ai_review_instance WHERE id")
-        .fetch_optional(e)
-        .await?
-        .map(|r| (r.overrides, r.api_key_enc))
-        .unwrap_or((serde_json::json!({}), None)))
+/// The administrator's changes over the config file.
+#[derive(Debug, Clone, Default)]
+pub struct Instance {
+    /// The fields set.
+    pub overrides: serde_json::Value,
+    pub api_key_enc: Option<String>,
+    /// A JSON map, sealed.
+    pub secret_options_enc: Option<String>,
 }
 
-/// Save the overrides; `key`: None keeps the stored key, Some(None) clears it.
-pub async fn set_instance(e: impl PgExecutor<'_>, overrides: &serde_json::Value, key: Option<Option<&str>>) -> Result<()> {
+pub async fn instance(e: impl PgExecutor<'_>) -> Result<Instance> {
+    Ok(sqlx::query_as!(Instance, "SELECT overrides, api_key_enc, secret_options_enc FROM ai_review_instance WHERE id")
+        .fetch_optional(e)
+        .await?
+        .unwrap_or(Instance { overrides: serde_json::json!({}), ..Default::default() }))
+}
+
+/// Save the overrides; `key` and `secrets` (sealed): None keeps what is
+/// stored, Some(None) clears it.
+pub async fn set_instance(
+    e: impl PgExecutor<'_>,
+    overrides: &serde_json::Value,
+    key: Option<Option<&str>>,
+    secrets: Option<Option<&str>>,
+) -> Result<()> {
     sqlx::query!(
-        "INSERT INTO ai_review_instance (id, overrides, api_key_enc) VALUES (true, $1, $3)
+        "INSERT INTO ai_review_instance (id, overrides, api_key_enc, secret_options_enc) VALUES (true, $1, $3, $5)
          ON CONFLICT (id) DO UPDATE SET overrides = $1,
-             api_key_enc = CASE WHEN $2 THEN $3 ELSE ai_review_instance.api_key_enc END, updated_at = now()",
+             api_key_enc = CASE WHEN $2 THEN $3 ELSE ai_review_instance.api_key_enc END,
+             secret_options_enc = CASE WHEN $4 THEN $5 ELSE ai_review_instance.secret_options_enc END, updated_at = now()",
         overrides,
         key.is_some(),
-        key.flatten()
+        key.flatten(),
+        secrets.is_some(),
+        secrets.flatten()
     )
     .execute(e)
     .await?;

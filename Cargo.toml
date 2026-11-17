@@ -14,7 +14,6 @@ publish = false
 forgust-db = { path = "crates/forgust-db" }
 forgust-storage = { path = "crates/forgust-storage" }
 forgust-ci-config = { path = "crates/forgust-ci-config" }
-forgust-review = { path = "crates/forgust-review" }
 
 anyhow = "1"
 thiserror = "2"

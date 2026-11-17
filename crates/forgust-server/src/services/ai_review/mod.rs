@@ -1,8 +1,9 @@
 //! AI review of merge requests. Someone who can push asks for a review; Forgust
 //! runs a pipeline of its own (source `ai_review`) on the instance's runners,
 //! as a bot that is a Reporter of the project, whose job sends the changes to
-//! the model endpoint the administrator set (`forgust ai-review`, in
-//! `forgust-review`).
+//! the model endpoint the administrator set. The job runs the reviewer image
+//! (forgust-dev/forgust-reviewer); the variables it gets and the report it
+//! leaves ([`report`]) are the contract between the two.
 //!
 //! The job holds no credential of the forge beyond its job token (clone
 //! only): it uploads a report, and the server checks every comment in it (the
@@ -10,19 +11,21 @@
 //! `max_comments`, not posted already) before posting it as the bot. A
 //! review is advice: the bot cannot approve or request changes.
 
-use std::collections::{HashMap, HashSet};
+pub mod report;
+
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use forgust_db::merge_requests::{self as mrdb, MergeRequest, MrDiff};
 use forgust_db::projects::Project;
 use forgust_db::users::User;
-use forgust_review::report::{self, Report};
 use forgust_storage::{DiffLineKind, DiffOptions};
+use report::Report;
 use serde_json::json;
 
 use crate::auth::Principal;
 use crate::auth::authz::{ProjectAction, require_project};
 use crate::ci::variables::Var;
-use crate::config::{AiProvider, AiReviewConfig};
+use crate::config::AiReviewConfig;
 use crate::error::{ApiError, ApiResult};
 use crate::events::Event;
 use crate::state::AppState;
@@ -32,14 +35,14 @@ pub const SOURCE: &str = "ai_review";
 pub const REPORT: &str = "ai_review";
 
 /// What an administrator may change over the config file's `[ai_review]`
-/// (Admin > AI review); absent fields keep the file's value. The key is
-/// stored apart, encrypted.
+/// (Admin > AI review); absent fields keep the file's value. The key and the
+/// secret options are stored apart, encrypted.
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct Overrides {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub enabled: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub provider: Option<AiProvider>,
+    pub provider: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub base_url: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -55,32 +58,49 @@ pub struct Overrides {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_comments: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub max_diff_bytes: Option<u64>,
+    pub options: Option<BTreeMap<String, String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ca_pem: Option<Option<String>>,
 }
 
 /// The settings in effect: the config file, then the administrator's changes.
-/// `api_key` is the config file's only: the one set in the admin area is
-/// decrypted where a job needs it ([`api_key`]).
+/// `api_key` and `secret_options` are the config file's only: those set in
+/// the admin area are decrypted where a job needs them ([`secrets`]).
 pub async fn config(state: &AppState) -> anyhow::Result<AiReviewConfig> {
     let mut c = state.cfg.ai_review.clone();
-    let (raw, _) = forgust_db::ai_review::instance(&state.db).await?;
-    let o: Overrides = serde_json::from_value(raw).unwrap_or_default();
+    let o: Overrides = serde_json::from_value(forgust_db::ai_review::instance(&state.db).await?.overrides).unwrap_or_default();
     macro_rules! over {
         ($($f:ident),*) => { $( if let Some(v) = o.$f { c.$f = v; } )* };
     }
-    over!(enabled, provider, base_url, model, image, tags, max_concurrent, timeout_secs, max_comments, max_diff_bytes, ca_pem);
+    over!(enabled, provider, base_url, model, image, tags, max_concurrent, timeout_secs, max_comments, options, ca_pem);
     Ok(c)
 }
 
-/// The endpoint's key in effect: the admin area's, else the config file's.
-pub async fn api_key(state: &AppState) -> anyhow::Result<Option<String>> {
-    Ok(match forgust_db::ai_review::instance(&state.db).await?.1 {
+/// The secrets in effect: (the endpoint's key, the secret options), each the
+/// admin area's when set there, else the config file's.
+pub async fn secrets(state: &AppState) -> anyhow::Result<(Option<String>, BTreeMap<String, String>)> {
+    let i = forgust_db::ai_review::instance(&state.db).await?;
+    let key = match i.api_key_enc {
         Some(sealed) => Some(state.secrets.decrypt_str(&sealed)?),
         None => state.cfg.ai_review.api_key.clone(),
-    }
-    .filter(|k| !k.is_empty()))
+    };
+    let options = match i.secret_options_enc {
+        Some(sealed) => state.secrets.decrypt_json(&sealed)?,
+        None => state.cfg.ai_review.secret_options.clone(),
+    };
+    Ok((key.filter(|k| !k.is_empty()), options))
+}
+
+/// What Forgust gives a review job itself: an option may not take its name.
+pub const RESERVED_OPTIONS: &[&str] = &["PROVIDER", "BASE_URL", "MODEL", "API_KEY", "CA_FILE", "MAX_COMMENTS"];
+
+/// An option's name: `A-Z`, `0-9` and `_`, not starting with a digit, not one Forgust sets.
+pub fn option_name_ok(k: &str) -> bool {
+    !k.is_empty()
+        && k.len() <= 64
+        && !k.starts_with(|c: char| c.is_ascii_digit())
+        && k.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+        && !RESERVED_OPTIONS.contains(&k)
 }
 
 /// The user type of the projects' AI review bots.
@@ -150,7 +170,9 @@ pub async fn configure(state: &AppState, principal: &Principal, project: &Projec
 }
 
 /// The job: Forgust's own image running `forgust ai-review` on a full clone
-/// (the base of an incremental review can be any older commit).
+/// The job: the reviewer image running `forgust-review` on a full clone
+/// (the base of an incremental review can be any older commit). The image's
+/// entrypoint is overridden: one that is not a shell would not run the script.
 fn job_config(cfg: &AiReviewConfig, base: &str, head: &str, target: &str) -> String {
     let job = json!({
         "image": { "name": cfg.image, "entrypoint": [""] },
@@ -163,7 +185,7 @@ fn job_config(cfg: &AiReviewConfig, base: &str, head: &str, target: &str) -> Str
             "FORGUST_REVIEW_TARGET_SHA": target,
         },
         "rules": [{ "when": "always" }],
-        "script": ["forgust ai-review"],
+        "script": ["forgust-review"],
         "artifacts": { "when": "always", "expire_in": "7 days", "reports": { REPORT: report::FILE } },
     });
     // JSON is YAML
@@ -259,9 +281,16 @@ pub async fn job_variables(state: &AppState, project: &Project, user: Option<&Us
         public("AI_REVIEW_BASE_URL", cfg.base_url.trim().into()),
         public("AI_REVIEW_MODEL", cfg.model.trim().into()),
         public("AI_REVIEW_MAX_COMMENTS", cfg.max_comments.to_string()),
-        public("AI_REVIEW_MAX_DIFF_BYTES", cfg.max_diff_bytes.to_string()),
     ];
-    if let Some(k) = api_key(state).await? {
+    // the reviewer's options: passed on, not read; never over what is set above
+    let (key, secret_options) = secrets(state).await?;
+    for (k, value) in cfg.options.iter().filter(|(k, _)| option_name_ok(k)) {
+        v.push(public(&format!("AI_REVIEW_{k}"), value.clone()));
+    }
+    for (k, value) in secret_options.into_iter().filter(|(k, _)| option_name_ok(k)) {
+        v.push(Var { masked: true, raw: true, ..Var::secret(&format!("AI_REVIEW_{k}"), value) });
+    }
+    if let Some(k) = key {
         v.push(Var { masked: true, raw: true, ..Var::secret("AI_REVIEW_API_KEY", k) });
     }
     if let Some(pem) = cfg.ca_pem.filter(|p| !p.trim().is_empty()) {
@@ -642,7 +671,7 @@ mod tests {
         let text = job_config(&cfg, "aa", "bb", "cc");
         let p = forgust_ci_config::parse(&text).expect("parses");
         let j = &p.jobs["ai_review"];
-        assert_eq!(j.script, vec!["forgust ai-review"]);
+        assert_eq!(j.script, vec!["forgust-review"]);
         assert_eq!(j.artifacts.as_ref().unwrap().reports[REPORT], vec![report::FILE]);
     }
 
