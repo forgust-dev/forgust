@@ -18,6 +18,12 @@ ignore = [
     # crypto-bigint 0.5 timing variability (via pgp 0.21, the latest): Forgust only
     # verifies commit signatures with public keys; it holds no OpenPGP secrets.
     { id = "RUSTSEC-2026-0387", reason = "public-key verification only; via pgp" },
+    # chrono, chrono-tz and humantime unmaintained (chronotope/chrono#1768), added
+    # 2026-11-17. chrono also arrives via sqlx, russh, openidconnect, graphile_worker,
+    # croner and object_store, so dropping it from our own code would not clear it.
+    { id = "RUSTSEC-2026-0543", reason = "unmaintained, not vulnerable; via sqlx and others" },
+    { id = "RUSTSEC-2026-0555", reason = "unmaintained, not vulnerable; CI schedule time zones" },
+    { id = "RUSTSEC-2026-0542", reason = "unmaintained, not vulnerable; via object_store" },
 ]
 
 [licenses]
