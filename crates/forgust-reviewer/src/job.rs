@@ -35,13 +35,7 @@ pub struct Job {
 /// Review `job` with `provider`. Never fails: what went wrong is in the
 /// report's `error`.
 pub async fn review(job: &Job, provider: &dyn Provider) -> Report {
-    let mut report = Report {
-        version: report::VERSION,
-        base_sha: job.base_sha.clone(),
-        head_sha: job.head_sha.clone(),
-        model: job.model.clone(),
-        ..Default::default()
-    };
+    let mut report = Report::new(&job.base_sha, &job.head_sha, &job.model);
     if let Err(e) = review_into(job, provider, &mut report).await {
         report.error = Some(format!("{e:#}"));
     }
@@ -115,12 +109,13 @@ fn env_or(name: &str, default: &str) -> String {
     std::env::var(name).ok().filter(|v| !v.is_empty()).unwrap_or_else(|| default.to_string())
 }
 
-/// An option of the job: `AI_REVIEW_<name>`, or its default.
-fn option<T: std::str::FromStr>(name: &str, default: T) -> anyhow::Result<T> {
-    match std::env::var(format!("AI_REVIEW_{name}")).ok().filter(|v| !v.trim().is_empty()) {
-        Some(v) => v.trim().parse().map_err(|_| anyhow::anyhow!("AI_REVIEW_{name} is not valid: `{v}`")),
-        None => Ok(default),
-    }
+/// An option of the job: `AI_REVIEW_<name>`, when set.
+fn option<T: std::str::FromStr>(name: &str) -> anyhow::Result<Option<T>> {
+    std::env::var(format!("AI_REVIEW_{name}"))
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .map(|v| v.trim().parse().map_err(|_| anyhow::anyhow!("AI_REVIEW_{name} is not valid: `{v}`")))
+        .transpose()
 }
 
 fn from_env() -> anyhow::Result<(Job, Box<dyn Provider>)> {
@@ -132,9 +127,9 @@ fn from_env() -> anyhow::Result<(Job, Box<dyn Provider>)> {
         title: env_or("CI_MERGE_REQUEST_TITLE", ""),
         description: env_or("CI_MERGE_REQUEST_DESCRIPTION", ""),
         model: env("AI_REVIEW_MODEL")?,
-        max_comments: option("MAX_COMMENTS", 10)?,
-        max_diff_bytes: option("MAX_DIFF_BYTES", 200_000)?,
-        max_requests: option("MAX_REQUESTS", MAX_REQUESTS)?.clamp(1, 32),
+        max_comments: option("MAX_COMMENTS")?.unwrap_or(10),
+        max_diff_bytes: option("MAX_DIFF_BYTES")?.unwrap_or(200_000),
+        max_requests: option("MAX_REQUESTS")?.unwrap_or(MAX_REQUESTS).clamp(1, 32),
     };
     let ca = match std::env::var("AI_REVIEW_CA_FILE").ok().filter(|p| !p.is_empty()) {
         Some(path) => Some(std::fs::read(&path).with_context(|| format!("reading AI_REVIEW_CA_FILE {path}"))?),
@@ -147,9 +142,9 @@ fn from_env() -> anyhow::Result<(Job, Box<dyn Provider>)> {
             std::env::var("AI_REVIEW_API_KEY").ok(),
             ca.as_deref(),
             provider::Options {
-                timeout: Duration::from_secs(option("REQUEST_TIMEOUT_SECS", 600)?),
-                temperature: option::<f32>("TEMPERATURE", f32::NAN).map(|t| (!t.is_nan()).then_some(t))?,
-                json_mode: option("JSON_MODE", true)?,
+                timeout: Duration::from_secs(option("REQUEST_TIMEOUT_SECS")?.unwrap_or(600)),
+                temperature: option("TEMPERATURE")?,
+                json_mode: option("JSON_MODE")?.unwrap_or(true),
             },
         )?),
         other => bail!("unknown AI_REVIEW_PROVIDER `{other}` (this version knows: openai)"),
@@ -166,12 +161,8 @@ pub async fn run_from_env() -> i32 {
             review(&job, provider.as_ref()).await
         }
         Err(e) => Report {
-            version: report::VERSION,
-            base_sha: env_or("FORGUST_REVIEW_BASE_SHA", ""),
-            head_sha: env_or("FORGUST_REVIEW_HEAD_SHA", ""),
-            model: env_or("AI_REVIEW_MODEL", ""),
             error: Some(format!("{e:#}")),
-            ..Default::default()
+            ..Report::new(&env_or("FORGUST_REVIEW_BASE_SHA", ""), &env_or("FORGUST_REVIEW_HEAD_SHA", ""), &env_or("AI_REVIEW_MODEL", ""))
         },
     };
     let json = serde_json::to_vec_pretty(&report).expect("a report serializes");

@@ -35,6 +35,13 @@ pub struct Report {
     pub error: Option<String>,
 }
 
+impl Report {
+    /// A report of this version on `base_sha..head_sha` by `model`, empty.
+    pub fn new(base_sha: &str, head_sha: &str, model: &str) -> Report {
+        Report { version: VERSION, base_sha: base_sha.into(), head_sha: head_sha.into(), model: model.into(), ..Default::default() }
+    }
+}
+
 /// A comment on one line: `new_line` (a line of the new file, added or kept)
 /// or `old_line` (a removed line of the old file).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -199,16 +199,7 @@ pub struct AdminAiReviewStatus {
 
 async fn admin_status(state: &AppState) -> ApiResult<AdminAiReviewStatus> {
     let c = svc::config(state).await.map_err(ApiError::Internal)?;
-    let i = forgust_db::ai_review::instance(&state.db).await?;
-    let secret_option_names = match &i.secret_options_enc {
-        Some(sealed) => state
-            .secrets
-            .decrypt_json::<std::collections::BTreeMap<String, String>>(sealed)
-            .map_err(ApiError::Internal)?
-            .into_keys()
-            .collect(),
-        None => c.secret_options.keys().cloned().collect(),
-    };
+    let (key, secret_options) = svc::secrets(state).await.map_err(ApiError::Internal)?;
     Ok(AdminAiReviewStatus {
         settings: AdminAiReview {
             enabled: c.enabled,
@@ -221,10 +212,10 @@ async fn admin_status(state: &AppState) -> ApiResult<AdminAiReviewStatus> {
             timeout_secs: c.timeout_secs,
             max_comments: c.max_comments,
             options: c.options,
-            secret_option_names,
+            secret_option_names: secret_options.into_keys().collect(),
             secret_options: None,
             ca_pem: c.ca_pem,
-            api_key_set: i.api_key_enc.is_some() || c.api_key.is_some_and(|k| !k.is_empty()),
+            api_key_set: key.is_some(),
             api_key: None,
         },
         enabled_projects: forgust_db::ai_review::enabled_count(&state.db).await?,
@@ -246,9 +237,11 @@ pub async fn admin_set(
 ) -> ApiResult<Json<AdminAiReviewStatus>> {
     let base_url = s.base_url.trim();
     if !base_url.is_empty() {
-        let u = url::Url::parse(base_url).map_err(|_| ApiError::bad("the endpoint is a URL like https://api.openai.com/v1"))?;
-        if !matches!(u.scheme(), "http" | "https") || u.host_str().is_none() || !u.username().is_empty() || u.password().is_some() {
-            return Err(ApiError::bad("the endpoint is an http(s) URL without credentials (the key has its own field)"));
+        let ok = crate::services::webhooks::validate_url(base_url).is_ok_and(|u| u.password().is_none());
+        if !ok {
+            return Err(ApiError::bad(
+                "the endpoint is an http(s) URL like https://api.openai.com/v1, without credentials (the key has its own field)",
+            ));
         }
     }
     if s.enabled && (base_url.is_empty() || s.model.trim().is_empty()) {
@@ -298,17 +291,17 @@ pub async fn admin_set(
     }
     let tags: Vec<String> = s.tags.iter().map(|t| t.trim().to_string()).filter(|t| !t.is_empty()).collect();
     let overrides = svc::Overrides {
-        enabled: Some(s.enabled),
-        provider: Some(provider.to_string()),
-        base_url: Some(base_url.to_string()),
-        model: Some(s.model.trim().to_string()),
-        image: Some(s.image.trim().to_string()),
-        tags: Some(tags),
-        max_concurrent: Some(s.max_concurrent),
-        timeout_secs: Some(s.timeout_secs),
-        max_comments: Some(s.max_comments),
-        options: Some(s.options),
-        ca_pem: Some(ca_pem.map(str::to_string)),
+        enabled: s.enabled,
+        provider: provider.to_string(),
+        base_url: base_url.to_string(),
+        model: s.model.trim().to_string(),
+        image: s.image.trim().to_string(),
+        tags,
+        max_concurrent: s.max_concurrent,
+        timeout_secs: s.timeout_secs,
+        max_comments: s.max_comments,
+        options: s.options,
+        ca_pem: ca_pem.map(str::to_string),
     };
     let sealed = match s.api_key.as_deref().map(str::trim) {
         None => None,

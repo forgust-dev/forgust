@@ -15,12 +15,14 @@ CREATE OR REPLACE FUNCTION is_system_source(source text) RETURNS boolean
 LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$ SELECT source IN ('renovate', 'security', 'ai_review') $$;
 
 -- what the admin changed over [ai_review] in the config file; the endpoint's
--- key is stored encrypted, never sent back
+-- key and the reviewer's secret options (a JSON map) are stored encrypted,
+-- never sent back
 CREATE TABLE ai_review_instance (
-    id           boolean PRIMARY KEY DEFAULT true CHECK (id),
-    overrides    jsonb   NOT NULL DEFAULT '{}',
-    api_key_enc  text,
-    updated_at   timestamptz NOT NULL DEFAULT now()
+    id                  boolean PRIMARY KEY DEFAULT true CHECK (id),
+    overrides           jsonb   NOT NULL DEFAULT '{}',
+    api_key_enc         text,
+    secret_options_enc  text,
+    updated_at          timestamptz NOT NULL DEFAULT now()
 );
 
 -- a project with no row never turned it on
@@ -40,6 +42,9 @@ CREATE TABLE ai_review_runs (
     base_sha          text    NOT NULL,
     head_sha          text    NOT NULL,
     requested_by      bigint  REFERENCES users(id) ON DELETE SET NULL,
+    -- the job whose report settled it: a retried job (another model, an
+    -- endpoint that was down) settles it again with its own report
+    build_id          bigint  REFERENCES ci_builds(id) ON DELETE SET NULL,
     state             text    NOT NULL DEFAULT 'pending'
                       CHECK (state IN ('pending', 'posted', 'outdated', 'failed')),
     comments_posted   integer NOT NULL DEFAULT 0,

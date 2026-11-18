@@ -2,9 +2,9 @@
 //! files, hunks and numbered lines. Shared by the server's storage and the
 //! AI reviewer, so the line numbers a review comments on are the ones the
 //! server checks. `schema`: serializable, with OpenAPI schemas (the server).
-
-//! Structured diffs: `git diff --numstat` for the file list, then a unified patch for
-//! the requested page of files, parsed into hunks and lines.
+//!
+//! `git diff --numstat` for the file list, then a unified patch for the
+//! requested page of files, parsed into hunks and lines.
 
 #[derive(Debug, Clone)]
 pub struct DiffOptions {

@@ -160,9 +160,12 @@ pub fn pipeline_vars(state: &AppState, i: &PipelineInfo<'_>) -> Vec<Var> {
         v.push(Var::public("CI_MERGE_REQUEST_TARGET_BRANCH_NAME", m.target_branch.clone()));
         v.push(Var::public("CI_MERGE_REQUEST_TITLE", m.title.clone()));
         // GitLab cuts it at 2700 characters, and says so
-        let cut = m.description.chars().count() > 2700;
-        v.push(Var::public("CI_MERGE_REQUEST_DESCRIPTION", m.description.chars().take(2700).collect::<String>()));
-        v.push(Var::public("CI_MERGE_REQUEST_DESCRIPTION_IS_TRUNCATED", cut.to_string()));
+        let end = m.description.char_indices().nth(2700).map(|(i, _)| i);
+        let description = &m.description[..end.unwrap_or(m.description.len())];
+        // written by whoever opened the merge request: never expanded (a
+        // `$CI_JOB_TOKEN` in it stays text)
+        v.push(Var { raw: true, ..Var::public("CI_MERGE_REQUEST_DESCRIPTION", description) });
+        v.push(Var::public("CI_MERGE_REQUEST_DESCRIPTION_IS_TRUNCATED", end.is_some().to_string()));
         v.push(Var::public("CI_MERGE_REQUEST_DRAFT", m.draft.to_string()));
         v.push(Var::public("CI_MERGE_REQUEST_EVENT_TYPE", "detached"));
     }

@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, enc, qs, timeAgo, type S } from "../api/client";
 import { useProviders } from "../prefetch";
 import { useSession } from "../session";
-import { Avatar, Badge, Card, ErrorBox, Field, FilterTabs, NotFound, Q, SearchField, UserLink, useDebounced } from "../components/ui";
+import { Avatar, Badge, Card, ErrorBox, Field, FilterTabs, NotFound, Q, SearchField, UserLink, useDebounced, useFormRun } from "../components/ui";
 import { adminPage } from "./adminPages";
 import { Menu, type MenuItem } from "../components/controls";
 import { MoreHorizontal } from "lucide-react";
@@ -411,6 +411,21 @@ function AdminAuditLog() {
   return <AuditEvents path="/admin/audit" perPage={200} target />;
 }
 
+/** `NAME=value` lines, one a variable. */
+const envLines = (m: Record<string, string>) =>
+  Object.entries(m)
+    .map(([k, v]) => `${k}=${v}`)
+    .join("\n");
+
+const parseEnvLines = (text: string) => {
+  const out: Record<string, string> = {};
+  for (const line of text.split("\n").map((l) => l.trim()).filter(Boolean)) {
+    const i = line.indexOf("=");
+    if (i > 0) out[line.slice(0, i).trim()] = line.slice(i + 1);
+  }
+  return out;
+};
+
 function DependencyUpdatesAdmin() {
   const q = useQuery({ queryKey: ["admin-renovate"], queryFn: () => api.get<S["AdminRenovateStatus"]>("/admin/renovate") });
   return <Q q={q}>{(s) => <DependencyUpdatesForm initial={s} />}</Q>;
@@ -419,11 +434,7 @@ function DependencyUpdatesAdmin() {
 function DependencyUpdatesForm({ initial }: { initial: S["AdminRenovateStatus"] }) {
   const qc = useQueryClient();
   const [s, setS] = useState(initial);
-  const [env, setEnv] = useState(
-    Object.entries(initial.extra_env)
-      .map(([k, v]) => `${k}=${v}`)
-      .join("\n"),
-  );
+  const [env, setEnv] = useState(envLines(initial.extra_env));
   const [token, setToken] = useState("");
   const [pullPassword, setPullPassword] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
@@ -431,11 +442,7 @@ function DependencyUpdatesForm({ initial }: { initial: S["AdminRenovateStatus"] 
   const save = async (e: FormEvent, clearToken = false, clearPull = false) => {
     e.preventDefault();
     setError(null);
-    const extra_env: Record<string, string> = {};
-    for (const line of env.split("\n").map((l) => l.trim()).filter(Boolean)) {
-      const i = line.indexOf("=");
-      if (i > 0) extra_env[line.slice(0, i).trim()] = line.slice(i + 1);
-    }
+    const extra_env = parseEnvLines(env);
     try {
       const r = await api.put<S["AdminRenovateStatus"]>("/admin/renovate", {
         ...s,
@@ -531,53 +538,32 @@ function AiReviewForm({ initial }: { initial: S["AdminAiReviewStatus"] }) {
   const qc = useQueryClient();
   const [s, setS] = useState(initial);
   const [key, setKey] = useState("");
-  const lines = (m: Record<string, string>) =>
-    Object.entries(m)
-      .map(([k, v]) => `${k}=${v}`)
-      .join("\n");
-  const parse = (text: string) => {
-    const out: Record<string, string> = {};
-    for (const line of text.split("\n").map((l) => l.trim()).filter(Boolean)) {
-      const i = line.indexOf("=");
-      if (i > 0) out[line.slice(0, i).trim()] = line.slice(i + 1);
-    }
-    return out;
-  };
-  const [options, setOptions] = useState(lines(initial.options ?? {}));
+  const [options, setOptions] = useState(envLines(initial.options ?? {}));
   const secretNames = initial.secret_option_names ?? [];
   const [secrets, setSecrets] = useState("");
-  const [msg, setMsg] = useState<string | null>(null);
-  const [error, setError] = useState<unknown>(null);
-  const save = async (e: FormEvent, clearKey = false, clearSecrets = false) => {
-    e.preventDefault();
-    setError(null);
-    setMsg(null);
-    try {
+  const { run, msg, error } = useFormRun(() => qc.invalidateQueries({ queryKey: ["admin-ai-review"] }));
+  const save = (clearKey = false, clearSecrets = false) =>
+    run(async () => {
       const r = await api.put<S["AdminAiReviewStatus"]>("/admin/ai_review", {
         ...s,
-        options: parse(options),
+        options: parseEnvLines(options),
         ca_pem: s.ca_pem || null,
         api_key: clearKey ? "" : key || undefined,
         // all of them: what is typed replaces what is stored
-        secret_options: clearSecrets ? {} : secrets.trim() ? parse(secrets) : undefined,
+        secret_options: clearSecrets ? {} : secrets.trim() ? parseEnvLines(secrets) : undefined,
       });
       setS(r);
       setKey("");
       setSecrets("");
-      setMsg("Saved.");
-      qc.invalidateQueries({ queryKey: ["admin-ai-review"] });
-    } catch (err) {
-      setError(err);
-    }
-  };
+    }, "Saved.");
   let host = "";
   try {
     host = s.base_url ? new URL(s.base_url).host : "";
   } catch {
-    host = "";
+    // not a URL yet
   }
   return (
-    <form className="stack" style={{ maxWidth: 640 }} onSubmit={(e) => save(e)}>
+    <form className="stack" style={{ maxWidth: 640 }} onSubmit={save()}>
       <p className="muted small">
         Projects turn on AI review in their settings; then people who can push ask for a review on a merge request. Forgust runs the review on the instance runners
         and posts the model&apos;s comments as a bot of the project; the bot never approves. {initial.enabled_projects} project(s) use it, {initial.active_runs}{" "}
@@ -656,12 +642,12 @@ function AiReviewForm({ initial }: { initial: S["AdminAiReviewStatus"] }) {
       <div className="row" style={{ gap: 8 }}>
         <button className="btn primary">Save</button>
         {initial.api_key_set && (
-          <button type="button" className="btn" onClick={(e) => save(e, true)}>
+          <button type="button" className="btn" onClick={save(true)}>
             Remove the API key
           </button>
         )}
         {secretNames.length > 0 && (
-          <button type="button" className="btn" onClick={(e) => save(e, false, true)}>
+          <button type="button" className="btn" onClick={save(false, true)}>
             Remove the secret options
           </button>
         )}
