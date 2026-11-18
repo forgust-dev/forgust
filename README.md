@@ -18,31 +18,55 @@ workflow on your own servers.
 ## Screenshots
 <table>
   <tr>
-    <td align="center"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/code-dark.png"/><img src=".github/images/code-light.png" alt="Repository"/></picture><br/><sub>Repository</sub></td>
-    <td align="center"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/file-dark.png"/><img src=".github/images/file-light.png" alt="Source file"/></picture><br/><sub>Source file</sub></td>
-    <td align="center"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/merge-request-dark.png"/><img src=".github/images/merge-request-light.png" alt="Merge request"/></picture><br/><sub>Merge request</sub></td>
+    <td align="center"><a href=".github/images/code-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/code-dark.png"/><img src=".github/images/code-light.png" alt="Repository"/></picture></a><br/><sub>Repository</sub></td>
+    <td align="center"><a href=".github/images/merge-request-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/merge-request-dark.png"/><img src=".github/images/merge-request-light.png" alt="Merge request"/></picture></a><br/><sub>Merge request</sub></td>
+    <td align="center"><a href=".github/images/diff-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/diff-dark.png"/><img src=".github/images/diff-light.png" alt="Code review"/></picture></a><br/><sub>Code review</sub></td>
   </tr>
   <tr>
-    <td align="center"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/diff-dark.png"/><img src=".github/images/diff-light.png" alt="Code review"/></picture><br/><sub>Code review</sub></td>
-    <td align="center"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/pipeline-dark.png"/><img src=".github/images/pipeline-light.png" alt="Pipeline"/></picture><br/><sub>Pipeline</sub></td>
-    <td align="center"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/job-dark.png"/><img src=".github/images/job-light.png" alt="Job log"/></picture><br/><sub>Job log</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/issues-dark.png"/><img src=".github/images/issues-light.png" alt="Issues"/></picture><br/><sub>Issues</sub></td>
-    <td align="center"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/security-dark.png"/><img src=".github/images/security-light.png" alt="Security findings"/></picture><br/><sub>Security findings</sub></td>
+    <td align="center"><a href=".github/images/pipeline-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/pipeline-dark.png"/><img src=".github/images/pipeline-light.png" alt="Pipeline"/></picture></a><br/><sub>Pipeline</sub></td>
+    <td align="center"><a href=".github/images/login-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/login-dark.png"/><img src=".github/images/login-light.png" alt="Sign in"/></picture></a><br/><sub>Sign in</sub></td>
+    <td align="center"><a href=".github/images/security-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/security-dark.png"/><img src=".github/images/security-light.png" alt="Security findings"/></picture></a><br/><sub>Security findings</sub></td>
   </tr>
 </table>
 
-### Admin
+<details>
+<summary>More screenshots</summary>
+
 <table>
   <tr>
-    <td align="center"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/admin-dark.png"/><img src=".github/images/admin-light.png" alt="Overview"/></picture><br/><sub>Overview</sub></td>
-    <td align="center"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/admin-storage-dark.png"/><img src=".github/images/admin-storage-light.png" alt="Storage"/></picture><br/><sub>Storage</sub></td>
-    <td align="center"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/admin-health-dark.png"/><img src=".github/images/admin-health-light.png" alt="Health"/></picture><br/><sub>Health</sub></td>
+    <td align="center"><a href=".github/images/job-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/job-dark.png"/><img src=".github/images/job-light.png" alt="Job log"/></picture></a><br/><sub>Job log</sub></td>
+    <td align="center"><a href=".github/images/dashboard-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/dashboard-dark.png"/><img src=".github/images/dashboard-light.png" alt="Your work"/></picture></a><br/><sub>Your work</sub></td>
+    <td align="center"><a href=".github/images/file-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/file-dark.png"/><img src=".github/images/file-light.png" alt="Source file"/></picture></a><br/><sub>Source file</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><a href=".github/images/commits-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/commits-dark.png"/><img src=".github/images/commits-light.png" alt="Commits"/></picture></a><br/><sub>Commits</sub></td>
+    <td align="center"><a href=".github/images/merge-requests-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/merge-requests-dark.png"/><img src=".github/images/merge-requests-light.png" alt="Merge requests"/></picture></a><br/><sub>Merge requests</sub></td>
+    <td align="center"><a href=".github/images/issues-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/issues-dark.png"/><img src=".github/images/issues-light.png" alt="Issues"/></picture></a><br/><sub>Issues</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><a href=".github/images/environments-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/environments-dark.png"/><img src=".github/images/environments-light.png" alt="Environments"/></picture></a><br/><sub>Environments</sub></td>
+    <td align="center"><a href=".github/images/releases-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/releases-dark.png"/><img src=".github/images/releases-light.png" alt="Releases"/></picture></a><br/><sub>Releases</sub></td>
+    <td align="center"><a href=".github/images/registry-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/registry-dark.png"/><img src=".github/images/registry-light.png" alt="Container registry"/></picture></a><br/><sub>Container registry</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><a href=".github/images/group-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/group-dark.png"/><img src=".github/images/group-light.png" alt="Group"/></picture></a><br/><sub>Group</sub></td>
+    <td align="center"><a href=".github/images/user-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/user-dark.png"/><img src=".github/images/user-light.png" alt="User profile"/></picture></a><br/><sub>User profile</sub></td>
+    <td align="center"><a href=".github/images/settings-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/settings-dark.png"/><img src=".github/images/settings-light.png" alt="Project settings"/></picture></a><br/><sub>Project settings</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><a href=".github/images/profile-security-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/profile-security-dark.png"/><img src=".github/images/profile-security-light.png" alt="Password, 2FA and passkeys"/></picture></a><br/><sub>Password, 2FA and passkeys</sub></td>
+    <td align="center"><a href=".github/images/admin-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/admin-dark.png"/><img src=".github/images/admin-light.png" alt="Admin overview"/></picture></a><br/><sub>Admin overview</sub></td>
+    <td align="center"><a href=".github/images/admin-users-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/admin-users-dark.png"/><img src=".github/images/admin-users-light.png" alt="Admin users"/></picture></a><br/><sub>Admin users</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><a href=".github/images/admin-runners-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/admin-runners-dark.png"/><img src=".github/images/admin-runners-light.png" alt="Admin runners"/></picture></a><br/><sub>Admin runners</sub></td>
+    <td align="center"><a href=".github/images/admin-storage-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/admin-storage-dark.png"/><img src=".github/images/admin-storage-light.png" alt="Admin storage"/></picture></a><br/><sub>Admin storage</sub></td>
+    <td align="center"><a href=".github/images/admin-health-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/admin-health-dark.png"/><img src=".github/images/admin-health-light.png" alt="Admin health"/></picture></a><br/><sub>Admin health</sub></td>
   </tr>
 </table>
+</details>
 
-## Quick Start
+## Quick start
 
 ```bash
 git clone https://github.com/forgust-dev/forgust && cd forgust
@@ -68,7 +92,7 @@ Run the published image (amd64 and arm64) next to Postgres, or build your own wi
 ```yaml
 services:
   forgust:
-    image: ghcr.io/forgust-dev/forgust:0.1
+    image: ghcr.io/forgust-dev/forgust:0.4
     restart: unless-stopped
     read_only: true
     tmpfs: [/tmp]
@@ -112,7 +136,7 @@ volumes: { forgust-data: {}, db-data: {} }
 - Fast code browsing: tree, blame, history, compare, syntax highlighting
 - Code search across projects: exact text or regular expressions, filters by path,
   file name and language, only in code you can read
-- Markdown with diagrams (Mermaid), math and alerts
+- Markdown with diagrams (Mermaid), math, alerts and emoji shortcodes
 - Edit files, create branches and tags from the browser
 - Protected branches and tags, push rules, signed-commit verification (GPG and SSH)
 - Releases with notes and attached files
@@ -134,7 +158,9 @@ volumes: { forgust-data: {}, db-data: {} }
 - Confidential issues (only Reporters and up, the author and the assignees see them)
   and internal comments on issues and merge requests (only Reporters and up)
 - Mentions, `#12` and `!45` references, to-dos and a "Your work" inbox
-- Emoji reactions, watching projects, per-project notification levels, an inbox in the app (live), and a switch per kind of notification for the app and for email
+- Emoji reactions, watching projects, per-project notification levels
+- A live notification inbox in the app, with a switch per kind of notification for
+  the app and for email
 
 ### ⚙️ CI/CD
 - Pipelines with stages and `needs` graphs, live logs, artifacts, JUnit test reports
@@ -156,7 +182,9 @@ volumes: { forgust-data: {}, db-data: {} }
 - Overview with activity and CI statistics
 - Users: block, reset two-factor, impersonate (audited)
 - Storage by kind and by project, quotas per group and project
-- Background jobs, health checks, backups from the UI, an instance banner, a notice to administrators when a new release is out (can be turned off)
+- Runners, background jobs, health checks and backups from the UI
+- An instance banner, and a notice to administrators when a new release is out (can
+  be turned off)
 
 ### 🔌 Integrations
 - Import from GitLab and GitHub: repositories, merge requests, issues (confidential
@@ -185,32 +213,22 @@ against 300 ms).
 
 ## Status
 
-Forgust is young (0.1) and built for private teams first. Not there yet: forks and
+Forgust is young (0.4) and built for private teams first. Not there yet: forks and
 merge requests from forks, wikis, snippets, package registries, push and pull
-mirroring, issue boards, system hooks, and SAML or LDAP sign-in. Code search covers each project's default branch, not other branches
-or tags.
+mirroring, issue boards, system hooks, and SAML or LDAP sign-in.
+Code search covers each project's default branch, not other branches or tags.
 
-## Tech Stack
+## Tech stack
 | Layer | Technology |
 |---|---|
 | Backend | Rust + axum + tokio + sqlx |
 | Git | git (writes and transfer) + gitoxide (hot reads), russh for SSH |
-| Frontend | React 18 + TypeScript + Vite + TanStack Query |
+| Frontend | React 19 + TypeScript + Vite + TanStack Query |
 | Database | PostgreSQL 17+ |
 | Job queue | graphile_worker (on PostgreSQL) |
 | Storage | Local disk or S3-compatible object storage |
 
 ## Development
-```bash
-docker compose -f compose.dev.yml up -d      # Postgres :5440, S3 :9010, SMTP :1026 (inbox on :8026)
-echo DATABASE_URL=postgres://forgust:forgust@localhost:5440/forgust > .env
-cp forgust.example.toml forgust.toml         # set database.url
-(cd web && npm ci && npm run build)          # or `npm run dev` with FORGUST_URL set
-cargo run -p forgust-server -- serve         # migrates on start
-cargo test --workspace                       # one throwaway database per test
-(cd web && npm run e2e)                      # end-to-end tests (Playwright)
-```
-
 Contributions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md) (commits are signed
 off under the DCO). Report security problems privately, as [SECURITY.md](SECURITY.md)
 explains.

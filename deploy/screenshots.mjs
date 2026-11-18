@@ -21,13 +21,14 @@ const P = "acme/shop";
 
 const browser = await chromium.launch();
 const contexts = {};
-/** One signed-in context per user; each page picks its colour scheme. */
+/** One signed-in context per user (null: signed out); each page picks its colour scheme. */
 async function as(user) {
   if (!contexts[user]) {
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1.5 });
+    contexts[user] = ctx;
+    if (user === null) return ctx;
     const r = await ctx.request.post(`${base}/api/v1/auth/login`, { data: { login: user, password } });
     if (!r.ok()) throw new Error(`sign-in as ${user}: ${r.status()} (is the instance seeded?)`);
-    contexts[user] = ctx;
   }
   return contexts[user];
 }
@@ -64,16 +65,29 @@ if (wanted("pipeline", "job")) {
 }
 
 const SHOTS = [
-  // name, user, path (a function when it needs a subject above)
+  // name, user (null: signed out), path (a function when it needs a subject above)
+  ["login", null, "login"],
+  ["dashboard", "alice", ""],
+  ["group", "alice", "acme"],
+  ["user", "alice", "bob"],
   ["code", "alice", P],
   ["file", "alice", `${P}/-/blob/main/shop/cart.py`],
+  ["commits", "alice", `${P}/-/commits/main`],
+  ["merge-requests", "alice", `${P}/-/merge_requests`],
   ["merge-request", "alice", () => `${P}/-/merge_requests/${mr.iid}`],
   ["diff", "alice", () => `${P}/-/merge_requests/${mr.iid}/diffs`],
   ["pipeline", "alice", () => `${P}/-/pipelines/${pipeline.iid}`],
   ["job", "alice", () => `${P}/-/jobs/${job.id}`],
   ["issues", "alice", `${P}/-/issues`],
   ["security", "alice", `${P}/-/security`],
+  ["releases", "alice", `${P}/-/releases`],
+  ["registry", "alice", `${P}/-/container_registry`],
+  ["environments", "alice", `${P}/-/environments`],
+  ["settings", "alice", `${P}/-/settings`],
+  ["profile-security", "alice", "profile/security"],
   ["admin", "root", "admin"],
+  ["admin-users", "root", "admin/users"],
+  ["admin-runners", "root", "admin/runners"],
   ["admin-storage", "root", "admin/storage"],
   ["admin-health", "root", "admin/health"],
 ];
