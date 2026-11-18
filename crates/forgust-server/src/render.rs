@@ -268,6 +268,8 @@ pub fn markdown_with(source: &str, project_url: &str, git_ref: &str, dir: &str, 
     // `$x^2$`, `$$...$$`, `` $`x`$ `` and ```math: marked here, typeset in the browser
     opts.extension.math_dollars = true;
     opts.extension.math_code = true;
+    // `:tada:` and the other emoji shortcodes, as on GitLab and GitHub
+    opts.extension.shortcodes = true;
     opts.render.r#unsafe = false;
     let html = comrak::markdown_to_html(source, &opts);
 
@@ -630,6 +632,14 @@ mod tests {
         assert!(html.contains("prices $5 and $10"), "dollars in prose stay: {html}");
         assert!(html.contains(r#"<code class="language-math" data-math-style="display">a+b"#), "{html}");
         assert!(!html.contains("evil") && !html.contains(r#"data-math-style="x""#), "{html}");
+    }
+
+    #[test]
+    fn emoji_shortcodes_are_emoji() {
+        let html = markdown("Works :tada: :+1:, not `:tada:` in code, nor :not-an-emoji: or 10:30:45.", "/acme/api", "main", "");
+        assert!(html.contains("Works 🎉 👍,"), "{html}");
+        assert!(html.contains("<code>:tada:</code>"), "code stays as written: {html}");
+        assert!(html.contains(":not-an-emoji:") && html.contains("10:30:45"), "{html}");
     }
 }
 
