@@ -153,7 +153,14 @@ fn toml_like(cfg: &Config) -> String {
             *s = serde_json::Value::String("<redacted>".into());
         }
     }
-    for path in ["/database/url", "/email/smtp_url", "/telemetry/sentry_dsn", "/telemetry/metrics_token", "/renovate/github_com_token", "/ai_review/api_key"] {
+    for path in [
+        "/database/url",
+        "/email/smtp_url",
+        "/telemetry/sentry_dsn",
+        "/telemetry/metrics_token",
+        "/renovate/github_com_token",
+        "/ai_review/api_key",
+    ] {
         if let Some(s) = v.pointer_mut(path).filter(|s| s.as_str().is_some_and(|d| !d.trim().is_empty())) {
             *s = serde_json::Value::String("<redacted>".into());
         }
