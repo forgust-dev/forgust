@@ -75,8 +75,8 @@ test("the stack map shows both layers and what merges next", async ({ page }) =>
 test("your work lists your merge requests; projects moved to their own page", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Your work" })).toBeVisible();
-  await page.getByRole("navigation", { name: "Your work" }).getByRole("button", { name: /Merge requests/ }).click();
-  const yours = page.locator("section", { has: page.getByRole("heading", { name: "Opened by you" }) });
+  const yours = page.locator("section", { has: page.getByRole("heading", { name: "Your merge requests" }) });
+  await expect(yours.locator(".item", { hasText: "Checkout with discounts" })).toContainText("opened by you");
   await expect(yours.getByRole("link", { name: "Checkout with discounts" })).toBeVisible();
   await yours.getByRole("link", { name: "Checkout with discounts" }).click();
   await expect(page.getByRole("heading", { name: "Checkout with discounts" })).toBeVisible();
@@ -90,10 +90,7 @@ test("your work keeps review requests you already reviewed apart from those wait
   const me = await call("get", `/users/${ADMIN}`);
   const mr2 = `/projects/${project.id}/merge_requests/2`;
   const section = (name: string) => page.locator("section", { has: page.getByRole("heading", { name }) });
-  const reviewRequests = async () => {
-    await page.goto("/");
-    await page.getByRole("navigation", { name: "Your work" }).getByRole("button", { name: /Review requests/ }).click();
-  };
+  const reviewRequests = () => page.goto("/");
   // !2 is shared: whatever happens, leave no reviewer and no open thread behind
   let note: { id: number } | null = null;
   try {
@@ -135,7 +132,7 @@ test("a user's page shows the contribution calendar and recent activity", async 
     await expect(page.locator(".contrib-caption")).toContainText(/[1-9]\d* contributions? in the last year/);
     await expect(cal.locator(".contrib-cell.l0, .contrib-cell.l1, .contrib-cell.l2, .contrib-cell.l3, .contrib-cell.l4").first()).toBeVisible();
     await expect(page.locator(".contrib-cell:not(.l0):not(.future)").first()).toBeAttached();
-    const row = page.locator(".activity-list li", { has: page.getByRole("link", { name: title }) });
+    const row = page.locator(".user-activity .tl-row", { has: page.getByRole("link", { name: title }) });
     await expect(row).toContainText("opened");
   } finally {
     await remove();
@@ -291,7 +288,7 @@ test("forgot password, reset and email links", async ({ browser }) => {
   const page = await ctx.newPage();
   await page.goto("/login");
   await page.getByLabel("Username or email").fill("root");
-  await page.getByRole("link", { name: "Forgot your password?" }).click();
+  await page.getByRole("link", { name: "Forgot password?" }).click();
   // a server without email (email.smtp_url) promises no link: it says whom to ask
   const { email_enabled } = await (await page.request.get("/api/v1/setup")).json();
   if (email_enabled) {
@@ -370,8 +367,8 @@ test("edit a file in the browser onto a new branch, add and delete files, manage
     await page.getByLabel("Branch name").fill(`${branch}-b`);
     await page.getByRole("button", { name: "Create branch" }).click();
     await expect(page.locator(".toast.ok").last()).toContainText("created");
-    page.once("dialog", (d) => d.accept());
     await page.getByRole("button", { name: `Delete branch ${branch}-b` }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Delete branch" }).click();
     await expect(page.getByRole("link", { name: `${branch}-b`, exact: true })).toHaveCount(0);
   } finally {
     // keep the "recently pushed branches" banner of the other tests intact
@@ -420,8 +417,8 @@ test("tag, release with a file, download it, edit and delete", async ({ page }) 
     await page.getByRole("button", { name: "Save changes" }).click();
     await expect(page.getByRole("heading", { name: `Shop ${tag} final` })).toBeVisible();
     // deleted: the tag stays
-    page.once("dialog", (d) => d.accept());
     await page.getByRole("button", { name: `Delete release Shop ${tag} final` }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Delete release" }).click();
     await expect(page).toHaveURL(new RegExp(`${P}/-/releases$`));
     await expect(page.getByRole("article", { name: `Release Shop ${tag} final` })).toHaveCount(0);
   } finally {

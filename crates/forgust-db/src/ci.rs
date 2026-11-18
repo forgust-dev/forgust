@@ -541,6 +541,31 @@ pub async fn list_pipelines(
     .await
 }
 
+/// The pipelines a schedule started, newest first (whatever its branch is now).
+pub async fn schedule_pipelines(
+    e: impl PgExecutor<'_>,
+    project_id: i64,
+    schedule_id: i64,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<Pipeline>> {
+    sqlx::query_as!(
+        Pipeline,
+        "SELECT p.id, p.project_id, p.iid, p.ref AS git_ref, p.tag, p.sha, p.before_sha, p.source, p.status, p.protected,
+                p.merge_request_id, p.schedule_id, p.user_id, u.username AS \"username?\", p.commit_title, p.yaml_errors, p.created_at,
+                p.started_at, p.finished_at, p.updated_at
+         FROM ci_pipelines p LEFT JOIN users u ON u.id = p.user_id
+         WHERE p.project_id = $1 AND p.schedule_id = $2
+         ORDER BY p.id DESC LIMIT $3 OFFSET $4",
+        project_id,
+        schedule_id,
+        limit,
+        offset
+    )
+    .fetch_all(e)
+    .await
+}
+
 /// The newest pipeline of each of these commits (not Forgust's own: as
 /// `list_pipelines` by sha), for lists.
 pub async fn newest_pipelines_of(e: impl PgExecutor<'_>, project_id: i64, shas: &[String]) -> Result<Vec<Pipeline>> {
@@ -1744,6 +1769,22 @@ pub async fn upstream_pipeline(e: impl PgExecutor<'_>, pipeline_id: i64) -> Resu
         status: r.status,
         source: r.source,
     }))
+}
+
+/// Of `pipeline_ids`, the child pipelines (started by a bridge job of another
+/// pipeline of the same project): `(child id, parent iid)`, in one query for a list.
+pub async fn parent_iids(e: impl PgExecutor<'_>, pipeline_ids: &[i64]) -> Result<Vec<(i64, i64)>> {
+    Ok(sqlx::query!(
+        "SELECT p.id, u.iid
+           FROM ci_pipelines p JOIN ci_builds b ON b.id = p.upstream_build_id JOIN ci_pipelines u ON u.id = b.pipeline_id
+          WHERE p.id = ANY ($1) AND u.project_id = p.project_id",
+        pipeline_ids
+    )
+    .fetch_all(e)
+    .await?
+    .into_iter()
+    .map(|r| (r.id, r.iid))
+    .collect())
 }
 
 pub async fn instance_key(e: impl PgExecutor<'_>, name: &str) -> Result<Option<String>> {

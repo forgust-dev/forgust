@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, qs, refLink, timeAgo, type S } from "../../api/client";
@@ -15,6 +15,7 @@ import { StatusIcon, duration, isActive, statusLabel } from "./ci/Status";
 import { usePipeline } from "./ci/Pipelines";
 import { usePref } from "../../shell/theme";
 import { useAct, useToast } from "../../shell/toast";
+import { useConfirm } from "../../shell/dialog";
 import { useCiLive, useProjectEvents } from "../../shell/live";
 import { PagedDiff, lineKey, type LineKey, type NewComment, type Review } from "./Diff";
 import { CommitList, CommitRow } from "./History";
@@ -27,6 +28,9 @@ import { MrSecurity } from "./Security";
 import { StackChip, StackMap, RecentBranchBanner, StackOnFact, useStackTargets } from "./MrStack";
 import { useBranches } from "./Code";
 import { Markdown } from "../../components/Markdown";
+import { Ring } from "../../components/decide";
+import { readinessChecks, readinessScore } from "../../components/readiness";
+import { Timeline, type LogEntry } from "../../components/timeline";
 
 /** Invalidate MR queries when the server reports a change (shared SSE stream). */
 export function useLiveUpdates(projectId: number) {
@@ -718,67 +722,60 @@ function Readiness({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
       <Q q={st}>
         {(s) => {
           const p = pipelines.data?.[0];
-          const checks: Check[] = [];
           const pstatus = s.pipeline_status ?? p?.status;
-          if (pstatus || s.pipeline_required) {
-            const ok = pstatus === "success";
-            const running = pstatus != null && isActive(pstatus);
-            checks.push({
-              key: "pipeline",
-              tone: ok ? "ok" : running ? "warn" : s.pipeline_required ? "bad" : "warn",
-              text: pstatus ? `Pipeline${p ? ` #${p.iid}` : ""} ${statusLabel(pstatus)}` : "No pipeline for the latest commit",
-              action: p && (
-                <Link className="small" to={`${ctx.web}/-/pipelines/${p.iid}`}>
-                  Checks
-                </Link>
-              ),
-            });
-          }
-          if (s.approval_rules.length === 0) {
-            checks.push({ key: "approvals", tone: "none", text: m.approvals.length ? `Approved by ${m.approvals.map((a) => a.username).join(", ")}` : "No approval required" });
-          }
-          for (const r of s.approval_rules) {
-            checks.push({
-              key: `rule:${r.name}`,
-              tone: r.satisfied ? "ok" : "bad",
-              text: r.satisfied ? `${r.name} approved` : `${r.name}: ${r.required - r.given} more approval${r.required - r.given === 1 ? "" : "s"}`,
-              action: (
-                <span className="mono small faint">
-                  {r.given}/{r.required}
-                </span>
-              ),
-            });
-          }
-          checks.push(
-            s.unresolved_threads > 0
-              ? { key: "threads", tone: "warn", text: `${s.unresolved_threads} open thread${s.unresolved_threads === 1 ? "" : "s"}` }
-              : { key: "threads", tone: "ok", text: "All threads resolved" },
-          );
           const canRebase = s.user_can_merge && !s.fast_forward && s.conflicts.length === 0;
-          checks.push(
-            s.conflicts.length > 0
-              ? { key: "conflicts", tone: "bad", text: <>Conflicts in {s.conflicts.map((c) => <code key={c}>{c} </code>)}</> }
+          // which checks there are and how they stand: shared with the rings of "Your work"
+          const checks: Check[] = readinessChecks(s, p?.status).map((c): Check => {
+            if (c.kind === "pipeline")
+              return {
+                key: c.key,
+                tone: c.tone,
+                text: pstatus ? `Pipeline${p ? ` #${p.iid}` : ""} ${statusLabel(pstatus)}` : "No pipeline for the latest commit",
+                action: p && (
+                  <Link className="small" to={`${ctx.web}/-/pipelines/${p.iid}`}>
+                    Checks
+                  </Link>
+                ),
+              };
+            if (c.kind === "approvals")
+              return { key: c.key, tone: c.tone, text: m.approvals.length ? `Approved by ${m.approvals.map((a) => a.username).join(", ")}` : "No approval required" };
+            if (c.kind === "rule" && c.rule) {
+              const r = c.rule;
+              return {
+                key: c.key,
+                tone: c.tone,
+                text: r.satisfied ? `${r.name} approved` : `${r.name}: ${r.required - r.given} more approval${r.required - r.given === 1 ? "" : "s"}`,
+                action: (
+                  <span className="mono small faint">
+                    {r.given}/{r.required}
+                  </span>
+                ),
+              };
+            }
+            if (c.kind === "threads")
+              return { key: c.key, tone: c.tone, text: s.unresolved_threads > 0 ? `${s.unresolved_threads} open thread${s.unresolved_threads === 1 ? "" : "s"}` : "All threads resolved" };
+            return s.conflicts.length > 0
+              ? { key: c.key, tone: c.tone, text: <>Conflicts in {s.conflicts.map((f) => <code key={f}>{f} </code>)}</> }
               : {
-                  key: "conflicts",
-                  tone: "ok",
+                  key: c.key,
+                  tone: c.tone,
                   text: `No conflicts with ${m.target_branch}`,
                   action: canRebase && (
                     <button className="link-btn small" disabled={busy} onClick={() => run(() => api.post(`${path}/rebase`), `Rebased onto ${m.target_branch}`)}>
                       Rebase
                     </button>
                   ),
-                },
-          );
+                };
+          });
           // blockers the checklist does not already show
           const other = s.blockers.filter((b) => !/^(there are merge conflicts|approval rule|the pipeline must succeed)/.test(b));
-          const scored = checks.filter((c) => c.tone !== "none");
-          const passed = scored.filter((c) => c.tone === "ok").length;
-          const left = scored.length - passed;
+          const { passed, total } = readinessScore(checks);
+          const left = total - passed;
           return (
             <>
               <section className="mr-card ready-card" aria-label="Merge readiness">
                 <div className="readiness-head">
-                  <ReadyRing passed={passed} total={scored.length} />
+                  <Ring done={passed} total={total} title={`${passed} of ${total} checks pass`} />
                   <div className="grow">
                     <h2 className="mr-card-title">{s.can_merge ? "Ready to merge" : "Not ready yet"}</h2>
                     {!s.can_merge && left > 0 && (
@@ -937,36 +934,6 @@ function Readiness({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
   );
 }
 
-/** How many of the checks pass, as a ring around the count. */
-function ReadyRing({ passed, total }: { passed: number; total: number }) {
-  const r = 22;
-  const around = 2 * Math.PI * r;
-  const done = total === 0 ? 0 : (passed / total) * around;
-  return (
-    <svg className="ready-ring" width="56" height="56" viewBox="0 0 56 56" role="img" aria-label={`${passed} of ${total} checks pass`}>
-      <circle className="track" cx="28" cy="28" r={r} fill="none" strokeWidth="6" />
-      {done > 0 && (
-        <circle
-          className="done"
-          cx="28"
-          cy="28"
-          r={r}
-          fill="none"
-          strokeWidth="6"
-          strokeLinecap="round"
-          strokeDasharray={around}
-          // fills from empty on arrival, and moves when a check changes (styles.css)
-          style={{ strokeDashoffset: around - done, "--around": `${around}px` } as CSSProperties}
-          transform="rotate(-90 28 28)"
-        />
-      )}
-      <text x="28" y="33" textAnchor="middle" aria-hidden="true">
-        {passed}/{total}
-      </text>
-    </svg>
-  );
-}
-
 /** The latest pipeline's jobs at a glance (name, status, duration), like
  *  GitHub's checks: open when something failed or still runs. */
 function MrJobs({ ctx, iid }: { ctx: Ctx; iid: number }) {
@@ -1026,6 +993,7 @@ function CheckIcon({ tone }: { tone: Check["tone"] }) {
 function Thread({ ctx, m, root, replies, boxed }: { ctx: Ctx; m: S["MrDetail"]; root: S["NoteDto"]; replies: S["NoteDto"][]; boxed?: boolean }) {
   const qc = useQueryClient();
   const toast = useToast();
+  const confirm = useConfirm();
   const { user } = useSession();
   const [reply, setReply] = useState("");
   const [open, setOpen] = useState(false);
@@ -1096,7 +1064,7 @@ function Thread({ ctx, m, root, replies, boxed }: { ctx: Ctx; m: S["MrDetail"]; 
                   <button
                     className="link-btn small"
                     onClick={async () => {
-                      if (!confirm("Delete this comment?")) return;
+                      if (!(await confirm({ title: "Delete this comment?", action: "Delete comment", danger: true }))) return;
                       await api.del(`${path}/notes/${n.id}`).catch(setError);
                       refresh();
                     }}
@@ -1176,17 +1144,6 @@ function threadsOf(notes: S["NoteDto"][]) {
   return { roots, replies };
 }
 
-const hhmm = (at: string) => new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-
-export function dayLabel(at: string) {
-  const d = new Date(at);
-  const today = new Date();
-  const days = Math.round((new Date(today.toDateString()).getTime() - new Date(d.toDateString()).getTime()) / 86_400_000);
-  if (days === 0) return "Today";
-  if (days === 1) return "Yesterday";
-  return d.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short", year: d.getFullYear() === today.getFullYear() ? undefined : "numeric" });
-}
-
 /** Icon and wording for a system note. */
 export function systemEvent(body: string): { icon: ReactNode; tone: string } {
   if (body.startsWith("merged")) return { icon: <GitMerge size={12} />, tone: "accent" };
@@ -1199,35 +1156,6 @@ export function systemEvent(body: string): { icon: ReactNode; tone: string } {
   if (body === "requested changes") return { icon: <FileWarning size={12} />, tone: "bad" };
   return { icon: <Dot size={12} />, tone: "" };
 }
-
-/** Entries by day, each with its time and icon. */
-export function Timeline({ entries }: { entries: LogEntry[] }) {
-  let lastDay = "";
-  return (
-    <div className="timeline">
-      {entries.length === 0 && <p className="muted small">Nothing yet.</p>}
-      {entries.map((e) => {
-        const day = dayLabel(e.at);
-        const sep = day !== lastDay;
-        lastDay = day;
-        return (
-          <div key={e.key}>
-            {sep && <div className="tl-day">{day}</div>}
-            <div className={`tl-row ${e.boxed ? "boxed" : ""}`}>
-              <time dateTime={e.at} title={new Date(e.at).toLocaleString()}>
-                {hhmm(e.at)}
-              </time>
-              <span className={`tl-icon ${e.tone ?? ""}`}>{e.icon}</span>
-              <div className="tl-body">{e.body}</div>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-export type LogEntry = { at: string; key: string; icon: ReactNode; tone?: string; boxed?: boolean; body: ReactNode };
 
 function Activity({ ctx, m, notes }: { ctx: Ctx; m: S["MrDetail"]; notes: S["NoteDto"][] }) {
   const qc = useQueryClient();

@@ -1,16 +1,53 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { api, type S } from "../api/client";
+import { api, ApiError, type S } from "../api/client";
 import { cancelled, getCredential, webauthnSupported } from "../api/webauthn";
 import { useProviders, useSetup } from "../prefetch";
 import { useSession } from "../session";
 import { ErrorBox, Field } from "../components/ui";
 import { Logo } from "../components/Logo";
+import { ThemeButton } from "../shell/Shell";
 
 /** `?next=` only ever leads to a path on this site (no `//host`, no `/\host`). */
 export function safeNext(next: string | null): string {
   if (!next || !next.startsWith("/") || next.startsWith("//") || next.includes("\\") || /[\u0000-\u001f]/.test(next)) return "/";
   return next;
+}
+
+
+/** The frame of the pages that let someone in: the mark, a title and the form
+ *  on a card, over paper that glows like a forge. Signed in (a confirmation
+ *  link), it is the plain card. */
+function AuthLayout({ title, lede, children }: { title: string; lede?: ReactNode; children: ReactNode }) {
+  const { user } = useSession();
+  if (user) {
+    return (
+      <div className="page narrow auth-page">
+        <Logo size={36} className="auth-logo" />
+        <h1>{title}</h1>
+        {children}
+      </div>
+    );
+  }
+  return (
+    <div className="auth">
+      <div className="auth-glow" aria-hidden="true" />
+      <div className="auth-top">
+        <ThemeButton />
+      </div>
+      <div className="auth-center">
+        <div className="auth-head">
+          <Link to="/" className="auth-tile" aria-label="Forgust">
+            <Logo size={44} />
+          </Link>
+          <h1>{title}</h1>
+          {lede && <p className="auth-lede">{lede}</p>}
+        </div>
+        <div className="auth-card">{children}</div>
+        <p className="auth-foot">{window.location.host} · Forgust</p>
+      </div>
+    </div>
+  );
 }
 
 export function Login() {
@@ -37,9 +74,21 @@ export function Login() {
   const setup = useSetup();
   const passkeys = !!setup.data?.webauthn && webauthnSupported();
 
+  // back to the password: another account, or a challenge that expired
+  const restart = (why: string | null = null) => {
+    setChallenge(null);
+    setFactors(null);
+    setRecovery(false);
+    setCode("");
+    setError(why);
+  };
+  // too slow, or used up: the code is not the problem, the password is asked again
+  const expired = (err: unknown) => err instanceof ApiError && err.code === "challenge_expired";
+  const EXPIRED = "Your sign-in expired. Enter your password again.";
+
   useEffect(() => {
     if (!challenge) return;
-    api.post<S["SecondFactors"]>("/auth/login/second_factor", { challenge }).then(setFactors, setError);
+    api.post<S["SecondFactors"]>("/auth/login/second_factor", { challenge }).then(setFactors, (err) => (expired(err) ? restart(EXPIRED) : setError(err)));
   }, [challenge]);
 
   const finish = (r: S["LoginResponse"]) => {
@@ -53,13 +102,17 @@ export function Login() {
     }
   };
 
-  const attempt = async (f: () => Promise<S["LoginResponse"]>) => {
+  // `rejected`: what to say when the server answers its generic 401
+  const attempt = async (f: () => Promise<S["LoginResponse"]>, rejected?: string) => {
     setBusy(true);
     setError(null);
     try {
       finish(await f());
     } catch (err) {
-      if (!cancelled(err)) setError(err);
+      if (cancelled(err)) return;
+      if (expired(err)) restart(EXPIRED);
+      else if (rejected && err instanceof ApiError && err.status === 401) setError(rejected);
+      else setError(err);
     } finally {
       setBusy(false);
     }
@@ -71,6 +124,11 @@ export function Login() {
       challenge
         ? api.post<S["LoginResponse"]>(recovery ? "/auth/login/recovery" : "/auth/login/totp", { challenge, code })
         : api.post<S["LoginResponse"]>("/auth/login", { login, password }),
+      !challenge
+        ? "Wrong username or password."
+        : recovery
+          ? "That recovery code is not valid, or it has been used."
+          : "That code is not valid. Try the current one.",
     );
   };
 
@@ -91,13 +149,12 @@ export function Login() {
 
   if (setup.data?.needs_setup) {
     return (
-      <div className="page narrow">
-        <h1>Welcome to Forgust</h1>
+      <AuthLayout title="Welcome to Forgust" lede="No account exists yet.">
         <p className="muted">
-          No account exists yet. Open the setup link printed in the server log (<code>/setup?token=…</code>) to create the first
-          administrator, or run <code>forgust admin create-user --admin</code>.
+          Open the setup link printed in the server log (<code>/setup?token=…</code>) to create the first administrator, or run{" "}
+          <code>forgust admin create-user --admin</code>.
         </p>
-      </div>
+      </AuthLayout>
     );
   }
 
@@ -106,15 +163,26 @@ export function Login() {
   const codeField = recovery || !factors || factors.totp;
 
   return (
-    <div className="page narrow auth-page">
-      <Logo size={36} className="auth-logo" />
-      <h1>Sign in to Forgust</h1>
-      <form className="stack" onSubmit={submit}>
+    <AuthLayout
+      title={challenge ? "Two-factor authentication" : "Sign in to Forgust"}
+      lede={
+        !challenge
+          ? undefined
+          : recovery
+            ? "Enter one of your recovery codes."
+            : withKey && factors?.totp
+              ? "Use your security key, or enter the code from your authenticator app."
+              : withKey
+                ? "Use your security key."
+                : "Enter the code from your authenticator app."
+      }
+    >
+      <form className="stack auth-stack" onSubmit={submit}>
         <ErrorBox error={error} />
         {challenge ? (
           <>
             {withKey && !recovery && (
-              <button type="button" className={`btn${factors?.totp ? "" : " primary"}`} disabled={busy} onClick={securityKey}>
+              <button type="button" className={`btn auth-submit${factors?.totp ? "" : " primary"}`} disabled={busy} onClick={securityKey}>
                 Use your security key
               </button>
             )}
@@ -126,6 +194,7 @@ export function Login() {
                 <input
                   key={String(recovery)}
                   autoFocus
+                  className={recovery ? undefined : "auth-code"}
                   inputMode={recovery ? undefined : "numeric"}
                   autoComplete={recovery ? "off" : "one-time-code"}
                   spellCheck={false}
@@ -137,7 +206,7 @@ export function Login() {
             {(recovery || factors?.recovery_code) && (
               <button
                 type="button"
-                className="link-btn small"
+                className="auth-back"
                 onClick={() => {
                   setRecovery(!recovery);
                   setCode("");
@@ -153,32 +222,45 @@ export function Login() {
             <Field label="Username or email">
               <input autoFocus autoComplete="username" value={login} onChange={(e) => setLogin(e.target.value)} />
             </Field>
-            <Field label="Password">
-              <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
-            </Field>
-            <Link className="small" to={`/forgot-password${login ? `?login=${encodeURIComponent(login)}` : ""}`}>
-              Forgot your password?
-            </Link>
+            <div className="auth-pw">
+              <Field label="Password">
+                <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+              </Field>
+              <Link className="auth-forgot" to={`/forgot-password${login ? `?login=${encodeURIComponent(login)}` : ""}`}>
+                Forgot password?
+              </Link>
+            </div>
           </>
         )}
         {(!challenge || codeField) && (
-          <button className="btn primary" disabled={busy}>
+          <button className="btn primary auth-submit" disabled={busy}>
             {challenge ? "Verify" : "Sign in"}
           </button>
         )}
-        {!challenge && passkeys && (
-          <button type="button" className="btn" disabled={busy} onClick={passkey}>
-            Sign in with a passkey
+        {challenge && (
+          <button type="button" className="auth-back" onClick={() => restart()}>
+            Use another account
           </button>
         )}
-        {!challenge &&
-          providers.data?.map((p) => (
-            <a key={p.name} className="btn" href={`/api/v1/auth/oidc/${p.name}/start`}>
-              Sign in with {p.display_name}
-            </a>
-          ))}
+        {!challenge && (passkeys || !!providers.data?.length) && (
+          <>
+            <div className="auth-or">
+              <span>or</span>
+            </div>
+            {passkeys && (
+              <button type="button" className="btn auth-submit" disabled={busy} onClick={passkey}>
+                Sign in with a passkey
+              </button>
+            )}
+            {providers.data?.map((p) => (
+              <a key={p.name} className="btn auth-submit" href={`/api/v1/auth/oidc/${p.name}/start`}>
+                Continue with {p.display_name}
+              </a>
+            ))}
+          </>
+        )}
       </form>
-    </div>
+    </AuthLayout>
   );
 }
 
@@ -200,10 +282,8 @@ export function Setup() {
   };
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [k]: e.target.value });
   return (
-    <div className="page narrow auth-page">
-      <Logo size={36} className="auth-logo" />
-      <h1>Create the first administrator</h1>
-      <form className="stack" onSubmit={submit}>
+    <AuthLayout title="Create the first administrator" lede="Set up the account that runs this instance.">
+      <form className="stack auth-stack" onSubmit={submit}>
         <ErrorBox error={error} />
         <Field label="Setup token" hint="Printed in the server log on first start">
           <input value={form.token} onChange={set("token")} />
@@ -217,9 +297,9 @@ export function Setup() {
         <Field label="Password" hint="At least 8 characters">
           <input type="password" value={form.password} onChange={set("password")} />
         </Field>
-        <button className="btn primary">Create administrator</button>
+        <button className="btn primary auth-submit">Create administrator</button>
       </form>
-    </div>
+    </AuthLayout>
   );
 }
 
@@ -232,9 +312,7 @@ export function ForgotPassword() {
   const [busy, setBusy] = useState(false);
   const setup = useSetup();
   return (
-    <div className="page narrow auth-page">
-      <Logo size={36} className="auth-logo" />
-      <h1>Reset your password</h1>
+    <AuthLayout title="Reset your password">
       {setup.data?.email_enabled === false ? (
         <div className="stack">
           <p>This instance sends no email, so it cannot send a reset link. Ask an administrator to set a new password for you.</p>
@@ -247,7 +325,7 @@ export function ForgotPassword() {
         </div>
       ) : (
         <form
-          className="stack"
+          className="stack auth-stack"
           onSubmit={async (e) => {
             e.preventDefault();
             setBusy(true);
@@ -267,7 +345,7 @@ export function ForgotPassword() {
           <Field label="Username or email">
             <input autoFocus autoComplete="username" value={login} onChange={(e) => setLogin(e.target.value)} />
           </Field>
-          <button className="btn primary" disabled={busy || !login.trim() || !setup.data}>
+          <button className="btn primary auth-submit" disabled={busy || !login.trim() || !setup.data}>
             Send the link
           </button>
           <Link className="small" to="/login">
@@ -275,7 +353,7 @@ export function ForgotPassword() {
           </Link>
         </form>
       )}
-    </div>
+    </AuthLayout>
   );
 }
 
@@ -290,9 +368,7 @@ export function ResetPassword() {
   const [busy, setBusy] = useState(false);
   const mismatch = again !== "" && again !== password;
   return (
-    <div className="page narrow auth-page">
-      <Logo size={36} className="auth-logo" />
-      <h1>Choose a new password</h1>
+    <AuthLayout title="Choose a new password">
       {done ? (
         <div className="stack">
           <p>Your password is changed, and every session of your account was signed out.</p>
@@ -302,7 +378,7 @@ export function ResetPassword() {
         </div>
       ) : (
         <form
-          className="stack"
+          className="stack auth-stack"
           onSubmit={async (e) => {
             e.preventDefault();
             setBusy(true);
@@ -326,12 +402,12 @@ export function ResetPassword() {
             <input type="password" autoComplete="new-password" value={again} onChange={(e) => setAgain(e.target.value)} aria-invalid={mismatch} />
           </Field>
           {mismatch && <span className="small danger-text">The two passwords differ.</span>}
-          <button className="btn primary" disabled={busy || !token || password.length < 8 || password !== again}>
+          <button className="btn primary auth-submit" disabled={busy || !token || password.length < 8 || password !== again}>
             Set the password
           </button>
         </form>
       )}
-    </div>
+    </AuthLayout>
   );
 }
 
@@ -356,9 +432,7 @@ export function VerifyEmail() {
   }, [token, loading, user]);
   const back = `/login?next=${encodeURIComponent(`/verify-email?token=${token}`)}`;
   return (
-    <div className="page narrow auth-page">
-      <Logo size={36} className="auth-logo" />
-      <h1>Confirm your email</h1>
+    <AuthLayout title="Confirm your email">
       {!token ? (
         <p className="muted">This page needs the link from your email.</p>
       ) : !loading && !user ? (
@@ -385,6 +459,6 @@ export function VerifyEmail() {
       ) : (
         <p className="muted">Confirming…</p>
       )}
-    </div>
+    </AuthLayout>
   );
 }

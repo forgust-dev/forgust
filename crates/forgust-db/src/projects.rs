@@ -117,6 +117,37 @@ pub async fn in_namespace_visible(
     .await
 }
 
+/// How a project is doing, for a list of them: its open merge requests and the
+/// latest pipeline of its default branch (not Forgust's own runs).
+#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+pub struct ProjectState {
+    pub project_id: i64,
+    pub open_merge_requests: i64,
+    pub pipeline_iid: Option<i64>,
+    pub pipeline_status: Option<String>,
+    pub pipeline_ref: Option<String>,
+}
+
+/// [`ProjectState`] of each of these projects, in one query.
+pub async fn states(e: impl PgExecutor<'_>, ids: &[i64]) -> Result<Vec<ProjectState>> {
+    sqlx::query_as!(
+        ProjectState,
+        r#"SELECT pr.id AS "project_id!",
+                  (SELECT count(*) FROM merge_requests m WHERE m.project_id = pr.id AND m.state = 'opened') AS "open_merge_requests!",
+                  l.iid AS "pipeline_iid?", l.status AS "pipeline_status?", l.ref AS "pipeline_ref?"
+           FROM projects pr
+           LEFT JOIN LATERAL (
+               SELECT p.iid, p.status, p.ref FROM ci_pipelines p
+                WHERE p.project_id = pr.id AND p.ref = coalesce(pr.default_branch, 'main') AND NOT is_system_source(p.source)
+                ORDER BY p.id DESC LIMIT 1
+           ) l ON true
+           WHERE pr.id = ANY($1)"#,
+        ids
+    )
+    .fetch_all(e)
+    .await
+}
+
 /// Projects the user is a member of (directly or through groups), most active first.
 pub async fn for_user(e: impl PgExecutor<'_>, user_id: i64, search: &str, limit: i64, offset: i64) -> Result<Vec<(Project, i16)>> {
     let rows = sqlx::query!(

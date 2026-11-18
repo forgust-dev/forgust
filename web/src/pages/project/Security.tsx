@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, ShieldAlert, ShieldCheck } from "lucide-react";
-import { api, qs, refLink, timeAgo, type S } from "../../api/client";
+import { api, listAnd, plural, qs, refLink, timeAgo, timeUntil, type S } from "../../api/client";
 import { Empty, FilterTabs, ListHead, Q, SearchField, useDebounced } from "../../components/ui";
+import { DecideCard } from "../../components/decide";
 import { Select } from "../../components/controls";
 import { useAct } from "../../shell/toast";
 import type { Ctx } from "./Project";
@@ -27,15 +28,125 @@ const REASONS = [
 ];
 
 export function SeverityBadge({ severity }: { severity: string }) {
-  return <span className={`sev sev-${severity}`}>{severity}</span>;
+  return <span className={`sev sev-${severity}`}>{severity[0].toUpperCase() + severity.slice(1)}</span>;
 }
 
 type Finding = S["Finding"];
 
+/** Where a finding is, in a few words: a file and line, a package, or an image. */
+function whereText(f: Finding) {
+  if (f.report_type === "dependency_scanning" && f.package_name) return `${f.package_name}@${f.package_version ?? "?"}`;
+  if (f.report_type === "container_scanning") return f.image ?? f.package_name ?? "";
+  return f.file ? `${f.file}${f.start_line ? `:${f.start_line}` : ""}` : "";
+}
+
+/**
+ * The page's emphasized card: the critical and high findings still open on the
+ * default branch, to fix or to dismiss. None when there are none.
+ */
+function Triage({ ctx, counts, open, onOpen }: { ctx: Ctx; counts: S["SecurityCounts"]; open?: Finding[]; onOpen: (f: Finding) => void }) {
+  const urgent = counts.critical + counts.high;
+  // the open findings: those the list shows when it is not filtered, else their own request
+  const q = useQuery({
+    queryKey: ["security", ctx.p.id, "detected", "triage"],
+    queryFn: () => api.get<S["SecurityOverview"]>(`/projects/${ctx.p.id}/security/findings${qs({ state: "detected", per_page: 100 })}`),
+    enabled: urgent > 0 && !open,
+  });
+  if (urgent === 0) return null;
+  const rank = (f: Finding) => (f.severity === "critical" ? 0 : 1);
+  const top = (open ?? q.data?.findings ?? [])
+    .filter((f) => f.severity === "critical" || f.severity === "high")
+    .sort((a, b) => rank(a) - rank(b))
+    .slice(0, 4);
+  const parts = [counts.critical > 0 && `${counts.critical} critical`, counts.high > 0 && `${counts.high} high`].filter(Boolean).join(" and ");
+  return (
+    <DecideCard
+      label="To triage"
+      late={counts.critical > 0}
+      eyebrow={
+        <>
+          <ShieldAlert size={14} aria-hidden /> To triage
+        </>
+      }
+      title={`${parts} finding${urgent === 1 ? "" : "s"}`}
+      sub="Open on the default branch: fix them, or dismiss them with a reason."
+      actions={
+        top[0] && (
+          <button type="button" className="btn run" onClick={() => onOpen(top[0])}>
+            Look at the first
+          </button>
+        )
+      }
+      rows={top.map((f) => ({
+        key: String(f.id),
+        tone: f.severity === "critical" ? "bad" : "warn",
+        text: (
+          <button type="button" className="decide-link" onClick={() => onOpen(f)} title={`${f.severity}: ${f.title}`}>
+            {f.title}
+          </button>
+        ),
+        aside: whereText(f),
+      }))}
+      foot={top.length > 0 && urgent > top.length ? `And ${urgent - top.length} more below.` : undefined}
+    />
+  );
+}
+
+/** What each built-in scanner looks at, in a few words. */
+const SCANS: Record<string, string> = {
+  sast: "its code",
+  secret_detection: "secrets",
+  dependency_scanning: "dependencies",
+  iac: "infrastructure files",
+  container_scanning: "container images",
+};
+
+/**
+ * No scan yet: how findings come here. The built-in scanners first (a click away
+ * for maintainers, or already on), then the reports of the project's own jobs.
+ */
+function NoScanYet({ ctx }: { ctx: Ctx }) {
+  // the settings page's request
+  const q = useQuery({ queryKey: ["scanning", ctx.p.id], queryFn: () => api.get<S["ScanningStatus"]>(`/projects/${ctx.p.id}/security/scanning`), retry: false });
+  const s = q.data;
+  const what = listAnd((s?.available ?? []).map((k) => SCANS[k] ?? k));
+  const hours = s?.interval_hours;
+  const every = hours === 24 ? "every day" : hours ? `every ${plural(hours, "hour")}` : null;
+  return (
+    <Empty>
+      <div className="no-scan">
+        <ShieldAlert size={26} className="faint" aria-hidden />
+        <h2>No security scan yet</h2>
+        {s?.enabled ? (
+          <p>
+            Security scanning is on{s.next_run_at ? `: the first scan runs ${timeUntil(s.next_run_at)}` : ""}. Its findings show up here.
+          </p>
+        ) : s?.instance_enabled && what ? (
+          <>
+            <p>
+              Forgust can scan this project itself{every ? `, ${every}` : ""}: {what}.
+              {!ctx.p.can_admin && " A maintainer turns it on in the project's settings."}
+            </p>
+            {ctx.p.can_admin && (
+              <Link className="btn primary" to={`${ctx.web}/-/settings/automation#security-scanning`}>
+                <ShieldCheck size={15} /> Turn on security scanning
+              </Link>
+            )}
+          </>
+        ) : null}
+        <p className="small">
+          Jobs can also upload their reports: <code>artifacts:reports:sast</code>, <code>secret_detection</code>, <code>dependency_scanning</code> or{" "}
+          <code>container_scanning</code> (GitLab's format, or SARIF from CodeQL, Semgrep, Trivy and others).
+        </p>
+      </div>
+    </Empty>
+  );
+}
+
 /** A finding in a list: a toggle (severity, title) and what it is about. */
 function FindingRow({ ctx, f, open, onToggle, struck }: { ctx: Ctx; f: Finding; open: boolean; onToggle: () => void; struck?: boolean }) {
   return (
-    <div className="list-group">
+    <div className="list-group" id={`finding-${f.id}`}>
       <div className="item finding-row">
         <button type="button" className="finding-toggle" aria-expanded={open} onClick={onToggle}>
           {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -94,11 +205,28 @@ export function SecurityPage({ ctx }: { ctx: Ctx }) {
   const [kind, setKind] = useState("");
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState<number | null>(null);
+  // a finding picked in the card: shown open in the list, once it is there
+  const [focus, setFocus] = useState<number | null>(null);
   const term = useDebounced(search, 250);
   const q = useQuery({
     queryKey: ["security", ctx.p.id, state, severity, kind, term],
     queryFn: () => api.get<S["SecurityOverview"]>(`/projects/${ctx.p.id}/security/findings${qs({ state, severity, report_type: kind, search: term, per_page: 100 })}`),
   });
+  useEffect(() => {
+    if (focus == null) return;
+    const el = document.getElementById(`finding-${focus}`);
+    if (!el) return;
+    el.scrollIntoView({ block: "start", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+    setFocus(null);
+  }, [focus, q.data]);
+  const openFinding = (f: Finding) => {
+    setState("detected");
+    setSeverity("");
+    setKind("");
+    setSearch("");
+    setOpen(f.id);
+    setFocus(f.id);
+  };
   return (
     <div className="stack">
       <ListHead
@@ -114,68 +242,69 @@ export function SecurityPage({ ctx }: { ctx: Ctx }) {
         }
       />
       <Q q={q}>
-        {(s) => (
-          <>
-            <div className="sev-summary" role="group" aria-label="By severity">
-              {SEVERITIES.filter((sv) => sv !== "unknown" || s.counts.unknown > 0).map((sv) => (
-                <button
-                  key={sv}
-                  type="button"
-                  className={`sev-count${severity === sv ? " active" : ""}`}
-                  aria-pressed={severity === sv}
-                  onClick={() => setSeverity(severity === sv ? "" : sv)}
-                >
-                  <SeverityBadge severity={sv} /> <strong>{s.counts[sv]}</strong>
-                </button>
-              ))}
-            </div>
-            <div className="row wrap" style={{ gap: 8 }}>
-              <FilterTabs
-                label="State"
-                value={state}
-                onChange={setState}
-                options={[
-                  { value: "detected", label: "Open" },
-                  { value: "dismissed", label: "Dismissed", count: s.counts.dismissed },
-                  { value: "resolved", label: "Fixed", count: s.counts.resolved },
-                  { value: "all", label: "All" },
-                ]}
-              />
-            </div>
-            <div className="row wrap" style={{ gap: 8 }}>
-              <Select
-                label="Kind"
-                style={{ width: 170 }}
-                value={kind}
-                onChange={setKind}
-                options={[{ value: "", label: "Every kind" }, ...Object.entries(KIND).map(([value, label]) => ({ value, label }))]}
-              />
-              <SearchField value={search} onChange={setSearch} placeholder="Filter by title, file, package or rule" />
-            </div>
-            {s.findings.length === 0 ? (
-              <Empty>
-                {s.last_scan_pipeline_iid == null ? (
-                  <>
-                    No security scan yet. Jobs that upload <code>artifacts:reports:sast</code>, <code>secret_detection</code>, <code>dependency_scanning</code> or{" "}
-                    <code>container_scanning</code> (GitLab's format, or SARIF from CodeQL, Semgrep, Trivy and others) show their findings here.
-                  </>
-                ) : state === "detected" ? (
-                  <>
-                    <ShieldCheck size={16} className="ic-ok" /> Nothing open{severity || kind || term ? " matches" : ""}.
-                  </>
-                ) : (
-                  "Nothing here."
-                )}
-              </Empty>
-            ) : (
-              <div className="list findings">
-                {s.findings.map((f) => (
-                  <FindingRow key={f.id} ctx={ctx} f={f} open={open === f.id} onToggle={() => setOpen(open === f.id ? null : f.id)} />
+        {(s) =>
+          // never scanned: nothing to count or filter, only how findings come
+          s.last_scan_pipeline_iid == null && s.findings.length === 0 && state === "detected" && !severity && !kind && !term ? (
+            <NoScanYet ctx={ctx} />
+          ) : (
+            <>
+              <Triage ctx={ctx} counts={s.counts} open={state === "detected" && !severity && !kind && !term ? s.findings : undefined} onOpen={openFinding} />
+              <div className="sev-summary" role="group" aria-label="By severity">
+                {SEVERITIES.filter((sv) => sv !== "unknown" || s.counts.unknown > 0).map((sv) => (
+                  <button
+                    key={sv}
+                    type="button"
+                    className={`sev-count${severity === sv ? " active" : ""}`}
+                    aria-pressed={severity === sv}
+                    onClick={() => setSeverity(severity === sv ? "" : sv)}
+                  >
+                    <SeverityBadge severity={sv} /> <strong>{s.counts[sv]}</strong>
+                  </button>
                 ))}
               </div>
-            )}
-          </>
-        )}
+              <div className="row wrap" style={{ gap: 8 }}>
+                <FilterTabs
+                  label="State"
+                  value={state}
+                  onChange={setState}
+                  options={[
+                    { value: "detected", label: "Open" },
+                    { value: "dismissed", label: "Dismissed", count: s.counts.dismissed },
+                    { value: "resolved", label: "Fixed", count: s.counts.resolved },
+                    { value: "all", label: "All" },
+                  ]}
+                />
+              </div>
+              <div className="row wrap" style={{ gap: 8 }}>
+                <Select
+                  label="Kind"
+                  style={{ width: 170 }}
+                  value={kind}
+                  onChange={setKind}
+                  options={[{ value: "", label: "Every kind" }, ...Object.entries(KIND).map(([value, label]) => ({ value, label }))]}
+                />
+                <SearchField value={search} onChange={setSearch} placeholder="Filter by title, file, package or rule" />
+              </div>
+              {s.findings.length === 0 ? (
+                <Empty>
+                  {state === "detected" ? (
+                    <>
+                      <ShieldCheck size={16} className="ic-ok" /> Nothing open{severity || kind || term ? " matches" : ""}.
+                    </>
+                  ) : (
+                    "Nothing here."
+                  )}
+                </Empty>
+              ) : (
+                <div className="list findings">
+                  {s.findings.map((f) => (
+                    <FindingRow key={f.id} ctx={ctx} f={f} open={open === f.id} onToggle={() => setOpen(open === f.id ? null : f.id)} />
+                  ))}
+                </div>
+              )}
+            </>
+          )
+        }
       </Q>
     </div>
   );

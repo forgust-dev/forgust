@@ -1,15 +1,17 @@
-import { useState, type FormEvent } from "react";
+import { useLayoutEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, Clock3, GitBranch, Play, RotateCcw, Square, Tag, Timer, Plus, X } from "lucide-react";
+import { CalendarClock, Clock3, CornerDownRight, GitBranch, Play, RotateCcw, Server, ServerOff, Square, Tag, Timer, Plus, X } from "lucide-react";
 import { api, qs, refLink, timeAgo, type S } from "../../../api/client";
 import { Empty, ErrorBox, Field, FieldGroup, FilterTabs, ListHead, Q, SearchField } from "../../../components/ui";
 import { Select } from "../../../components/controls";
 import { useCiLive } from "../../../shell/live";
 import { useAct } from "../../../shell/toast";
+import { useConfirm } from "../../../shell/dialog";
 import type { Ctx } from "../Project";
 import { PipelineTests } from "./Tests";
-import { MiniPipeline, RETRYABLE, StatusBadge, StatusIcon, duration, isActive } from "./Status";
+import { MiniPipeline, RETRYABLE, StatusBadge, StatusIcon, duration, isActive, statusLabel } from "./Status";
+import { DecideCard } from "../../../components/decide";
 import { useBranches, useTags } from "../Code";
 
 export const SOURCE: Record<string, string> = {
@@ -29,12 +31,16 @@ export function pipelineHref(ctx: Ctx, l: S["PipelineLink"]) {
   return l.project_id === ctx.p.id ? `${ctx.web}/-/pipelines/${l.iid}` : `/${l.project_path}/-/pipelines/${l.iid}`;
 }
 
-/** Run a job that asks for confirmation first (`manual_confirmation`). */
-export function confirmRun(j: S["JobDto"]): boolean {
-  return !j.manual_confirmation || window.confirm(j.manual_confirmation);
+/** Before running a job: those that ask for a confirmation (`manual_confirmation`)
+ *  ask it in the app's dialog. True to go on. */
+export function useConfirmRun() {
+  const confirm = useConfirm();
+  return (j: S["JobDto"]) => (j.manual_confirmation ? confirm({ title: `Run ${j.name}?`, body: j.manual_confirmation, action: `Run ${j.name}` }) : Promise.resolve(true));
 }
 
-export function PipelineRow({ ctx, p }: { ctx: Ctx; p: S["PipelineSummary"] }) {
+/** A pipeline in the list; the child pipelines it started (`trigger: include`) go
+ *  under it, rather than in rows of their own with the same title. */
+export function PipelineRow({ ctx, p, kids = [] }: { ctx: Ctx; p: S["PipelineSummary"]; kids?: S["PipelineSummary"][] }) {
   const to = `${ctx.web}/-/pipelines/${p.iid}`;
   return (
     <div className="item pipeline-row">
@@ -59,14 +65,82 @@ export function PipelineRow({ ctx, p }: { ctx: Ctx; p: S["PipelineSummary"] }) {
           <Link to={`${ctx.web}/-/commit/${p.sha}`} className="sha">
             {p.sha.slice(0, 8)}
           </Link>
-          <span>{SOURCE[p.source] ?? p.source}</span>
-          {p.username && <span>{p.username}</span>}
+          {/* a child whose parent is not listed here (another page, a filter) says whose it is */}
+          {p.parent_iid != null ? <Link to={`${ctx.web}/-/pipelines/${p.parent_iid}`}>child of #{p.parent_iid}</Link> : <span>{SOURCE[p.source] ?? p.source}</span>}
+          {p.username && <span>by {p.username}</span>}
           <span>{timeAgo(p.created_at)}</span>
         </div>
         {p.yaml_errors && <div className="small" style={{ color: "var(--danger)" }}>{p.yaml_errors}</div>}
+        {kids.length > 0 && (
+          <ul className="pipe-kids" aria-label="Child pipelines">
+            {kids.map((k) => (
+              <li key={k.id}>
+                <CornerDownRight size={13} aria-hidden className="faint" />
+                <span className={`st-${k.status}`}>
+                  <StatusIcon status={k.status} size={14} />
+                </span>
+                <Link to={`${ctx.web}/-/pipelines/${k.iid}`}>Child pipeline #{k.iid}</Link>
+                <span className="faint">
+                  {statusLabel(k.status).toLowerCase()}
+                  {k.duration != null && ` · ${duration(k.duration)}`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
       <MiniPipeline stages={p.stages} to={to} />
     </div>
+  );
+}
+
+/** Pipeline states that wait for runners to take their jobs. */
+const WAITING = ["created", "pending", "running", "preparing", "waiting_for_resource"];
+
+/**
+ * The list's emphasized card, for maintainers: pipelines wait and no runner the
+ * project may use is online, so nothing will run (a "running" one there only
+ * waits). None when a runner is online, or nothing waits.
+ */
+function NoRunner({ ctx, list }: { ctx: Ctx; list: S["PipelineSummary"][] }) {
+  // the CI/CD settings' request: the project's runners, its groups' and the instance's
+  const runners = useQuery({
+    queryKey: ["runners", `/projects/${ctx.p.id}/runners`],
+    queryFn: () => api.get<S["RunnerDto"][]>(`/projects/${ctx.p.id}/runners`),
+    enabled: ctx.p.can_admin,
+    retry: false,
+  });
+  const waiting = list.filter((p) => WAITING.includes(p.status)).length;
+  const rs = runners.data;
+  if (!rs || waiting === 0 || rs.some((r) => r.status === "online")) return null;
+  return (
+    <DecideCard
+      label="No runner online"
+      late
+      eyebrow={
+        <>
+          <ServerOff size={14} aria-hidden /> Nothing runs
+        </>
+      }
+      title={`${waiting} pipeline${waiting === 1 ? " waits" : "s wait"} for a runner`}
+      sub={
+        rs.length === 0
+          ? "This project has no runner: neither its own, nor its groups', nor the instance's. Jobs stay pending until one takes them."
+          : `${rs.length === 1 ? "Its runner is" : `Its ${rs.length} runners are`} offline or paused: jobs stay pending until one is back.`
+      }
+      actions={
+        <Link className="btn run" to={`${ctx.web}/-/settings/ci_cd`}>
+          <Server size={14} /> Set up a runner
+        </Link>
+      }
+      rows={rs.slice(0, 4).map((r) => ({
+        key: String(r.id),
+        tone: "warn" as const,
+        icon: <Server size={15} className="row-ic" />,
+        text: r.description || `Runner #${r.id}`,
+        aside: r.status === "paused" ? "paused" : r.contacted_at ? `seen ${timeAgo(r.contacted_at)}` : "never connected",
+      }))}
+    />
   );
 }
 
@@ -121,11 +195,25 @@ export function PipelineList({ ctx }: { ctx: Ctx }) {
               )}
             </Empty>
           ) : (
-            <div className="list rows">
-              {list.map((p) => (
-                <PipelineRow key={p.id} ctx={ctx} p={p} />
-              ))}
-            </div>
+            (() => {
+              // child pipelines go under their parent when it is listed too
+              const listed = new Set(list.map((p) => p.iid));
+              const kids = new Map<number, S["PipelineSummary"][]>();
+              for (const p of list) if (p.parent_iid != null && listed.has(p.parent_iid)) kids.set(p.parent_iid, [...(kids.get(p.parent_iid) ?? []), p]);
+              const rows = list.filter((p) => !(p.parent_iid != null && listed.has(p.parent_iid)));
+              return (
+                <>
+                  {/* counts every pipeline, children too: a parent that triggered
+                      one (without strategy: depend) is done while its child waits */}
+                  <NoRunner ctx={ctx} list={list} />
+                  <div className="list rows">
+                    {rows.map((p) => (
+                      <PipelineRow key={p.id} ctx={ctx} p={p} kids={kids.get(p.iid)} />
+                    ))}
+                  </div>
+                </>
+              );
+            })()
           )
         }
       </Q>
@@ -225,6 +313,74 @@ function upstreamOf(j: S["JobDto"], jobs: S["JobDto"][]): Set<string> {
   return new Set(before.filter((o) => o.stage_idx === last).map((o) => o.name));
 }
 
+/** The room between two stages, where the lines turn (styles.css: .stage-link). */
+const STAGE_GAP = 48;
+
+type Edge = { from: string; to: string; d: string };
+
+/** The lines from each job to the jobs that wait for it, drawn behind the cards:
+ *  quiet, until a hovered job lights its own and dims the rest. */
+function GraphEdges({ graph, jobs, focus }: { graph: HTMLDivElement | null; jobs: S["JobDto"][]; focus?: string }) {
+  const [geo, setGeo] = useState<{ w: number; h: number; edges: Edge[] }>();
+  // the lines move only when the jobs or what they wait for do, not with a status
+  const shape = jobs.map((j) => `${j.name}:${j.stage_idx}:${j.needs?.join(",") ?? "-"}`).join("|");
+  // the graph comes as state, not a ref: a child's effects run before its parent's ref is set
+  useLayoutEffect(() => {
+    const el = graph;
+    if (!el) return;
+    const measure = () => {
+      // stacked on a phone: the cards follow each other, a line would only cross them
+      if (getComputedStyle(el).flexDirection === "column") return setGeo(undefined);
+      const box = el.getBoundingClientRect();
+      const ox = el.scrollLeft - box.left - el.clientLeft;
+      const oy = el.scrollTop - box.top - el.clientTop;
+      const at = new Map<string, DOMRect>();
+      el.querySelectorAll<HTMLElement>("[data-job]").forEach((c) => at.set(c.dataset.job!, c.getBoundingClientRect()));
+      const edges: Edge[] = [];
+      for (const j of jobs) {
+        const b = at.get(j.name);
+        if (!b) continue;
+        for (const u of upstreamOf(j, jobs)) {
+          const a = at.get(u);
+          if (!a) continue;
+          const y1 = a.top + a.height / 2 + oy;
+          const y2 = b.top + b.height / 2 + oy;
+          let d: string;
+          if (b.left > a.right) {
+            // out of the earlier card, turn in the gap after its stage, then straight on
+            const x1 = a.right + ox;
+            const x2 = b.left + ox;
+            const g = Math.min(STAGE_GAP, x2 - x1);
+            d = `M${x1} ${y1}C${x1 + g * 0.6} ${y1} ${x1 + g * 0.4} ${y2} ${x1 + g} ${y2}H${x2}`;
+          } else {
+            // a need inside one stage: a loop along the column's left side
+            const x = Math.min(a.left, b.left) + ox;
+            d = `M${a.left + ox} ${y1}C${x - 18} ${y1} ${x - 18} ${y2} ${b.left + ox} ${y2}`;
+          }
+          edges.push({ from: u, to: j.name, d });
+        }
+      }
+      setGeo({ w: el.scrollWidth, h: el.scrollHeight, edges });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    el.querySelectorAll(".stage-col").forEach((c) => ro.observe(c));
+    return () => ro.disconnect();
+  }, [graph, shape]);
+  if (!geo) return null;
+  const rel = (e: Edge) => (!focus ? "" : e.to === focus ? "up" : e.from === focus ? "down" : "dim");
+  // the lit lines last, over the others
+  const edges = focus ? [...geo.edges].sort((a, b) => Number(rel(a) !== "dim") - Number(rel(b) !== "dim")) : geo.edges;
+  return (
+    <svg className="graph-edges" width={geo.w} height={geo.h} aria-hidden="true">
+      {edges.map((e) => (
+        <path key={`${e.from}>${e.to}`} d={e.d} className={rel(e)} />
+      ))}
+    </svg>
+  );
+}
+
 const pipelineKey = (pid: number, iid: number) => ["pipeline", pid, iid];
 
 export function usePipeline(ctx: Ctx, iid: number | undefined) {
@@ -249,7 +405,7 @@ export function PipelineHeader({ ctx, p, tab }: { ctx: Ctx; p: S["PipelineDetail
   const first = pickJob(p.jobs);
   return (
     <div className="stack" style={{ gap: 14 }}>
-      <div className="row wrap" style={{ gap: 12 }}>
+      <div className="row wrap pipeline-head" style={{ gap: 12 }}>
         <StatusBadge status={p.status} />
         <h1 className="pipeline-title grow">
           {p.commit_title || `Pipeline #${p.iid}`} <span className="faint mono">#{p.iid}</span>
@@ -344,28 +500,37 @@ export function PipelineHeader({ ctx, p, tab }: { ctx: Ctx; p: S["PipelineDetail
  *  gets the page's emphasized card (the first such job; the graph shows the rest). */
 function ManualCard({ ctx, p }: { ctx: Ctx; p: S["PipelineDetail"] }) {
   const qc = useQueryClient();
+  const confirmRun = useConfirmRun();
   const run = useAct(() => qc.invalidateQueries({ queryKey: ["pipeline", ctx.p.id] }));
   const waiting = p.jobs.filter((j) => !j.retried && j.status === "manual");
   if (!p.can_run || waiting.length === 0) return null;
   const j = waiting[0];
   const env = j.environment && j.environment.action === "start" ? j.environment.name : null;
   const play = async () => {
-    if (!confirmRun(j)) return;
+    if (!(await confirmRun(j))) return;
     await run(() => api.post(`/projects/${ctx.p.id}/jobs/${j.id}/play`), `Started ${j.name}`);
   };
+  // as tall as the facts beside it: what waits and its button on one line, the why in its tip
   return (
     <section className="manual-card" aria-label="Waiting for you">
-      <span className="eyebrow">
-        <Clock3 size={14} aria-hidden /> Waiting for you
-      </span>
-      <h2>{env ? `Deploy to ${env}` : `Run ${j.name}`}</h2>
-      <p>
-        {waiting.length === 1
-          ? `${j.name} is a manual job: it runs when someone starts it.`
-          : `${j.name} and ${waiting.length - 1} more manual job${waiting.length === 2 ? "" : "s"} run when someone starts them.`}
-      </p>
-      <button className="btn run" onClick={play}>
-        <Play size={14} /> Run {j.name}
+      <div className="manual-text">
+        <span className="eyebrow">
+          <Clock3 size={14} aria-hidden /> Waiting for you
+          {waiting.length > 1 && ` · ${waiting.length} manual jobs`}
+        </span>
+        <h2>{env ? `Deploy to ${env}` : `Run ${j.name}`}</h2>
+      </div>
+      <button
+        className="btn run"
+        onClick={play}
+        aria-label={`Start ${j.name}`}
+        title={
+          waiting.length === 1
+            ? `${j.name} is a manual job: it runs when someone starts it.`
+            : `${j.name} and ${waiting.length - 1} more manual job${waiting.length === 2 ? "" : "s"} run when someone starts them.`
+        }
+      >
+        <Play size={14} /> Start
       </button>
     </section>
   );
@@ -393,9 +558,10 @@ function StageDots({ p }: { p: S["PipelineDetail"] }) {
 
 export function JobCard({ ctx, j, canRun, rel, onHover }: { ctx: Ctx; j: S["JobDto"]; canRun: boolean; rel?: "focus" | "up" | "down" | "dim"; onHover?: (name: string | null) => void }) {
   const qc = useQueryClient();
+  const confirmRun = useConfirmRun();
   const run = useAct(() => qc.invalidateQueries({ queryKey: ["pipeline", ctx.p.id] }));
   const act = async (what: "retry" | "play" | "cancel") => {
-    if (what === "play" && !confirmRun(j)) return;
+    if (what === "play" && !(await confirmRun(j))) return;
     await run(() => api.post(`/projects/${ctx.p.id}/jobs/${j.id}/${what}`), what === "retry" ? `Retrying ${j.name}` : what === "play" ? `Started ${j.name}` : `Canceling ${j.name}`);
   };
   const action =
@@ -415,6 +581,7 @@ export function JobCard({ ctx, j, canRun, rel, onHover }: { ctx: Ctx; j: S["JobD
   return (
     <div
       className={`job-card ${j.retried ? "retried" : ""} ${j.status === "manual" ? "manual" : ""} ${rel ?? ""}`}
+      data-job={j.retried ? undefined : j.name}
       onMouseEnter={() => onHover?.(j.name)}
       onMouseLeave={() => onHover?.(null)}
       onFocus={() => onHover?.(j.name)}
@@ -469,6 +636,7 @@ function stageSummary(jobs: S["JobDto"][]) {
 export function PipelinePage({ ctx, iid }: { ctx: Ctx; iid: number }) {
   const [showRetried, setShowRetried] = useState(false);
   const [hover, setHover] = useState<string | null>(null);
+  const [graph, setGraph] = useState<HTMLDivElement | null>(null);
   const q = usePipeline(ctx, iid);
   return (
     <Q q={q}>
@@ -490,7 +658,8 @@ export function PipelinePage({ ctx, iid }: { ctx: Ctx; iid: number }) {
             <PipelineHeader ctx={ctx} p={p} tab="graph" />
             <PipelineTests ctx={ctx} iid={iid} />
             {live.length > 0 && (
-              <div className="pipeline-graph" role="list" aria-label="Stages">
+              <div className="pipeline-graph" role="list" aria-label="Stages" ref={setGraph}>
+                <GraphEdges graph={graph} jobs={live} focus={focus?.name} />
                 {p.stages.map((stage, i) => {
                   const jobs = live.filter((j) => j.stage === stage);
                   return (

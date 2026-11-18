@@ -6,8 +6,9 @@ test("archive a project, then unarchive it", async ({ page }) => {
   const { project, web, remove } = await freshProject(page, "arch", { "README.md": "# Archive me\n" });
   try {
     await page.goto(`${web}/-/settings`);
-    page.once("dialog", (d) => d.accept());
     await page.getByRole("button", { name: "Archive project" }).click();
+    // asked in the app's dialog
+    await page.getByRole("alertdialog").getByRole("button", { name: "Archive project" }).click();
     await expect(page.getByRole("status").filter({ hasText: "This project is archived" })).toBeVisible();
     await expect(page.locator(".pill", { hasText: "Archived" })).toBeVisible();
     // writes are refused with the reason
@@ -29,8 +30,8 @@ test("an archived project's Owner renames it and unarchives it from its settings
   const { project, web, remove } = await freshProject(page, "arch-own", { "README.md": "# Archived\n" });
   try {
     await page.goto(`${web}/-/settings`);
-    page.once("dialog", (d) => d.accept());
     await page.getByRole("button", { name: "Archive project" }).click();
+    await page.getByRole("alertdialog").getByRole("button", { name: "Archive project" }).click();
     await expect(page.getByRole("status").filter({ hasText: "This project is archived" })).toBeVisible();
 
     // the general page only: the others hold settings that are read-only now
@@ -63,10 +64,14 @@ test("cancelling archive or delete changes nothing and says nothing", async ({ p
   const { project, web, remove } = await freshProject(page, "keep", { "README.md": "# Keep me\n" });
   try {
     await page.goto(`${web}/-/settings`);
-    page.once("dialog", (d) => d.dismiss());
     await page.getByRole("button", { name: "Archive project" }).click();
-    page.once("dialog", (d) => d.dismiss());
+    await page.getByRole("alertdialog").getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByRole("alertdialog")).toHaveCount(0);
     await page.getByRole("button", { name: "Delete project" }).click();
+    // Escape is no as well
+    await expect(page.getByRole("alertdialog")).toContainText("This cannot be undone");
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("alertdialog")).toHaveCount(0);
     await expect(page.getByText("Archived: the project is read-only.")).toHaveCount(0);
     await expect(page.getByText("Deleted.")).toHaveCount(0);
     await expect(page.getByText("This project is archived")).toHaveCount(0);

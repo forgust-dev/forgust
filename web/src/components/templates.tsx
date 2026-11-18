@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api, type S } from "../api/client";
 import { Select } from "./controls";
+import { useConfirm } from "../shell/dialog";
 
 type Kind = "merge_request" | "issue";
 
@@ -19,6 +20,7 @@ export function useTemplates(projectId: number, kind: Kind) {
  */
 export function TemplatePicker({ projectId, kind, description, setDescription }: { projectId: number; kind: Kind; description: string; setDescription: (d: string) => void }) {
   const q = useTemplates(projectId, kind);
+  const confirm = useConfirm();
   const list = q.data ?? [];
   const filled = useRef(false);
   useEffect(() => {
@@ -33,10 +35,12 @@ export function TemplatePicker({ projectId, kind, description, setDescription }:
     <Select
       label="Description template"
       value={current}
-      onChange={(name) => {
+      onChange={async (name) => {
         const t = list.find((x) => x.name === name);
         const next = t?.content ?? "";
-        if (description.trim() && description !== next && !list.some((x) => x.content === description) && !confirm("Replace the description with this template?")) return;
+        // what you wrote yourself (not another template) is asked about first
+        const yours = description.trim() && description !== next && !list.some((x) => x.content === description);
+        if (yours && !(await confirm({ title: "Replace the description?", body: "What you wrote is replaced by this template.", action: "Replace", danger: true }))) return;
         setDescription(next);
       }}
       options={[{ value: "", label: "No template" }, ...list.map((t) => ({ value: t.name, label: t.name }))]}

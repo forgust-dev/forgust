@@ -21,6 +21,7 @@ import { NavProvider } from "./shell/nav";
 import { PaletteHost } from "./shell/palette";
 import { ThemeProvider } from "./shell/theme";
 import { ToastProvider } from "./shell/toast";
+import { DialogProvider } from "./shell/dialog";
 // code split per route: each page loads only what it needs
 const PathRoute = lazy(() => import("./pages/PathRoute").then((m) => ({ default: m.PathRoute })));
 const Profile = lazy(() => import("./pages/Profile").then((m) => ({ default: m.Profile })));
@@ -90,9 +91,11 @@ createRoot(document.getElementById("root")!).render(
         <SessionProvider>
           <ThemeProvider>
             <ToastProvider>
-              <NavProvider>
-                <App />
-              </NavProvider>
+              <DialogProvider>
+                <NavProvider>
+                  <App />
+                </NavProvider>
+              </DialogProvider>
             </ToastProvider>
           </ThemeProvider>
         </SessionProvider>

@@ -127,6 +127,7 @@ pub fn router() -> Router<AppState> {
         .route("/groups/{id}/transfer", post(groups::transfer))
         .route("/groups/{id}/subgroups", get(groups::subgroups))
         .route("/groups/{id}/projects", get(groups::projects))
+        .route("/groups/{id}/project_states", get(groups::project_states))
         .route("/groups/{id}/members", get(groups::members).post(groups::add_member))
         .route("/groups/{id}/members/{user_id}", delete(groups::remove_member))
         .route("/groups/{id}/shares", get(groups::shares).post(groups::share))

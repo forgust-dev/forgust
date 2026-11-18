@@ -1,4 +1,4 @@
-import { useState, type ReactElement } from "react";
+import { useState, type ReactElement, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Globe, Lock, Shield } from "lucide-react";
@@ -21,7 +21,7 @@ export function Visibility({ v }: { v: string }) {
   );
 }
 
-export function ProjectRow({ p, level }: { p: S["ProjectDto"]; level?: string }) {
+export function ProjectRow({ p, level, aside }: { p: S["ProjectDto"]; level?: string; aside?: ReactNode }) {
   const pf = usePrefetch({ kind: "project", id: p.id, path: p.full_path });
   const slash = p.full_path.lastIndexOf("/");
   return (
@@ -38,6 +38,7 @@ export function ProjectRow({ p, level }: { p: S["ProjectDto"]; level?: string })
         </div>
         {p.description && <div className="row-desc ellipsis">{p.description}</div>}
       </div>
+      {aside}
       <span className="row-time" title={new Date(p.last_activity_at).toLocaleString()}>
         {timeAgo(p.last_activity_at)}
       </span>

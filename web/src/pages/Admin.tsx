@@ -11,6 +11,7 @@ import { adminPage } from "./adminPages";
 import { Menu, type MenuItem } from "../components/controls";
 import { MoreHorizontal } from "lucide-react";
 import { useAct, useToast } from "../shell/toast";
+import { useConfirm, usePrompt, type Ask } from "../shell/dialog";
 import { RunnersPanel } from "./project/ci/Runners";
 import { AdminBackups, AdminHealth, AdminJobs, AdminOverview, AdminProjects, AdminStorage, BannerForm } from "./AdminTools";
 
@@ -56,18 +57,35 @@ function Users() {
     queryFn: () => api.get<S["AdminUser"][]>(`/admin/users${qs({ search: term, filter, per_page: 100 })}`),
   });
   const toast = useToast();
+  const confirm = useConfirm();
+  const prompt = usePrompt();
   // what they wrote stays (without an author); personal projects are asked about
   const deleteUser = async (u: S["AdminUser"]) => {
-    const typed = window.prompt(
-      `Delete ${u.username}'s account?\n\nTheir merge requests, issues, comments and pipelines stay, without an author. Their memberships, keys, tokens, approvals and to-dos go. This cannot be undone.\n\nType their username to confirm:`,
-    );
+    const typed = await prompt({
+      title: `Delete ${u.username}'s account?`,
+      body: (
+        <>
+          <p>Their merge requests, issues, comments and pipelines stay, without an author. Their memberships, keys, tokens, approvals and to-dos go.</p>
+          <p>This cannot be undone.</p>
+        </>
+      ),
+      action: "Delete account",
+      danger: true,
+      input: { label: "Type their username to confirm", match: u.username, mono: true },
+    });
     if (typed !== u.username) return;
     const path = `/admin/users/${u.id}`;
     try {
       await api.del(path);
     } catch (e) {
       if (!(e instanceof ApiError && e.status === 409 && e.message.includes("personal projects"))) return toast.error(e);
-      if (!window.confirm(`${e.message}.\n\nDelete those projects (repositories, issues, merge requests, CI) with the account?`)) return;
+      const also = await confirm({
+        title: "Delete their personal projects too?",
+        body: `${e.message}. Those projects (repositories, issues, merge requests, CI) are deleted with the account.`,
+        action: "Delete projects and account",
+        danger: true,
+      });
+      if (!also) return;
       try {
         await api.del(`${path}?delete_projects=true`);
       } catch (e2) {
@@ -78,23 +96,33 @@ function Users() {
     qc.invalidateQueries({ queryKey: ["admin-users"] });
   };
   const run = useAct(() => qc.invalidateQueries({ queryKey: ["admin-users"] }));
-  const act = async (f: () => Promise<unknown>, done: string, confirmText?: string) => {
-    if (confirmText && !window.confirm(confirmText)) return;
+  const act = async (f: () => Promise<unknown>, done: string, ask?: Omit<Ask, "input">) => {
+    if (ask && !(await confirm(ask))) return;
     await run(f, done);
   };
   const providers = useProviders();
   const { emailEnabled } = useSession();
   // for someone who cannot do it from their own settings: by who they are at the provider
   const linkProvider = async (u: S["AdminUser"], pr: S["Provider"]) => {
-    const subject = window.prompt(`Link ${u.username} to ${pr.display_name}.\n\nTheir identifier at the provider (the "sub" claim of its ID tokens):`);
-    if (!subject?.trim()) return;
-    await run(() => api.post(`/admin/users/${u.id}/identities`, { provider: pr.name, subject: subject.trim() }), `${pr.display_name} linked`);
+    const subject = await prompt({
+      title: `Link ${u.username} to ${pr.display_name}`,
+      body: "They can then sign in with it. Give who they are at the provider: the sub claim of its ID tokens.",
+      action: "Link",
+      input: { label: "Their identifier (sub)", mono: true },
+    });
+    if (!subject) return;
+    await run(() => api.post(`/admin/users/${u.id}/identities`, { provider: pr.name, subject }), `${pr.display_name} linked`);
   };
   // confirmed at once: the administrator vouches for it (no link, so it works without email too)
   const changeEmail = async (u: S["AdminUser"]) => {
-    const email = window.prompt(`A new email address for ${u.username}.\n\nIt is theirs at once, confirmed: enter it only if you know it is their address.`, u.email);
-    if (!email?.trim() || email.trim() === u.email) return;
-    await run(() => api.put(`/admin/users/${u.id}`, { email: email.trim() }), "Email address changed");
+    const email = await prompt({
+      title: `A new email address for ${u.username}`,
+      body: "It is theirs at once, confirmed: enter it only if you know it is their address.",
+      action: "Change address",
+      input: { label: "Email address", type: "email", value: u.email },
+    });
+    if (!email || email === u.email) return;
+    await run(() => api.put(`/admin/users/${u.id}`, { email }), "Email address changed");
   };
   const [form, setForm] = useState({ username: "", email: "", password: "", is_admin: false });
   const [error, setError] = useState<unknown>(null);
@@ -157,26 +185,80 @@ function Users() {
                       { label: u.is_admin ? "Remove admin rights" : "Make administrator", onSelect: () => act(() => api.put(path, { is_admin: !u.is_admin }), u.is_admin ? "Admin rights removed" : "Now an administrator") },
                       { label: u.is_external ? "Make internal" : "Make external", disabled: u.is_admin && !u.is_external, onSelect: () => act(() => api.put(path, { is_external: !u.is_external }), u.is_external ? "Now internal" : "Now external") },
                       "separator",
-                      { label: "Sign out everywhere", disabled: u.sessions === 0, onSelect: () => act(() => api.post(`${path}/sign_out`), "Signed out everywhere", `End ${u.username}'s ${u.sessions} session(s)?`) },
-                      { label: "Revoke access tokens", disabled: u.tokens === 0, onSelect: () => act(() => api.post(`${path}/revoke_tokens`), "Tokens revoked", `Revoke ${u.username}'s ${u.tokens} personal access token(s)? Tools using them stop working.`) },
-                      { label: "Reset two-factor authentication", disabled: !u.two_factor_enabled, onSelect: () => act(() => api.post(`${path}/reset_two_factor`), "Two-factor authentication reset", `Turn off ${u.username}'s two-factor authentication? Do it only once you know it is them (a lost authenticator).`) },
+                      {
+                        label: "Sign out everywhere",
+                        disabled: u.sessions === 0,
+                        onSelect: () =>
+                          act(() => api.post(`${path}/sign_out`), "Signed out everywhere", {
+                            title: `End ${u.username}'s ${u.sessions === 1 ? "session" : `${u.sessions} sessions`}?`,
+                            body: "They are signed out on every device and sign in again to go on.",
+                            action: "Sign out everywhere",
+                            danger: true,
+                          }),
+                      },
+                      {
+                        label: "Revoke access tokens",
+                        disabled: u.tokens === 0,
+                        onSelect: () =>
+                          act(() => api.post(`${path}/revoke_tokens`), "Tokens revoked", {
+                            title: `Revoke ${u.username}'s ${u.tokens === 1 ? "personal access token" : `${u.tokens} personal access tokens`}?`,
+                            body: "Tools using them stop working.",
+                            action: "Revoke tokens",
+                            danger: true,
+                          }),
+                      },
+                      {
+                        label: "Reset two-factor authentication",
+                        disabled: !u.two_factor_enabled,
+                        onSelect: () =>
+                          act(() => api.post(`${path}/reset_two_factor`), "Two-factor authentication reset", {
+                            title: `Turn off ${u.username}'s two-factor authentication?`,
+                            body: "Do it only once you know it is them (a lost authenticator).",
+                            action: "Turn it off",
+                            danger: true,
+                          }),
+                      },
                       {
                         label: "Impersonate",
                         disabled: u.is_admin || u.state === "blocked",
                         onSelect: () =>
-                          window.confirm(`Sign in as ${u.username} for up to an hour? Your own session ends; everything you do is audited as yours.`) &&
-                          act(async () => {
-                            await api.post(`${path}/impersonate`);
-                            window.location.assign("/");
-                          }, `Signed in as ${u.username}`),
+                          act(
+                            async () => {
+                              await api.post(`${path}/impersonate`);
+                              window.location.assign("/");
+                            },
+                            `Signed in as ${u.username}`,
+                            {
+                              title: `Sign in as ${u.username}?`,
+                              body: "For up to an hour. Your own session ends; everything you do is audited as yours.",
+                              action: `Sign in as ${u.username}`,
+                            },
+                          ),
                       },
                       { label: "Change the email address…", onSelect: () => changeEmail(u) },
-                      { label: "Confirm the email address", disabled: u.email_verified, onSelect: () => act(() => api.post(`${path}/confirm_email`, { email: u.email }), "Email address confirmed", `Confirm ${u.email} as ${u.username}'s address without a link? Do it only if you know it is theirs: a confirmed address is trusted for verified commits and code owners.`) },
+                      {
+                        label: "Confirm the email address",
+                        disabled: u.email_verified,
+                        onSelect: () =>
+                          act(() => api.post(`${path}/confirm_email`, { email: u.email }), "Email address confirmed", {
+                            title: `Confirm ${u.email} without a link?`,
+                            body: `Do it only if you know it is ${u.username}'s: a confirmed address is trusted for verified commits and code owners.`,
+                            action: "Confirm address",
+                          }),
+                      },
                       { label: "Resend the confirmation email", disabled: u.email_verified || !emailEnabled, onSelect: () => act(() => api.post(`${path}/resend_confirmation`), "Confirmation email sent") },
                       ...(providers.data ?? []).map(
                         (pr): MenuItem =>
                           u.providers.includes(pr.name)
-                            ? { label: `Unlink ${pr.display_name}`, onSelect: () => act(() => api.del(`${path}/identities/${enc(pr.name)}`), `${pr.display_name} unlinked`, `Stop ${u.username} signing in with ${pr.display_name}?`) }
+                            ? {
+                                label: `Unlink ${pr.display_name}`,
+                                onSelect: () =>
+                                  act(() => api.del(`${path}/identities/${enc(pr.name)}`), `${pr.display_name} unlinked`, {
+                                    title: `Stop ${u.username} signing in with ${pr.display_name}?`,
+                                    action: `Unlink ${pr.display_name}`,
+                                    danger: true,
+                                  }),
+                              }
                             : { label: `Link ${pr.display_name}…`, onSelect: () => linkProvider(u, pr) },
                       ),
                       "separator",
@@ -184,7 +266,14 @@ function Users() {
                       {
                         label: u.state === "blocked" ? "Unblock" : "Block",
                         danger: u.state !== "blocked",
-                        onSelect: () => act(() => api.put(path, { state: u.state === "blocked" ? "active" : "blocked" }), u.state === "blocked" ? "Unblocked" : "Blocked", u.state === "blocked" ? undefined : `Block ${u.username}? They are signed out and cannot sign in, push or use tokens.`),
+                        onSelect: () =>
+                          act(
+                            () => api.put(path, { state: u.state === "blocked" ? "active" : "blocked" }),
+                            u.state === "blocked" ? "Unblocked" : "Blocked",
+                            u.state === "blocked"
+                              ? undefined
+                              : { title: `Block ${u.username}?`, body: "They are signed out and cannot sign in, push or use tokens.", action: "Block", danger: true },
+                          ),
                       },
                     ]
                   : [];

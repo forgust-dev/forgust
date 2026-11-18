@@ -1,12 +1,14 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, CircleDot, GitMerge, Milestone as MilestoneIcon, Pencil, Plus, Trash2 } from "lucide-react";
-import { api, qs, type S } from "../../api/client";
+import { CalendarClock, CalendarDays, CheckCircle2, CircleDot, GitMerge, Milestone as MilestoneIcon, Pencil, Plus, Trash2 } from "lucide-react";
+import { api, plural, qs, type S } from "../../api/client";
 import { Empty, ErrorBox, Field, FilterTabs, ListHead, Q } from "../../components/ui";
+import { DecideCard, Ring, type DecideRow } from "../../components/decide";
 import { Select } from "../../components/controls";
 import { MarkdownEditor } from "../../components/MarkdownEditor";
 import { useToast } from "../../shell/toast";
+import { useConfirm } from "../../shell/dialog";
 import type { Ctx } from "./Project";
 
 type M = S["Milestone"];
@@ -29,11 +31,96 @@ export function overdue(d?: string | null) {
   return d < iso;
 }
 
-function Progress({ m }: { m: M }) {
-  const total = m.open_issues + m.closed_issues;
-  const pct = total === 0 ? 0 : Math.round((m.closed_issues / total) * 100);
+/** How far a milestone is: its issues closed, or its merge requests merged when it has no issues. */
+function progressOf(m: M) {
+  const issues = m.open_issues + m.closed_issues;
+  const mrs = m.open_merge_requests + m.merged_merge_requests;
+  if (issues > 0 || mrs === 0) return { done: m.closed_issues, total: issues, title: `${m.closed_issues} of ${issues} issues closed` };
+  return { done: m.merged_merge_requests, total: mrs, title: `${m.merged_merge_requests} of ${mrs} merge requests merged` };
+}
+
+/** Days from today to a date (`YYYY-MM-DD`): negative once past. */
+function daysUntil(d: string) {
+  const [y, m, dd] = d.split("-").map(Number);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((new Date(y, m - 1, dd).getTime() - today.getTime()) / 86_400_000);
+}
+
+function dueIn(d: string) {
+  const n = daysUntil(d);
+  if (n < 0) return `Past due by ${-n} day${n === -1 ? "" : "s"}`;
+  if (n === 0) return "Due today";
+  if (n === 1) return "Due tomorrow";
+  return `Due in ${n} days`;
+}
+
+
+/** What is left in a milestone, in words. */
+function leftText(m: M) {
+  const parts = [m.open_issues > 0 && plural(m.open_issues, "issue"), m.open_merge_requests > 0 && plural(m.open_merge_requests, "merge request")].filter(Boolean);
+  return parts.join(" and ");
+}
+
+/** The open milestone due first (past due ones are): what it still needs. */
+function NextMilestone({ ctx, m }: { ctx: Ctx; m: M }) {
+  const issues = useQuery({
+    queryKey: ["issues", ctx.p.id, "milestone", m.id, "opened"],
+    queryFn: () => api.get<S["IssueList"]>(`/projects/${ctx.p.id}/issues${qs({ milestone: m.title, state: "opened", per_page: 4 })}`),
+    enabled: m.open_issues > 0,
+  });
+  const mrs = useQuery({
+    queryKey: ["mrs", ctx.p.id, "milestone", m.id, "opened"],
+    queryFn: () => api.get<S["MrListItem"][]>(`/projects/${ctx.p.id}/merge_requests${qs({ milestone: m.title, state: "opened", per_page: 4 })}`),
+    enabled: m.open_merge_requests > 0 && ctx.p.can_read_code,
+  });
+  const p = progressOf(m);
+  const left = m.open_issues + m.open_merge_requests;
+  // merge requests first: they are the closest to done
+  const rows: DecideRow[] = [
+    ...(mrs.data ?? []).map((r) => ({
+      key: `mr${r.id}`,
+      icon: <GitMerge size={15} className="row-ic" />,
+      text: <Link to={`${ctx.web}/-/merge_requests/${r.iid}`}>{r.title}</Link>,
+      aside: `!${r.iid}`,
+    })),
+    ...(issues.data?.issues ?? []).map((i) => ({
+      key: `i${i.id}`,
+      icon: <CircleDot size={15} className="row-ic" />,
+      text: <Link to={`${ctx.web}/-/issues/${i.iid}`}>{i.title}</Link>,
+      aside: `#${i.iid}`,
+    })),
+  ].slice(0, 4);
+  const late = daysUntil(m.due_date!) < 0;
   return (
-    <div className="ms-progress" title={`${m.closed_issues} of ${total} issues closed`}>
+    <DecideCard
+      label={`Next milestone: ${m.title}`}
+      eyebrow={
+        <>
+          <CalendarClock size={14} aria-hidden /> {dueIn(m.due_date!)} · {day(m.due_date!)}
+        </>
+      }
+      late={late}
+      ring={<Ring done={p.done} total={p.total} title={p.title} />}
+      title={m.title}
+      sub={left > 0 ? `${leftText(m)} left` : "Everything is done: it can be closed."}
+      actions={
+        <Link className="btn run" to={`${ctx.web}/-/milestones/${m.id}`}>
+          Open {m.title}
+        </Link>
+      }
+      rowsTitle={rows.length > 0 ? "Still open" : undefined}
+      rows={rows}
+      foot={left > rows.length && rows.length > 0 ? `And ${left - rows.length} more.` : undefined}
+    />
+  );
+}
+
+function Progress({ m }: { m: M }) {
+  const { done, total, title } = progressOf(m);
+  const pct = total === 0 ? 0 : Math.round((done / total) * 100);
+  return (
+    <div className="ms-progress" title={title}>
       <div className="ms-bar" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={`${m.title} progress`}>
         <span style={{ width: `${pct}%` }} />
       </div>
@@ -58,6 +145,11 @@ export function MilestonesPage({ ctx }: { ctx: Ctx }) {
   const [params, setParams] = useSearchParams();
   const state = (params.get("state") as "active" | "closed" | "all") || "active";
   const q = useMilestones(ctx.p.id, state);
+  // the open one due first, whatever the tab shows
+  const open = useMilestones(ctx.p.id, "active");
+  const next = (open.data ?? [])
+    .filter((m) => m.state === "active" && m.due_date)
+    .sort((a, b) => a.due_date!.localeCompare(b.due_date!))[0];
   return (
     <div className="stack list-page">
       <ListHead title="Milestones" sub="Goals with dates that issues and merge requests work towards.">
@@ -67,6 +159,7 @@ export function MilestonesPage({ ctx }: { ctx: Ctx }) {
           </Link>
         )}
       </ListHead>
+      {next && <NextMilestone ctx={ctx} m={next} />}
       <div className="list-toolbar plain">
         <FilterTabs
           label="State"
@@ -115,10 +208,73 @@ export function MilestonesPage({ ctx }: { ctx: Ctx }) {
   );
 }
 
+/** Open, with everything in it done: ready to be closed. */
+function complete(m: M) {
+  const left = m.open_issues + m.open_merge_requests;
+  return m.state === "active" && left === 0 && m.closed_issues + m.merged_merge_requests > 0;
+}
+
+/**
+ * A milestone's decision, when it has one: close it once everything in it is
+ * done, or move its date once it is past due with work left. Nothing otherwise.
+ */
+function MilestoneDecision({ ctx, m, onClose }: { ctx: Ctx; m: M; onClose: () => void }) {
+  if (m.state !== "active") return null;
+  const left = m.open_issues + m.open_merge_requests;
+  const p = progressOf(m);
+  if (complete(m)) {
+    return (
+      <DecideCard
+        label="Everything is done"
+        eyebrow={
+          <>
+            <CheckCircle2 size={14} aria-hidden /> Everything is done
+          </>
+        }
+        ring={<Ring done={p.done} total={p.total} title={p.title} />}
+        title={`${m.title} is complete`}
+        sub={`${[m.closed_issues > 0 && plural(m.closed_issues, "issue") + " closed", m.merged_merge_requests > 0 && plural(m.merged_merge_requests, "merge request") + " merged"].filter(Boolean).join(", ")}.`}
+        actions={
+          ctx.p.can_push && (
+            <button type="button" className="btn run" onClick={onClose}>
+              Close milestone
+            </button>
+          )
+        }
+      />
+    );
+  }
+  if (m.due_date && overdue(m.due_date) && left > 0) {
+    return (
+      <DecideCard
+        label="Past due"
+        late
+        eyebrow={
+          <>
+            <CalendarClock size={14} aria-hidden /> {dueIn(m.due_date)}
+          </>
+        }
+        ring={<Ring done={p.done} total={p.total} title={p.title} />}
+        title={`${leftText(m)} left`}
+        sub={`${m.title} was due ${day(m.due_date)}: finish what is left, or give it a new date.`}
+        actions={
+          ctx.p.can_push && (
+            <Link className="btn run" to={`${ctx.web}/-/milestones/${m.id}/edit`}>
+              Change the due date
+            </Link>
+          )
+        }
+      />
+    );
+  }
+  return null;
+}
+
 export function MilestonePage({ ctx, id }: { ctx: Ctx; id: number }) {
   const nav = useNavigate();
   const qc = useQueryClient();
   const toast = useToast();
+  const confirm = useConfirm();
   const path = `/projects/${ctx.p.id}/milestones/${id}`;
   const q = useQuery({ queryKey: ["milestone", ctx.p.id, id], queryFn: () => api.get<M>(path) });
   const issues = useQuery({
@@ -144,7 +300,13 @@ export function MilestonePage({ ctx, id }: { ctx: Ctx; id: number }) {
     }
   };
   const remove = async (m: M) => {
-    if (!confirm(`Delete the milestone ${m.title}? Its issues and merge requests stay, without a milestone.`)) return;
+    const ok = await confirm({
+      title: `Delete the milestone ${m.title}?`,
+      body: "Its issues and merge requests stay, without a milestone.",
+      action: "Delete milestone",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await api.del(path);
       qc.invalidateQueries({ queryKey: ["milestones", ctx.p.id] });
@@ -168,9 +330,12 @@ export function MilestonePage({ ctx, id }: { ctx: Ctx; id: number }) {
           >
             {ctx.p.can_push && (
               <div className="row" style={{ gap: 6 }}>
-                <button className="btn" onClick={() => setState(m.state === "active" ? "closed" : "active")}>
-                  {m.state === "active" ? "Close milestone" : "Reopen milestone"}
-                </button>
+                {/* once everything is done, closing it is the card's action */}
+                {!complete(m) && (
+                  <button className="btn" onClick={() => setState(m.state === "active" ? "closed" : "active")}>
+                    {m.state === "active" ? "Close milestone" : "Reopen milestone"}
+                  </button>
+                )}
                 <Link className="icon-btn bordered" to={`${ctx.web}/-/milestones/${m.id}/edit`} title="Edit" aria-label={`Edit milestone ${m.title}`}>
                   <Pencil size={15} />
                 </Link>
@@ -180,6 +345,7 @@ export function MilestonePage({ ctx, id }: { ctx: Ctx; id: number }) {
               </div>
             )}
           </ListHead>
+          <MilestoneDecision ctx={ctx} m={m} onClose={() => setState("closed")} />
           <Progress m={m} />
           {m.description && <p style={{ whiteSpace: "pre-wrap" }}>{m.description}</p>}
           <section className="stack" style={{ gap: 8 }} aria-label="Issues">

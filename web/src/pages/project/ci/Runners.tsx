@@ -4,6 +4,7 @@ import { Lock, Plus, Server, Trash2 } from "lucide-react";
 import { api, timeAgo, type S } from "../../../api/client";
 import { Section, Empty, ErrorBox, Field, NewSecret, Q } from "../../../components/ui";
 import { useToast } from "../../../shell/toast";
+import { useConfirm } from "../../../shell/dialog";
 
 // Runners: a project's, a group's, the instance's (also loaded by Admin and groups).
 
@@ -26,6 +27,7 @@ function RegisterHelp({ token }: { token: string }) {
 export function RunnersPanel({ list, create, title = "Runners", note }: { list: string; create?: string; title?: string; note?: string }) {
   const qc = useQueryClient();
   const toast = useToast();
+  const confirm = useConfirm();
   const q = useQuery({ queryKey: ["runners", list], queryFn: () => api.get<S["RunnerDto"][]>(list) });
   const [form, setForm] = useState<{ description: string; tags: string; run_untagged: boolean; protected_only: boolean } | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -61,7 +63,8 @@ export function RunnersPanel({ list, create, title = "Runners", note }: { list: 
     }
   };
   const remove = async (r: S["RunnerDto"]) => {
-    if (!confirm(`Delete runner #${r.id}? Machines using its token stop getting jobs.`)) return;
+    const ok = await confirm({ title: `Delete runner #${r.id}?`, body: "Machines using its token stop getting jobs.", action: "Delete runner", danger: true });
+    if (!ok) return;
     try {
       await api.del(`/runners/${r.id}`);
       toast.ok("Runner deleted");

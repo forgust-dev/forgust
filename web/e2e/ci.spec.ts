@@ -57,8 +57,8 @@ test("CI/CD settings: runner token, variables", async ({ page }) => {
   const item = page.locator(".item", { hasText: key });
   await expect(item).toContainText("masked");
   await expect(item).not.toContainText("super-secret-value");
-  page.once("dialog", (d) => d.accept());
   await item.getByRole("button", { name: `Delete ${key}` }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Delete variable" }).click();
   await expect(page.locator(".item", { hasText: key })).toHaveCount(0);
 });
 
@@ -74,9 +74,11 @@ test("schedules", async ({ page }) => {
   await page.getByPlaceholder("Nightly build").fill("Nightly e2e");
   await page.getByRole("button", { name: "Every weekday (03:00)" }).click();
   await page.getByRole("button", { name: "Save schedule" }).click();
-  const row = page.locator(".item", { hasText: "Nightly e2e" }).first();
-  await expect(row).toContainText("0 3 * * 1-5");
-  page.once("dialog", (d) => d.accept());
-  await row.getByRole("button", { name: "Delete schedule" }).click();
-  await expect(page.locator(".item", { hasText: "Nightly e2e" })).toHaveCount(0);
+  // a card, in words and in cron
+  const card = page.getByRole("article", { name: "Schedule Nightly e2e" }).first();
+  await expect(card).toContainText("Every weekday at 03:00");
+  await expect(card).toContainText("0 3 * * 1-5");
+  await card.getByRole("button", { name: "Delete schedule" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Delete schedule" }).click();
+  await expect(page.getByRole("article", { name: "Schedule Nightly e2e" })).toHaveCount(0);
 });

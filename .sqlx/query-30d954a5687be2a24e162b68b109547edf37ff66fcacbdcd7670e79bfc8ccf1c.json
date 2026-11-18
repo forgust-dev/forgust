@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.id, u.iid\n           FROM ci_pipelines p JOIN ci_builds b ON b.id = p.upstream_build_id JOIN ci_pipelines u ON u.id = b.pipeline_id\n          WHERE p.id = ANY ($1) AND u.project_id = p.project_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "iid",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "iid"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8Array"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "30d954a5687be2a24e162b68b109547edf37ff66fcacbdcd7670e79bfc8ccf1c"
+}

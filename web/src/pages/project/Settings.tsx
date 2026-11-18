@@ -251,7 +251,11 @@ function GeneralSettings({ ctx }: { ctx: Ctx }) {
                       nav(`/${p.full_path}`);
                     },
                     "Archived: the project is read-only.",
-                    `Archive ${p.full_path}? It becomes read-only for everyone (code, issues, merge requests, CI, settings) until you unarchive it.`,
+                    {
+                      title: `Archive ${p.full_path}?`,
+                      body: "It becomes read-only for everyone (code, issues, merge requests, CI, settings) until you unarchive it.",
+                      action: "Archive project",
+                    },
                   )}
                 >
                   Archive project
@@ -268,7 +272,12 @@ function GeneralSettings({ ctx }: { ctx: Ctx }) {
                     nav("/");
                   },
                   "Deleted.",
-                  `Delete ${p.full_path} and its repository? This cannot be undone.`,
+                  {
+                    title: `Delete ${p.full_path}?`,
+                    body: "Its repository, issues, merge requests, pipelines and everything else go with it. This cannot be undone.",
+                    action: "Delete project",
+                    danger: true,
+                  },
                 )}
               >
                 Delete project

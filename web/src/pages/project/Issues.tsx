@@ -11,7 +11,9 @@ import { EditLabelsButton, LabelChip, LabelList, LabelPicker, MilestoneChip, Sys
 import { EditPeopleButton, PeopleAvatars, PeopleList, PeoplePicker } from "../../components/people";
 import { useSession } from "../../session";
 import { useToast } from "../../shell/toast";
-import { Timeline, systemEvent, type LogEntry } from "./MergeRequests";
+import { useConfirm } from "../../shell/dialog";
+import { systemEvent } from "./MergeRequests";
+import { Timeline, type LogEntry } from "../../components/timeline";
 import type { Ctx } from "./Project";
 import { DueDateFact, MilestoneFact, day, overdue, useMilestones } from "./Milestones";
 import { ReactionBar } from "../../components/Reactions";
@@ -486,6 +488,7 @@ function IssueActivity({ ctx, i, notes, labels, refresh }: { ctx: Ctx; i: S["Iss
 
 function IssueComment({ ctx, i, n, refresh, toast }: { ctx: Ctx; i: S["IssueDetail"]; n: S["IssueNoteDto"]; refresh: () => void; toast: ReturnType<typeof useToast> }) {
   const { user } = useSession();
+  const confirm = useConfirm();
   const [editing, setEditing] = useState(false);
   const [body, setBody] = useState(n.body);
   const path = `/projects/${ctx.p.id}/issues/${i.iid}/notes/${n.id}`;
@@ -508,7 +511,7 @@ function IssueComment({ ctx, i, n, refresh, toast }: { ctx: Ctx; i: S["IssueDeta
             className="link-btn small"
             aria-label="Delete comment"
             onClick={async () => {
-              if (!confirm("Delete this comment?")) return;
+              if (!(await confirm({ title: "Delete this comment?", action: "Delete comment", danger: true }))) return;
               await api.del(path).catch(toast.error);
               refresh();
             }}
@@ -557,6 +560,7 @@ function IssueComment({ ctx, i, n, refresh, toast }: { ctx: Ctx; i: S["IssueDeta
 export function LabelsPage({ ctx }: { ctx: Ctx }) {
   const qc = useQueryClient();
   const toast = useToast();
+  const confirm = useConfirm();
   const labels = useLabels(ctx.p.id);
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<number | "new" | null>(null);
@@ -614,7 +618,13 @@ export function LabelsPage({ ctx }: { ctx: Ctx }) {
                           aria-label={`Delete ${l.name}`}
                           title="Delete"
                           onClick={async () => {
-                            if (!confirm(`Delete the label “${l.name}”? It is removed from every issue and merge request.`)) return;
+                            const ok = await confirm({
+                              title: `Delete the label “${l.name}”?`,
+                              body: "It is removed from every issue and merge request.",
+                              action: "Delete label",
+                              danger: true,
+                            });
+                            if (!ok) return;
                             try {
                               await api.del(`/projects/${ctx.p.id}/labels/${l.id}`);
                               refresh();

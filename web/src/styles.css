@@ -20,6 +20,8 @@
   --tab-mark: #e65b00;
   --danger: #c4314b;
   --danger-soft: #fdecef;
+  /* text on --danger (a destructive confirmation's button) */
+  --danger-text: #ffffff;
   --ok: #1f7a3d;
   --ok-soft: #e3f2e7;
   --warn: #9a6200;
@@ -104,6 +106,7 @@
     --accent-text: #0d0e12;
     --danger: #f0738a;
     --danger-soft: #3a1c24;
+    --danger-text: #0d0e12;
     --ok: #5fcf98;
     --ok-soft: #173326;
     --warn: #f2b04f;
@@ -178,6 +181,7 @@
   --accent-text: #0d0e12;
   --danger: #f0738a;
   --danger-soft: #3a1c24;
+  --danger-text: #0d0e12;
   --ok: #5fcf98;
   --ok-soft: #173326;
   --warn: #f2b04f;
@@ -1968,6 +1972,84 @@ kbd {
   width: 1%;
 }
 
+/* the app's dialog (shell/dialog.tsx): the browser's confirm() and prompt() in
+   the site's look. Over everything but the toasts, so a failure still shows */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  background: rgba(10, 12, 16, 0.45);
+  transition: opacity 150ms var(--ease-out);
+}
+.modal {
+  position: fixed;
+  z-index: 151;
+  top: 16vh;
+  right: 0;
+  left: 0;
+  width: min(460px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 20px 22px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+  transform-origin: top center;
+  transition:
+    opacity 150ms var(--ease-out),
+    transform 150ms var(--ease-out);
+}
+/* in as the menus and popovers come in, out the way it came */
+.modal-backdrop[data-starting-style],
+.modal-backdrop[data-ending-style] {
+  opacity: 0;
+}
+.modal[data-starting-style],
+.modal[data-ending-style] {
+  opacity: 0;
+  transform: scale(0.97);
+}
+.modal-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  overflow-wrap: anywhere;
+}
+.modal-body {
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.modal-body p {
+  margin: 0;
+}
+.modal-body p + p {
+  margin-top: 8px;
+}
+.modal-field {
+  margin-top: 14px;
+}
+.modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+/* what cannot be undone, confirmed: the one red button */
+.btn.danger.solid {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: var(--danger-text);
+  font-weight: 600;
+}
+.btn.danger.solid:hover {
+  background: var(--danger);
+  filter: brightness(0.94);
+}
+
 /* ---- toasts + banner */
 
 .toasts {
@@ -3496,6 +3578,18 @@ a.status-badge:hover {
   font-weight: 700;
   letter-spacing: -0.03em;
 }
+/* on a phone the title takes its own line, under the status and the actions
+   (beside them, it was squeezed into a narrow column) */
+@media (max-width: 600px) {
+  .pipeline-head .pipeline-title {
+    order: 1;
+    flex-basis: 100%;
+    font-size: 25px;
+  }
+  .pipeline-head > .btn:first-of-type {
+    margin-left: auto;
+  }
+}
 .facts-bar {
   display: flex;
   flex-wrap: wrap;
@@ -3531,11 +3625,12 @@ a.status-badge:hover {
 .facts-bar dd.mono {
   font-size: 12.5px;
 }
-/* the facts, and beside them the manual job waiting for someone */
+/* the facts, and beside them the manual job waiting for someone: one height for
+   both (the card is a line: what waits, then its button) */
 .pipe-summary {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: stretch;
   gap: 14px;
 }
 .pipe-summary > .facts-bar {
@@ -3543,16 +3638,25 @@ a.status-badge:hover {
   min-width: 0;
 }
 .manual-card {
-  flex: 1 1 300px;
+  /* room for "Deploy to production" and its button on one line */
+  flex: 1 1 340px;
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
   min-width: 0;
-  padding: 16px 18px;
+  padding: 12px 14px 12px 18px;
   border: 1px solid var(--emph-border);
   border-radius: var(--radius-lg);
   background: var(--emph-bg);
   color: var(--emph-text);
+}
+.manual-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 .manual-card .eyebrow {
   display: inline-flex;
@@ -3564,18 +3668,13 @@ a.status-badge:hover {
 }
 .manual-card h2 {
   margin: 0;
-  font-size: 19px;
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.02em;
-}
-.manual-card p {
-  margin: 0;
-  color: var(--emph-muted);
-  font-size: 13.5px;
+  overflow-wrap: anywhere;
 }
 .manual-card .btn.run {
-  align-self: flex-start;
-  margin-top: 8px;
+  flex: none;
   border-color: var(--emph-btn-bg);
   background: var(--emph-btn-bg);
   color: var(--emph-btn-text);
@@ -3583,6 +3682,518 @@ a.status-badge:hover {
 }
 .manual-card .btn.run:hover {
   filter: brightness(0.94);
+}
+
+/* ---- the page's emphasized card, wide (components/decide.tsx): what there is to
+   decide or act on, on your work, milestones, releases, findings and the admin
+   overview. The readiness card's look: what and why on the left with the one
+   action, the items on the right; one column when narrow */
+.decide-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px 32px;
+  padding: 18px 20px;
+  border: 1px solid var(--emph-border);
+  border-radius: var(--radius-lg);
+  background: var(--emph-bg);
+  color: var(--emph-text);
+  box-shadow: 0 1px 2px rgba(28, 25, 21, 0.15);
+}
+.decide-main {
+  flex: 1 1 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.decide-side {
+  flex: 1.4 1 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.decide-card .eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--emph-link);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.decide-card .eyebrow.bad {
+  color: var(--emph-bad);
+}
+.decide-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.decide-title {
+  flex: 1;
+  min-width: 0;
+}
+.decide-card h2 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+.decide-title p {
+  margin: 2px 0 0;
+  color: var(--emph-muted);
+  font-size: 13.5px;
+}
+.decide-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-top: 10px;
+}
+.decide-card a,
+.decide-card .link-btn {
+  color: var(--emph-link);
+}
+.decide-card .btn.run {
+  border-color: var(--emph-btn-bg);
+  background: var(--emph-btn-bg);
+  color: var(--emph-btn-text);
+  font-weight: 700;
+}
+.decide-card .btn.run:hover {
+  filter: brightness(0.94);
+}
+.decide-card .checks {
+  gap: 4px;
+}
+.decide-card .checks li {
+  min-height: 32px;
+  padding: 4px 10px;
+  border-radius: var(--radius);
+  color: var(--emph-muted);
+  font-size: 13px;
+}
+/* what to look at or what blocks stands out; what passes steps back */
+.decide-card .checks li.item,
+.decide-card .checks li.bad,
+.decide-card .checks li.warn {
+  min-height: 36px;
+  background: var(--emph-row);
+  color: var(--emph-text);
+  font-size: 13.5px;
+}
+.decide-card .checks li a {
+  color: inherit;
+}
+.decide-card .checks li a:hover {
+  color: var(--emph-link);
+}
+.decide-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.decide-aside {
+  flex: none;
+  color: var(--emph-muted);
+  font: 12px var(--mono);
+}
+.decide-card .check-icon,
+.decide-card .row-ic {
+  flex: none;
+  color: var(--emph-muted);
+}
+.decide-card .check-icon.ok {
+  color: var(--emph-ok);
+}
+.decide-card .check-icon.bad {
+  color: var(--emph-bad);
+}
+.decide-card .check-icon.warn {
+  color: var(--emph-warn);
+}
+.decide-foot {
+  margin: 0;
+  padding: 0 10px;
+  color: var(--emph-muted);
+  font-size: 12.5px;
+}
+.decide-card code {
+  background: var(--emph-row);
+  color: var(--emph-text);
+}
+
+/* the small ring of a list row (your work): on a light surface, no count inside */
+.ready-ring.mini .track {
+  stroke: var(--border);
+}
+.mr-ready {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.mr-ready.ok {
+  color: var(--ok);
+  font-weight: 600;
+}
+.decide-label {
+  margin: 0;
+  padding: 0 10px;
+  color: var(--emph-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* a page in sections (your work): each title with its count and what to do with it */
+.section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  min-height: 30px;
+}
+.section-count {
+  margin-left: 3px;
+  color: var(--text-faint);
+  font: 500 12px var(--mono);
+}
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+.work-page .work-section {
+  margin-top: 10px;
+}
+
+/* the admin overview: CI in the middle, the instance's numbers beside it, as the
+   project page's right column */
+.admin-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 20px 28px;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .admin-overview {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+/* facts in a right-column card, one a line: the label, the value on the right */
+.side-facts {
+  display: flex;
+  flex-direction: column;
+  margin: 8px 0 0;
+}
+.side-facts > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.side-facts > div:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+.side-facts dt {
+  color: var(--text-muted);
+  font-size: 13.5px;
+}
+.side-facts dd {
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.side-facts dd a {
+  color: inherit;
+}
+.side-facts dd a:hover {
+  color: var(--accent);
+}
+.side-fact-hint {
+  flex-basis: 100%;
+  margin: 1px 0 0;
+  color: var(--text-faint);
+  font-size: 12.5px;
+}
+.decide-card .checks .decide-aside a {
+  color: var(--emph-link);
+  font-family: var(--sans);
+}
+/* on a phone, a group's and a person's page show their list first, then the facts
+   (a project's page puts its pipeline card first) */
+@media (max-width: 900px) {
+  .group-layout .repo-about,
+  .profile-page .repo-about {
+    order: 0;
+  }
+}
+/* a project's state in a list (a group's page): open merge requests, latest pipeline */
+.project-state {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-muted);
+  font: 12.5px var(--mono);
+}
+.project-state a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.project-state a:not([class*="st-"]) {
+  color: inherit;
+}
+.project-state a:hover {
+  color: var(--accent);
+}
+/* people in a right-column card (a group's members) */
+.repo-about .side-people {
+  gap: 9px;
+  margin-top: 12px;
+}
+.side-people li {
+  min-width: 0;
+}
+.repo-about .side-people a {
+  color: var(--text);
+}
+.side-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+/* pipelines: the child pipelines under the one that started them */
+.pipe-kids {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 7px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12.5px;
+}
+.pipe-kids li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.pipe-kids li > span {
+  display: inline-flex;
+}
+.pipe-kids a {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.pipe-kids a:hover {
+  color: var(--accent);
+}
+
+/* schedules: a card each, in time (how often, when next, how the latest runs went),
+   not rows like the pipelines' */
+.sched-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr));
+  gap: 14px;
+}
+.sched-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px;
+}
+.sched-card.paused {
+  background: var(--bg-subtle);
+}
+.sched-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.sched-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.sched-card.paused .sched-icon {
+  background: var(--bg-hover);
+  color: var(--text-faint);
+}
+.sched-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 650;
+}
+.sched-when {
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  font-size: 13.5px;
+}
+.sched-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+  margin: 0;
+}
+.sched-facts dt {
+  color: var(--text-faint);
+  font-size: 12px;
+  font-weight: 600;
+}
+.sched-facts dd {
+  min-width: 0;
+  margin: 2px 0 0;
+  font-size: 13.5px;
+  overflow-wrap: anywhere;
+}
+.sched-facts dd.mono {
+  font-size: 12.5px;
+}
+.sched-runs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.sched-runs-label {
+  color: var(--text-faint);
+  font-size: 12px;
+  font-weight: 600;
+}
+.sched-dots {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.sched-dots a {
+  display: inline-flex;
+}
+.sched-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* environments: the review apps' folders fold, their environments sit under them;
+   a deployment's ref, and the one live now */
+.list.rows > .list-group > .item {
+  gap: 12px;
+  padding: 11px 16px;
+}
+.env-folder {
+  width: 100%;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.list > .list-group > .env-folder:hover {
+  background: var(--bg-subtle);
+}
+.env-folder svg {
+  flex: none;
+}
+.list.rows > .list-group > .env-row.in-folder {
+  padding-left: 44px;
+}
+.deploy-ref {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+  font: 500 13px var(--mono);
+}
+.deploy-ref a {
+  color: inherit;
+}
+.deploy-ref a:hover {
+  color: var(--accent);
+}
+.list > .item.deploy-row.live {
+  background: color-mix(in srgb, var(--ok-soft) 55%, var(--bg));
+}
+
+/* an empty page that leads somewhere (findings before any scan): what, how, the button */
+.no-scan {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 580px;
+  margin: 0 auto;
+}
+.no-scan h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 650;
+}
+.no-scan p {
+  margin: 0;
+}
+.no-scan .btn {
+  margin-top: 4px;
+}
+.no-scan p.small {
+  margin-top: 10px;
+  color: var(--text-faint);
+}
+
+/* a row that opens what it names on the page (a finding) */
+.decide-link {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.decide-link:hover {
+  color: var(--emph-link);
+}
+.decide-link:focus-visible {
+  outline: 2px solid var(--emph-link);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 .stage-dots {
   display: inline-flex;
@@ -3615,6 +4226,7 @@ a.status-badge:hover {
 /* ---- pipeline graph */
 
 .pipeline-graph {
+  position: relative;
   display: flex;
   overflow-x: auto;
   padding: 20px;
@@ -3623,15 +4235,45 @@ a.status-badge:hover {
   border: 1px solid var(--border);
 }
 .stage-wrap {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: flex-start;
   flex: none;
 }
+/* the room between stages, where the lines turn (Pipelines.tsx: STAGE_GAP) */
 .stage-link {
-  width: 32px;
-  height: 2px;
-  margin-top: 46px;
-  background: var(--border-strong);
+  width: 48px;
+  flex: none;
+}
+/* lines from each job to the jobs that wait for it, behind the cards */
+.graph-edges {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+.graph-edges path {
+  fill: none;
+  stroke: var(--text-faint);
+  stroke-width: 1.5;
+  opacity: 0.45;
+  transition: stroke 0.1s, opacity 0.1s;
+}
+.graph-edges path.up {
+  stroke: var(--accent);
+  stroke-width: 2;
+  opacity: 1;
+}
+.graph-edges path.down {
+  stroke: var(--warn);
+  stroke-width: 2;
+  opacity: 1;
+}
+.graph-edges path.dim {
+  opacity: 0.15;
 }
 .stage-col {
   display: flex;
@@ -3862,7 +4504,8 @@ a.status-badge:hover {
   .stage-wrap {
     flex-direction: column;
   }
-  .stage-link {
+  .stage-link,
+  .graph-edges {
     display: none;
   }
   .stage-col {
@@ -4620,6 +5263,208 @@ a.item.group-row:hover .row-title {
     border: 0;
   }
 }
+/* the sign-in pages: a card centered on dotted paper, under a slow forge glow */
+.auth {
+  --auth-dot: #ded6cb;
+  --auth-card: var(--bg);
+  --auth-ember: rgba(255, 101, 0, 0.17);
+  --auth-ember-2: rgba(255, 101, 0, 0.07);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  overflow: hidden;
+  background-color: var(--bg-page);
+  background-image: radial-gradient(var(--auth-dot) 1px, transparent 1px);
+  background-size: 22px 22px;
+  isolation: isolate;
+}
+:root[data-theme="dark"] .auth {
+  --auth-dot: #23262e;
+  --auth-card: var(--bg-subtle);
+  --auth-ember: rgba(255, 101, 0, 0.24);
+  --auth-ember-2: rgba(255, 101, 0, 0.12);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .auth {
+    --auth-dot: #23262e;
+    --auth-card: var(--bg-subtle);
+    --auth-ember: rgba(255, 101, 0, 0.24);
+    --auth-ember-2: rgba(255, 101, 0, 0.12);
+  }
+}
+/* two embers that breathe out of step, so the glow never pulses in place */
+.auth-glow,
+.auth::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  border-radius: 50%;
+  pointer-events: none;
+}
+.auth-glow {
+  left: 50%;
+  top: -300px;
+  width: 960px;
+  height: 640px;
+  margin-left: -480px;
+  background: radial-gradient(closest-side, var(--auth-ember), transparent);
+  animation: auth-ember 11s var(--ease-in-out) infinite alternate;
+}
+.auth::before {
+  right: -220px;
+  bottom: -260px;
+  width: 720px;
+  height: 560px;
+  background: radial-gradient(closest-side, var(--auth-ember-2), transparent);
+  animation: auth-ember-low 15s var(--ease-in-out) infinite alternate;
+}
+@keyframes auth-ember {
+  from {
+    opacity: 0.65;
+    transform: translateX(-6%) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(6%) scale(1.06);
+  }
+}
+@keyframes auth-ember-low {
+  from {
+    opacity: 0.5;
+    transform: translate(4%, 4%) scale(1.05);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-6%, -3%) scale(0.95);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-glow,
+  .auth::before {
+    animation: none;
+  }
+}
+.auth-top {
+  display: flex;
+  justify-content: flex-end;
+  padding: 20px 24px 0;
+}
+.auth-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  width: 100%;
+  max-width: 400px;
+  margin: auto;
+  padding: 24px 16px 48px;
+  box-sizing: border-box;
+}
+.auth-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.auth-tile {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--auth-card);
+  box-shadow: var(--shadow-pop);
+}
+.auth-head h1 {
+  margin: 0;
+  font-size: 32px;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+.auth-lede {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+}
+.auth-card {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 32px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--auth-card);
+  box-shadow: var(--shadow-pop);
+}
+.auth-card > .stack > p {
+  margin: 0;
+}
+.auth-foot {
+  margin: 0;
+  color: var(--text-faint);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.auth-card input:not([type="checkbox"]):not([type="radio"]) {
+  height: 42px;
+  padding: 8px 12px;
+}
+.auth-card .btn.auth-submit {
+  width: 100%;
+  height: 42px;
+}
+.auth-pw {
+  position: relative;
+}
+.auth-forgot {
+  position: absolute;
+  top: 0;
+  right: 0;
+  font-size: 13px;
+}
+.auth-code {
+  font-family: var(--mono);
+  font-size: 18px;
+  letter-spacing: 0.3em;
+}
+.auth-back {
+  align-self: center;
+  padding: 2px 4px;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.auth-back:hover {
+  color: var(--text);
+}
+.auth-or {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.auth-or::before,
+.auth-or::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--border);
+}
+@media (max-width: 500px) {
+  .auth-top {
+    padding: 14px 16px 0;
+  }
+  .auth-center {
+    margin-top: 4vh;
+  }
+  .auth-card {
+    padding: 24px 20px;
+  }
+}
 .list-head + .tabs {
   margin-top: 12px;
 }
@@ -5217,17 +6062,18 @@ a.item.import-row:hover {
 .contrib-cell.l0 {
   background: var(--bg-hover);
 }
+/* the logo's orange, as what is active across the site */
 .contrib-cell.l1 {
-  background: color-mix(in srgb, var(--ok) 28%, var(--bg));
+  background: color-mix(in srgb, var(--brand) 26%, var(--bg));
 }
 .contrib-cell.l2 {
-  background: color-mix(in srgb, var(--ok) 52%, var(--bg));
+  background: color-mix(in srgb, var(--brand) 50%, var(--bg));
 }
 .contrib-cell.l3 {
-  background: color-mix(in srgb, var(--ok) 76%, var(--bg));
+  background: color-mix(in srgb, var(--brand) 75%, var(--bg));
 }
 .contrib-cell.l4 {
-  background: var(--ok);
+  background: var(--brand);
 }
 .contrib-legend {
   display: flex;
@@ -5241,24 +6087,6 @@ a.item.import-row:hover {
 .contrib-legend .contrib-cell {
   width: 11px;
   height: 11px;
-}
-.activity-list {
-  display: flex;
-  flex-direction: column;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.activity-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 2px;
-  border-bottom: 1px solid var(--border);
-  font-size: 13px;
-}
-.activity-row:last-child {
-  border-bottom: 0;
 }
 
 /* auto-merge set */
@@ -5303,16 +6131,33 @@ a.item.import-row:hover {
 .profile-page {
   gap: 20px;
 }
+/* as a project's page: the name large, the facts in the right column */
 .profile-head {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
 }
 .profile-head h1 {
   margin: 0;
-  font-size: 22px;
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.user-activity .activity-head {
+  margin-bottom: 0;
+}
+.repo-about .side-places {
+  gap: 7px;
+}
+.repo-about .side-places a {
+  color: var(--text);
+  font-weight: 500;
+}
+.repo-about .side-places a:hover {
+  color: var(--accent);
 }
 .avatar.profile-avatar {
   width: 64px;
@@ -6140,15 +6985,15 @@ button.test-case-row:hover {
   border-radius: 2px;
 }
 .pipe-legend i.ok,
-.pipe-bar .seg.ok {
+.pipe-bar .pipe-seg.ok {
   background: var(--chart-ok);
 }
 .pipe-legend i.bad,
-.pipe-bar .seg.bad {
+.pipe-bar .pipe-seg.bad {
   background: var(--chart-bad);
 }
 .pipe-legend i.other,
-.pipe-bar .seg.other {
+.pipe-bar .pipe-seg.other {
   background: var(--chart-other);
 }
 .pipe-bars {
@@ -6168,14 +7013,14 @@ button.test-case-row:hover {
   min-width: 4px;
   cursor: default;
 }
-.pipe-bar .seg {
+.pipe-bar .pipe-seg {
   display: block;
   width: 100%;
 }
-.pipe-bar .seg:last-child {
+.pipe-bar .pipe-seg:last-child {
   border-radius: 4px 4px 0 0;
 }
-.pipe-bar:hover .seg {
+.pipe-bar:hover .pipe-seg {
   filter: brightness(1.15);
 }
 .pipe-axis {
@@ -6201,11 +7046,9 @@ button.test-case-row:hover {
   padding: 1px 7px;
   border: 1px solid color-mix(in srgb, currentColor 28%, transparent);
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
   text-align: center;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
   color: var(--text-muted);
   background: var(--bg-hover);
 }
@@ -6411,12 +7254,15 @@ button.test-case-row:hover {
   .dropdown,
   .popover,
   .menu,
+  .modal,
   .toast {
     transition: opacity 150ms ease;
   }
   .select-menu[data-starting-style],
   .dropdown[data-starting-style],
-  .popover[data-starting-style] {
+  .popover[data-starting-style],
+  .modal[data-starting-style],
+  .modal[data-ending-style] {
     transform: none;
   }
   @starting-style {

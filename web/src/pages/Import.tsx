@@ -7,6 +7,7 @@ import { Empty, ErrorBox, Field, FieldGroup, ListHead, Q, SearchField } from "..
 import { Segmented, Select } from "../components/controls";
 import { useSession } from "../session";
 import { useAct } from "../shell/toast";
+import { useConfirm } from "../shell/dialog";
 import { useGroups } from "../prefetch";
 
 type Source = "gitlab" | "github";
@@ -444,6 +445,7 @@ const STAGES: Record<string, string> = {
 export function ImportDetailPage() {
   const { id } = useParams();
   const qc = useQueryClient();
+  const confirm = useConfirm();
   const q = useQuery({
     queryKey: ["import", id],
     queryFn: () => api.get<S["ImportDetail"]>(`/imports/${id}`),
@@ -476,7 +478,13 @@ export function ImportDetailPage() {
                 }
               >
                 {(planned || ACTIVE.includes(d.status)) && (
-                  <button className="btn" onClick={() => confirm("Stop this import? Projects not imported yet are skipped.") && act("cancel", {}, "Import canceled")}>
+                  <button
+                    className="btn"
+                    onClick={async () => {
+                      const ok = await confirm({ title: "Stop this import?", body: "Projects not imported yet are skipped.", action: "Stop import", danger: true });
+                      if (ok) act("cancel", {}, "Import canceled");
+                    }}
+                  >
                     Cancel
                   </button>
                 )}

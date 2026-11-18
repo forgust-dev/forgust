@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowRight, AtSign, CalendarDays, FolderGit2, GitMerge, Network, Users } from "lucide-react";
 import { fetchers } from "../prefetch";
-import { api, bytes, type S } from "../api/client";
-import { Badge, Section, Empty, ErrorBox, Field, LevelSelect, NotFound, Q, VISIBILITY_OPTIONS, VisibilitySelect, ListHead, SearchField, Tile, QuotaBar, useFormRun } from "../components/ui";
+import { api, bytes, plural, timeAgo, type S } from "../api/client";
+import { Avatar, Badge, Section, Empty, ErrorBox, Field, LevelSelect, NotFound, Q, VISIBILITY_OPTIONS, VisibilitySelect, ListHead, SearchField, Tile, QuotaBar, UserLink, useFormRun } from "../components/ui";
+import { StatusIcon, statusLabel } from "./project/ci/Status";
 import { Select } from "../components/controls";
 import { useSetNav } from "../shell/nav";
 import { VariablesPanel } from "./project/ci/Settings";
@@ -25,8 +27,9 @@ export function GroupPage({ id, rest }: { id: number; fullPath: string; rest: st
             <>
               <GroupNav group={group} tab={tab} />
               {tab === "" && (
-                <div className="page-head">
-                  <div className="row wrap">
+                // as a project's page: the name, what it is under it, its facts in cards beside the list
+                <div className="page-head repo-head">
+                  <div className="row wrap" style={{ gap: 12 }}>
                     <Tile name={group.name} src={group.avatar_url} group big />
                     <h1 style={{ margin: 0 }}>{group.name}</h1>
                     <span className="pill">
@@ -36,11 +39,18 @@ export function GroupPage({ id, rest }: { id: number; fullPath: string; rest: st
                     <span className="grow" />
                     {group.access_level !== "none" && <Badge tone="accent">{group.access_level}</Badge>}
                   </div>
-                  {group.description && <p className="muted" style={{ margin: "6px 0 0" }}>{group.description}</p>}
+                  {group.description && <p className="repo-desc">{group.description}</p>}
                 </div>
               )}
               {tab === "members" && <ListHead title="Members" sub={`Who can reach ${group.name} and its projects, and what they can do.`} />}
-              {tab === "" && <Overview group={group} />}
+              {tab === "" && (
+                <div className="repo-layout group-layout">
+                  <div className="repo-main">
+                    <Overview group={group} />
+                  </div>
+                  <GroupAbout group={group} />
+                </div>
+              )}
               {tab === "members" && <Members base={`/groups/${id}`} canManage={group.can_admin || group.access_level === "maintainer"} kind="group" />}
               {tab === "settings" &&
                 (group.can_admin ? (
@@ -75,10 +85,118 @@ function GroupNav({ group, tab }: { group: S["GroupDetail"]; tab: string }) {
   return null;
 }
 
+const useSubgroups = (group: S["GroupDetail"]) =>
+  useQuery({ queryKey: ["subgroups", group.id], queryFn: () => api.get<S["GroupDto"][]>(`/groups/${group.id}/subgroups`), enabled: group.kind === "group" });
+const useGroupProjects = (group: S["GroupDetail"]) =>
+  useQuery({ queryKey: ["group-projects", group.id], queryFn: () => api.get<S["ProjectDto"][]>(`/groups/${group.id}/projects`) });
+
+/**
+ * How each project is doing, as on its own page: the latest pipeline of its
+ * default branch, and its open merge requests. One request for the list (the
+ * server reports on its first, most active projects).
+ */
+function useProjectStates(group: S["GroupDetail"]) {
+  const q = useQuery({
+    queryKey: ["group-project-states", group.id],
+    queryFn: () => api.get<S["ProjectState"][]>(`/groups/${group.id}/project_states`),
+    retry: false,
+    staleTime: 30_000,
+  });
+  const byId = new Map((q.data ?? []).map((s) => [s.project_id, s]));
+  return (p: S["ProjectDto"]) => {
+    const st = byId.get(p.id);
+    if (!st) return null;
+    const open = st.open_merge_requests;
+    const pipe = st.pipeline_iid != null && st.pipeline_status ? { iid: st.pipeline_iid, status: st.pipeline_status, ref: st.pipeline_ref ?? "" } : null;
+    if (!pipe && open === 0) return null;
+    return (
+      <span className="project-state">
+        {open > 0 && (
+          <Link to={`/${p.full_path}/-/merge_requests`} title={`${open} open merge request${open === 1 ? "" : "s"}`}>
+            <GitMerge size={13} aria-hidden /> {open}
+          </Link>
+        )}
+        {pipe && (
+          <Link className={`st-${pipe.status}`} to={`/${p.full_path}/-/pipelines/${pipe.iid}`} title={`Pipeline #${pipe.iid} on ${pipe.ref}: ${statusLabel(pipe.status)}`}>
+            <StatusIcon status={pipe.status} size={15} />
+          </Link>
+        )}
+      </span>
+    );
+  };
+}
+
+/** The group's facts, as a project's right column: people, projects, age. */
+function GroupAbout({ group }: { group: S["GroupDetail"] }) {
+  const web = `/${group.full_path}`;
+  // the members page's request; a non-member may not see them
+  const members = useQuery({ queryKey: ["members", `/groups/${group.id}`], queryFn: () => api.get<S["MemberDto"][]>(`/groups/${group.id}/members`), retry: false });
+  const projects = useGroupProjects(group);
+  const subgroups = useSubgroups(group);
+  const people = (members.data ?? []).filter((m) => m.user_type === "human");
+  return (
+    <aside className="repo-about" aria-label={`About ${group.name}`}>
+      <section className="side-card">
+        <h2>About</h2>
+        <ul>
+          {members.data && (
+            <li>
+              <Users size={15} />
+              {group.kind === "group" ? <Link to={`${web}/-/members`}>{plural(people.length, "member")}</Link> : <span>{plural(people.length, "member")}</span>}
+            </li>
+          )}
+          {projects.data && (
+            <li>
+              <FolderGit2 size={15} />
+              <span>{plural(projects.data.length, "project")}</span>
+            </li>
+          )}
+          {(subgroups.data?.length ?? 0) > 0 && (
+            <li>
+              <Network size={15} />
+              <span>{plural(subgroups.data!.length, "subgroup")}</span>
+            </li>
+          )}
+          <li>
+            <AtSign size={15} />
+            <span className="mono">{group.full_path}</span>
+          </li>
+          <li>
+            <CalendarDays size={15} />
+            <span>Created {timeAgo(group.created_at)}</span>
+          </li>
+        </ul>
+      </section>
+      {people.length > 0 && (
+        <section className="side-card">
+          <h2>Members</h2>
+          <ul className="side-people">
+            {people.slice(0, 8).map((m) => (
+              <li key={m.user_id}>
+                <Avatar name={m.name || m.username} username={m.username} />
+                <UserLink username={m.username} className="grow ellipsis">
+                  {m.name || m.username}
+                </UserLink>
+                <span className="faint small">{m.access_level}</span>
+              </li>
+            ))}
+          </ul>
+          {people.length > 8 && group.kind === "group" && (
+            <Link className="side-more" to={`${web}/-/members`}>
+              All {people.length} members <ArrowRight size={14} />
+            </Link>
+          )}
+        </section>
+      )}
+    </aside>
+  );
+}
+
 function Overview({ group }: { group: S["GroupDetail"] }) {
   const [search, setSearch] = useState("");
-  const subgroups = useQuery({ queryKey: ["subgroups", group.id], queryFn: () => api.get<S["GroupDto"][]>(`/groups/${group.id}/subgroups`), enabled: group.kind === "group" });
-  const projects = useQuery({ queryKey: ["group-projects", group.id], queryFn: () => api.get<S["ProjectDto"][]>(`/groups/${group.id}/projects`) });
+  const subgroups = useSubgroups(group);
+  const projects = useGroupProjects(group);
+  const stateOf = useProjectStates(group);
   const match = (s: string) => s.toLowerCase().includes(search.toLowerCase());
   const subs = (subgroups.data ?? []).filter((g) => match(g.name) || match(g.full_path));
   return (
@@ -108,7 +226,7 @@ function Overview({ group }: { group: S["GroupDetail"] }) {
                 <GroupRow key={`g${g.id}`} g={g} />
               ))}
               {list.map((p) => (
-                <ProjectRow key={p.id} p={p} />
+                <ProjectRow key={p.id} p={p} aside={stateOf(p)} />
               ))}
             </div>
           );
@@ -259,7 +377,12 @@ function GroupSettings({ group }: { group: S["GroupDetail"] }) {
                   nav("/");
                 },
                 "Deleted.",
-                `Delete ${group.full_path}? It must be empty.`,
+                {
+                  title: `Delete ${group.full_path}?`,
+                  body: "Only an empty group can go: move or delete its projects and subgroups first.",
+                  action: "Delete group",
+                  danger: true,
+                },
               )}
             >
               Delete group

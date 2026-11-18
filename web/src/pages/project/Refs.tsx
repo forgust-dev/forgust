@@ -9,6 +9,7 @@ import { PagedDiff } from "./Diff";
 import { CommitList } from "./History";
 import type { Ctx } from "./Project";
 import { useBranches, useTags } from "./Code";
+import { useConfirm } from "../../shell/dialog";
 
 /** Subject and age of a ref's tip, for list rows. */
 function Tip({ ctx, c }: { ctx: Ctx; c?: S["CommitSummary"] | null }) {
@@ -75,10 +76,17 @@ export function Branches({ ctx }: { ctx: Ctx }) {
   const [creating, setCreating] = useState(false);
   const qc = useQueryClient();
   const toast = useToast();
+  const confirm = useConfirm();
   const term = useDebounced(search, 250);
   const q = useQuery({ queryKey: ["branches", ctx.p.id, term], queryFn: () => api.get<S["BranchDto"][]>(`${ctx.base}/branches${qs({ search: term, per_page: 100 })}`) });
   const remove = async (name: string) => {
-    if (!confirm(`Delete the branch ${name}? Its commits stay reachable only from other branches and merge requests.`)) return;
+    const ok = await confirm({
+      title: `Delete the branch ${name}?`,
+      body: "Its commits stay reachable only from other branches and merge requests.",
+      action: "Delete branch",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await api.del(`${ctx.base}/branches/${encPath(name)}`);
       toast.ok(`Branch ${name} deleted`);
@@ -199,10 +207,16 @@ export function Tags({ ctx }: { ctx: Ctx }) {
   const [creating, setCreating] = useState(false);
   const qc = useQueryClient();
   const toast = useToast();
+  const confirm = useConfirm();
   const q = useTags(ctx);
   const remove = async (t: S["TagDto"]) => {
-    const also = t.release ? ` Its release “${t.release}” is deleted too.` : "";
-    if (!confirm(`Delete the tag ${t.name}?${also}`)) return;
+    const ok = await confirm({
+      title: `Delete the tag ${t.name}?`,
+      body: t.release ? `Its release “${t.release}” is deleted too.` : undefined,
+      action: "Delete tag",
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await api.del(`${ctx.base}/tags/${encPath(t.name)}`);
       toast.ok(`Tag ${t.name} deleted`);

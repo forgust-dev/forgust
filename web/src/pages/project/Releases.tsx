@@ -1,11 +1,13 @@
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, ExternalLink, FileArchive, Image, Package, Paperclip, Pencil, Plus, Tag, Trash2, Wrench } from "lucide-react";
-import { api, bytes, enc, refLink, timeAgo, type S } from "../../api/client";
+import { BookOpen, ExternalLink, FileArchive, GitCommitHorizontal, Image, Package, Paperclip, Pencil, Plus, Tag, Trash2, Wrench } from "lucide-react";
+import { api, bytes, enc, qs, refLink, timeAgo, type S } from "../../api/client";
 import { AuthorLink, Empty, ErrorBox, Field, ListHead, Q } from "../../components/ui";
+import { DecideCard, type DecideRow } from "../../components/decide";
 import { MarkdownEditor } from "../../components/MarkdownEditor";
 import { useToast } from "../../shell/toast";
+import { useConfirm } from "../../shell/dialog";
 import type { Ctx } from "./Project";
 import { useTags } from "./Code";
 import { Markdown } from "../../components/Markdown";
@@ -22,9 +24,10 @@ function ReleaseCard({ ctx, r, single }: { ctx: Ctx; r: S["ReleaseDto"]; single?
   const nav = useNavigate();
   const qc = useQueryClient();
   const toast = useToast();
+  const confirm = useConfirm();
   const page = `${ctx.web}/-/releases/${enc(r.tag_name)}`;
   const remove = async () => {
-    if (!confirm(`Delete the release ${r.name}? The tag ${r.tag_name} stays.`)) return;
+    if (!(await confirm({ title: `Delete the release ${r.name}?`, body: `The tag ${r.tag_name} stays.`, action: "Delete release", danger: true }))) return;
     try {
       await api.del(`/projects/${ctx.p.id}/releases/${enc(r.tag_name)}`);
       toast.ok(`Release ${r.name} deleted`);
@@ -98,6 +101,123 @@ function ReleaseCard({ ctx, r, single }: { ctx: Ctx; r: S["ReleaseDto"]; single?
   );
 }
 
+/**
+ * The page's emphasized card, for those who release: what is not released yet.
+ * Tags newer than the latest release that have none, and what the default branch
+ * gained since it. None when everything is released, or when nothing ever was.
+ */
+function Unreleased({ ctx, latest }: { ctx: Ctx; latest?: S["ReleaseDto"] }) {
+  const tags = useTags(ctx, ctx.p.can_push);
+  const ref = ctx.p.default_branch ?? "main";
+  const since = useQuery({
+    queryKey: ["compare", ctx.p.id, latest?.tag_name, ref, "commits"],
+    // the commits only: the diff stops at one file
+    queryFn: () => api.get<S["CompareResponse"]>(`${ctx.base}/compare${qs({ from: latest!.tag_name, to: ref, limit: 1 })}`),
+    enabled: ctx.p.can_push && !!latest,
+    staleTime: 60_000,
+  });
+  if (!ctx.p.can_push || !tags.data || (latest && !since.data)) return null;
+  const released = latest ? (tags.data.find((t) => t.name === latest.tag_name)?.commit?.committed_at ?? 0) : 0;
+  const fresh = tags.data.filter((t) => !t.release && (!latest || (t.commit?.committed_at ?? 0) > released));
+  const commits = since.data?.commits ?? [];
+  if (fresh.length === 0 && commits.length === 0) return null;
+  // the commit list stops at 250
+  const count = commits.length >= 250 ? "250+" : String(commits.length);
+  const tagRows = fresh.slice(0, 2);
+  const commitRows = commits.slice(0, 4 - tagRows.length);
+  const hidden = commits.length - commitRows.length;
+  const rows: DecideRow[] = [
+    ...tagRows.map((t) => ({
+      key: `tag:${t.name}`,
+      icon: <Tag size={15} className="row-ic" />,
+      text: (
+        <>
+          <code>{t.name}</code> {t.commit?.subject}
+        </>
+      ),
+      aside: <Link to={`${ctx.web}/-/releases/new?tag=${enc(t.name)}`}>Release it</Link>,
+    })),
+    ...commitRows.map((c) => ({
+      key: c.id,
+      icon: <GitCommitHorizontal size={15} className="row-ic" />,
+      text: <Link to={`${ctx.web}/-/commit/${c.id}`}>{c.subject}</Link>,
+      aside: c.id.slice(0, 8),
+    })),
+  ];
+  const first = fresh[0];
+  return (
+    <DecideCard
+      label="Not released yet"
+      eyebrow={
+        <>
+          <Package size={14} aria-hidden /> Not released yet
+        </>
+      }
+      // the title says what the button does: release the tag, else what the branch gained
+      title={
+        first
+          ? fresh.length === 1
+            ? `${first.name} has no release`
+            : `${fresh.length} tags have no release`
+          : `${count} commit${commits.length === 1 ? "" : "s"} on ${ref} since ${latest!.tag_name}`
+      }
+      sub={
+        latest
+          ? first && commits.length > 0
+            ? `${count} commit${commits.length === 1 ? "" : "s"} on ${ref} since ${latest.tag_name}, released ${timeAgo(latest.released_at)}.`
+            : `${latest.name} was released ${timeAgo(latest.released_at)}.`
+          : "Give a tag its notes and files."
+      }
+      actions={
+        <>
+          <Link className="btn run" to={`${ctx.web}/-/releases/new${first ? `?tag=${enc(first.name)}` : ""}`}>
+            {first ? `Release ${first.name}` : "Create release"}
+          </Link>
+          {latest && commits.length > 0 && (
+            <Link to={`${ctx.web}/-/compare/${latest.tag_name}...${ref}`}>
+              Compare {latest.tag_name}…{ref}
+            </Link>
+          )}
+        </>
+      }
+      rowsTitle={tagRows.length === 0 && commitRows.length > 0 ? `Latest on ${ref}` : undefined}
+      rows={rows}
+      foot={hidden > 0 ? `And ${hidden} more commit${hidden === 1 ? "" : "s"}.` : undefined}
+    />
+  );
+}
+
+/** An older release, in one line: the latest one gets the full card. */
+function ReleaseRow({ ctx, r }: { ctx: Ctx; r: S["ReleaseDto"] }) {
+  const assets = r.links.length + r.sources.length;
+  return (
+    <div className="item">
+      <span className="row-icon faint">
+        <Package size={16} />
+      </span>
+      <div className="grow" style={{ minWidth: 0 }}>
+        <div className="row-title">
+          <Link to={`${ctx.web}/-/releases/${enc(r.tag_name)}`} className="ellipsis">
+            {r.name}
+          </Link>
+          {r.upcoming_release && <span className="pill warn">Upcoming</span>}
+        </div>
+        <div className="row-meta">
+          <span>{r.tag_name}</span>
+          {r.commit && <span>{r.commit.short_id}</span>}
+          {r.author_username && <span>by {r.author_username}</span>}
+          <span>
+            {assets} asset{assets === 1 ? "" : "s"}
+          </span>
+        </div>
+      </div>
+      <span className="row-time" title={new Date(r.released_at).toLocaleString()}>
+        {timeAgo(r.released_at)}
+      </span>
+    </div>
+  );
+}
+
 export function Releases({ ctx }: { ctx: Ctx }) {
   const q = useQuery({ queryKey: ["releases", ctx.p.id], queryFn: () => api.get<S["ReleaseDto"][]>(`/projects/${ctx.p.id}/releases?per_page=50`) });
   return (
@@ -110,17 +230,35 @@ export function Releases({ ctx }: { ctx: Ctx }) {
         )}
       </ListHead>
       <Q q={q}>
-        {(list) =>
-          list.length === 0 ? (
-            <Empty>No releases yet.{ctx.p.can_push && " Create one from a tag, or let a pipeline make it."}</Empty>
-          ) : (
-            <div className="stack" style={{ gap: 16 }}>
-              {list.map((r) => (
-                <ReleaseCard key={r.id} ctx={ctx} r={r} />
-              ))}
-            </div>
-          )
-        }
+        {(list) => {
+          // newest first; an upcoming release is not the latest one out
+          const latest = list.find((r) => !r.upcoming_release) ?? list[0];
+          const rest = list.filter((r) => r !== latest);
+          return (
+            <>
+              <Unreleased ctx={ctx} latest={latest} />
+              {list.length === 0 ? (
+                <Empty>No releases yet.{ctx.p.can_push && " Create one from a tag, or let a pipeline make it."}</Empty>
+              ) : (
+                <>
+                  <ReleaseCard ctx={ctx} r={latest} />
+                  {rest.length > 0 && (
+                    <section className="stack" style={{ gap: 8, marginTop: 10 }} aria-label="Other releases">
+                      <h2 className="section-title">
+                        Other releases<span className="section-count"> {rest.length}</span>
+                      </h2>
+                      <div className="list rows">
+                        {rest.map((r) => (
+                          <ReleaseRow key={r.id} ctx={ctx} r={r} />
+                        ))}
+                      </div>
+                    </section>
+                  )}
+                </>
+              )}
+            </>
+          );
+        }}
       </Q>
     </div>
   );

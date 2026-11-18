@@ -71,6 +71,12 @@ export function qs(params: Record<string, string | number | boolean | undefined 
   return s ? `?${s}` : "";
 }
 
+/** "1 issue", "3 issues", "1,204 commits": a count and its noun. */
+export const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
+
+/** "a", "a and b", "a, b and c". */
+export const listAnd = (l: string[]) => (l.length > 1 ? `${l.slice(0, -1).join(", ")} and ${l[l.length - 1]}` : (l[0] ?? ""));
+
 export const LEVELS = ["guest", "reporter", "developer", "maintainer", "owner"] as const;
 
 export function timeAgo(ts: number | string): string {
@@ -88,6 +94,31 @@ export function timeAgo(ts: number | string): string {
   for (const u of units) if (s >= u[0]) unit = u;
   const n = Math.floor(s / unit[0]);
   return `${n} ${unit[1]}${n === 1 ? "" : "s"} ago`;
+}
+
+/**
+ * How long until a moment to come: "in 5 minutes", "in 2 days" (timeAgo's
+ * other way). One already past (a scheduler running late) is due any moment,
+ * and says since when.
+ */
+export function timeUntil(ts: number | string): string {
+  const t = typeof ts === "number" ? ts * 1000 : Date.parse(ts);
+  const s = (t - Date.now()) / 1000;
+  if (s <= -60) return `any moment now (due ${timeAgo(ts)})`;
+  if (s < 60) return "any moment now";
+  // each unit, and how many of it make the next
+  const units: [number, string, number][] = [
+    [60, "minute", 60],
+    [3600, "hour", 24],
+    [86400, "day", 30],
+    [86400 * 30, "month", Infinity],
+  ];
+  for (const [size, name, next] of units) {
+    const n = Math.round(s / size);
+    // 59.5 minutes is "in 1 hour", not "in 60 minutes"
+    if (n < next) return `in ${n} ${name}${n === 1 ? "" : "s"}`;
+  }
+  return "";
 }
 
 export function bytes(n: number): string {

@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDownToLine, ChevronDown, ChevronRight, Download, FileText, Play, RotateCcw, Square, FolderOpen } from "lucide-react";
-import { api, bytes, timeAgo, type S } from "../../../api/client";
+import { api, bytes, timeAgo, timeUntil, type S } from "../../../api/client";
 import { Q } from "../../../components/ui";
 import { useProjectEvents } from "../../../shell/live";
 import { useAct } from "../../../shell/toast";
@@ -11,7 +11,7 @@ import { usePref } from "../../../shell/theme";
 import type { Ctx } from "../Project";
 import { LogParser, sectionDuration, type LogLine, type Span } from "./log";
 import { RETRYABLE, StatusBadge, StatusIcon, duration, isActive } from "./Status";
-import { PipelineHeader, confirmRun, pipelineHref, usePipeline } from "./Pipelines";
+import { PipelineHeader, pipelineHref, useConfirmRun, usePipeline } from "./Pipelines";
 
 /** The job log, fetched incrementally while the job runs. */
 function useTrace(pid: number, jobId: number, status: string | undefined) {
@@ -229,16 +229,9 @@ function JobList({ ctx, p, current }: { ctx: Ctx; p: S["PipelineDetail"]; curren
   );
 }
 
-/** "in 12 minutes", for a moment ahead. */
-function timeUntil(ts: string): string {
-  const s = Math.max(0, (Date.parse(ts) - Date.now()) / 1000);
-  if (s < 60) return "any moment now";
-  const [n, unit] = s >= 86400 ? [Math.round(s / 86400), "day"] : s >= 3600 ? [Math.round(s / 3600), "hour"] : [Math.round(s / 60), "minute"];
-  return `in ${n} ${unit}${n === 1 ? "" : "s"}`;
-}
-
 export function JobPage({ ctx, jobId }: { ctx: Ctx; jobId: number }) {
   const qc = useQueryClient();
+  const confirmRun = useConfirmRun();
   const nav = useNavigate();
   const q = useQuery({ queryKey: ["job", ctx.p.id, jobId], queryFn: () => api.get<S["JobDetail"]>(`/projects/${ctx.p.id}/jobs/${jobId}`) });
   // status changes: through usePipeline's live updates (the "job" queries too)
@@ -249,7 +242,7 @@ export function JobPage({ ctx, jobId }: { ctx: Ctx; jobId: number }) {
     qc.invalidateQueries({ queryKey: ["pipeline", ctx.p.id] });
   });
   const act = async (what: "retry" | "play" | "cancel" | "unschedule") => {
-    if (what === "play" && q.data && !confirmRun(q.data)) return;
+    if (what === "play" && q.data && !(await confirmRun(q.data))) return;
     let retried: number | null = null;
     const done = what === "retry" ? "Retrying" : what === "play" ? "Started" : what === "unschedule" ? "Unscheduled: it waits for someone to run it" : "Canceling";
     if (await run(async () => (retried = (await api.post<S["JobDto"]>(`/projects/${ctx.p.id}/jobs/${jobId}/${what}`)).id), done) && what === "retry" && retried != null) {

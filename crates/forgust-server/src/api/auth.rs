@@ -198,7 +198,7 @@ async fn second_factor(
     let hash = crypto::token_hash(challenge);
     let mut tx = state.db.begin().await?;
     let forgust_db::sessions::Challenge { user_id, provider_sync, webauthn_state } =
-        forgust_db::sessions::lock_challenge(&mut tx, &hash).await?.ok_or(ApiError::Unauthorized)?;
+        forgust_db::sessions::lock_challenge(&mut tx, &hash).await?.ok_or(ApiError::ChallengeExpired)?;
     second_step_allowed(&state, user_id)?;
     let user = forgust_db::users::find(&mut *tx, user_id).await?.ok_or(ApiError::Unauthorized)?;
     // wrong codes: 5 per 10 minutes per account; then the challenge is gone
@@ -301,7 +301,7 @@ fn second_step_budget(state: &AppState, key: &str) -> ApiResult<()> {
 #[utoipa::path(post, path = "/api/v1/auth/login/second_factor", request_body = PendingLogin, responses((status = 200, body = SecondFactors)), tag = "auth")]
 pub async fn second_factors(State(state): State<AppState>, Json(req): Json<PendingLogin>) -> ApiResult<Json<SecondFactors>> {
     let user_id =
-        forgust_db::sessions::challenge_user(&state.db, &crypto::token_hash(&req.challenge)).await?.ok_or(ApiError::Unauthorized)?;
+        forgust_db::sessions::challenge_user(&state.db, &crypto::token_hash(&req.challenge)).await?.ok_or(ApiError::ChallengeExpired)?;
     second_step_question_allowed(&state, user_id)?;
     let user = forgust_db::users::find(&state.db, user_id).await?.ok_or(ApiError::Unauthorized)?;
     Ok(Json(SecondFactors {
@@ -324,7 +324,7 @@ pub struct WebauthnChallenge {
 pub async fn security_key_start(State(state): State<AppState>, Json(req): Json<PendingLogin>) -> ApiResult<Json<WebauthnChallenge>> {
     let rp = webauthn::of(&state)?;
     let hash = crypto::token_hash(&req.challenge);
-    let user_id = forgust_db::sessions::challenge_user(&state.db, &hash).await?.ok_or(ApiError::Unauthorized)?;
+    let user_id = forgust_db::sessions::challenge_user(&state.db, &hash).await?.ok_or(ApiError::ChallengeExpired)?;
     second_step_question_allowed(&state, user_id)?;
     let keys = forgust_db::webauthn::credentials(&state.db, user_id, CredentialKind::SecurityKey, &rp.id).await?;
     let keys: Vec<SecurityKey> = keys.into_iter().map(|k| webauthn::from_json(k.credential)).collect::<ApiResult<_>>()?;
@@ -333,7 +333,7 @@ pub async fn security_key_start(State(state): State<AppState>, Json(req): Json<P
     }
     let (options, asked) = rp.start_securitykey_authentication(&keys).map_err(webauthn::internal)?;
     if !forgust_db::webauthn::set_challenge_state(&state.db, &hash, Some(&webauthn::to_json(&asked)?)).await? {
-        return Err(ApiError::Unauthorized);
+        return Err(ApiError::ChallengeExpired);
     }
     Ok(Json(WebauthnChallenge { options: webauthn::to_json(&options)? }))
 }
