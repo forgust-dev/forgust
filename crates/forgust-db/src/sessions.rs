@@ -47,18 +47,40 @@ pub async fn delete(e: impl PgExecutor<'_>, token_hash: &[u8]) -> Result<()> {
 }
 
 /// Every session of `user_id` but the one with `keep` (the one in use).
-/// When a live session was created (its sign-in).
-pub async fn created_at(e: impl PgExecutor<'_>, token_hash: &[u8]) -> Result<Option<DateTime<Utc>>> {
-    sqlx::query_scalar!("SELECT created_at FROM sessions WHERE token_hash = $1 AND expires_at > now()", token_hash).fetch_optional(e).await
+/// Whose live session this is and when it was created (its sign-in), if it
+/// is the account's own (not an impersonation).
+pub async fn own_sign_in(e: impl PgExecutor<'_>, token_hash: &[u8]) -> Result<Option<(i64, DateTime<Utc>)>> {
+    let r = sqlx::query!(
+        "SELECT user_id, created_at FROM sessions WHERE token_hash = $1 AND expires_at > now() AND impersonator_id IS NULL",
+        token_hash
+    )
+    .fetch_optional(e)
+    .await?;
+    Ok(r.map(|r| (r.user_id, r.created_at)))
 }
 
 pub async fn delete_others(e: impl PgExecutor<'_>, user_id: i64, keep: &[u8]) -> Result<()> {
-    sqlx::query!("DELETE FROM sessions WHERE user_id = $1 AND token_hash <> $2", user_id, keep).execute(e).await?;
+    sqlx::query!(
+        "WITH c AS (DELETE FROM login_challenges WHERE user_id = $1),
+              w AS (DELETE FROM webauthn_ceremonies WHERE user_id = $1)
+         DELETE FROM sessions WHERE user_id = $1 AND token_hash <> $2",
+        user_id,
+        keep
+    )
+    .execute(e)
+    .await?;
     Ok(())
 }
 
 pub async fn delete_for_user(e: impl PgExecutor<'_>, user_id: i64) -> Result<()> {
-    sqlx::query!("DELETE FROM sessions WHERE user_id = $1", user_id).execute(e).await?;
+    sqlx::query!(
+        "WITH c AS (DELETE FROM login_challenges WHERE user_id = $1),
+              w AS (DELETE FROM webauthn_ceremonies WHERE user_id = $1)
+         DELETE FROM sessions WHERE user_id = $1",
+        user_id
+    )
+    .execute(e)
+    .await?;
     Ok(())
 }
 

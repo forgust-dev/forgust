@@ -82,6 +82,7 @@ pub async fn add_gpg_key(State(state): State<AppState>, SignedIn(u, p): SignedIn
 }
 
 pub async fn delete_gpg_key(State(state): State<AppState>, SignedIn(u, p): SignedIn, Path(id): Path<i64>) -> ApiResult<Json<Value>> {
+    super::user::require_interactive(&u, &p)?;
     if !forgust_db::gpg_keys::delete_for_user(&state.db, u.id, id).await? {
         return Err(ApiError::NotFound);
     }

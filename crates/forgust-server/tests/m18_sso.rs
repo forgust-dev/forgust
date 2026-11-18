@@ -219,6 +219,21 @@ async fn the_last_way_in_cannot_be_unlinked(pool: sqlx::PgPool) {
     nora.ok_post("/api/v1/user/identities/corp/unlink", json!({ "password": "nora-has-a-password-1" })).await;
 }
 
+/// Without a password, a recent sign-in stands in for it once: one sign-in,
+/// one change, whatever is sent as the password.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn a_recent_sign_in_covers_one_change(pool: sqlx::PgPool) {
+    let (srv, idp) = with_idp(pool, json!({ "auto_create": true })).await;
+    let olga = session_of(&srv, sign_in(&srv, &idp, person("corp-olga", "olga@corp.example")).await).await;
+    // setting the app up keeps the sign-in for enabling it
+    let setup = olga.ok_post("/api/v1/user/two_factor/setup", json!({ "password": "anything" })).await;
+    let code = totp_code(setup["secret"].as_str().unwrap());
+    olga.ok_post("/api/v1/user/two_factor/enable", json!({ "code": code, "password": "anything" })).await;
+    let (status, body) = olga.post("/api/v1/user/two_factor/recovery_codes", json!({ "password": "anything" })).await;
+    assert_eq!(status, 403, "{body}");
+    assert_eq!(olga.post("/api/v1/user/two_factor/disable", json!({ "password": "" })).await.0, 403);
+}
+
 /// `allowed_groups`: only members come in through the provider, to a new
 /// account, an existing one or a link.
 #[sqlx::test(migrator = "forgust_db::MIGRATOR")]

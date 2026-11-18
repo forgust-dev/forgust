@@ -207,7 +207,7 @@ async fn tokens_deploy_keys_and_two_factor(pool: sqlx::PgPool) {
     assert_eq!((s, v["error"].as_str()), (403, Some("two_factor_required")));
 
     // enrol TOTP, after which access works and sign-in needs the code
-    let setup = dev.ok_post("/api/v1/user/two_factor/setup", json!({})).await;
+    let setup = dev.ok_post("/api/v1/user/two_factor/setup", json!({ "password": password("dave") })).await;
     let secret = setup["secret"].as_str().unwrap();
     let code = totp_code(secret);
     assert_eq!(dev.post("/api/v1/user/two_factor/enable", json!({ "code": code })).await.0, 403, "enrolment needs the password");
@@ -616,7 +616,8 @@ async fn forgotten_credentials_take_the_second_factor(pool: sqlx::PgPool) {
 
 /// Turn TOTP on for a signed-in user; their recovery codes.
 async fn enable_totp(c: &Client, username: &str) -> Vec<String> {
-    let secret = c.ok_post("/api/v1/user/two_factor/setup", json!({})).await["secret"].as_str().unwrap().to_string();
+    let secret =
+        c.ok_post("/api/v1/user/two_factor/setup", json!({ "password": password(username) })).await["secret"].as_str().unwrap().to_string();
     let on = c.ok_post("/api/v1/user/two_factor/enable", json!({ "code": totp_code(&secret), "password": password(username) })).await;
     assert_eq!(on["user"]["two_factor_enabled"], true);
     on["recovery_codes"].as_array().unwrap().iter().map(|c| c.as_str().unwrap().to_string()).collect()

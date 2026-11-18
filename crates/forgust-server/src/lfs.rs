@@ -55,14 +55,7 @@ pub(crate) struct Access {
     pub read: bool,
     pub write: bool,
     pub signed_in: bool,
-    who: Who,
-}
-
-enum Who {
-    User(forgust_db::users::User),
-    /// A user's `git-lfs-authenticate` token: looked up only when a lock asks.
-    SshUser(i64),
-    Nobody,
+    principal: Principal,
 }
 
 /// (can read, can write) for the request, credentials checked once. LFS also
@@ -73,18 +66,26 @@ pub(crate) async fn access(state: &AppState, project: &Project, headers: &Header
         if t.project_id != project.id {
             return Err(ApiError::NotFound);
         }
-        let who = if t.principal_kind == "user" { Who::SshUser(t.principal_id) } else { Who::Nobody };
-        return Ok(Access { read: true, write: t.can_write && !project.archived(), signed_in: true, who });
+        let principal = match t.principal_kind.as_str() {
+            "user" => {
+                let user = forgust_db::users::find(&state.db, t.principal_id).await?.ok_or(ApiError::Unauthorized)?;
+                if !user.is_active() {
+                    return Err(ApiError::Unauthorized);
+                }
+                Principal::User { user, scopes: None }
+            }
+            "deploy_key" => Principal::DeployKey { key_id: t.principal_id },
+            _ => return Err(ApiError::Unauthorized),
+        };
+        let read = can_project(state, &principal, ProjectAction::ReadCode, project).await?;
+        let write = read && t.can_write && can_project(state, &principal, ProjectAction::Push, project).await?;
+        return Ok(Access { read, write, signed_in: true, principal });
     }
     let principal = basic_principal(state, headers, ip).await?;
     let read = can_project(state, &principal, ProjectAction::ReadCode, project).await?;
     let write = read && can_project(state, &principal, ProjectAction::Push, project).await?;
     let signed_in = !matches!(principal, Principal::Anonymous);
-    let who = match principal {
-        Principal::User { user, .. } | Principal::Job { user, .. } => Who::User(user),
-        _ => Who::Nobody,
-    };
-    Ok(Access { read, write, signed_in, who })
+    Ok(Access { read, write, signed_in, principal })
 }
 
 pub(crate) fn lfs_ssh_token(headers: &HeaderMap) -> Option<String> {
@@ -96,7 +97,7 @@ pub(crate) fn lfs_ssh_token(headers: &HeaderMap) -> Option<String> {
 }
 
 pub async fn handle(state: AppState, project: Project, rest: String, req: Request) -> ApiResult<Response> {
-    let Access { read, write, signed_in, who } =
+    let Access { read, write, signed_in, principal } =
         match access(&state, &project, req.headers(), ClientIp::of(&state, req.headers(), req.extensions())).await {
             Ok(a) => a,
             Err(ApiError::Unauthorized) => return Ok(lfs_error(StatusCode::UNAUTHORIZED, "Credentials needed")),
@@ -121,14 +122,7 @@ pub async fn handle(state: AppState, project: Project, rest: String, req: Reques
             let oid = p["objects/".len()..].to_string();
             upload(state, project, oid, req).await
         }
-        (method, p) if p == "locks" || p.starts_with("locks/") => {
-            let user = match who {
-                Who::User(u) => Some(u),
-                Who::SshUser(id) => forgust_db::users::find(&state.db, id).await?,
-                Who::Nobody => None,
-            };
-            locks(state, project, write, user, method, p.to_string(), req).await
-        }
+        (method, p) if p == "locks" || p.starts_with("locks/") => locks(state, project, write, principal, method, p.to_string(), req).await,
         _ => Ok(lfs_error(StatusCode::NOT_FOUND, "Not found")),
     }
 }
@@ -172,11 +166,12 @@ async fn locks(
     state: AppState,
     project: Project,
     write: bool,
-    user: Option<forgust_db::users::User>,
+    principal: Principal,
     method: Method,
     path: String,
     req: Request,
 ) -> ApiResult<Response> {
+    let user = principal.user().filter(|_| write);
     let query: LockQuery = axum::extract::Query::try_from_uri(req.uri()).map(|q| q.0).unwrap_or_default();
     let body: LockBody = if method == Method::POST {
         let bytes = axum::body::to_bytes(req.into_body(), 64 << 10).await.map_err(|_| ApiError::bad("request too large"))?;
@@ -201,7 +196,7 @@ async fn locks(
             Ok(json_lfs(json!({ "locks": locks, "next_cursor": next })))
         }
         (Method::POST, "locks") => {
-            let Some(u) = user.filter(|_| write) else { return Ok(lfs_error(StatusCode::FORBIDDEN, "You cannot push to this repository")) };
+            let Some(u) = user else { return Ok(lfs_error(StatusCode::FORBIDDEN, "You cannot push to this repository")) };
             let p = body.path.trim().trim_start_matches('/').to_string();
             if p.is_empty() || p.len() > 4096 || p.split('/').any(|s| s == ".." || s.is_empty()) {
                 return Ok(lfs_error(StatusCode::UNPROCESSABLE_ENTITY, "invalid path"));
@@ -223,7 +218,7 @@ async fn locks(
             }
         }
         (Method::POST, "locks/verify") => {
-            let Some(u) = user.filter(|_| write) else { return Ok(lfs_error(StatusCode::FORBIDDEN, "You cannot push to this repository")) };
+            let Some(u) = user else { return Ok(lfs_error(StatusCode::FORBIDDEN, "You cannot push to this repository")) };
             let (after, limit) = page(body.cursor.as_deref(), body.limit);
             let list = forgust_db::lfs_locks::list(&state.db, project.id, None, None, after, limit + 1).await?;
             let next = (list.len() as i64 > limit).then(|| list[limit as usize - 1].id.to_string());
@@ -235,7 +230,7 @@ async fn locks(
             })))
         }
         (Method::POST, p) if p.starts_with("locks/") && p.ends_with("/unlock") => {
-            let Some(u) = user.filter(|_| write) else { return Ok(lfs_error(StatusCode::FORBIDDEN, "You cannot push to this repository")) };
+            let Some(u) = user else { return Ok(lfs_error(StatusCode::FORBIDDEN, "You cannot push to this repository")) };
             let Ok(id) = p["locks/".len()..p.len() - "/unlock".len()].parse::<i64>() else {
                 return Ok(lfs_error(StatusCode::NOT_FOUND, "Lock not found"));
             };
@@ -243,7 +238,6 @@ async fn locks(
                 return Ok(lfs_error(StatusCode::NOT_FOUND, "Lock not found"));
             };
             if lock.owner_id != u.id {
-                let principal = Principal::User { user: u.clone(), scopes: None };
                 if !body.force {
                     return Ok(lfs_error(
                         StatusCode::FORBIDDEN,

@@ -171,6 +171,7 @@ pub async fn create_group_runner(
     Json(b): Json<RunnerBody>,
 ) -> ApiResult<Json<NewRunnerToken>> {
     p.may_mint_credentials()?;
+    super::user::require_confirmed(&state, &me)?;
     let g = group_for(&state, &p, &id, GroupAction::Admin).await?;
     if g.kind != "group" {
         return Err(ApiError::bad("runners belong to groups, not personal namespaces"));
@@ -212,6 +213,7 @@ pub async fn create_project_runner(
     Json(b): Json<RunnerBody>,
 ) -> ApiResult<Json<NewRunnerToken>> {
     p.may_mint_credentials()?;
+    super::user::require_confirmed(&state, &me)?;
     let proj = project_for(&state, &p, &id, ProjectAction::Admin).await?;
     Ok(Json(create_runner(&state, "project", None, Some(proj.id), me.id, b).await?))
 }
@@ -287,12 +289,13 @@ pub async fn delete_runner(
 #[utoipa::path(post, path = "/api/v1/runners/{id}/reset_token", responses((status = 200, body = NewRunnerToken)), tag = "ci")]
 pub async fn reset_runner_token(
     State(state): State<AppState>,
-    SignedIn(_, p): SignedIn,
+    SignedIn(me, p): SignedIn,
     Path(id): Path<i64>,
 ) -> ApiResult<Json<NewRunnerToken>> {
     // a new token is a new runner credential: from the person's own session,
     // as creating the runner is
     p.may_mint_credentials()?;
+    super::user::require_confirmed(&state, &me)?;
     let r = managed_runner(&state, &p, id).await?;
     let token = runner_api::rotate_token(&state, r.id).await?;
     Ok(Json(NewRunnerToken { id: r.id, token }))

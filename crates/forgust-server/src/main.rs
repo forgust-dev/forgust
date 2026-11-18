@@ -148,14 +148,50 @@ async fn run(command: Command, cfg: Config) -> anyhow::Result<()> {
 
 fn toml_like(cfg: &Config) -> String {
     let mut v = serde_json::to_value(cfg).unwrap_or_default();
-    if let Some(s) = v.pointer_mut("/security/secret_key") {
-        *s = serde_json::Value::String("<redacted>".into());
+    for path in ["/security/secret_key", "/blobs/s3_secret_access_key"] {
+        if let Some(s) = v.pointer_mut(path) {
+            *s = serde_json::Value::String("<redacted>".into());
+        }
     }
-    if let Some(s) = v.pointer_mut("/blobs/s3_secret_access_key") {
-        *s = serde_json::Value::String("<redacted>".into());
+    for path in ["/database/url", "/email/smtp_url", "/telemetry/sentry_dsn", "/telemetry/metrics_token", "/renovate/github_com_token"] {
+        if let Some(s) = v.pointer_mut(path).filter(|s| s.as_str().is_some_and(|d| !d.trim().is_empty())) {
+            *s = serde_json::Value::String("<redacted>".into());
+        }
     }
-    if let Some(s) = v.pointer_mut("/telemetry/sentry_dsn").filter(|s| s.as_str().is_some_and(|d| !d.trim().is_empty())) {
-        *s = serde_json::Value::String("<redacted>".into());
+    if let Some(oidc) = v.get_mut("oidc").and_then(|o| o.as_object_mut()) {
+        for p in oidc.values_mut() {
+            if let Some(s) = p.get_mut("client_secret").filter(|s| s.as_str().is_some_and(|d| !d.trim().is_empty())) {
+                *s = serde_json::Value::String("<redacted>".into());
+            }
+        }
     }
     serde_json::to_string_pretty(&v).unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn config_output_redacts_secrets() {
+        let mut cfg = Config::default();
+        cfg.database.url = "postgres://forgust:db-secret@localhost/forgust".into();
+        cfg.email.smtp_url = "smtp://user:smtp-secret@mail.example.com".into();
+        cfg.telemetry.metrics_token = "metrics-secret".into();
+        cfg.renovate.github_com_token = Some("ghp_renovate_secret".into());
+        cfg.oidc.insert(
+            "corp".into(),
+            serde_json::from_value(serde_json::json!({
+                "display_name": "Corp",
+                "issuer": "https://idp.example.com",
+                "client_id": "forgust",
+                "client_secret": "oidc-secret"
+            }))
+            .unwrap(),
+        );
+        let out = toml_like(&cfg);
+        for s in ["db-secret", "smtp-secret", "metrics-secret", "ghp_renovate_secret", "oidc-secret"] {
+            assert!(!out.contains(s), "leaked {s} in {out}");
+        }
+    }
 }

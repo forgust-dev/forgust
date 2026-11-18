@@ -118,12 +118,14 @@ pub async fn children_visible(
            FROM namespaces n JOIN routes r ON r.source_type = 'namespace' AND r.source_id = n.id
            WHERE n.parent_id = $1
              AND ($3 OR n.visibility = 20 OR (n.visibility = 10 AND $4)
-                  OR EXISTS (SELECT 1 FROM namespace_authorizations a WHERE a.namespace_id = n.id AND a.user_id = $2)
-                  OR EXISTS (SELECT 1 FROM namespaces d JOIN namespace_authorizations a ON a.namespace_id = d.id
-                             WHERE d.traversal_ids @> ARRAY[n.id] AND a.user_id = $2)
-                  OR EXISTS (SELECT 1 FROM projects p JOIN namespaces d ON d.id = p.namespace_id
-                             JOIN project_authorizations pa ON pa.project_id = p.id
-                             WHERE d.traversal_ids @> ARRAY[n.id] AND pa.user_id = $2))
+                  OR ((NOT (SELECT require_two_factor FROM namespaces WHERE id = n.traversal_ids[1])
+                       OR EXISTS (SELECT 1 FROM users u WHERE u.id = $2 AND (u.two_factor_enabled OR u.is_admin OR u.user_type <> 'human')))
+                      AND (EXISTS (SELECT 1 FROM namespace_authorizations a WHERE a.namespace_id = n.id AND a.user_id = $2)
+                           OR EXISTS (SELECT 1 FROM namespaces d JOIN namespace_authorizations a ON a.namespace_id = d.id
+                                      WHERE d.traversal_ids @> ARRAY[n.id] AND a.user_id = $2)
+                           OR EXISTS (SELECT 1 FROM projects p JOIN namespaces d ON d.id = p.namespace_id
+                                      JOIN listed_project_authorizations pa ON pa.project_id = p.id
+                                      WHERE d.traversal_ids @> ARRAY[n.id] AND pa.user_id = $2))))
            ORDER BY lower(n.name)"#,
         parent,
         user_id,
@@ -144,11 +146,13 @@ pub async fn top_level_visible(e: impl PgExecutor<'_>, user_id: Option<i64>, is_
            FROM namespaces n JOIN routes r ON r.source_type = 'namespace' AND r.source_id = n.id
            WHERE n.kind = 'group' AND n.parent_id IS NULL
              AND ($2 OR n.visibility = 20 OR (n.visibility = 10 AND $3)
-                  OR EXISTS (SELECT 1 FROM namespaces d JOIN namespace_authorizations a ON a.namespace_id = d.id
-                             WHERE d.traversal_ids @> ARRAY[n.id] AND a.user_id = $1)
-                  OR EXISTS (SELECT 1 FROM projects p JOIN namespaces d ON d.id = p.namespace_id
-                             JOIN project_authorizations pa ON pa.project_id = p.id
-                             WHERE d.traversal_ids @> ARRAY[n.id] AND pa.user_id = $1))
+                  OR ((NOT n.require_two_factor
+                       OR EXISTS (SELECT 1 FROM users u WHERE u.id = $1 AND (u.two_factor_enabled OR u.is_admin OR u.user_type <> 'human')))
+                      AND (EXISTS (SELECT 1 FROM namespaces d JOIN namespace_authorizations a ON a.namespace_id = d.id
+                                   WHERE d.traversal_ids @> ARRAY[n.id] AND a.user_id = $1)
+                           OR EXISTS (SELECT 1 FROM projects p JOIN namespaces d ON d.id = p.namespace_id
+                                      JOIN listed_project_authorizations pa ON pa.project_id = p.id
+                                      WHERE d.traversal_ids @> ARRAY[n.id] AND pa.user_id = $1))))
            ORDER BY lower(n.name)"#,
         user_id,
         is_admin,

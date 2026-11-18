@@ -358,11 +358,12 @@ pub struct AddDeployKey {
 
 pub async fn add_deploy_key(
     State(state): State<AppState>,
-    SignedIn(_, p): SignedIn,
+    SignedIn(u, p): SignedIn,
     Path(id): Path<String>,
     Json(req): Json<AddDeployKey>,
 ) -> ApiResult<Json<Vec<DeployKey>>> {
     p.may_mint_credentials()?;
+    super::user::require_confirmed(&state, &u)?;
     let proj = project_for(&state, &p, &id, ProjectAction::Admin).await?;
     let (key, fp) = super::user::parse_public_key(&req.key)?;
     // expired keys too: an expired personal key still holds its fingerprint
@@ -413,11 +414,12 @@ pub async fn list_deploy_tokens(
 
 pub async fn create_deploy_token(
     State(state): State<AppState>,
-    SignedIn(_, p): SignedIn,
+    SignedIn(u, p): SignedIn,
     Path(id): Path<String>,
     Json(req): Json<CreateDeployToken>,
 ) -> ApiResult<Json<NewToken>> {
     p.may_mint_credentials()?;
+    super::user::require_confirmed(&state, &u)?;
     let proj = project_for(&state, &p, &id, ProjectAction::Admin).await?;
     Ok(Json(create_deploy(&state, &p, Some(proj.id), None, req).await?))
 }

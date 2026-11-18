@@ -223,9 +223,11 @@ async fn security_keys_are_a_second_factor(pool: sqlx::PgPool) {
     let bob = srv.user("bob", false).await;
     let mut bobs = Authenticator::new();
     assert_eq!(register(&bob, "bob", &mut bobs, "security_key", "Bob's").await.0, 200);
+    let ask = key_question(&srv, &ch).await;
     let foreign = bobs.get(&ask, ORIGIN, false, None);
     assert_eq!(key_answer(&srv, &ch, foreign).await, 401);
     // hers: signed in, once
+    let ask = key_question(&srv, &ch).await;
     let answer = yubikey.get(&ask, ORIGIN, false, None);
     let mut signed_in = Client::new(&srv.base);
     let r = anon_send(&srv, "/api/v1/auth/login/webauthn", json!({ "challenge": ch, "credential": answer })).await;
@@ -262,6 +264,20 @@ async fn security_keys_are_a_second_factor(pool: sqlx::PgPool) {
     assert_eq!(u["two_factor_enabled"], false);
     assert_eq!(ann.ok_get("/api/v1/user/two_factor/recovery_codes").await["remaining"], 0);
     assert!(audited(&srv, "webauthn_removed").await);
+}
+
+/// An authenticator app still being set up is no second factor: it cannot
+/// stand in for the account's security keys, and setting it up asks for the password.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn a_pending_authenticator_app_is_no_second_factor(pool: sqlx::PgPool) {
+    let srv = server(pool).await;
+    let ann = srv.user("ann", false).await;
+    assert_eq!(register(&ann, "ann", &mut Authenticator::new(), "security_key", "YubiKey").await.0, 200);
+    assert_eq!(ann.post("/api/v1/user/two_factor/setup", json!({})).await.0, 403, "the password again");
+    let pending = ann.ok_post("/api/v1/user/two_factor/setup", json!({ "password": password("ann") })).await;
+    let code = totp_code(pending["secret"].as_str().unwrap());
+    let ch = challenge(&srv, "ann").await;
+    assert_eq!(Client::new(&srv.base).post("/api/v1/auth/login/totp", json!({ "challenge": ch, "code": code })).await.0, 401);
 }
 
 #[sqlx::test(migrator = "forgust_db::MIGRATOR")]

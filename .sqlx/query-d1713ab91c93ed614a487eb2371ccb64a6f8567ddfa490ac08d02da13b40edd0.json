@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH c AS (DELETE FROM login_challenges WHERE user_id = $1),\n              w AS (DELETE FROM webauthn_ceremonies WHERE user_id = $1)\n         DELETE FROM sessions WHERE user_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d1713ab91c93ed614a487eb2371ccb64a6f8567ddfa490ac08d02da13b40edd0"
+}
