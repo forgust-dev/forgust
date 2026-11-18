@@ -7,7 +7,8 @@ use sqlx::{PgConnection, PgExecutor};
 
 use crate::Result;
 
-/// Live logs are stored in chunks of this size (ADR-0014).
+/// A live log is stored as the runner sends it, one row per update, and an
+/// update larger than this is split in rows of this size (ADR-0014).
 pub const TRACE_CHUNK: i64 = 128 * 1024;
 
 // ---------------------------------------------------------------- settings
@@ -1054,55 +1055,48 @@ pub enum Append {
     RangeMismatch(i64),
 }
 
-/// Append bytes at `offset` (must equal the current size) to a locked build.
+/// Append bytes at `offset` (must equal the current size) to a locked build:
+/// new rows, never a rewrite of the ones there.
 pub async fn append_trace(c: &mut PgConnection, build: &Build, offset: i64, data: &[u8]) -> Result<Append> {
     if offset != build.trace_size {
         return Ok(Append::RangeMismatch(build.trace_size));
     }
     let mut pos = offset;
-    let mut rest = data;
-    while !rest.is_empty() {
-        let idx = (pos / TRACE_CHUNK) as i32;
-        let room = (TRACE_CHUNK - pos % TRACE_CHUNK) as usize;
-        let (part, tail) = rest.split_at(rest.len().min(room));
-        sqlx::query!(
-            "INSERT INTO ci_job_trace_chunks (build_id, chunk_index, data) VALUES ($1, $2, $3)
-             ON CONFLICT (build_id, chunk_index) DO UPDATE SET data = ci_job_trace_chunks.data || $3",
-            build.id,
-            idx,
-            part
-        )
-        .execute(&mut *c)
-        .await?;
+    for part in data.chunks(TRACE_CHUNK as usize) {
+        sqlx::query!("INSERT INTO ci_job_trace_chunks (build_id, byte_offset, data) VALUES ($1, $2, $3)", build.id, pos, part)
+            .execute(&mut *c)
+            .await?;
         pos += part.len() as i64;
-        rest = tail;
     }
     sqlx::query!("UPDATE ci_builds SET trace_size = $2, contacted_at = now() WHERE id = $1", build.id, pos).execute(&mut *c).await?;
     Ok(Append::Ok(pos))
 }
 
-/// Bytes from `offset` to the end of the live trace (chunks still in Postgres).
-/// At most `max` live log bytes from `offset` (only the chunks that hold them are read).
+/// At most `max` live log bytes from `offset` (chunks still in Postgres): only
+/// the rows that hold them are read, from the one `offset` falls in.
 pub async fn read_trace(e: impl PgExecutor<'_>, build_id: i64, offset: i64, max: i64) -> Result<Vec<u8>> {
     let offset = offset.max(0);
-    let max = max.max(0);
-    let first = (offset / TRACE_CHUNK) as i32;
-    let last = (offset.saturating_add(max) / TRACE_CHUNK).min(i32::MAX as i64) as i32;
-    let chunks = sqlx::query_scalar!(
-        "SELECT data FROM ci_job_trace_chunks WHERE build_id = $1 AND chunk_index BETWEEN $2 AND $3 ORDER BY chunk_index",
+    let end = offset.saturating_add(max.max(0));
+    let rows = sqlx::query!(
+        "SELECT byte_offset, data FROM ci_job_trace_chunks
+          WHERE build_id = $1 AND byte_offset < $3
+            AND byte_offset >= coalesce((SELECT max(byte_offset) FROM ci_job_trace_chunks
+                                          WHERE build_id = $1 AND byte_offset <= $2), 0)
+          ORDER BY byte_offset",
         build_id,
-        first,
-        last
+        offset,
+        end
     )
     .fetch_all(e)
     .await?;
     let mut out = Vec::new();
-    for c in chunks {
-        out.extend_from_slice(&c);
+    for r in rows {
+        // the part of this row's bytes inside [offset, end)
+        let len = r.data.len() as i64;
+        let from = (offset - r.byte_offset).clamp(0, len) as usize;
+        let to = (end - r.byte_offset).clamp(0, len) as usize;
+        out.extend_from_slice(&r.data[from..to]);
     }
-    let skip = (offset - first as i64 * TRACE_CHUNK) as usize;
-    let mut out = if skip >= out.len() { Vec::new() } else { out.split_off(skip) };
-    out.truncate(usize::try_from(max).unwrap_or(usize::MAX));
     Ok(out)
 }
 

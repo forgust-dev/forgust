@@ -929,3 +929,88 @@ async fn a_failed_pipeline_and_the_one_that_fixes_it_reach_who_started_them(pool
     run(6, "success").await;
     assert_eq!(mails("pipeline #6 passed again on main"), 1);
 }
+
+/// Upgrading while jobs run: their 128 KiB chunks become rows starting at
+/// chunk_index * 128 KiB, and their logs read and grow as before. An update
+/// larger than a chunk is stored in rows of a chunk at most.
+#[sqlx::test(migrations = false)]
+async fn live_logs_of_running_jobs_survive_the_upgrade(pool: sqlx::PgPool) {
+    use forgust_db::ci::{Append, TRACE_CHUNK, append_trace, build_for_update, read_trace};
+    forgust_db::MIGRATOR.run_to(20261118100000, &pool).await.unwrap();
+    let id = |sql: &'static str| sqlx::query_scalar::<_, i64>(sql);
+    let ns = id("INSERT INTO namespaces (kind, name, path) VALUES ('user', 'ada', 'ada') RETURNING id").fetch_one(&pool).await.unwrap();
+    let p = id("INSERT INTO projects (namespace_id, name, path) VALUES ($1, 'app', 'app') RETURNING id")
+        .bind(ns)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let pl = id("INSERT INTO ci_pipelines (project_id, iid, ref, sha, source) VALUES ($1, 1, 'main', 'abc', 'push') RETURNING id")
+        .bind(p)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    // the old layout: chunk 0 full, chunk 1 partly
+    let mut log: Vec<u8> = (0..TRACE_CHUNK + 1000).map(|i| b'a' + (i % 26) as u8).collect();
+    let b = id("INSERT INTO ci_builds (pipeline_id, project_id, name, stage, stage_idx, spec, status, trace_size)
+                VALUES ($1, $2, 'build', 'build', 0, '{}', 'running', $3) RETURNING id")
+    .bind(pl)
+    .bind(p)
+    .bind(log.len() as i64)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let (first, second) = log.split_at(TRACE_CHUNK as usize);
+    sqlx::query("INSERT INTO ci_job_trace_chunks (build_id, chunk_index, data) VALUES ($1, 0, $2), ($1, 1, $3)")
+        .bind(b)
+        .bind(first)
+        .bind(second)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    forgust_db::MIGRATOR.run(&pool).await.unwrap();
+    assert_eq!(read_trace(&pool, b, 0, i64::MAX).await.unwrap(), log);
+    let edge = TRACE_CHUNK as usize - 10;
+    assert_eq!(read_trace(&pool, b, edge as i64, 30).await.unwrap(), &log[edge..edge + 30]);
+
+    // appends after the old chunks: a small update, then one of two chunks and a half
+    let big: Vec<u8> = (0..TRACE_CHUNK * 5 / 2).map(|i| b'0' + (i % 10) as u8).collect();
+    for part in [&b"tail\n"[..], &big[..]] {
+        let mut tx = pool.begin().await.unwrap();
+        let build = build_for_update(&mut tx, b).await.unwrap().unwrap();
+        let Append::Ok(size) = append_trace(&mut tx, &build, build.trace_size, part).await.unwrap() else { panic!("range mismatch") };
+        tx.commit().await.unwrap();
+        log.extend_from_slice(part);
+        assert_eq!(size, log.len() as i64);
+    }
+    let rows: Vec<(i64, i32)> =
+        sqlx::query_as("SELECT byte_offset, length(data) FROM ci_job_trace_chunks WHERE build_id = $1 ORDER BY byte_offset")
+            .bind(b)
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    let chunk = TRACE_CHUNK as i32;
+    let after = TRACE_CHUNK + 1005;
+    assert_eq!(
+        rows,
+        [
+            (0, chunk),
+            (TRACE_CHUNK, 1000),
+            (TRACE_CHUNK + 1000, 5),
+            (after, chunk),
+            (after + TRACE_CHUNK, chunk),
+            (after + 2 * TRACE_CHUNK, chunk / 2)
+        ]
+    );
+    assert_eq!(read_trace(&pool, b, 0, i64::MAX).await.unwrap(), log);
+    // a read inside one row, across rows, and past the end
+    for (offset, max) in
+        [(TRACE_CHUNK + 1002, 2), (TRACE_CHUNK + 990, 20), (after + TRACE_CHUNK - 3, TRACE_CHUNK + 6), (log.len() as i64 - 4, 100)]
+    {
+        let o = offset as usize;
+        let end = (o + max as usize).min(log.len());
+        assert_eq!(read_trace(&pool, b, offset, max).await.unwrap(), &log[o..end], "{offset}+{max}");
+    }
+    assert!(read_trace(&pool, b, log.len() as i64, 10).await.unwrap().is_empty());
+    assert!(read_trace(&pool, b, 5, 0).await.unwrap().is_empty());
+}
