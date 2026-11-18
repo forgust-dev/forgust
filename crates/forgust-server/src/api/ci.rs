@@ -827,9 +827,7 @@ pub async fn job_trace(
 #[utoipa::path(get, path = "/api/v1/projects/{id}/jobs/{job_id}/raw", responses((status = 200, content_type = "text/plain")), tag = "ci")]
 pub async fn job_raw(State(state): State<AppState>, Viewer(v): Viewer, Path((id, job_id)): Path<(String, i64)>) -> ApiResult<Response> {
     let (_, b) = load_job(&state, &v, &id, job_id).await?;
-    if b.trace_archived
-        && let Some(r) = trace::blob_download(&state, &trace::blob_key(b.project_id, b.id), "text/plain; charset=utf-8", None).await?
-    {
+    if let Some(r) = trace::download(&state, &b).await? {
         return Ok(r);
     }
     let bytes = trace::read(&state, &b, 0, i64::MAX).await?;

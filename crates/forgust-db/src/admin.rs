@@ -189,7 +189,7 @@ pub async fn storage_kinds(e: impl PgExecutor<'_>) -> Result<StorageKinds> {
              (SELECT coalesce(sum(repository_bytes), 0) FROM projects)::bigint AS "repos!",
              (SELECT coalesce(sum(size), 0) FROM lfs_objects)::bigint AS "lfs!",
              (SELECT coalesce(sum(size), 0) FROM ci_job_artifacts WHERE file_type <> 'trace')::bigint AS "artifacts!",
-             (SELECT coalesce(sum(trace_size), 0) FROM ci_builds WHERE trace_archived)::bigint AS "logs_archived!",
+             (SELECT coalesce(sum(size), 0) FROM ci_job_artifacts WHERE file_type = 'trace')::bigint AS "logs_archived!",
              (SELECT coalesce(sum(octet_length(data)), 0) FROM ci_job_trace_chunks)::bigint AS "logs_live!",
              (SELECT coalesce(sum(size), 0) FROM registry_blobs)::bigint AS "registry!",
              (SELECT coalesce(sum(size), 0) FROM uploads)::bigint AS "uploads!""#

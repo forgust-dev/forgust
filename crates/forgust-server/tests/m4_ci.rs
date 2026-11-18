@@ -1014,3 +1014,57 @@ async fn live_logs_of_running_jobs_survive_the_upgrade(pool: sqlx::PgPool) {
     assert!(read_trace(&pool, b, log.len() as i64, 10).await.unwrap().is_empty());
     assert!(read_trace(&pool, b, 5, 0).await.unwrap().is_empty());
 }
+
+/// A finished job's log is stored zstd-compressed, in frames: the log page
+/// reads it by range and the raw view streams it whole, as before.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn archived_logs_are_compressed_and_read_by_range(pool: sqlx::PgPool) {
+    let f = fixture(pool).await;
+    let token = new_runner(&f, json!({ "description": "fake" })).await;
+    let (s, job) = request_job(&f, &token).await;
+    assert_eq!(s, StatusCode::CREATED, "{job}");
+    let id = job["id"].as_i64().unwrap();
+    let jt = job["token"].as_str().unwrap().to_string();
+    // 2.5 MiB of build output, sent in updates of 64 KiB
+    let mut log = String::new();
+    for i in 0.. {
+        if log.len() >= 5 << 19 {
+            break;
+        }
+        log.push_str(&format!("\x1b[32;1m$ cargo build\x1b[0;m Compiling crate-{} v0.{}.{} (step {i})\n", i % 211, i % 7, i % 13));
+    }
+    for (n, piece) in log.as_bytes().chunks(64 << 10).enumerate() {
+        let r = patch(&f, id, &jt, n * (64 << 10), std::str::from_utf8(piece).unwrap()).await;
+        assert_eq!(r.status(), StatusCode::ACCEPTED);
+    }
+    let r = put(&f, id, json!({ "token": jt, "state": "success", "exit_code": 0, "output": { "bytesize": log.len() } })).await;
+    assert_eq!(r.status(), StatusCode::OK);
+    forgust_server::ci::trace::archive(&f.srv.state, id).await.unwrap();
+
+    let db = &f.srv.state.db;
+    let a = forgust_db::ci::artifact(db, id, "trace").await.unwrap().unwrap();
+    assert_eq!(a.file_format, "zstd");
+    assert!(a.blob_key.ends_with(".log.zst"), "{}", a.blob_key);
+    assert!(a.size * 10 < log.len() as i64, "{} bytes stored for {}", a.size, log.len());
+    let chunks: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM ci_job_trace_chunks WHERE build_id = $1").bind(id).fetch_one(db).await.unwrap();
+    assert_eq!(chunks, 0);
+    // the log page reads it in pieces of at most 1 MiB, from any offset
+    let trace = format!("/api/v1/projects/{}/jobs/{id}/trace", f.project);
+    let mut read = String::new();
+    loop {
+        let t = f.owner.ok_get(&format!("{trace}?offset={}", read.len())).await;
+        read.push_str(t["content"].as_str().unwrap());
+        if t["complete"] == true {
+            break;
+        }
+        assert_eq!(t["more"], true, "{}", read.len());
+    }
+    assert!(read == log, "read in pieces: {} bytes of {}", read.len(), log.len());
+    let mid = (1 << 20) - 7;
+    let t = f.owner.ok_get(&format!("{trace}?offset={mid}")).await;
+    assert!(t["content"].as_str().unwrap() == &log[mid..mid + (1 << 20)], "a piece across two frames");
+    let (s, raw) = f.owner.get_bytes(&format!("/api/v1/projects/{}/jobs/{id}/raw", f.project)).await;
+    assert_eq!(s, 200);
+    assert!(raw == log.as_bytes(), "the raw view: {} bytes of {}", raw.len(), log.len());
+}

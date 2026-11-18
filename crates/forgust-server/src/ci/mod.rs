@@ -14,6 +14,7 @@ pub mod resolver;
 pub mod runner_api;
 pub mod schedule;
 pub mod security;
+pub mod seekable;
 pub mod trace;
 pub mod variables;
 
