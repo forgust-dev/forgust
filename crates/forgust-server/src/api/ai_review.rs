@@ -75,6 +75,9 @@ pub struct AiReviewRun {
     pub head_sha: String,
     /// Reviewed the merge request's latest version.
     pub current: bool,
+    /// Reviewed only the changes since an earlier review (from its head).
+    pub incremental: bool,
+    /// Line comments posted: each opens a thread.
     pub comments_posted: i32,
     pub comments_dropped: i32,
     pub error: Option<String>,
@@ -109,7 +112,9 @@ async fn status_of(state: &AppState, principal: &crate::auth::Principal, p: &Pro
             let pl = forgust_db::ci::pipeline(&state.db, r.pipeline_id).await?;
             // a retried job goes on: reviewing again
             let going = pl.as_ref().is_some_and(|pl| forgust_db::ci::ACTIVE.contains(&pl.status.as_str()));
+            let incremental = forgust_db::ai_review::is_incremental(&state.db, mr.id, r.pipeline_id, &r.base_sha).await?;
             Some(AiReviewRun {
+                incremental,
                 pipeline_iid: pl.as_ref().map_or(0, |pl| pl.iid),
                 pipeline_status: pl.map_or_else(String::new, |pl| pl.status),
                 current: head.as_deref() == Some(r.head_sha.as_str()),

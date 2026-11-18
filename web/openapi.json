@@ -5376,6 +5376,7 @@
           "base_sha",
           "head_sha",
           "current",
+          "incremental",
           "comments_posted",
           "comments_dropped",
           "created_at"
@@ -5390,7 +5391,8 @@
           },
           "comments_posted": {
             "type": "integer",
-            "format": "int32"
+            "format": "int32",
+            "description": "Line comments posted: each opens a thread."
           },
           "created_at": {
             "type": "string",
@@ -5415,6 +5417,10 @@
           },
           "head_sha": {
             "type": "string"
+          },
+          "incremental": {
+            "type": "boolean",
+            "description": "Reviewed only the changes since an earlier review (from its head)."
           },
           "pipeline_iid": {
             "type": "integer",

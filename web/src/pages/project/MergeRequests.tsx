@@ -622,10 +622,12 @@ function AiReviewFact({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
   if (!s || (!s.available && !s.latest)) return null;
   const r = s.latest;
   const pending = r?.state === "pending";
+  // each line comment opens a thread (the summary is always posted)
+  const threads = (n: number) => (n > 0 ? `${n} thread${n === 1 ? "" : "s"}` : r?.incremental ? "No new threads" : "No threads, summary only");
   const label = !r
     ? "Not reviewed yet"
     : r.state === "posted"
-      ? `${r.comments_posted} comment${r.comments_posted === 1 ? "" : "s"}${r.current ? "" : " on an older version"}`
+      ? `${threads(r.comments_posted)}${r.current ? "" : " on an older version"}`
       : (AI_REVIEW_STATE[r.state] ?? r.state);
   return (
     <div className="fact">

@@ -2883,7 +2883,10 @@ export interface components {
             base_sha: string;
             /** Format: int32 */
             comments_dropped: number;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Line comments posted: each opens a thread.
+             */
             comments_posted: number;
             /** Format: date-time */
             created_at: string;
@@ -2893,6 +2896,8 @@ export interface components {
             /** Format: date-time */
             finished_at?: string | null;
             head_sha: string;
+            /** @description Reviewed only the changes since an earlier review (from its head). */
+            incremental: boolean;
             /** Format: int64 */
             pipeline_iid: number;
             pipeline_status: string;

@@ -264,7 +264,7 @@ async fn a_review_runs_as_a_reporter_bot_and_only_what_holds_up_is_posted(pool: 
     let summary = by_bot.iter().find(|n| n["new_path"].is_null()).unwrap();
     let body = summary["body"].as_str().unwrap();
     assert!(
-        body.contains("Divides by zero.") && body.contains("test-model") && body.contains("2 comments") && body.contains("Cargo.lock"),
+        body.contains("Divides by zero.") && body.contains("test-model") && body.contains("2 threads") && body.contains("Cargo.lock"),
         "{body}"
     );
     let lines: Vec<i64> = by_bot.iter().filter_map(|n| n["new_line"].as_i64()).collect();
@@ -553,7 +553,7 @@ async fn suggested_changes_are_checked_then_applied_by_a_person(pool: sqlx::PgPo
     assert_eq!(on(1)["body"], "Main:\nmaybe.", "a block the model wrote is not posted");
     let summary = notes.as_array().unwrap().iter().find(|n| n["new_path"].is_null() && n["author_bot"] == true).unwrap();
     let text = summary["body"].as_str().unwrap();
-    assert!(text.contains("3 comments on the changed lines, 1 with a change to apply."), "{text}");
+    assert!(text.contains("3 threads on the changed lines, 1 with a change to apply."), "{text}");
     assert!(text.contains("1 suggested change did not match the code"), "{text}");
 
     // the bot never commits: a person applies it

@@ -157,6 +157,19 @@ pub async fn latest(e: impl PgExecutor<'_>, merge_request_id: i64) -> Result<Opt
     .await
 }
 
+/// Whether a run reviewed only what came since an earlier review: it starts
+/// from that review's head (a whole review starts from the merge request's base).
+pub async fn is_incremental(e: impl PgExecutor<'_>, merge_request_id: i64, pipeline_id: i64, base_sha: &str) -> Result<bool> {
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM ai_review_runs WHERE merge_request_id = $1 AND pipeline_id <> $2 AND head_sha = $3) AS "x!""#,
+        merge_request_id,
+        pipeline_id,
+        base_sha
+    )
+    .fetch_one(e)
+    .await
+}
+
 /// The head of a merge request's newest run whose comments were posted: a
 /// review asked again starts from there.
 pub async fn last_posted_head(e: impl PgExecutor<'_>, merge_request_id: i64) -> Result<Option<String>> {

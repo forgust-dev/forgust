@@ -612,9 +612,10 @@ async fn post(
     }
     let ready = notes.iter().filter(|(.., ready)| *ready).count();
     summary.push_str(&match (notes.len(), ready) {
-        (0, _) => "No comment on the changed lines.".to_string(),
-        (n, 0) => format!("{} on the changed lines.", plural(n, "comment")),
-        (n, r) => format!("{} on the changed lines, {r} with a change to apply.", plural(n, "comment")),
+        // each line comment opens a thread: the word the merge request uses
+        (0, _) => "No thread on the changed lines.".to_string(),
+        (n, 0) => format!("{} on the changed lines.", plural(n, "thread")),
+        (n, r) => format!("{} on the changed lines, {r} with a change to apply.", plural(n, "thread")),
     });
     if dropped > 0 {
         summary.push_str(&format!(" {dropped} more were left out (not on a changed line, or past the limit)."));
