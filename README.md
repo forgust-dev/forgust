@@ -18,14 +18,14 @@ workflow on your own servers.
 ## Screenshots
 <table>
   <tr>
-    <td align="center"><a href=".github/images/code-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/code-dark.png"/><img src=".github/images/code-light.png" alt="Repository"/></picture></a><br/><sub>Repository</sub></td>
-    <td align="center"><a href=".github/images/merge-request-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/merge-request-dark.png"/><img src=".github/images/merge-request-light.png" alt="Merge request"/></picture></a><br/><sub>Merge request</sub></td>
-    <td align="center"><a href=".github/images/diff-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/diff-dark.png"/><img src=".github/images/diff-light.png" alt="Code review"/></picture></a><br/><sub>Code review</sub></td>
+    <td align="center"><a href=".github/images/code-dark.webp"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/code-dark.webp"/><img src=".github/images/code-light.webp" alt="Repository"/></picture></a><br/><sub>Repository</sub></td>
+    <td align="center"><a href=".github/images/merge-request-dark.webp"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/merge-request-dark.webp"/><img src=".github/images/merge-request-light.webp" alt="Merge request"/></picture></a><br/><sub>Merge request</sub></td>
+    <td align="center"><a href=".github/images/diff-dark.webp"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/diff-dark.webp"/><img src=".github/images/diff-light.webp" alt="Code review"/></picture></a><br/><sub>Code review</sub></td>
   </tr>
   <tr>
-    <td align="center"><a href=".github/images/pipeline-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/pipeline-dark.png"/><img src=".github/images/pipeline-light.png" alt="Pipeline"/></picture></a><br/><sub>Pipeline</sub></td>
-    <td align="center"><a href=".github/images/login-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/login-dark.png"/><img src=".github/images/login-light.png" alt="Sign in"/></picture></a><br/><sub>Sign in</sub></td>
-    <td align="center"><a href=".github/images/security-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/security-dark.png"/><img src=".github/images/security-light.png" alt="Security findings"/></picture></a><br/><sub>Security findings</sub></td>
+    <td align="center"><a href=".github/images/pipeline-dark.webp"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/pipeline-dark.webp"/><img src=".github/images/pipeline-light.webp" alt="Pipeline"/></picture></a><br/><sub>Pipeline</sub></td>
+    <td align="center"><a href=".github/images/login-dark.webp"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/login-dark.webp"/><img src=".github/images/login-light.webp" alt="Sign in"/></picture></a><br/><sub>Sign in</sub></td>
+    <td align="center"><a href=".github/images/security-dark.webp"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/security-dark.webp"/><img src=".github/images/security-light.webp" alt="Security findings"/></picture></a><br/><sub>Security findings</sub></td>
   </tr>
 </table>
 
@@ -34,34 +34,34 @@ workflow on your own servers.
 
 <table>
   <tr>
-    <td align="center"><a href=".github/images/job-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/job-dark.png"/><img src=".github/images/job-light.png" alt="Job log"/></picture></a><br/><sub>Job log</sub></td>
-    <td align="center"><a href=".github/images/dashboard-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/dashboard-dark.png"/><img src=".github/images/dashboard-light.png" alt="Your work"/></picture></a><br/><sub>Your work</sub></td>
-    <td align="center"><a href=".github/images/file-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/file-dark.png"/><img src=".github/images/file-light.png" alt="Source file"/></picture></a><br/><sub>Source file</sub></td>
+    <td align="center"><a href=".github/images/job-dark.webp"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/job-dark.webp"/><img src=".github/images/job-light.webp" alt="Job log"/></picture></a><br/><sub>Job log</sub></td>
+    <td align="center"><a href=".github/images/dashboard-dark.webp"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/dashboard-dark.webp"/><img src=".github/images/dashboard-light.webp" alt="Your work"/></picture></a><br/><sub>Your work</sub></td>
+    <td align="center"><a href=".github/images/file-dark.webp"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/file-dark.webp"/><img src=".github/images/file-light.webp" alt="Source file"/></picture></a><br/><sub>Source file</sub></td>
   </tr>
   <tr>
-    <td align="center"><a href=".github/images/commits-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/commits-dark.png"/><img src=".github/images/commits-light.png" alt="Commits"/></picture></a><br/><sub>Commits</sub></td>
-    <td align="center"><a href=".github/images/merge-requests-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/merge-requests-dark.png"/><img src=".github/images/merge-requests-light.png" alt="Merge requests"/></picture></a><br/><sub>Merge requests</sub></td>
-    <td align="center"><a href=".github/images/issues-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/issues-dark.png"/><img src=".github/images/issues-light.png" alt="Issues"/></picture></a><br/><sub>Issues</sub></td>
+    <td align="center"><a href=".github/images/commits-dark.webp"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/commits-dark.webp"/><img src=".github/images/commits-light.webp" alt="Commits"/></picture></a><br/><sub>Commits</sub></td>
+    <td align="center"><a href=".github/images/merge-requests-dark.webp"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/merge-requests-dark.webp"/><img src=".github/images/merge-requests-light.webp" alt="Merge requests"/></picture></a><br/><sub>Merge requests</sub></td>
+    <td align="center"><a href=".github/images/issues-dark.webp"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/issues-dark.webp"/><img src=".github/images/issues-light.webp" alt="Issues"/></picture></a><br/><sub>Issues</sub></td>
   </tr>
   <tr>
-    <td align="center"><a href=".github/images/environments-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/environments-dark.png"/><img src=".github/images/environments-light.png" alt="Environments"/></picture></a><br/><sub>Environments</sub></td>
-    <td align="center"><a href=".github/images/releases-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/releases-dark.png"/><img src=".github/images/releases-light.png" alt="Releases"/></picture></a><br/><sub>Releases</sub></td>
-    <td align="center"><a href=".github/images/registry-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/registry-dark.png"/><img src=".github/images/registry-light.png" alt="Container registry"/></picture></a><br/><sub>Container registry</sub></td>
+    <td align="center"><a href=".github/images/environments-dark.webp"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/environments-dark.webp"/><img src=".github/images/environments-light.webp" alt="Environments"/></picture></a><br/><sub>Environments</sub></td>
+    <td align="center"><a href=".github/images/releases-dark.webp"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/releases-dark.webp"/><img src=".github/images/releases-light.webp" alt="Releases"/></picture></a><br/><sub>Releases</sub></td>
+    <td align="center"><a href=".github/images/registry-dark.webp"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/registry-dark.webp"/><img src=".github/images/registry-light.webp" alt="Container registry"/></picture></a><br/><sub>Container registry</sub></td>
   </tr>
   <tr>
-    <td align="center"><a href=".github/images/group-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/group-dark.png"/><img src=".github/images/group-light.png" alt="Group"/></picture></a><br/><sub>Group</sub></td>
-    <td align="center"><a href=".github/images/user-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/user-dark.png"/><img src=".github/images/user-light.png" alt="User profile"/></picture></a><br/><sub>User profile</sub></td>
-    <td align="center"><a href=".github/images/settings-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/settings-dark.png"/><img src=".github/images/settings-light.png" alt="Project settings"/></picture></a><br/><sub>Project settings</sub></td>
+    <td align="center"><a href=".github/images/group-dark.webp"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/group-dark.webp"/><img src=".github/images/group-light.webp" alt="Group"/></picture></a><br/><sub>Group</sub></td>
+    <td align="center"><a href=".github/images/user-dark.webp"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/user-dark.webp"/><img src=".github/images/user-light.webp" alt="User profile"/></picture></a><br/><sub>User profile</sub></td>
+    <td align="center"><a href=".github/images/settings-dark.webp"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/settings-dark.webp"/><img src=".github/images/settings-light.webp" alt="Project settings"/></picture></a><br/><sub>Project settings</sub></td>
   </tr>
   <tr>
-    <td align="center"><a href=".github/images/profile-security-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/profile-security-dark.png"/><img src=".github/images/profile-security-light.png" alt="Password, 2FA and passkeys"/></picture></a><br/><sub>Password, 2FA and passkeys</sub></td>
-    <td align="center"><a href=".github/images/admin-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/admin-dark.png"/><img src=".github/images/admin-light.png" alt="Admin overview"/></picture></a><br/><sub>Admin overview</sub></td>
-    <td align="center"><a href=".github/images/admin-users-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/admin-users-dark.png"/><img src=".github/images/admin-users-light.png" alt="Admin users"/></picture></a><br/><sub>Admin users</sub></td>
+    <td align="center"><a href=".github/images/profile-security-dark.webp"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/profile-security-dark.webp"/><img src=".github/images/profile-security-light.webp" alt="Password, 2FA and passkeys"/></picture></a><br/><sub>Password, 2FA and passkeys</sub></td>
+    <td align="center"><a href=".github/images/admin-dark.webp"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/admin-dark.webp"/><img src=".github/images/admin-light.webp" alt="Admin overview"/></picture></a><br/><sub>Admin overview</sub></td>
+    <td align="center"><a href=".github/images/admin-users-dark.webp"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/admin-users-dark.webp"/><img src=".github/images/admin-users-light.webp" alt="Admin users"/></picture></a><br/><sub>Admin users</sub></td>
   </tr>
   <tr>
-    <td align="center"><a href=".github/images/admin-runners-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/admin-runners-dark.png"/><img src=".github/images/admin-runners-light.png" alt="Admin runners"/></picture></a><br/><sub>Admin runners</sub></td>
-    <td align="center"><a href=".github/images/admin-storage-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/admin-storage-dark.png"/><img src=".github/images/admin-storage-light.png" alt="Admin storage"/></picture></a><br/><sub>Admin storage</sub></td>
-    <td align="center"><a href=".github/images/admin-health-dark.png"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/admin-health-dark.png"/><img src=".github/images/admin-health-light.png" alt="Admin health"/></picture></a><br/><sub>Admin health</sub></td>
+    <td align="center"><a href=".github/images/admin-runners-dark.webp"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/admin-runners-dark.webp"/><img src=".github/images/admin-runners-light.webp" alt="Admin runners"/></picture></a><br/><sub>Admin runners</sub></td>
+    <td align="center"><a href=".github/images/admin-storage-dark.webp"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/admin-storage-dark.webp"/><img src=".github/images/admin-storage-light.webp" alt="Admin storage"/></picture></a><br/><sub>Admin storage</sub></td>
+    <td align="center"><a href=".github/images/admin-health-dark.webp"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/admin-health-dark.webp"/><img src=".github/images/admin-health-light.webp" alt="Admin health"/></picture></a><br/><sub>Admin health</sub></td>
   </tr>
 </table>
 </details>
