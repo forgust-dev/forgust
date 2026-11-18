@@ -6985,15 +6985,15 @@ button.test-case-row:hover {
   border-radius: 2px;
 }
 .pipe-legend i.ok,
-.pipe-bar .seg.ok {
+.pipe-bar .pipe-seg.ok {
   background: var(--chart-ok);
 }
 .pipe-legend i.bad,
-.pipe-bar .seg.bad {
+.pipe-bar .pipe-seg.bad {
   background: var(--chart-bad);
 }
 .pipe-legend i.other,
-.pipe-bar .seg.other {
+.pipe-bar .pipe-seg.other {
   background: var(--chart-other);
 }
 .pipe-bars {
@@ -7013,14 +7013,14 @@ button.test-case-row:hover {
   min-width: 4px;
   cursor: default;
 }
-.pipe-bar .seg {
+.pipe-bar .pipe-seg {
   display: block;
   width: 100%;
 }
-.pipe-bar .seg:last-child {
+.pipe-bar .pipe-seg:last-child {
   border-radius: 4px 4px 0 0;
 }
-.pipe-bar:hover .seg {
+.pipe-bar:hover .pipe-seg {
   filter: brightness(1.15);
 }
 .pipe-axis {

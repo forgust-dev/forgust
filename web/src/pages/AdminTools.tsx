@@ -221,9 +221,9 @@ function PipelinesChart({ days }: { days: S["PipelineDay"][] }) {
               title={`${fmt(d.day)}: ${n} pipeline${n === 1 ? "" : "s"}\n${d.success} passed · ${d.failed} failed · ${d.other} other`}
             >
               {/* bottom up: passed on the baseline, then failed, then the rest */}
-              {d.success > 0 && <span className="seg ok" style={{ height: `${(d.success / max) * 100}%` }} />}
-              {d.failed > 0 && <span className="seg bad" style={{ height: `${(d.failed / max) * 100}%` }} />}
-              {d.other > 0 && <span className="seg other" style={{ height: `${(d.other / max) * 100}%` }} />}
+              {d.success > 0 && <span className="pipe-seg ok" style={{ height: `${(d.success / max) * 100}%` }} />}
+              {d.failed > 0 && <span className="pipe-seg bad" style={{ height: `${(d.failed / max) * 100}%` }} />}
+              {d.other > 0 && <span className="pipe-seg other" style={{ height: `${(d.other / max) * 100}%` }} />}
             </div>
           );
         })}
