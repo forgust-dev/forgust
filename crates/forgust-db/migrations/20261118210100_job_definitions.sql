@@ -25,7 +25,4 @@ ALTER TABLE ci_builds ADD CONSTRAINT ci_builds_definition_id_fkey
     FOREIGN KEY (definition_id) REFERENCES ci_job_definitions (id) NOT VALID;
 ALTER TABLE ci_builds ADD CONSTRAINT ci_builds_spec_or_definition
     CHECK (spec IS NOT NULL OR definition_id IS NOT NULL) NOT VALID;
--- what the foreign key looks up when a project's definitions go with it
-CREATE INDEX ci_builds_definition_idx ON ci_builds (definition_id) WHERE definition_id IS NOT NULL;
--- the jobs whose spec is still to move: none once the sweep is through
-CREATE INDEX ci_builds_inline_spec_idx ON ci_builds (id) WHERE spec IS NOT NULL;
+-- Its indexes come in the next two migrations, built concurrently.

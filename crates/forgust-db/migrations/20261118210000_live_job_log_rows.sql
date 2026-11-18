@@ -13,9 +13,8 @@ ALTER TABLE ci_job_trace_chunks ALTER COLUMN byte_offset TYPE bigint USING byte_
 -- and an entry in every index of the table (16 of 107 updates were HOT in a
 -- development database). stale_running filters on coalesce(contacted_at,
 -- started_at), which the index never served: the status alone finds the
--- running jobs.
-DROP INDEX ci_builds_running_idx;
-CREATE INDEX ci_builds_running_idx ON ci_builds (status) WHERE status IN ('running', 'canceling');
+-- running jobs. It is replaced in the next two migrations, concurrently:
+-- building an index on ci_builds here would hold every write to it.
 -- a HOT update needs room on its row's page; and vacuum at 2% of dead rows,
 -- not 20%: a table of ten million jobs would wait for two million
 ALTER TABLE ci_builds SET (fillfactor = 90, autovacuum_vacuum_scale_factor = 0.02);
