@@ -604,8 +604,8 @@ function AiReviewForm({ initial }: { initial: S["AdminAiReviewStatus"] }) {
         <Field label="Timeout (minutes)">
           <input type="number" min={1} max={120} value={Math.round(s.timeout_secs / 60)} onChange={(e) => setS({ ...s, timeout_secs: Number(e.target.value) * 60 })} />
         </Field>
-        <Field label="Reviewer image" hint="Runs forgust-review: ghcr.io/forgust-dev/forgust-reviewer at this server's version, or an image of your own with the same contract">
-          <input className="mono" value={s.image} onChange={(e) => setS({ ...s, image: e.target.value })} />
+        <Field label="Reviewer image" hint="Empty: the one released with this server, which follows each upgrade. Or an image of your own that runs forgust-review with the same contract">
+          <input className="mono" value={s.image} placeholder={initial.default_image} onChange={(e) => setS({ ...s, image: e.target.value })} />
         </Field>
         <Field label="Runner tags" hint="Comma-separated; instance runners only">
           <input value={s.tags.join(", ")} onChange={(e) => setS({ ...s, tags: e.target.value.split(",").map((t) => t.trim()) })} />

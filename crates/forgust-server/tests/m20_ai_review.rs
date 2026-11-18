@@ -66,6 +66,11 @@ fn review(job: &Value, comments: Value) -> Value {
 
 /// Forgust's own pipelines are listed twice (the server and the database):
 /// they say the same.
+/// The image a review job runs now.
+async fn svc_config_image(srv: &TestServer) -> String {
+    forgust_server::services::ai_review::config(&srv.state).await.unwrap().image
+}
+
 #[sqlx::test(migrator = "forgust_db::MIGRATOR")]
 async fn the_system_pipelines_are_the_same_on_both_sides(pool: sqlx::PgPool) {
     let sources = [
@@ -118,6 +123,29 @@ async fn ai_review_is_off_until_an_administrator_sets_an_endpoint(pool: sqlx::Pg
     assert_eq!(admin.ok_put("/api/v1/admin/ai_review", a.clone()).await["api_key_set"], true);
     let sealed: Option<String> = sqlx::query_scalar("SELECT api_key_enc FROM ai_review_instance").fetch_one(&srv.state.db).await.unwrap();
     assert!(!sealed.unwrap().contains("sk-not-returned"), "stored encrypted");
+
+    // the image: the default is not saved, so an upgrade moves it
+    let default = format!("ghcr.io/forgust-dev/forgust-reviewer:{}", env!("CARGO_PKG_VERSION"));
+    let saved_image = || async {
+        sqlx::query_scalar::<_, Option<String>>("SELECT overrides->>'image' FROM ai_review_instance")
+            .fetch_one(&srv.state.db)
+            .await
+            .unwrap()
+    };
+    let st = admin.ok_get("/api/v1/admin/ai_review").await;
+    assert_eq!((st["image"].as_str(), st["default_image"].as_str()), (Some(""), Some(default.as_str())), "{st}");
+    assert_eq!(saved_image().await, None, "saving the form did not pin the version");
+    a["image"] = json!(default);
+    assert_eq!(admin.ok_put("/api/v1/admin/ai_review", a.clone()).await["image"], "", "the default, typed in: still the default");
+    assert_eq!(saved_image().await, None);
+    a["image"] = json!("registry.example.com/reviewer:1");
+    assert_eq!(admin.ok_put("/api/v1/admin/ai_review", a.clone()).await["image"], "registry.example.com/reviewer:1");
+    assert_eq!(svc_config_image(&srv).await, "registry.example.com/reviewer:1");
+    a["image"] = json!("bad image");
+    assert_eq!(admin.put("/api/v1/admin/ai_review", a.clone()).await.0, 400);
+    a["image"] = json!("");
+    assert_eq!(admin.ok_put("/api/v1/admin/ai_review", a.clone()).await["image"], "", "cleared: back to the default");
+    assert_eq!(svc_config_image(&srv).await, default);
 
     // the reviewer's options: any provider name, names checked, secrets never returned
     a["provider"] = json!("anthropic");

@@ -44,7 +44,10 @@ pub struct Overrides {
     pub provider: String,
     pub base_url: String,
     pub model: String,
-    pub image: String,
+    /// Only one set on purpose: without it, the config file's, by default the
+    /// reviewer released with this server, which moves with each upgrade.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image: Option<String>,
     pub tags: Vec<String>,
     pub max_concurrent: u32,
     pub timeout_secs: u64,

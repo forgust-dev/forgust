@@ -169,6 +169,8 @@ pub struct AdminAiReview {
     /// The API's base, reached from the runners (e.g. `http://ollama:11434/v1`).
     pub base_url: String,
     pub model: String,
+    /// The reviewer image set here; "" follows the default (`default_image`).
+    #[serde(default)]
     pub image: String,
     pub tags: Vec<String>,
     pub max_concurrent: u32,
@@ -198,6 +200,9 @@ pub struct AdminAiReview {
 pub struct AdminAiReviewStatus {
     #[serde(flatten)]
     pub settings: AdminAiReview,
+    /// The image when none is set here: the config file's, by default the
+    /// reviewer released with this server (it moves with each upgrade).
+    pub default_image: String,
     pub enabled_projects: i64,
     pub active_runs: i64,
 }
@@ -218,14 +223,17 @@ async fn admin_status(state: &AppState) -> ApiResult<AdminAiReviewStatus> {
         },
         None => file.secret_options.keys().cloned().collect(),
     };
+    // the image set here, apart from the default it falls back to
+    let image = i.overrides.get("image").and_then(|v| v.as_str()).unwrap_or_default().to_string();
     let c = svc::config_of(state, i.overrides);
     Ok(AdminAiReviewStatus {
+        default_image: file.image.clone(),
         settings: AdminAiReview {
             enabled: c.enabled,
             provider: c.provider,
             base_url: c.base_url,
             model: c.model,
-            image: c.image,
+            image,
             tags: c.tags,
             max_concurrent: c.max_concurrent,
             timeout_secs: c.timeout_secs,
@@ -269,7 +277,9 @@ pub async fn admin_set(
     if s.model.len() > 200 || s.model.chars().any(char::is_control) {
         return Err(ApiError::bad("the model is a name like gpt-4.1 or qwen2.5-coder:32b"));
     }
-    if s.image.trim().is_empty() || s.image.chars().any(char::is_whitespace) {
+    // the default is not saved: an upgrade moves it
+    let image = Some(s.image.trim()).filter(|i| !i.is_empty() && *i != state.cfg.ai_review.image);
+    if image.is_some_and(|i| i.chars().any(char::is_whitespace) || i.len() > 512) {
         return Err(ApiError::bad(format!("the image is a name like ghcr.io/forgust-dev/forgust-reviewer:{}", env!("CARGO_PKG_VERSION"))));
     }
     if !(1..=50).contains(&s.max_concurrent) {
@@ -314,7 +324,7 @@ pub async fn admin_set(
         provider: provider.to_string(),
         base_url: base_url.to_string(),
         model: s.model.trim().to_string(),
-        image: s.image.trim().to_string(),
+        image: image.map(str::to_string),
         tags,
         max_concurrent: s.max_concurrent,
         timeout_secs: s.timeout_secs,

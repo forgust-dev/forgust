@@ -4964,7 +4964,6 @@
           "provider",
           "base_url",
           "model",
-          "image",
           "tags",
           "max_concurrent",
           "timeout_secs",
@@ -4990,7 +4989,8 @@
             "type": "boolean"
           },
           "image": {
-            "type": "string"
+            "type": "string",
+            "description": "The reviewer image set here; \"\" follows the default (`default_image`)."
           },
           "max_comments": {
             "type": "integer",
@@ -5047,6 +5047,7 @@
           {
             "type": "object",
             "required": [
+              "default_image",
               "enabled_projects",
               "active_runs"
             ],
@@ -5054,6 +5055,10 @@
               "active_runs": {
                 "type": "integer",
                 "format": "int64"
+              },
+              "default_image": {
+                "type": "string",
+                "description": "The image when none is set here: the config file's, by default the\nreviewer released with this server (it moves with each upgrade)."
               },
               "enabled_projects": {
                 "type": "integer",

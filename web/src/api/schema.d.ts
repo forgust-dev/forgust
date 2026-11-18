@@ -2734,7 +2734,8 @@ export interface components {
             /** @description PEM of an in-house CA the endpoint's certificate is signed by. */
             ca_pem?: string | null;
             enabled: boolean;
-            image: string;
+            /** @description The reviewer image set here; "" follows the default (`default_image`). */
+            image?: string;
             /** Format: int32 */
             max_comments: number;
             /** Format: int32 */
@@ -2761,6 +2762,11 @@ export interface components {
         AdminAiReviewStatus: components["schemas"]["AdminAiReview"] & {
             /** Format: int64 */
             active_runs: number;
+            /**
+             * @description The image when none is set here: the config file's, by default the
+             *     reviewer released with this server (it moves with each upgrade).
+             */
+            default_image: string;
             /** Format: int64 */
             enabled_projects: number;
         };
