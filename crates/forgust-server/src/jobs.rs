@@ -464,7 +464,8 @@ impl TaskHandler for ScanBlobs {
     }
 }
 
-/// Every few minutes: expired sessions, tokens and memberships, idle git processes.
+/// Every few minutes: expired sessions, tokens and memberships, old webhook
+/// deliveries, idle git processes.
 #[derive(Debug, Serialize, Default)]
 pub struct Cleanup;
 payload_free!(Cleanup);
@@ -483,6 +484,11 @@ impl TaskHandler for Cleanup {
         }
         // notifications read a month ago leave the inbox
         forgust_db::notifications::prune(&state.db, 30).await.map_err(|e| e.to_string())?;
+        // webhook deliveries past the ones their hook's page lists
+        let pruned = crate::services::webhooks::prune_deliveries(state).await.map_err(|e| e.to_string())?;
+        if pruned > 0 {
+            tracing::debug!(deliveries = pruned, "old webhook deliveries deleted");
+        }
         state.storage.reap_idle();
         metrics::gauge!("forgust_catfile_processes").set(state.storage.catfile_processes() as f64);
         Ok::<(), String>(())

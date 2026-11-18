@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM webhook_deliveries WHERE id IN (\n             SELECT d.id FROM webhooks w\n             -- the newest delivery past the kept ones: it and older ones go\n             CROSS JOIN LATERAL (SELECT x.id FROM webhook_deliveries x WHERE x.webhook_id = w.id\n                                  ORDER BY x.id DESC OFFSET $1 LIMIT 1) cut\n             JOIN webhook_deliveries d ON d.webhook_id = w.id AND d.id <= cut.id\n             WHERE d.status <> 'pending'\n             LIMIT $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "dea12e87a7562a7db2755c34b8fa3f0b2db29559e2d49fe4c6f46c4beaaeee40"
+}

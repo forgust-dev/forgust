@@ -514,6 +514,43 @@ async fn webhook_last_attempt_on_a_busy_hook(pool: sqlx::PgPool) {
     assert_eq!(status, "failed");
 }
 
+/// A hook keeps the deliveries its page lists; older finished ones go with
+/// their payload, and a pending one stays for its retries.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn old_webhook_deliveries_are_deleted(pool: sqlx::PgPool) {
+    use forgust_db::webhooks::{KEPT_DELIVERIES, create_delivery};
+    let srv = TestServer::start_with(pool, |c| c.features.webhooks_allow_local = true).await;
+    let owner = srv.user("olivia", false).await;
+    let (_org, _sub, proj) = org_project(&owner).await;
+    let hooks = format!("/api/v1/projects/{proj}/hooks");
+    owner.ok_post(&hooks, json!({ "url": "http://127.0.0.1:9/busy", "events": ["push"] })).await;
+    let list = owner.ok_post(&hooks, json!({ "url": "http://127.0.0.1:9/quiet", "events": ["push"] })).await;
+    let (busy, quiet) = (list[0]["id"].as_i64().unwrap(), list[1]["id"].as_i64().unwrap());
+    let db = &srv.state.db;
+    let mut ids = Vec::new();
+    for i in 0..60 {
+        ids.push(create_delivery(db, busy, "push", &json!({ "i": i })).await.unwrap());
+    }
+    for i in 0..10 {
+        create_delivery(db, quiet, "push", &json!({ "i": i })).await.unwrap();
+    }
+    // the oldest of the busy hook is still being retried; the rest went out
+    sqlx::query("UPDATE webhook_deliveries SET status = 'delivered' WHERE id <> $1").bind(ids[0]).execute(db).await.unwrap();
+    let page = format!("{hooks}/{busy}/deliveries");
+    let before = owner.ok_get(&page).await;
+    assert_eq!(before.as_array().unwrap().len(), KEPT_DELIVERIES as usize);
+
+    assert_eq!(forgust_server::services::webhooks::prune_deliveries(&srv.state).await.unwrap(), 9);
+    let left: Vec<i64> =
+        sqlx::query_scalar("SELECT id FROM webhook_deliveries WHERE webhook_id = $1 ORDER BY id").bind(busy).fetch_all(db).await.unwrap();
+    assert_eq!(left, [&ids[..1], &ids[10..]].concat(), "the pending one and the newest 50");
+    let quiet_left: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM webhook_deliveries WHERE webhook_id = $1").bind(quiet).fetch_one(db).await.unwrap();
+    assert_eq!(quiet_left, 10);
+    assert_eq!(owner.ok_get(&page).await, before, "the page lists the same deliveries");
+    assert_eq!(forgust_server::services::webhooks::prune_deliveries(&srv.state).await.unwrap(), 0);
+}
+
 async fn main_head(srv: &TestServer, proj: i64) -> String {
     srv.state.storage.resolve(proj, "refs/heads/main").await.unwrap().unwrap()
 }

@@ -209,6 +209,25 @@ pub fn sign(secret: &str, body: &[u8]) -> String {
     format!("sha256={}", hex::encode(mac.finalize().into_bytes()))
 }
 
+/// Deliveries deleted per statement, and statements per cleanup: a backlog
+/// (every delivery used to be kept) goes over several cleanups.
+const PRUNE_BATCH: i64 = 5_000;
+const PRUNE_BATCHES: usize = 100;
+
+/// Delete the finished deliveries past those each hook's page lists
+/// (`webhooks::KEPT_DELIVERIES`). Returns how many went.
+pub async fn prune_deliveries(state: &AppState) -> anyhow::Result<u64> {
+    let mut pruned = 0;
+    for _ in 0..PRUNE_BATCHES {
+        let n = forgust_db::webhooks::prune_deliveries(&state.db, PRUNE_BATCH).await?;
+        pruned += n;
+        if n < PRUNE_BATCH as u64 {
+            break;
+        }
+    }
+    Ok(pruned)
+}
+
 /// Deliver one queued delivery (worker). Returns Err to make the job retry.
 pub async fn deliver(state: &AppState, delivery_id: i64) -> anyhow::Result<()> {
     let Some(d) = forgust_db::webhooks::pending_delivery(&state.db, delivery_id).await? else { return Ok(()) };

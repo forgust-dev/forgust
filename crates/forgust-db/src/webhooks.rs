@@ -166,6 +166,32 @@ pub async fn record_attempt(
     Ok(())
 }
 
+/// Deliveries a hook keeps: the ones its page lists. An older one holds only
+/// its payload, which nothing reads once it was delivered or failed.
+pub const KEPT_DELIVERIES: i64 = 50;
+
+/// Deletes at most `limit` finished deliveries past each hook's newest
+/// [`KEPT_DELIVERIES`]; pending ones stay, their retries read the payload.
+/// Every delivery used to stay, payload included: a hook on job events gets
+/// one for each state change of each job (about 2 KB each).
+pub async fn prune_deliveries(e: impl PgExecutor<'_>, limit: i64) -> Result<u64> {
+    let r = sqlx::query!(
+        "DELETE FROM webhook_deliveries WHERE id IN (
+             SELECT d.id FROM webhooks w
+             -- the newest delivery past the kept ones: it and older ones go
+             CROSS JOIN LATERAL (SELECT x.id FROM webhook_deliveries x WHERE x.webhook_id = w.id
+                                  ORDER BY x.id DESC OFFSET $1 LIMIT 1) cut
+             JOIN webhook_deliveries d ON d.webhook_id = w.id AND d.id <= cut.id
+             WHERE d.status <> 'pending'
+             LIMIT $2)",
+        KEPT_DELIVERIES,
+        limit
+    )
+    .execute(e)
+    .await?;
+    Ok(r.rows_affected())
+}
+
 pub async fn deliveries(e: impl PgExecutor<'_>, webhook_id: i64, limit: i64) -> Result<Vec<Delivery>> {
     sqlx::query_as!(
         Delivery,
