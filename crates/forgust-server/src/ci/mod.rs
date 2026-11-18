@@ -14,6 +14,7 @@ pub mod resolver;
 pub mod runner_api;
 pub mod schedule;
 pub mod security;
+pub mod seekable;
 pub mod trace;
 pub mod variables;
 
@@ -306,4 +307,19 @@ async fn sweep_locked(state: &AppState) {
     if let Err(e) = crate::services::uploads::drain_deletions(state).await {
         tracing::warn!(error = %e, "deleted files not removed from storage");
     }
+    // jobs made before job definitions: their spec moves to its definition,
+    // a few thousand a minute (each moved row is rewritten once)
+    for _ in 0..SPEC_BATCHES {
+        match forgust_db::ci::move_inline_specs(&state.db, SPEC_BATCH).await {
+            Ok(moved) if moved < SPEC_BATCH as u64 => break,
+            Ok(_) => {}
+            Err(e) => {
+                tracing::warn!(error = %e, "job specs not moved to their definitions");
+                break;
+            }
+        }
+    }
 }
+
+const SPEC_BATCH: i64 = 1_000;
+const SPEC_BATCHES: usize = 5;

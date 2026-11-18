@@ -87,6 +87,8 @@ pub trait Storage: Send + Sync + 'static {
     async fn is_ancestor(&self, repo: i64, ancestor: &str, descendant: &str) -> Result<bool>;
     async fn merge_base(&self, repo: i64, a: &str, b: &str) -> Result<Option<String>>;
 
+    /// Repack (all of it when `full`, which also deletes unreachable loose
+    /// objects two weeks old) and write the commit-graph.
     async fn maintenance(&self, repo: i64, full: bool) -> Result<()>;
     /// Write a bundle of all refs; returns false for an empty repo (nothing to bundle).
     async fn bundle_create(&self, repo: i64, dest: &Path) -> Result<bool>;

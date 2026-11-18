@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, pipeline_id, project_id, name, stage, stage_idx, status, when_, allow_failure, needs, spec, retry_max,\n                retry_when, attempt, retried, tags, timeout_secs, user_id, runner_id, runner_manager_id, failure_reason,\n                exit_code, trace_size, trace_archived, created_at, queued_at, started_at, finished_at, contacted_at,\n                cancel_requested_at\n           FROM ci_builds WHERE pipeline_id = $1 AND name = $2 AND status = 'success' AND NOT retried ORDER BY id DESC LIMIT 1",
+  "query": "SELECT b.id, b.pipeline_id, b.project_id, b.name, b.stage, b.stage_idx, b.status, b.when_, b.allow_failure, b.needs,\n                coalesce(b.spec, (SELECT d.spec FROM ci_job_definitions d WHERE d.id = b.definition_id)) AS \"spec!\",\n                b.retry_max, b.retry_when, b.attempt, b.retried, b.tags, b.timeout_secs, b.user_id, b.runner_id, b.runner_manager_id,\n                b.failure_reason, b.exit_code, b.trace_size, b.trace_archived, b.created_at, b.queued_at, b.started_at, b.finished_at,\n                b.contacted_at, b.cancel_requested_at\n           FROM ci_builds b JOIN ci_pipelines p ON p.id = b.pipeline_id\n          WHERE b.project_id = $1 AND p.ref = $2 AND b.name = $3 AND b.status = 'success' AND NOT b.retried\n          ORDER BY p.id DESC, b.id DESC LIMIT 1",
   "describe": {
     "columns": [
       {
@@ -115,14 +115,9 @@
       },
       {
         "ordinal": 10,
-        "name": "spec",
+        "name": "spec!",
         "type_info": "Jsonb",
-        "origin": {
-          "Table": {
-            "table": "ci_builds",
-            "name": "spec"
-          }
-        }
+        "origin": "Expression"
       },
       {
         "ordinal": 11,
@@ -337,6 +332,7 @@
     "parameters": {
       "Left": [
         "Int8",
+        "Text",
         "Text"
       ]
     },
@@ -351,7 +347,7 @@
       false,
       false,
       true,
-      false,
+      null,
       false,
       false,
       false,
@@ -373,5 +369,5 @@
       true
     ]
   },
-  "hash": "3435ca1cd7419af668cd6624d9c6b30f67e11b1d6045a5bc4401585f44e169ab"
+  "hash": "6c8707d63d6a38ba043886fab6f81e26a1810befb3868f62191542f799352731"
 }

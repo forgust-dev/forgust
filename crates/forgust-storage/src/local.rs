@@ -18,6 +18,9 @@ use crate::{Result, Storage, StorageError, cli};
 
 const SHORT: Duration = Duration::from_secs(30);
 const LONG: Duration = Duration::from_secs(600);
+/// How old an unreachable loose object is before the full maintenance deletes
+/// it: git gc's own default (`gc.pruneExpire`).
+const PRUNE_EXPIRE: &str = "2.weeks.ago";
 /// How long a clone, fetch or archive waits for a slot under the process limit.
 const SERVICE_WAIT: Duration = Duration::from_secs(60);
 
@@ -941,6 +944,21 @@ impl Storage for LocalStorage {
             c.args(["repack", "-d", "-l", "--write-midx", "--quiet"]);
         }
         cli::run(c, 4096, Duration::from_secs(3600)).await?;
+        if full {
+            // `repack -a -d` leaves out the unreachable objects of the packs it
+            // replaces but never touches loose ones, and gc.auto is off: the
+            // trees `merge-tree --write-tree` writes for every merge status (a
+            // merge request page, `/api/v4` reads, the auto-merge sweep each
+            // minute) stayed forever, a file each. Measured with git 2.47: five
+            // pushes to main, each followed by a merge status, then this repack
+            // left 12 loose objects, all unreachable; `git prune` removed them.
+            // Only objects older than PRUNE_EXPIRE go: a merge writes its tree,
+            // then its commit, then moves the branch, and writing an object
+            // that is already there freshens it.
+            let mut c = self.git(repo);
+            c.arg("prune").arg(format!("--expire={PRUNE_EXPIRE}"));
+            cli::run(c, 4096, Duration::from_secs(3600)).await?;
+        }
         let mut c = self.git(repo);
         c.args(["commit-graph", "write", "--reachable", "--changed-paths", "--split", "--no-progress"]);
         cli::run(c, 4096, Duration::from_secs(3600)).await?;

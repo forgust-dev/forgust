@@ -929,3 +929,211 @@ async fn a_failed_pipeline_and_the_one_that_fixes_it_reach_who_started_them(pool
     run(6, "success").await;
     assert_eq!(mails("pipeline #6 passed again on main"), 1);
 }
+
+/// Upgrading while jobs run: their 128 KiB chunks become rows starting at
+/// chunk_index * 128 KiB, and their logs read and grow as before. An update
+/// larger than a chunk is stored in rows of a chunk at most.
+#[sqlx::test(migrations = false)]
+async fn live_logs_of_running_jobs_survive_the_upgrade(pool: sqlx::PgPool) {
+    use forgust_db::ci::{Append, TRACE_CHUNK, append_trace, build_for_update, read_trace};
+    forgust_db::MIGRATOR.run_to(20261118100000, &pool).await.unwrap();
+    let id = |sql: &'static str| sqlx::query_scalar::<_, i64>(sql);
+    let ns = id("INSERT INTO namespaces (kind, name, path) VALUES ('user', 'ada', 'ada') RETURNING id").fetch_one(&pool).await.unwrap();
+    let p = id("INSERT INTO projects (namespace_id, name, path) VALUES ($1, 'app', 'app') RETURNING id")
+        .bind(ns)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let pl = id("INSERT INTO ci_pipelines (project_id, iid, ref, sha, source) VALUES ($1, 1, 'main', 'abc', 'push') RETURNING id")
+        .bind(p)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    // the old layout: chunk 0 full, chunk 1 partly
+    let mut log: Vec<u8> = (0..TRACE_CHUNK + 1000).map(|i| b'a' + (i % 26) as u8).collect();
+    let b = id("INSERT INTO ci_builds (pipeline_id, project_id, name, stage, stage_idx, spec, status, trace_size)
+                VALUES ($1, $2, 'build', 'build', 0, '{}', 'running', $3) RETURNING id")
+    .bind(pl)
+    .bind(p)
+    .bind(log.len() as i64)
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let (first, second) = log.split_at(TRACE_CHUNK as usize);
+    sqlx::query("INSERT INTO ci_job_trace_chunks (build_id, chunk_index, data) VALUES ($1, 0, $2), ($1, 1, $3)")
+        .bind(b)
+        .bind(first)
+        .bind(second)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    forgust_db::MIGRATOR.run(&pool).await.unwrap();
+    assert_eq!(read_trace(&pool, b, 0, i64::MAX).await.unwrap(), log);
+    let edge = TRACE_CHUNK as usize - 10;
+    assert_eq!(read_trace(&pool, b, edge as i64, 30).await.unwrap(), &log[edge..edge + 30]);
+
+    // appends after the old chunks: a small update, then one of two chunks and a half
+    let big: Vec<u8> = (0..TRACE_CHUNK * 5 / 2).map(|i| b'0' + (i % 10) as u8).collect();
+    for part in [&b"tail\n"[..], &big[..]] {
+        let mut tx = pool.begin().await.unwrap();
+        let build = build_for_update(&mut tx, b).await.unwrap().unwrap();
+        let Append::Ok(size) = append_trace(&mut tx, &build, build.trace_size, part).await.unwrap() else { panic!("range mismatch") };
+        tx.commit().await.unwrap();
+        log.extend_from_slice(part);
+        assert_eq!(size, log.len() as i64);
+    }
+    let rows: Vec<(i64, i32)> =
+        sqlx::query_as("SELECT byte_offset, length(data) FROM ci_job_trace_chunks WHERE build_id = $1 ORDER BY byte_offset")
+            .bind(b)
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    let chunk = TRACE_CHUNK as i32;
+    let after = TRACE_CHUNK + 1005;
+    assert_eq!(
+        rows,
+        [
+            (0, chunk),
+            (TRACE_CHUNK, 1000),
+            (TRACE_CHUNK + 1000, 5),
+            (after, chunk),
+            (after + TRACE_CHUNK, chunk),
+            (after + 2 * TRACE_CHUNK, chunk / 2)
+        ]
+    );
+    assert_eq!(read_trace(&pool, b, 0, i64::MAX).await.unwrap(), log);
+    // a read inside one row, across rows, and past the end
+    for (offset, max) in
+        [(TRACE_CHUNK + 1002, 2), (TRACE_CHUNK + 990, 20), (after + TRACE_CHUNK - 3, TRACE_CHUNK + 6), (log.len() as i64 - 4, 100)]
+    {
+        let o = offset as usize;
+        let end = (o + max as usize).min(log.len());
+        assert_eq!(read_trace(&pool, b, offset, max).await.unwrap(), &log[o..end], "{offset}+{max}");
+    }
+    assert!(read_trace(&pool, b, log.len() as i64, 10).await.unwrap().is_empty());
+    assert!(read_trace(&pool, b, 5, 0).await.unwrap().is_empty());
+}
+
+/// A finished job's log is stored zstd-compressed, in frames: the log page
+/// reads it by range and the raw view streams it whole, as before.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn archived_logs_are_compressed_and_read_by_range(pool: sqlx::PgPool) {
+    let f = fixture(pool).await;
+    let token = new_runner(&f, json!({ "description": "fake" })).await;
+    let (s, job) = request_job(&f, &token).await;
+    assert_eq!(s, StatusCode::CREATED, "{job}");
+    let id = job["id"].as_i64().unwrap();
+    let jt = job["token"].as_str().unwrap().to_string();
+    // 2.5 MiB of build output, sent in updates of 64 KiB
+    let mut log = String::new();
+    for i in 0.. {
+        if log.len() >= 5 << 19 {
+            break;
+        }
+        log.push_str(&format!("\x1b[32;1m$ cargo build\x1b[0;m Compiling crate-{} v0.{}.{} (step {i})\n", i % 211, i % 7, i % 13));
+    }
+    for (n, piece) in log.as_bytes().chunks(64 << 10).enumerate() {
+        let r = patch(&f, id, &jt, n * (64 << 10), std::str::from_utf8(piece).unwrap()).await;
+        assert_eq!(r.status(), StatusCode::ACCEPTED);
+    }
+    let r = put(&f, id, json!({ "token": jt, "state": "success", "exit_code": 0, "output": { "bytesize": log.len() } })).await;
+    assert_eq!(r.status(), StatusCode::OK);
+    forgust_server::ci::trace::archive(&f.srv.state, id).await.unwrap();
+
+    let db = &f.srv.state.db;
+    let a = forgust_db::ci::artifact(db, id, "trace").await.unwrap().unwrap();
+    assert_eq!(a.file_format, "zstd");
+    assert!(a.blob_key.ends_with(".log.zst"), "{}", a.blob_key);
+    assert!(a.size * 10 < log.len() as i64, "{} bytes stored for {}", a.size, log.len());
+    let chunks: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM ci_job_trace_chunks WHERE build_id = $1").bind(id).fetch_one(db).await.unwrap();
+    assert_eq!(chunks, 0);
+    // the log page reads it in pieces of at most 1 MiB, from any offset
+    let trace = format!("/api/v1/projects/{}/jobs/{id}/trace", f.project);
+    let mut read = String::new();
+    loop {
+        let t = f.owner.ok_get(&format!("{trace}?offset={}", read.len())).await;
+        read.push_str(t["content"].as_str().unwrap());
+        if t["complete"] == true {
+            break;
+        }
+        assert_eq!(t["more"], true, "{}", read.len());
+    }
+    assert!(read == log, "read in pieces: {} bytes of {}", read.len(), log.len());
+    let mid = (1 << 20) - 7;
+    let t = f.owner.ok_get(&format!("{trace}?offset={mid}")).await;
+    assert!(t["content"].as_str().unwrap() == &log[mid..mid + (1 << 20)], "a piece across two frames");
+    let (s, raw) = f.owner.get_bytes(&format!("/api/v1/projects/{}/jobs/{id}/raw", f.project)).await;
+    assert_eq!(s, 200);
+    assert!(raw == log.as_bytes(), "the raw view: {} bytes of {}", raw.len(), log.len());
+}
+
+/// Jobs point to their definition, stored once per project and content: a
+/// second pipeline of the same config adds none, nor does a retry, and a job
+/// made before definitions keeps its spec until the CI sweep moves it.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn job_definitions_are_stored_once(pool: sqlx::PgPool) {
+    let f = fixture(pool).await;
+    let db = f.srv.state.db.clone();
+    let count = |sql: &'static str| {
+        let db = db.clone();
+        async move { sqlx::query_scalar::<_, i64>(sql).fetch_one(&db).await.unwrap() }
+    };
+    let jobs = "SELECT count(*) FROM ci_builds";
+    let definitions = "SELECT count(*) FROM ci_job_definitions";
+    let inline = "SELECT count(*) FROM ci_builds WHERE spec IS NOT NULL";
+    assert_eq!((count(jobs).await, count(definitions).await, count(inline).await), (3, 3, 0));
+    f.owner.ok_post(&format!("/api/v1/projects/{}/pipelines", f.project), json!({ "ref": "main" })).await;
+    wait_jobs(&f.srv.state).await;
+    assert_eq!((count(jobs).await, count(definitions).await), (6, 3), "the same config: no new definition");
+
+    // the runner gets the job its definition describes
+    let token = new_runner(&f, json!({ "description": "fake" })).await;
+    let (s, job) = request_job(&f, &token).await;
+    assert_eq!(s, StatusCode::CREATED, "{job}");
+    assert_eq!(job["job_info"]["name"], "build");
+    assert_eq!(job["steps"][0]["script"], json!(["echo $GREETING > out.txt"]));
+    assert_eq!(job["image"]["name"], "alpine:3.20");
+    let id = job["id"].as_i64().unwrap();
+    let jt = job["token"].as_str().unwrap().to_string();
+    assert_eq!(put(&f, id, json!({ "token": jt, "state": "failed", "failure_reason": "script_failure" })).await.status(), StatusCode::OK);
+    let retried = f.owner.ok_post(&format!("/api/v1/projects/{}/jobs/{id}/retry", f.project), json!({})).await;
+    assert_eq!((count(jobs).await, count(definitions).await), (7, 3), "a retry adds no definition");
+
+    // jobs made before definitions hold their spec in their row (here the
+    // first pipeline's four, the retry included): read the same, then moved
+    // by the sweep, without a definition more
+    let pipeline = forgust_db::ci::build(&db, id).await.unwrap().unwrap().pipeline_id;
+    let page = format!("/api/v1/projects/{}/jobs/{}", f.project, retried["id"]);
+    // the job page, but for its time in the queue (it grows while it waits)
+    let job_page = || async {
+        let mut j = f.owner.ok_get(&page).await;
+        j.as_object_mut().unwrap().remove("queued_duration");
+        j
+    };
+    let before = job_page().await;
+    sqlx::query(
+        "UPDATE ci_builds b SET spec = d.spec, definition_id = NULL FROM ci_job_definitions d
+          WHERE d.id = b.definition_id AND b.pipeline_id = $1",
+    )
+    .bind(pipeline)
+    .execute(&db)
+    .await
+    .unwrap();
+    assert_eq!(count(inline).await, 4);
+    assert_eq!(job_page().await, before);
+    forgust_server::ci::sweep(&f.srv.state).await.unwrap();
+    assert_eq!((count(inline).await, count(definitions).await), (0, 3));
+    assert_eq!(job_page().await, before);
+    for b in forgust_db::ci::builds_of_pipeline(&db, pipeline).await.unwrap() {
+        let spec = forgust_server::ci::pipeline::StoredSpec::of(&b).unwrap();
+        assert_eq!(spec.global_variables["GREETING"], "hello", "{}", b.name);
+    }
+
+    // a project's definitions go with it
+    let (s, b) = f.owner.delete(&format!("/api/v1/projects/{}", f.project)).await;
+    assert!(s < 300, "{s} {b}");
+    wait_jobs(&f.srv.state).await;
+    assert_eq!((count(jobs).await, count(definitions).await), (0, 0));
+}

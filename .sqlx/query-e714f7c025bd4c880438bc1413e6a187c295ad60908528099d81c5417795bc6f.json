@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO ci_job_definitions (project_id, checksum, spec)\n         VALUES ($1, ci_spec_checksum($2::jsonb), $2::jsonb)\n         ON CONFLICT (project_id, checksum) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e714f7c025bd4c880438bc1413e6a187c295ad60908528099d81c5417795bc6f"
+}

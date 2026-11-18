@@ -762,7 +762,7 @@ pub async fn hook_deliveries(
     if hook.project_id != pid || hook.namespace_id != nid {
         return Err(ApiError::NotFound);
     }
-    Ok(Json(forgust_db::webhooks::deliveries(&state.db, hook_id, 50).await?))
+    Ok(Json(forgust_db::webhooks::deliveries(&state.db, hook_id, forgust_db::webhooks::KEPT_DELIVERIES).await?))
 }
 
 // ------------------------------------------------------------------ live updates

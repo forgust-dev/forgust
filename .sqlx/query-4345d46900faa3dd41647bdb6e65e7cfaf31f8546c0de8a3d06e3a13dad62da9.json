@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT ON (project_id, checksum) id AS \"id!\"\n             FROM (SELECT id, project_id, ci_spec_checksum(spec) AS checksum\n                     FROM ci_builds WHERE spec IS NOT NULL ORDER BY id LIMIT $1) b",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4345d46900faa3dd41647bdb6e65e7cfaf31f8546c0de8a3d06e3a13dad62da9"
+}

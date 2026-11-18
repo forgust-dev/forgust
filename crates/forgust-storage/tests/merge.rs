@@ -107,6 +107,32 @@ async fn rebase_twenty_commits_without_a_working_copy() {
     assert!(st.refs(1, REBASE_PREFIX).await.unwrap().is_empty());
 }
 
+/// A merge status writes the merged tree, which no ref reaches: the full
+/// maintenance deletes such objects once they are two weeks old, and keeps
+/// newer ones (a merge may be about to give its tree a commit and a ref).
+#[tokio::test]
+async fn full_maintenance_prunes_old_unreachable_objects() {
+    let (_r, _w, st) = setup().await;
+    let repo = st.repo_path(1);
+    let has = |oid: &str| {
+        Command::new("git").arg("-C").arg(&repo).args(["cat-file", "-e", oid]).env("GIT_CONFIG_NOSYSTEM", "1").status().unwrap().success()
+    };
+    let old = st.merge_tree(1, "main", "topic", None).await.unwrap().tree;
+    let loose = repo.join("objects").join(&old[..2]).join(&old[2..]);
+    let month_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(30 * 24 * 3600);
+    std::fs::File::open(&loose).unwrap().set_modified(month_ago).unwrap();
+    let fresh = st.merge_tree(1, "main", "clash", None).await.unwrap().tree;
+    assert!(has(&old) && has(&fresh));
+
+    st.maintenance(1, true).await.unwrap();
+    assert!(!has(&old), "a month-old unreachable tree is deleted");
+    assert!(has(&fresh), "a fresh one stays");
+    // what the refs reach is all there
+    git(&repo, &["fsck", "--connectivity-only", "--no-progress"]);
+    assert!(st.merge_tree(1, "main", "topic", None).await.unwrap().clean());
+    assert_eq!(st.rev_list(1, "main", "topic", false).await.unwrap().len(), 20);
+}
+
 #[tokio::test]
 async fn rebase_reports_conflicts() {
     let (_r, _w, st) = setup().await;

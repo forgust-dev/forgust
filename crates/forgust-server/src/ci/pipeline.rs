@@ -836,6 +836,9 @@ pub async fn finish_job(state: &AppState, id: i64, status: &str, reason: Option<
 
 /// Run a job again as a new attempt (the old one stays, marked retried).
 pub async fn retry_job(state: &AppState, build: &Build, user_id: Option<i64>) -> anyhow::Result<i64> {
+    // the job's definition first, on its own: inside the transaction, adding it
+    // could deadlock with a pipeline adding the same one (`add_job_definition`)
+    forgust_db::ci::add_job_definition(&state.db, build.project_id, &build.spec).await?;
     let mut tx = state.db.begin().await?;
     let b = forgust_db::ci::build_for_update(&mut tx, build.id).await?.context("job vanished")?;
     anyhow::ensure!(is_complete(&b.status) && !b.retried, "only finished jobs can be retried");

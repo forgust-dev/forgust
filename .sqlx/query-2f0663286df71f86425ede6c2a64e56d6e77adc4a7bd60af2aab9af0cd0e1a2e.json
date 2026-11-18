@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT byte_offset, data FROM ci_job_trace_chunks\n          WHERE build_id = $1 AND byte_offset > $2 AND byte_offset < $3\n          ORDER BY byte_offset",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "byte_offset",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_job_trace_chunks",
+            "name": "byte_offset"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "data",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "ci_job_trace_chunks",
+            "name": "data"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "2f0663286df71f86425ede6c2a64e56d6e77adc4a7bd60af2aab9af0cd0e1a2e"
+}
