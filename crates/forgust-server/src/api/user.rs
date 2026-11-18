@@ -10,7 +10,7 @@ use utoipa::ToSchema;
 
 use super::Paging;
 use super::dto::{NewToken, ProjectDto, UserDto};
-use crate::auth::{SignedIn, session, webauthn};
+use crate::auth::{ClientIp, SignedIn, session, webauthn};
 use crate::crypto;
 use crate::error::{ApiError, ApiResult};
 use crate::services::{self, paths, users};
@@ -56,6 +56,7 @@ pub async fn update_me(
     State(state): State<AppState>,
     SignedIn(u, p): SignedIn,
     jar: axum_extra::extract::CookieJar,
+    ip: ClientIp,
     Json(req): Json<UpdateMe>,
 ) -> ApiResult<Json<UserDto>> {
     require_interactive(&u, &p)?;
@@ -64,9 +65,7 @@ pub async fn update_me(
     let pending = u.unconfirmed_email.as_deref().is_some_and(|x| x.eq_ignore_ascii_case(email));
     // without email there is no link to confirm a new address with: it changes at once
     let at_once = changes && !state.cfg.email.enabled();
-    if changes && (!pending || at_once) {
-        reauth(&state, &jar, u.id, &req.current_password).await?;
-    }
+    let reauthed = if changes && (!pending || at_once) { Some(reauth(&state, &jar, ip, u.id, &req.current_password).await?) } else { None };
     paths::validate_name(&req.name)?;
     paths::validate_email(email)?;
     if let Some(other) = forgust_db::users::find_by_email(&state.db, email).await?
@@ -98,6 +97,9 @@ pub async fn update_me(
     } else if u.unconfirmed_email.is_some() {
         forgust_db::users::set_unconfirmed_email(&state.db, u.id, None).await?;
     }
+    if let Some(r) = reauthed {
+        r.spend(&state).await?;
+    }
     services::audit(&state, &p, "profile_updated", Some(("user", u.id)), json!({}), None).await;
     let u = forgust_db::users::find(&state.db, u.id).await?.ok_or(ApiError::NotFound)?;
     Ok(Json(UserDto::from(&u, true)))
@@ -110,10 +112,13 @@ pub struct ChangePassword {
     pub new: String,
 }
 
-/// Checks of the current password or a 2FA code inside a session share the
-/// sign-in limit, per account: a stolen session cannot guess the password.
-fn reauth_allowed(state: &AppState, user_id: i64) -> ApiResult<()> {
-    if !state.login_failures.exceeded(&format!("acct|{user_id}")) && state.login_limiter.allow(&format!("reauth|{user_id}")) {
+/// Checks of the current password inside a session share the sign-in limit,
+/// per account: a stolen session cannot guess the password. Past it, as at
+/// sign-in ([`account_open`](crate::auth::account_open)), only addresses the
+/// account signed in from before may keep trying: someone guessing cannot
+/// lock its owner out.
+async fn reauth_allowed(state: &AppState, ip: ClientIp, user_id: i64) -> ApiResult<()> {
+    if crate::auth::account_open(state, ip, user_id).await? && state.login_limiter.allow(&format!("reauth|{user_id}")) {
         Ok(())
     } else {
         Err(ApiError::forbidden("too many attempts, try again in a minute"))
@@ -125,52 +130,62 @@ fn reauth_allowed(state: &AppState, user_id: i64) -> ApiResult<()> {
 /// or remove the second factor.
 const FRESH_SIGN_IN: chrono::Duration = chrono::Duration::minutes(10);
 
-async fn reauth(state: &AppState, jar: &axum_extra::extract::CookieJar, user_id: i64, password: &str) -> ApiResult<()> {
-    reauth_allowed(state, user_id)?;
+/// The account proved itself again. Without a password it did so with its
+/// recent sign-in, which [`Reauthed::spend`] uses up once the change is made:
+/// one sign-in, one sensitive change.
+#[must_use = "spend it once the change is made"]
+struct Reauthed {
+    /// The session whose recent sign-in stood in for the password.
+    fresh_session: Option<Vec<u8>>,
+}
+
+impl Reauthed {
+    async fn spend(self, state: &AppState) -> ApiResult<()> {
+        if let Some(token) = self.fresh_session {
+            forgust_db::sessions::mark_not_recent(&state.db, &token).await?;
+        }
+        Ok(())
+    }
+}
+
+async fn reauth(state: &AppState, jar: &axum_extra::extract::CookieJar, ip: ClientIp, user_id: i64, password: &str) -> ApiResult<Reauthed> {
+    reauth_allowed(state, ip, user_id).await?;
     match forgust_db::users::password_hash(&state.db, user_id).await? {
         Some(hash) => {
             if !crypto::check_password(password, Some(hash)).await {
                 state.login_failures.allow(&format!("acct|{user_id}"));
                 return Err(ApiError::forbidden("password is wrong"));
             }
+            Ok(Reauthed { fresh_session: None })
         }
         None => {
             let token = crate::auth::session_cookie(&state.cfg, jar).map(crypto::token_hash).unwrap_or_default();
-            let same_user = forgust_db::sessions::find_with_user(&state.db, &token)
+            let fresh = forgust_db::sessions::own_sign_in(&state.db, &token)
                 .await?
-                .is_some_and(|(s, _)| s.user_id == user_id && s.impersonator_id.is_none());
-            let fresh =
-                same_user && forgust_db::sessions::created_at(&state.db, &token).await?.is_some_and(|t| Utc::now() - t < FRESH_SIGN_IN);
+                .is_some_and(|(owner, at)| owner == user_id && Utc::now() - at < FRESH_SIGN_IN);
             if !fresh {
                 return Err(ApiError::forbidden("sign out and sign in again, then retry within 10 minutes"));
             }
+            Ok(Reauthed { fresh_session: Some(token) })
         }
     }
-    Ok(())
-}
-
-async fn consume_passwordless_reauth(state: &AppState, jar: &axum_extra::extract::CookieJar, password: &str) -> ApiResult<()> {
-    if password.is_empty()
-        && let Some(c) = crate::auth::session_cookie(&state.cfg, jar)
-    {
-        forgust_db::sessions::mark_not_recent(&state.db, &crypto::token_hash(c)).await?;
-    }
-    Ok(())
 }
 
 pub async fn change_password(
     State(state): State<AppState>,
     SignedIn(u, p): SignedIn,
     jar: axum_extra::extract::CookieJar,
+    ip: ClientIp,
     Json(req): Json<ChangePassword>,
 ) -> ApiResult<Json<Value>> {
     require_interactive(&u, &p)?;
-    reauth(&state, &jar, u.id, &req.current).await.map_err(|e| match e {
+    let reauthed = reauth(&state, &jar, ip, u.id, &req.current).await.map_err(|e| match e {
         ApiError::Forbidden(m) if m == "password is wrong" => ApiError::forbidden("current password is wrong"),
         e => e,
     })?;
     users::validate_password(&req.new)?;
     forgust_db::users::set_password(&state.db, u.id, &crypto::hash_password_gated(&req.new).await?).await?;
+    reauthed.spend(&state).await?;
     // whoever else is signed in (perhaps with the old password) is signed out
     let current = crate::auth::session_cookie(&state.cfg, &jar).map(crypto::token_hash).unwrap_or_default();
     forgust_db::sessions::delete_others(&state.db, u.id, &current).await?;
@@ -226,6 +241,7 @@ pub async fn link_identity(
     State(state): State<AppState>,
     SignedIn(u, p): SignedIn,
     jar: axum_extra::extract::CookieJar,
+    ip: ClientIp,
     Path(name): Path<String>,
     Json(req): Json<ConfirmPassword>,
 ) -> ApiResult<(axum_extra::extract::CookieJar, Json<LinkStart>)> {
@@ -234,8 +250,9 @@ pub async fn link_identity(
     if !state.oidc.providers.contains_key(&name) {
         return Err(ApiError::NotFound);
     }
-    reauth(&state, &jar, u.id, &req.password).await?;
+    let reauthed = reauth(&state, &jar, ip, u.id, &req.password).await?;
     let (url, login_state) = crate::auth::oidc::start(&state, &name, Some(u.id)).await?;
+    reauthed.spend(&state).await?;
     Ok((jar.add(crate::auth::oidc::state_cookie(&state, login_state)), Json(LinkStart { url })))
 }
 
@@ -245,11 +262,12 @@ pub async fn unlink_identity(
     State(state): State<AppState>,
     SignedIn(u, p): SignedIn,
     jar: axum_extra::extract::CookieJar,
+    ip: ClientIp,
     Path(name): Path<String>,
     Json(req): Json<ConfirmPassword>,
 ) -> ApiResult<Json<Value>> {
     require_interactive(&u, &p)?;
-    reauth(&state, &jar, u.id, &req.password).await?;
+    let reauthed = reauth(&state, &jar, ip, u.id, &req.password).await?;
     let linked = forgust_db::users::identities(&state.db, u.id).await?;
     if !linked.iter().any(|i| i.provider == name) {
         return Err(ApiError::NotFound);
@@ -259,6 +277,7 @@ pub async fn unlink_identity(
         return Err(ApiError::forbidden("this is the only way into your account: set a password first"));
     }
     forgust_db::users::remove_identities(&state.db, u.id, &name).await?;
+    reauthed.spend(&state).await?;
     services::audit(&state, &p, "identity_unlinked", Some(("user", u.id)), json!({ "provider": name }), None).await;
     Ok(Json(json!({ "ok": true })))
 }
@@ -387,12 +406,23 @@ pub struct TotpSetup {
     pub otpauth_url: String,
 }
 
-/// Start enrolment: store a new (not yet enabled) secret.
-pub async fn totp_setup(State(state): State<AppState>, SignedIn(u, p): SignedIn) -> ApiResult<Json<TotpSetup>> {
+/// Start enrolment: store a new (not yet enabled) secret. Asked for with the
+/// password, like enabling it: a borrowed session must not be able to put its
+/// own secret on the account. An account without a password keeps its recent
+/// sign-in for the enabling.
+pub async fn totp_setup(
+    State(state): State<AppState>,
+    SignedIn(u, p): SignedIn,
+    jar: axum_extra::extract::CookieJar,
+    ip: ClientIp,
+    Json(req): Json<ConfirmPassword>,
+) -> ApiResult<Json<TotpSetup>> {
     require_interactive(&u, &p)?;
     if u.totp_enabled {
         return Err(ApiError::conflict("two-factor authentication is already enabled"));
     }
+    // spent by the enabling, which asks again
+    let _ = reauth(&state, &jar, ip, u.id, &req.password).await?;
     let secret = session::new_totp_secret();
     let sealed = state.secrets.encrypt(secret.as_bytes())?;
     forgust_db::users::set_totp(&state.db, u.id, Some(&sealed), false).await?;
@@ -421,13 +451,14 @@ pub async fn totp_enable(
     State(state): State<AppState>,
     SignedIn(u, p): SignedIn,
     jar: axum_extra::extract::CookieJar,
+    ip: ClientIp,
     Json(req): Json<TotpCode>,
 ) -> ApiResult<Json<TotpEnabled>> {
     require_interactive(&u, &p)?;
     if u.totp_enabled {
         return Err(ApiError::conflict("two-factor authentication is already enabled"));
     }
-    reauth(&state, &jar, u.id, &req.password).await?;
+    let reauthed = reauth(&state, &jar, ip, u.id, &req.password).await?;
     // the app and its recovery codes come together, or not at all
     let mut tx = state.db.begin().await?;
     if !session::verify_totp(&state, &mut tx, &u, &req.code).await? {
@@ -437,6 +468,7 @@ pub async fn totp_enable(
     forgust_db::users::set_totp(&mut *tx, u.id, Some(&sealed), true).await?;
     let recovery_codes = session::first_recovery_codes(&mut tx, u.id).await?;
     tx.commit().await?;
+    reauthed.spend(&state).await?;
     services::audit(&state, &p, "two_factor_enabled", Some(("user", u.id)), json!({}), None).await;
     let u = forgust_db::users::find(&state.db, u.id).await?.ok_or(ApiError::NotFound)?;
     Ok(Json(TotpEnabled { user: UserDto::from(&u, true), recovery_codes }))
@@ -451,14 +483,15 @@ pub async fn totp_disable(
     State(state): State<AppState>,
     SignedIn(u, p): SignedIn,
     jar: axum_extra::extract::CookieJar,
+    ip: ClientIp,
     Json(req): Json<TotpDisable>,
 ) -> ApiResult<Json<UserDto>> {
     require_interactive(&u, &p)?;
-    reauth(&state, &jar, u.id, &req.password).await?;
+    let reauthed = reauth(&state, &jar, ip, u.id, &req.password).await?;
     let mut tx = state.db.begin().await?;
     forgust_db::users::disable_totp(&mut tx, u.id).await?;
     tx.commit().await?;
-    consume_passwordless_reauth(&state, &jar, &req.password).await?;
+    reauthed.spend(&state).await?;
     services::audit(&state, &p, "two_factor_disabled", Some(("user", u.id)), json!({}), None).await;
     let u = forgust_db::users::find(&state.db, u.id).await?.ok_or(ApiError::NotFound)?;
     Ok(Json(UserDto::from(&u, true)))
@@ -486,16 +519,18 @@ pub async fn recovery_codes_reset(
     State(state): State<AppState>,
     SignedIn(u, p): SignedIn,
     jar: axum_extra::extract::CookieJar,
+    ip: ClientIp,
     Json(req): Json<ConfirmPassword>,
 ) -> ApiResult<Json<NewRecoveryCodes>> {
     require_interactive(&u, &p)?;
-    reauth(&state, &jar, u.id, &req.password).await?;
+    let reauthed = reauth(&state, &jar, ip, u.id, &req.password).await?;
     if !u.two_factor() {
         return Err(ApiError::conflict("turn on two-factor authentication first"));
     }
     let mut tx = state.db.begin().await?;
     let recovery_codes = session::reset_recovery_codes(&mut tx, u.id).await?;
     tx.commit().await?;
+    reauthed.spend(&state).await?;
     services::audit(&state, &p, "recovery_codes_reset", Some(("user", u.id)), json!({}), None).await;
     Ok(Json(NewRecoveryCodes { recovery_codes }))
 }
@@ -548,12 +583,13 @@ pub async fn webauthn_register_start(
     State(state): State<AppState>,
     SignedIn(u, p): SignedIn,
     jar: axum_extra::extract::CookieJar,
+    ip: ClientIp,
     Json(req): Json<WebauthnRegisterStart>,
 ) -> ApiResult<Json<WebauthnRegistration>> {
     require_interactive(&u, &p)?;
     require_confirmed(&state, &u)?;
     let rp = webauthn::of(&state)?;
-    reauth(&state, &jar, u.id, &req.password).await?;
+    let reauthed = reauth(&state, &jar, ip, u.id, &req.password).await?;
     let exclude = forgust_db::webauthn::credential_ids(&state.db, u.id).await?;
     if exclude.len() >= MAX_WEBAUTHN {
         return Err(ApiError::conflict(format!("an account has at most {MAX_WEBAUTHN} security keys and passkeys")));
@@ -586,6 +622,7 @@ pub async fn webauthn_register_start(
         Utc::now() + chrono::Duration::minutes(5),
     )
     .await?;
+    reauthed.spend(&state).await?;
     Ok(Json(WebauthnRegistration { ceremony, options }))
 }
 
@@ -721,16 +758,17 @@ pub async fn webauthn_remove(
     State(state): State<AppState>,
     SignedIn(u, p): SignedIn,
     jar: axum_extra::extract::CookieJar,
+    ip: ClientIp,
     Path(id): Path<i64>,
     Json(req): Json<ConfirmPassword>,
 ) -> ApiResult<Json<UserDto>> {
     require_interactive(&u, &p)?;
-    reauth(&state, &jar, u.id, &req.password).await?;
+    let reauthed = reauth(&state, &jar, ip, u.id, &req.password).await?;
     let mut tx = state.db.begin().await?;
     let (kind, name) = forgust_db::webauthn::delete(&mut tx, u.id, id).await?.ok_or(ApiError::NotFound)?;
     let after = forgust_db::users::find(&mut *tx, u.id).await?.ok_or(ApiError::NotFound)?;
     tx.commit().await?;
-    consume_passwordless_reauth(&state, &jar, &req.password).await?;
+    reauthed.spend(&state).await?;
     services::audit(&state, &p, "webauthn_removed", Some(("user", u.id)), json!({ "kind": kind, "name": name, "credential": id }), None)
         .await;
     webauthn_notice(&state, &u, kind, "removed", &name).await;

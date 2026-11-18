@@ -119,7 +119,7 @@ pub async fn children_visible(
            WHERE n.parent_id = $1
              AND ($3 OR n.visibility = 20 OR (n.visibility = 10 AND $4)
                   OR ((NOT (SELECT require_two_factor FROM namespaces WHERE id = n.traversal_ids[1])
-                       OR EXISTS (SELECT 1 FROM users u WHERE u.id = $2 AND (u.totp_enabled OR u.security_keys_enabled OR u.is_admin OR u.user_type <> 'human')))
+                       OR EXISTS (SELECT 1 FROM users u WHERE u.id = $2 AND (u.two_factor_enabled OR u.is_admin OR u.user_type <> 'human')))
                       AND (EXISTS (SELECT 1 FROM namespace_authorizations a WHERE a.namespace_id = n.id AND a.user_id = $2)
                            OR EXISTS (SELECT 1 FROM namespaces d JOIN namespace_authorizations a ON a.namespace_id = d.id
                                       WHERE d.traversal_ids @> ARRAY[n.id] AND a.user_id = $2)
@@ -147,7 +147,7 @@ pub async fn top_level_visible(e: impl PgExecutor<'_>, user_id: Option<i64>, is_
            WHERE n.kind = 'group' AND n.parent_id IS NULL
              AND ($2 OR n.visibility = 20 OR (n.visibility = 10 AND $3)
                   OR ((NOT n.require_two_factor
-                       OR EXISTS (SELECT 1 FROM users u WHERE u.id = $1 AND (u.totp_enabled OR u.security_keys_enabled OR u.is_admin OR u.user_type <> 'human')))
+                       OR EXISTS (SELECT 1 FROM users u WHERE u.id = $1 AND (u.two_factor_enabled OR u.is_admin OR u.user_type <> 'human')))
                       AND (EXISTS (SELECT 1 FROM namespaces d JOIN namespace_authorizations a ON a.namespace_id = d.id
                                    WHERE d.traversal_ids @> ARRAY[n.id] AND a.user_id = $1)
                            OR EXISTS (SELECT 1 FROM projects p JOIN namespaces d ON d.id = p.namespace_id

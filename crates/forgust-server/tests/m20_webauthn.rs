@@ -266,6 +266,20 @@ async fn security_keys_are_a_second_factor(pool: sqlx::PgPool) {
     assert!(audited(&srv, "webauthn_removed").await);
 }
 
+/// An authenticator app still being set up is no second factor: it cannot
+/// stand in for the account's security keys, and setting it up asks for the password.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn a_pending_authenticator_app_is_no_second_factor(pool: sqlx::PgPool) {
+    let srv = server(pool).await;
+    let ann = srv.user("ann", false).await;
+    assert_eq!(register(&ann, "ann", &mut Authenticator::new(), "security_key", "YubiKey").await.0, 200);
+    assert_eq!(ann.post("/api/v1/user/two_factor/setup", json!({})).await.0, 403, "the password again");
+    let pending = ann.ok_post("/api/v1/user/two_factor/setup", json!({ "password": password("ann") })).await;
+    let code = totp_code(pending["secret"].as_str().unwrap());
+    let ch = challenge(&srv, "ann").await;
+    assert_eq!(Client::new(&srv.base).post("/api/v1/auth/login/totp", json!({ "challenge": ch, "code": code })).await.0, 401);
+}
+
 #[sqlx::test(migrator = "forgust_db::MIGRATOR")]
 async fn passkeys_sign_in_without_a_password(pool: sqlx::PgPool) {
     let srv = server(pool).await;

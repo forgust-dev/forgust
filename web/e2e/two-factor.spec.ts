@@ -33,11 +33,11 @@ test("two-factor: recovery codes are shown once and sign in once", async ({ page
     await signIn();
     await expect.poll(() => me.evaluate(() => location.pathname)).not.toBe("/login");
     await me.goto("/profile/security");
-    await me.getByRole("button", { name: "Set up 2FA" }).click();
     const app = me.locator(".card", { hasText: "Authenticator app" });
+    await app.getByLabel("Confirm with your password").fill(pw);
+    await app.getByRole("button", { name: "Set up 2FA" }).click();
     const secret = (await app.locator("code").first().textContent())!.trim();
     await app.getByLabel("Code").fill(totp(secret));
-    await app.getByLabel("Confirm with your password").fill(pw);
     await app.getByRole("button", { name: "Enable" }).click();
 
     // the codes, this once

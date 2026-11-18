@@ -461,24 +461,25 @@ function Security() {
                 <Field label="Code">
                   <input inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value)} />
                 </Field>
-                <Field label="Confirm with your password" hint="Accounts without a password (single sign-on): leave empty within 10 minutes of signing in">
-                  <input type="password" autoComplete="current-password" value={disablePw} onChange={(e) => setDisablePw(e.target.value)} />
-                </Field>
                 <div>
                   <button className="btn primary">Enable</button>
                 </div>
               </form>
             ) : (
-              <div className="stack">
+              <form
+                className="stack"
+                onSubmit={run(async () => setSetup(await api.post<S["TotpSetup"]>("/user/two_factor/setup", { password: disablePw })), "")}
+              >
                 <p className="muted" style={{ margin: 0 }}>
                   A time-based code from an app on your phone.
                 </p>
+                <Field label="Confirm with your password" hint="Accounts without a password (single sign-on): leave empty within 10 minutes of signing in">
+                  <input type="password" autoComplete="current-password" value={disablePw} onChange={(e) => setDisablePw(e.target.value)} />
+                </Field>
                 <div>
-                  <button className="btn primary" onClick={run(async () => setSetup(await api.post<S["TotpSetup"]>("/user/two_factor/setup")), "")}>
-                    Set up 2FA
-                  </button>
+                  <button className="btn primary">Set up 2FA</button>
                 </div>
-              </div>
+              </form>
             )}
           </Card>
           <WebauthnCard kind="security_key" onCodes={setCodes} onChange={refresh} />

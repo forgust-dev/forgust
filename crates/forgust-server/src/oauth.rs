@@ -158,9 +158,8 @@ struct Registration {
 async fn register(State(state): State<AppState>, ClientIp(ip): ClientIp, body: axum::body::Bytes) -> Response {
     static LIMITER: OnceLock<RateLimiter> = OnceLock::new();
     let limiter = LIMITER.get_or_init(|| RateLimiter::new(30, Duration::from_secs(3600)));
-    if let Some(ip) = ip
-        && !limiter.allow(&ip.to_string())
-    {
+    // unknown clients share one budget
+    if !limiter.allow(&ip.map(|i| i.to_string()).unwrap_or_default()) {
         return oauth_error(StatusCode::TOO_MANY_REQUESTS, "rate_limited", "too many registrations from this address");
     }
     let Ok(reg) = serde_json::from_slice::<Registration>(&body) else {
@@ -365,9 +364,8 @@ fn token_name(client: &str) -> String {
 async fn token(State(state): State<AppState>, ClientIp(ip): ClientIp, Form(f): Form<HashMap<String, String>>) -> Response {
     static LIMITER: OnceLock<RateLimiter> = OnceLock::new();
     let limiter = LIMITER.get_or_init(|| RateLimiter::new(60, Duration::from_secs(60)));
-    if let Some(ip) = ip
-        && !limiter.allow(&ip.to_string())
-    {
+    // unknown clients share one budget
+    if !limiter.allow(&ip.map(|i| i.to_string()).unwrap_or_default()) {
         return oauth_error(StatusCode::TOO_MANY_REQUESTS, "rate_limited", "too many token requests from this address");
     }
     match token_grant(&state, &f).await {
