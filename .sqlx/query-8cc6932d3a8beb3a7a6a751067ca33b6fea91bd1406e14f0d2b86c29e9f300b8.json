@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE ci_builds b SET spec = NULL, definition_id = d.id\n           FROM (SELECT id FROM ci_builds WHERE spec IS NOT NULL ORDER BY id LIMIT $1 FOR UPDATE SKIP LOCKED) batch,\n                ci_job_definitions d\n          WHERE b.id = batch.id AND d.project_id = b.project_id AND d.checksum = ci_spec_checksum(b.spec)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8cc6932d3a8beb3a7a6a751067ca33b6fea91bd1406e14f0d2b86c29e9f300b8"
+}

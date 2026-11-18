@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT byte_offset, data FROM ci_job_trace_chunks\n          WHERE build_id = $1 AND byte_offset < $3\n            AND byte_offset >= coalesce((SELECT max(byte_offset) FROM ci_job_trace_chunks\n                                          WHERE build_id = $1 AND byte_offset <= $2), 0)\n          ORDER BY byte_offset",
+  "query": "SELECT byte_offset, data FROM ci_job_trace_chunks\n          WHERE build_id = $1 AND byte_offset > $2 AND byte_offset < $3\n          ORDER BY byte_offset",
   "describe": {
     "columns": [
       {
@@ -38,5 +38,5 @@
       false
     ]
   },
-  "hash": "16b473d1e65d40425f19780e85be55cc68b6df46c97cb692d6abe7d4897c7747"
+  "hash": "2f0663286df71f86425ede6c2a64e56d6e77adc4a7bd60af2aab9af0cd0e1a2e"
 }

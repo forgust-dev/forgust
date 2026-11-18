@@ -729,16 +729,17 @@ pub struct NewBuild<'a> {
 /// its spec in its own row, and the CI sweep moves it (`move_inline_specs`).
 pub async fn insert_build(e: impl PgExecutor<'_>, b: NewBuild<'_>) -> Result<i64> {
     sqlx::query_scalar!(
-        "WITH k AS (SELECT sha256(convert_to($10::jsonb::text, 'UTF8')) AS checksum),
+        "WITH k AS (SELECT ci_spec_checksum($10::jsonb) AS checksum),
               found AS (SELECT d.id FROM ci_job_definitions d, k WHERE d.project_id = $2 AND d.checksum = k.checksum),
               added AS (INSERT INTO ci_job_definitions (project_id, checksum, spec)
                         SELECT $2, k.checksum, $10::jsonb FROM k WHERE NOT EXISTS (SELECT 1 FROM found)
                         ON CONFLICT (project_id, checksum) DO NOTHING RETURNING id),
-              def AS (SELECT id FROM found UNION ALL SELECT id FROM added)
+              def AS (SELECT (SELECT id FROM found UNION ALL SELECT id FROM added LIMIT 1) AS id)
          INSERT INTO ci_builds (pipeline_id, project_id, name, stage, stage_idx, status, when_, allow_failure, needs, spec,
                                 definition_id, retry_max, retry_when, attempt, tags, timeout_secs, user_id, resource_group)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CASE WHEN (SELECT id FROM def LIMIT 1) IS NULL THEN $10::jsonb END,
-                 (SELECT id FROM def LIMIT 1), $11, $12, $13, $14, $15, $16, $17)
+         SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, CASE WHEN def.id IS NULL THEN $10::jsonb END,
+                def.id, $11, $12, $13, $14, $15, $16, $17
+           FROM def
          RETURNING id",
         b.pipeline_id,
         b.project_id,
@@ -768,7 +769,7 @@ pub async fn insert_build(e: impl PgExecutor<'_>, b: NewBuild<'_>) -> Result<i64
 pub async fn add_job_definition(e: impl PgExecutor<'_>, project_id: i64, spec: &serde_json::Value) -> Result<()> {
     sqlx::query!(
         "INSERT INTO ci_job_definitions (project_id, checksum, spec)
-         VALUES ($1, sha256(convert_to($2::jsonb::text, 'UTF8')), $2::jsonb)
+         VALUES ($1, ci_spec_checksum($2::jsonb), $2::jsonb)
          ON CONFLICT (project_id, checksum) DO NOTHING",
         project_id,
         spec
@@ -786,7 +787,7 @@ pub async fn move_inline_specs(pool: &sqlx::PgPool, limit: i64) -> Result<u64> {
     // a job for each distinct spec of the batch
     let ids = sqlx::query_scalar!(
         r#"SELECT DISTINCT ON (project_id, checksum) id AS "id!"
-             FROM (SELECT id, project_id, sha256(convert_to(spec::text, 'UTF8')) AS checksum
+             FROM (SELECT id, project_id, ci_spec_checksum(spec) AS checksum
                      FROM ci_builds WHERE spec IS NOT NULL ORDER BY id LIMIT $1) b"#,
         limit
     )
@@ -800,7 +801,7 @@ pub async fn move_inline_specs(pool: &sqlx::PgPool, limit: i64) -> Result<u64> {
     for id in ids {
         sqlx::query!(
             "INSERT INTO ci_job_definitions (project_id, checksum, spec)
-             SELECT project_id, sha256(convert_to(spec::text, 'UTF8')), spec FROM ci_builds WHERE id = $1 AND spec IS NOT NULL
+             SELECT project_id, ci_spec_checksum(spec), spec FROM ci_builds WHERE id = $1 AND spec IS NOT NULL
              ON CONFLICT (project_id, checksum) DO NOTHING",
             id
         )
@@ -811,7 +812,7 @@ pub async fn move_inline_specs(pool: &sqlx::PgPool, limit: i64) -> Result<u64> {
         "UPDATE ci_builds b SET spec = NULL, definition_id = d.id
            FROM (SELECT id FROM ci_builds WHERE spec IS NOT NULL ORDER BY id LIMIT $1 FOR UPDATE SKIP LOCKED) batch,
                 ci_job_definitions d
-          WHERE b.id = batch.id AND d.project_id = b.project_id AND d.checksum = sha256(convert_to(b.spec::text, 'UTF8'))",
+          WHERE b.id = batch.id AND d.project_id = b.project_id AND d.checksum = ci_spec_checksum(b.spec)",
         limit
     )
     .execute(pool)
@@ -904,6 +905,13 @@ pub async fn build_for_update(c: &mut PgConnection, id: i64) -> Result<Option<Bu
     )
     .fetch_optional(c)
     .await
+}
+
+/// The ids of every attempt of job `name` in a pipeline, newest first.
+pub async fn attempt_ids(e: impl PgExecutor<'_>, pipeline_id: i64, name: &str) -> Result<Vec<i64>> {
+    sqlx::query_scalar!("SELECT id FROM ci_builds WHERE pipeline_id = $1 AND name = $2 ORDER BY id DESC", pipeline_id, name)
+        .fetch_all(e)
+        .await
 }
 
 /// Every attempt of every job, oldest first.
@@ -1152,23 +1160,22 @@ pub async fn append_trace(c: &mut PgConnection, build: &Build, offset: i64, data
 }
 
 /// At most `max` live log bytes from `offset` (chunks still in Postgres): only
-/// the rows that hold them are read, from the one `offset` falls in.
+/// the rows that hold them are read. A row holds at most `TRACE_CHUNK` bytes,
+/// so the one `offset` falls in starts less than that before it.
 pub async fn read_trace(e: impl PgExecutor<'_>, build_id: i64, offset: i64, max: i64) -> Result<Vec<u8>> {
     let offset = offset.max(0);
     let end = offset.saturating_add(max.max(0));
     let rows = sqlx::query!(
         "SELECT byte_offset, data FROM ci_job_trace_chunks
-          WHERE build_id = $1 AND byte_offset < $3
-            AND byte_offset >= coalesce((SELECT max(byte_offset) FROM ci_job_trace_chunks
-                                          WHERE build_id = $1 AND byte_offset <= $2), 0)
+          WHERE build_id = $1 AND byte_offset > $2 AND byte_offset < $3
           ORDER BY byte_offset",
         build_id,
-        offset,
+        offset - TRACE_CHUNK,
         end
     )
     .fetch_all(e)
     .await?;
-    let mut out = Vec::new();
+    let mut out = Vec::with_capacity(rows.iter().map(|r| r.data.len()).sum::<usize>().min((end - offset) as usize));
     for r in rows {
         // the part of this row's bytes inside [offset, end)
         let len = r.data.len() as i64;

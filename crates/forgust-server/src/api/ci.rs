@@ -742,9 +742,7 @@ pub async fn show_job(
         Some(r) => cidb::runner(&state.db, r).await?.map(|r| if r.description.is_empty() { format!("#{}", r.id) } else { r.description }),
         None => None,
     };
-    let mut attempts: Vec<i64> =
-        cidb::builds_of_pipeline(&state.db, b.pipeline_id).await?.into_iter().filter(|o| o.name == b.name).map(|o| o.id).collect();
-    attempts.sort_unstable_by(|a, b| b.cmp(a));
+    let attempts = cidb::attempt_ids(&state.db, b.pipeline_id, &b.name).await?;
     // the archive only for whom `artifacts:access` lets download it (the page
     // offers to browse and download it when listed); reports stay listed
     let downloadable = may_download_artifacts(&state, &v, &proj, &b).await.is_ok();

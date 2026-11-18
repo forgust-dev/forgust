@@ -38,7 +38,7 @@ const FOOTER: usize = 9;
 
 /// One frame: where its compressed bytes are in the file, and which log
 /// bytes it holds.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy)]
 pub struct Frame {
     pub at: u64,
     pub compressed: u32,
@@ -53,7 +53,7 @@ impl Frame {
 }
 
 /// The frames of a file, in order.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Table {
     pub frames: Vec<Frame>,
     /// The log's size.
@@ -145,9 +145,10 @@ impl Table {
         &self.frames[first..last]
     }
 
-    /// Where the frames end in the file (the table starts there).
-    pub fn frames_end(&self) -> u64 {
-        self.frames.last().map_or(0, |f| f.at + u64::from(f.compressed))
+    /// Where the compressed bytes of `frames` (consecutive, as
+    /// [`Table::frames_for`] gives them) are in the file; None for no frame.
+    pub fn span(frames: &[Frame]) -> Option<std::ops::Range<u64>> {
+        Some(frames.first()?.at..frames.last().map(|l| l.at + u64::from(l.compressed))?)
     }
 }
 
@@ -195,9 +196,8 @@ mod tests {
     fn read(file: &[u8], start: u64, end: u64) -> Vec<u8> {
         let t = Table::parse(file, file.len() as u64).unwrap();
         let frames = t.frames_for(start, end);
-        let Some(first) = frames.first() else { return Vec::new() };
-        let last = frames.last().unwrap();
-        decompress(frames, &file[first.at as usize..(last.at + u64::from(last.compressed)) as usize], start, end).unwrap()
+        let Some(span) = Table::span(frames) else { return Vec::new() };
+        decompress(frames, &file[span.start as usize..span.end as usize], start, end).unwrap()
     }
 
     #[test]
@@ -209,7 +209,7 @@ mod tests {
         assert_eq!(zstd::stream::decode_all(&file[..]).unwrap(), data);
         let t = Table::parse(&file, file.len() as u64).unwrap();
         assert_eq!((t.frames.len(), t.size), (3, data.len() as u64));
-        assert_eq!(t.frames_end() as usize + table_len(&file).unwrap(), file.len());
+        assert_eq!(Table::span(&t.frames).map_or(0, |s| s.end) as usize + table_len(&file).unwrap(), file.len());
         let n = data.len() as u64;
         let f = FRAME as u64;
         for (start, end) in [(0, n), (0, 10), (f - 5, f + 5), (f, 2 * f), (f + 1, n), (n - 3, n), (n, n + 10), (5, 5), (n + 7, n + 9)] {

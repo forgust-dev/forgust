@@ -10,7 +10,7 @@ use crate::ci::seekable;
 use crate::state::AppState;
 
 /// Where a raw log is.
-pub fn blob_key(project_id: i64, build_id: i64) -> String {
+fn blob_key(project_id: i64, build_id: i64) -> String {
     format!("ci/traces/{project_id}/{build_id}.log")
 }
 
@@ -69,21 +69,29 @@ pub async fn archive(state: &AppState, build_id: i64) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Where an archived log is, and whether it is compressed. Its artifact row
-/// says; without one the log is where every log used to be, raw.
-async fn archived(state: &AppState, build: &forgust_db::ci::Build) -> anyhow::Result<(String, bool)> {
-    Ok(match forgust_db::ci::artifact(&state.db, build.id, "trace").await? {
-        Some(a) => (a.blob_key, a.file_format == "zstd"),
-        None => (blob_key(build.project_id, build.id), false),
-    })
+/// An archived log as the blob store holds it.
+enum StoredLog {
+    Raw { key: String, size: u64 },
+    Zstd { key: String, table: seekable::Table },
 }
 
-/// The frame table of the compressed log at `key`, `size` bytes long.
-async fn table(state: &AppState, key: &str, size: u64) -> anyhow::Result<seekable::Table> {
-    let tail = state.blobs.get_range(key, size.saturating_sub(TABLE_READ), size).await?;
+/// Where an archived log is and how (None when its blob is gone). Its artifact
+/// row says; without one the log is where every log used to be, raw.
+async fn open(state: &AppState, build: &forgust_db::ci::Build) -> anyhow::Result<Option<StoredLog>> {
+    let (key, compressed) = match forgust_db::ci::artifact(&state.db, build.id, "trace").await? {
+        Some(a) => (a.blob_key, a.file_format == "zstd"),
+        None => (blob_key(build.project_id, build.id), false),
+    };
+    let Some(size) = state.blobs.size(&key).await? else { return Ok(None) };
+    if !compressed {
+        return Ok(Some(StoredLog::Raw { key, size }));
+    }
+    // the frame table, from the file's end
+    let tail = state.blobs.get_range(&key, size.saturating_sub(TABLE_READ), size).await?;
     let need = seekable::table_len(&tail)? as u64;
-    let tail = if need > tail.len() as u64 && need <= size { state.blobs.get_range(key, size - need, size).await? } else { tail };
-    Ok(seekable::Table::parse(&tail, size)?)
+    let tail = if need > tail.len() as u64 && need <= size { state.blobs.get_range(&key, size - need, size).await? } else { tail };
+    let table = seekable::Table::parse(&tail, size)?;
+    Ok(Some(StoredLog::Zstd { key, table }))
 }
 
 /// At most `max` log bytes from `offset`, wherever they live now (an archived
@@ -93,49 +101,41 @@ pub async fn read(state: &AppState, build: &forgust_db::ci::Build, offset: i64, 
     if !build.trace_archived {
         return Ok(forgust_db::ci::read_trace(&state.db, build.id, offset, max).await?);
     }
-    let (key, compressed) = archived(state, build).await?;
-    let Some(size) = state.blobs.size(&key).await? else { return Ok(Vec::new()) };
-    if !compressed {
-        let start = (offset.max(0) as u64).min(size);
-        let end = start.saturating_add(max.max(0) as u64).min(size);
-        if start == end {
-            return Ok(Vec::new());
-        }
-        return Ok(state.blobs.get_range(&key, start, end).await?.to_vec());
-    }
-    let table = table(state, &key, size).await?;
     let start = offset.max(0) as u64;
     let end = start.saturating_add(max.max(0) as u64);
-    let frames = table.frames_for(start, end).to_vec();
-    let (Some(first), Some(last)) = (frames.first(), frames.last()) else { return Ok(Vec::new()) };
-    let bytes = state.blobs.get_range(&key, first.at, last.at + u64::from(last.compressed)).await?;
-    Ok(tokio::task::spawn_blocking(move || seekable::decompress(&frames, &bytes, start, end)).await??)
+    Ok(match open(state, build).await? {
+        None => Vec::new(),
+        Some(StoredLog::Raw { key, size }) => {
+            let (start, end) = (start.min(size), end.min(size));
+            if start == end { Vec::new() } else { state.blobs.get_range(&key, start, end).await?.to_vec() }
+        }
+        Some(StoredLog::Zstd { key, table }) => {
+            let frames = table.frames_for(start, end).to_vec();
+            let Some(span) = seekable::Table::span(&frames).filter(|_| start < end) else { return Ok(Vec::new()) };
+            let bytes = state.blobs.get_range(&key, span.start, span.end).await?;
+            tokio::task::spawn_blocking(move || seekable::decompress(&frames, &bytes, start, end)).await??
+        }
+    })
 }
 
 /// A finished job's whole log, streamed (None when it is not archived or its
 /// blob is gone): a compressed one a frame at a time.
 pub async fn download(state: &AppState, build: &forgust_db::ci::Build) -> anyhow::Result<Option<axum::response::Response>> {
-    use axum::http::{HeaderValue, header};
+    const TEXT: &str = "text/plain; charset=utf-8";
     if !build.trace_archived {
         return Ok(None);
     }
-    let text = "text/plain; charset=utf-8";
-    let (key, compressed) = archived(state, build).await?;
-    if !compressed {
-        return blob_download(state, &key, text, None).await;
+    match open(state, build).await? {
+        None => Ok(None),
+        Some(StoredLog::Raw { key, .. }) => blob_download(state, &key, TEXT, None).await,
+        Some(StoredLog::Zstd { key, table }) => {
+            let body = match seekable::Table::span(&table.frames) {
+                Some(span) => state.blobs.get_range_stream(&key, 0, span.end).await?,
+                None => futures::stream::empty().boxed(),
+            };
+            Ok(Some(stream_response(frames_of(table.frames, body), table.size, TEXT, None)))
+        }
     }
-    let Some(size) = state.blobs.size(&key).await? else { return Ok(None) };
-    let table = table(state, &key, size).await?;
-    let body = match table.frames_end() {
-        0 => futures::stream::empty().boxed(),
-        end => state.blobs.get_range_stream(&key, 0, end).await?,
-    };
-    let mut r = axum::response::Response::new(axum::body::Body::from_stream(frames_of(table.frames, body)));
-    let h = r.headers_mut();
-    h.insert(header::CONTENT_TYPE, HeaderValue::from_static(text));
-    h.insert(header::CONTENT_LENGTH, HeaderValue::from(table.size));
-    h.insert(header::X_CONTENT_TYPE_OPTIONS, HeaderValue::from_static("nosniff"));
-    Ok(Some(r))
 }
 
 /// The log bytes of `frames`, decompressed one at a time as `body` (the
@@ -165,8 +165,14 @@ pub async fn blob_download(
     content_type: &'static str,
     filename: Option<&str>,
 ) -> anyhow::Result<Option<axum::response::Response>> {
-    use axum::http::{HeaderValue, header};
     let Some((size, stream)) = state.blobs.get(key).await? else { return Ok(None) };
+    Ok(Some(stream_response(stream, size, content_type, filename)))
+}
+
+/// A response streaming `size` bytes of `content_type`: an attachment named
+/// `filename`, or shown inline without one.
+fn stream_response(stream: ByteStream, size: u64, content_type: &'static str, filename: Option<&str>) -> axum::response::Response {
+    use axum::http::{HeaderValue, header};
     let mut r = axum::response::Response::new(axum::body::Body::from_stream(stream));
     let h = r.headers_mut();
     h.insert(header::CONTENT_TYPE, HeaderValue::from_static(content_type));
@@ -177,7 +183,7 @@ pub async fn blob_download(
     {
         h.insert(header::CONTENT_DISPOSITION, v);
     }
-    Ok(Some(r))
+    r
 }
 
 /// Archive in the background after a job finishes.
