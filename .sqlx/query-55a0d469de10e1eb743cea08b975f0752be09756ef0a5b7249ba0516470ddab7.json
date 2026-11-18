@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, pipeline_id, project_id, name, stage, stage_idx, status, when_, allow_failure, needs, spec, retry_max,\n                    retry_when, attempt, retried, tags, timeout_secs, user_id, runner_id, runner_manager_id, failure_reason,\n                    exit_code, trace_size, trace_archived, created_at, queued_at, started_at, finished_at, contacted_at,\n                    cancel_requested_at\n             FROM ci_builds WHERE pipeline_id = $1 AND NOT retried ORDER BY stage_idx, name, id FOR UPDATE",
+  "query": "SELECT id, pipeline_id, project_id, name, stage, stage_idx, status, when_, allow_failure, needs,\n                coalesce(spec, (SELECT d.spec FROM ci_job_definitions d WHERE d.id = ci_builds.definition_id)) AS \"spec!\", retry_max,\n                retry_when, attempt, retried, tags, timeout_secs, user_id, runner_id, runner_manager_id, failure_reason,\n                exit_code, trace_size, trace_archived, created_at, queued_at, started_at, finished_at, contacted_at,\n                cancel_requested_at\n         FROM ci_builds WHERE pipeline_id = ANY ($1) AND NOT retried ORDER BY pipeline_id, stage_idx, name, id",
   "describe": {
     "columns": [
       {
@@ -115,14 +115,9 @@
       },
       {
         "ordinal": 10,
-        "name": "spec",
+        "name": "spec!",
         "type_info": "Jsonb",
-        "origin": {
-          "Table": {
-            "table": "ci_builds",
-            "name": "spec"
-          }
-        }
+        "origin": "Expression"
       },
       {
         "ordinal": 11,
@@ -336,7 +331,7 @@
     ],
     "parameters": {
       "Left": [
-        "Int8"
+        "Int8Array"
       ]
     },
     "nullable": [
@@ -350,7 +345,7 @@
       false,
       false,
       true,
-      false,
+      null,
       false,
       false,
       false,
@@ -372,5 +367,5 @@
       true
     ]
   },
-  "hash": "b1470515d92c702dcd557e292fe443ccc68b874a489f62fe555cc8a3f69e2117"
+  "hash": "55a0d469de10e1eb743cea08b975f0752be09756ef0a5b7249ba0516470ddab7"
 }

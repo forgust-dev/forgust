@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT DISTINCT ON (project_id, checksum) id AS \"id!\"\n             FROM (SELECT id, project_id, sha256(convert_to(spec::text, 'UTF8')) AS checksum\n                     FROM ci_builds WHERE spec IS NOT NULL ORDER BY id LIMIT $1) b",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "8715e00805f9af6ff4d6f8ee2986a0b37d5df1e0aec0d5702468dde73bb0acbc"
+}

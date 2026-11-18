@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO ci_job_definitions (project_id, checksum, spec)\n             SELECT project_id, sha256(convert_to(spec::text, 'UTF8')), spec FROM ci_builds WHERE id = $1 AND spec IS NOT NULL\n             ON CONFLICT (project_id, checksum) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2fb2878ff0e183ad49994419de3f136cd4c571450945ede56c3e130eb98769bc"
+}

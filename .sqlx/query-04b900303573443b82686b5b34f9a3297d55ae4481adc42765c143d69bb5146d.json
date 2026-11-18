@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, pipeline_id, project_id, name, stage, stage_idx, status, when_, allow_failure, needs, spec, retry_max,\n                    retry_when, attempt, retried, tags, timeout_secs, user_id, runner_id, runner_manager_id, failure_reason,\n                    exit_code, trace_size, trace_archived, created_at, queued_at, started_at, finished_at, contacted_at,\n                    cancel_requested_at\n             FROM ci_builds WHERE id = $1",
+  "query": "SELECT id, pipeline_id, project_id, name, stage, stage_idx, status, when_, allow_failure, needs,\n                coalesce(spec, (SELECT d.spec FROM ci_job_definitions d WHERE d.id = ci_builds.definition_id)) AS \"spec!\", retry_max,\n                retry_when, attempt, retried, tags, timeout_secs, user_id, runner_id, runner_manager_id, failure_reason,\n                exit_code, trace_size, trace_archived, created_at, queued_at, started_at, finished_at, contacted_at,\n                cancel_requested_at\n           FROM ci_builds WHERE pipeline_id = $1 AND name = $2 AND status = 'success' AND NOT retried ORDER BY id DESC LIMIT 1",
   "describe": {
     "columns": [
       {
@@ -115,14 +115,9 @@
       },
       {
         "ordinal": 10,
-        "name": "spec",
+        "name": "spec!",
         "type_info": "Jsonb",
-        "origin": {
-          "Table": {
-            "table": "ci_builds",
-            "name": "spec"
-          }
-        }
+        "origin": "Expression"
       },
       {
         "ordinal": 11,
@@ -336,7 +331,8 @@
     ],
     "parameters": {
       "Left": [
-        "Int8"
+        "Int8",
+        "Text"
       ]
     },
     "nullable": [
@@ -350,7 +346,7 @@
       false,
       false,
       true,
-      false,
+      null,
       false,
       false,
       false,
@@ -372,5 +368,5 @@
       true
     ]
   },
-  "hash": "d2d71d490a3b27d5e07ce5991a35ba80fe508030aa2b9e96fbc003c37fe77ba0"
+  "hash": "04b900303573443b82686b5b34f9a3297d55ae4481adc42765c143d69bb5146d"
 }

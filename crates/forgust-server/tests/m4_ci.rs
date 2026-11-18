@@ -1068,3 +1068,72 @@ async fn archived_logs_are_compressed_and_read_by_range(pool: sqlx::PgPool) {
     assert_eq!(s, 200);
     assert!(raw == log.as_bytes(), "the raw view: {} bytes of {}", raw.len(), log.len());
 }
+
+/// Jobs point to their definition, stored once per project and content: a
+/// second pipeline of the same config adds none, nor does a retry, and a job
+/// made before definitions keeps its spec until the CI sweep moves it.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn job_definitions_are_stored_once(pool: sqlx::PgPool) {
+    let f = fixture(pool).await;
+    let db = f.srv.state.db.clone();
+    let count = |sql: &'static str| {
+        let db = db.clone();
+        async move { sqlx::query_scalar::<_, i64>(sql).fetch_one(&db).await.unwrap() }
+    };
+    let jobs = "SELECT count(*) FROM ci_builds";
+    let definitions = "SELECT count(*) FROM ci_job_definitions";
+    let inline = "SELECT count(*) FROM ci_builds WHERE spec IS NOT NULL";
+    assert_eq!((count(jobs).await, count(definitions).await, count(inline).await), (3, 3, 0));
+    f.owner.ok_post(&format!("/api/v1/projects/{}/pipelines", f.project), json!({ "ref": "main" })).await;
+    wait_jobs(&f.srv.state).await;
+    assert_eq!((count(jobs).await, count(definitions).await), (6, 3), "the same config: no new definition");
+
+    // the runner gets the job its definition describes
+    let token = new_runner(&f, json!({ "description": "fake" })).await;
+    let (s, job) = request_job(&f, &token).await;
+    assert_eq!(s, StatusCode::CREATED, "{job}");
+    assert_eq!(job["job_info"]["name"], "build");
+    assert_eq!(job["steps"][0]["script"], json!(["echo $GREETING > out.txt"]));
+    assert_eq!(job["image"]["name"], "alpine:3.20");
+    let id = job["id"].as_i64().unwrap();
+    let jt = job["token"].as_str().unwrap().to_string();
+    assert_eq!(put(&f, id, json!({ "token": jt, "state": "failed", "failure_reason": "script_failure" })).await.status(), StatusCode::OK);
+    let retried = f.owner.ok_post(&format!("/api/v1/projects/{}/jobs/{id}/retry", f.project), json!({})).await;
+    assert_eq!((count(jobs).await, count(definitions).await), (7, 3), "a retry adds no definition");
+
+    // jobs made before definitions hold their spec in their row (here the
+    // first pipeline's four, the retry included): read the same, then moved
+    // by the sweep, without a definition more
+    let pipeline = forgust_db::ci::build(&db, id).await.unwrap().unwrap().pipeline_id;
+    let page = format!("/api/v1/projects/{}/jobs/{}", f.project, retried["id"]);
+    // the job page, but for its time in the queue (it grows while it waits)
+    let job_page = || async {
+        let mut j = f.owner.ok_get(&page).await;
+        j.as_object_mut().unwrap().remove("queued_duration");
+        j
+    };
+    let before = job_page().await;
+    sqlx::query(
+        "UPDATE ci_builds b SET spec = d.spec, definition_id = NULL FROM ci_job_definitions d
+          WHERE d.id = b.definition_id AND b.pipeline_id = $1",
+    )
+    .bind(pipeline)
+    .execute(&db)
+    .await
+    .unwrap();
+    assert_eq!(count(inline).await, 4);
+    assert_eq!(job_page().await, before);
+    forgust_server::ci::sweep(&f.srv.state).await.unwrap();
+    assert_eq!((count(inline).await, count(definitions).await), (0, 3));
+    assert_eq!(job_page().await, before);
+    for b in forgust_db::ci::builds_of_pipeline(&db, pipeline).await.unwrap() {
+        let spec = forgust_server::ci::pipeline::StoredSpec::of(&b).unwrap();
+        assert_eq!(spec.global_variables["GREETING"], "hello", "{}", b.name);
+    }
+
+    // a project's definitions go with it
+    let (s, b) = f.owner.delete(&format!("/api/v1/projects/{}", f.project)).await;
+    assert!(s < 300, "{s} {b}");
+    wait_jobs(&f.srv.state).await;
+    assert_eq!((count(jobs).await, count(definitions).await), (0, 0));
+}

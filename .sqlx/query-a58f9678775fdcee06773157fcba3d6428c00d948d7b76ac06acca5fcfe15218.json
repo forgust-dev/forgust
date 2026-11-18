@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, pipeline_id, project_id, name, stage, stage_idx, status, when_, allow_failure, needs, spec, retry_max,\n                    retry_when, attempt, retried, tags, timeout_secs, user_id, runner_id, runner_manager_id, failure_reason,\n                    exit_code, trace_size, trace_archived, created_at, queued_at, started_at, finished_at, contacted_at,\n                    cancel_requested_at\n             FROM ci_builds WHERE id = $1 FOR UPDATE",
+  "query": "SELECT b.id, b.pipeline_id, b.project_id, b.name, b.stage, b.stage_idx, b.status, b.when_, b.allow_failure, b.needs,\n                coalesce(b.spec, (SELECT d.spec FROM ci_job_definitions d WHERE d.id = b.definition_id)) AS \"spec!\", b.retry_max,\n                b.retry_when, b.attempt, b.retried, b.tags, b.timeout_secs, b.user_id, b.runner_id, b.runner_manager_id, b.failure_reason,\n                b.exit_code, b.trace_size, b.trace_archived, b.created_at, b.queued_at, b.started_at, b.finished_at, b.contacted_at,\n                b.cancel_requested_at\n           FROM ci_job_tokens t JOIN ci_builds b ON b.id = t.build_id\n          WHERE t.token_hash = $1 AND t.expires_at > now()",
   "describe": {
     "columns": [
       {
@@ -115,14 +115,9 @@
       },
       {
         "ordinal": 10,
-        "name": "spec",
+        "name": "spec!",
         "type_info": "Jsonb",
-        "origin": {
-          "Table": {
-            "table": "ci_builds",
-            "name": "spec"
-          }
-        }
+        "origin": "Expression"
       },
       {
         "ordinal": 11,
@@ -336,7 +331,7 @@
     ],
     "parameters": {
       "Left": [
-        "Int8"
+        "Bytea"
       ]
     },
     "nullable": [
@@ -350,7 +345,7 @@
       false,
       false,
       true,
-      false,
+      null,
       false,
       false,
       false,
@@ -372,5 +367,5 @@
       true
     ]
   },
-  "hash": "593901eeeb21fa4a560011a3b967ac4a6e4bfb1fd6cd07aed461b096e8f73402"
+  "hash": "a58f9678775fdcee06773157fcba3d6428c00d948d7b76ac06acca5fcfe15218"
 }

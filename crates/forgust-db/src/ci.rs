@@ -721,11 +721,25 @@ pub struct NewBuild<'a> {
     pub resource_group: Option<&'a str>,
 }
 
+/// The job points to its spec's definition (`ci_job_definitions`), found or
+/// added. Pipelines of a project are created one at a time (their iid's row
+/// stays locked until they commit), so a definition one adds, the next finds.
+/// Should another transaction add the same definition meanwhile, this
+/// statement cannot see it (it began before that commit): the job then keeps
+/// its spec in its own row, and the CI sweep moves it (`move_inline_specs`).
 pub async fn insert_build(e: impl PgExecutor<'_>, b: NewBuild<'_>) -> Result<i64> {
     sqlx::query_scalar!(
-        "INSERT INTO ci_builds (pipeline_id, project_id, name, stage, stage_idx, status, when_, allow_failure, needs, spec,
-                                retry_max, retry_when, attempt, tags, timeout_secs, user_id, resource_group)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING id",
+        "WITH k AS (SELECT sha256(convert_to($10::jsonb::text, 'UTF8')) AS checksum),
+              found AS (SELECT d.id FROM ci_job_definitions d, k WHERE d.project_id = $2 AND d.checksum = k.checksum),
+              added AS (INSERT INTO ci_job_definitions (project_id, checksum, spec)
+                        SELECT $2, k.checksum, $10::jsonb FROM k WHERE NOT EXISTS (SELECT 1 FROM found)
+                        ON CONFLICT (project_id, checksum) DO NOTHING RETURNING id),
+              def AS (SELECT id FROM found UNION ALL SELECT id FROM added)
+         INSERT INTO ci_builds (pipeline_id, project_id, name, stage, stage_idx, status, when_, allow_failure, needs, spec,
+                                definition_id, retry_max, retry_when, attempt, tags, timeout_secs, user_id, resource_group)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CASE WHEN (SELECT id FROM def LIMIT 1) IS NULL THEN $10::jsonb END,
+                 (SELECT id FROM def LIMIT 1), $11, $12, $13, $14, $15, $16, $17)
+         RETURNING id",
         b.pipeline_id,
         b.project_id,
         b.name,
@@ -748,12 +762,70 @@ pub async fn insert_build(e: impl PgExecutor<'_>, b: NewBuild<'_>) -> Result<i64
     .await
 }
 
+/// Adds `spec` to `project_id`'s job definitions unless it is there, in a
+/// statement of its own: one that adds several in a transaction could
+/// deadlock with a pipeline adding the same ones in another order.
+pub async fn add_job_definition(e: impl PgExecutor<'_>, project_id: i64, spec: &serde_json::Value) -> Result<()> {
+    sqlx::query!(
+        "INSERT INTO ci_job_definitions (project_id, checksum, spec)
+         VALUES ($1, sha256(convert_to($2::jsonb::text, 'UTF8')), $2::jsonb)
+         ON CONFLICT (project_id, checksum) DO NOTHING",
+        project_id,
+        spec
+    )
+    .execute(e)
+    .await?;
+    Ok(())
+}
+
+/// Moves the spec of up to `limit` jobs made before job definitions to their
+/// definition (a few seconds per thousand at most). Returns how many moved:
+/// fewer than `limit` once none is left, or when other transactions hold
+/// some (those are left for the next time, never waited for).
+pub async fn move_inline_specs(pool: &sqlx::PgPool, limit: i64) -> Result<u64> {
+    // a job for each distinct spec of the batch
+    let ids = sqlx::query_scalar!(
+        r#"SELECT DISTINCT ON (project_id, checksum) id AS "id!"
+             FROM (SELECT id, project_id, sha256(convert_to(spec::text, 'UTF8')) AS checksum
+                     FROM ci_builds WHERE spec IS NOT NULL ORDER BY id LIMIT $1) b"#,
+        limit
+    )
+    .fetch_all(pool)
+    .await?;
+    if ids.is_empty() {
+        return Ok(0);
+    }
+    // its definition, a statement each (see add_job_definition), copied in SQL:
+    // the checksum is of the stored jsonb, as the update below computes it
+    for id in ids {
+        sqlx::query!(
+            "INSERT INTO ci_job_definitions (project_id, checksum, spec)
+             SELECT project_id, sha256(convert_to(spec::text, 'UTF8')), spec FROM ci_builds WHERE id = $1 AND spec IS NOT NULL
+             ON CONFLICT (project_id, checksum) DO NOTHING",
+            id
+        )
+        .execute(pool)
+        .await?;
+    }
+    let moved = sqlx::query!(
+        "UPDATE ci_builds b SET spec = NULL, definition_id = d.id
+           FROM (SELECT id FROM ci_builds WHERE spec IS NOT NULL ORDER BY id LIMIT $1 FOR UPDATE SKIP LOCKED) batch,
+                ci_job_definitions d
+          WHERE b.id = batch.id AND d.project_id = b.project_id AND d.checksum = sha256(convert_to(b.spec::text, 'UTF8'))",
+        limit
+    )
+    .execute(pool)
+    .await?;
+    Ok(moved.rows_affected())
+}
+
 /// The newest successful run of job `name` on `git_ref` of a project
 /// (`needs:project`): the job of the newest pipeline that has it passed.
 pub async fn latest_successful_job(e: impl PgExecutor<'_>, project_id: i64, git_ref: &str, name: &str) -> Result<Option<Build>> {
     sqlx::query_as!(
         Build,
-        "SELECT b.id, b.pipeline_id, b.project_id, b.name, b.stage, b.stage_idx, b.status, b.when_, b.allow_failure, b.needs, b.spec,
+        "SELECT b.id, b.pipeline_id, b.project_id, b.name, b.stage, b.stage_idx, b.status, b.when_, b.allow_failure, b.needs,
+                coalesce(b.spec, (SELECT d.spec FROM ci_job_definitions d WHERE d.id = b.definition_id)) AS \"spec!\",
                 b.retry_max, b.retry_when, b.attempt, b.retried, b.tags, b.timeout_secs, b.user_id, b.runner_id, b.runner_manager_id,
                 b.failure_reason, b.exit_code, b.trace_size, b.trace_archived, b.created_at, b.queued_at, b.started_at, b.finished_at,
                 b.contacted_at, b.cancel_requested_at
@@ -772,7 +844,8 @@ pub async fn latest_successful_job(e: impl PgExecutor<'_>, project_id: i64, git_
 pub async fn successful_job_in(e: impl PgExecutor<'_>, pipeline_id: i64, name: &str) -> Result<Option<Build>> {
     sqlx::query_as!(
         Build,
-        "SELECT id, pipeline_id, project_id, name, stage, stage_idx, status, when_, allow_failure, needs, spec, retry_max,
+        "SELECT id, pipeline_id, project_id, name, stage, stage_idx, status, when_, allow_failure, needs,
+                coalesce(spec, (SELECT d.spec FROM ci_job_definitions d WHERE d.id = ci_builds.definition_id)) AS \"spec!\", retry_max,
                 retry_when, attempt, retried, tags, timeout_secs, user_id, runner_id, runner_manager_id, failure_reason,
                 exit_code, trace_size, trace_archived, created_at, queued_at, started_at, finished_at, contacted_at,
                 cancel_requested_at
@@ -789,7 +862,8 @@ pub async fn successful_job_in(e: impl PgExecutor<'_>, pipeline_id: i64, name: &
 pub async fn build_by_token(e: impl PgExecutor<'_>, hash: &[u8]) -> Result<Option<Build>> {
     sqlx::query_as!(
         Build,
-        "SELECT b.id, b.pipeline_id, b.project_id, b.name, b.stage, b.stage_idx, b.status, b.when_, b.allow_failure, b.needs, b.spec, b.retry_max,
+        "SELECT b.id, b.pipeline_id, b.project_id, b.name, b.stage, b.stage_idx, b.status, b.when_, b.allow_failure, b.needs,
+                coalesce(b.spec, (SELECT d.spec FROM ci_job_definitions d WHERE d.id = b.definition_id)) AS \"spec!\", b.retry_max,
                 b.retry_when, b.attempt, b.retried, b.tags, b.timeout_secs, b.user_id, b.runner_id, b.runner_manager_id, b.failure_reason,
                 b.exit_code, b.trace_size, b.trace_archived, b.created_at, b.queued_at, b.started_at, b.finished_at, b.contacted_at,
                 b.cancel_requested_at
@@ -804,7 +878,8 @@ pub async fn build_by_token(e: impl PgExecutor<'_>, hash: &[u8]) -> Result<Optio
 pub async fn build(e: impl PgExecutor<'_>, id: i64) -> Result<Option<Build>> {
     sqlx::query_as!(
         Build,
-        "SELECT id, pipeline_id, project_id, name, stage, stage_idx, status, when_, allow_failure, needs, spec, retry_max,
+        "SELECT id, pipeline_id, project_id, name, stage, stage_idx, status, when_, allow_failure, needs,
+                coalesce(spec, (SELECT d.spec FROM ci_job_definitions d WHERE d.id = ci_builds.definition_id)) AS \"spec!\", retry_max,
                     retry_when, attempt, retried, tags, timeout_secs, user_id, runner_id, runner_manager_id, failure_reason,
                     exit_code, trace_size, trace_archived, created_at, queued_at, started_at, finished_at, contacted_at,
                     cancel_requested_at
@@ -819,7 +894,8 @@ pub async fn build(e: impl PgExecutor<'_>, id: i64) -> Result<Option<Build>> {
 pub async fn build_for_update(c: &mut PgConnection, id: i64) -> Result<Option<Build>> {
     sqlx::query_as!(
         Build,
-        "SELECT id, pipeline_id, project_id, name, stage, stage_idx, status, when_, allow_failure, needs, spec, retry_max,
+        "SELECT id, pipeline_id, project_id, name, stage, stage_idx, status, when_, allow_failure, needs,
+                coalesce(spec, (SELECT d.spec FROM ci_job_definitions d WHERE d.id = ci_builds.definition_id)) AS \"spec!\", retry_max,
                     retry_when, attempt, retried, tags, timeout_secs, user_id, runner_id, runner_manager_id, failure_reason,
                     exit_code, trace_size, trace_archived, created_at, queued_at, started_at, finished_at, contacted_at,
                     cancel_requested_at
@@ -834,7 +910,8 @@ pub async fn build_for_update(c: &mut PgConnection, id: i64) -> Result<Option<Bu
 pub async fn builds_of_pipeline(e: impl PgExecutor<'_>, pipeline_id: i64) -> Result<Vec<Build>> {
     sqlx::query_as!(
         Build,
-        "SELECT id, pipeline_id, project_id, name, stage, stage_idx, status, when_, allow_failure, needs, spec, retry_max,
+        "SELECT id, pipeline_id, project_id, name, stage, stage_idx, status, when_, allow_failure, needs,
+                coalesce(spec, (SELECT d.spec FROM ci_job_definitions d WHERE d.id = ci_builds.definition_id)) AS \"spec!\", retry_max,
                     retry_when, attempt, retried, tags, timeout_secs, user_id, runner_id, runner_manager_id, failure_reason,
                     exit_code, trace_size, trace_archived, created_at, queued_at, started_at, finished_at, contacted_at,
                     cancel_requested_at
@@ -849,7 +926,8 @@ pub async fn builds_of_pipeline(e: impl PgExecutor<'_>, pipeline_id: i64) -> Res
 pub async fn live_builds_of_pipelines(e: impl PgExecutor<'_>, pipeline_ids: &[i64]) -> Result<Vec<Build>> {
     sqlx::query_as!(
         Build,
-        "SELECT id, pipeline_id, project_id, name, stage, stage_idx, status, when_, allow_failure, needs, spec, retry_max,
+        "SELECT id, pipeline_id, project_id, name, stage, stage_idx, status, when_, allow_failure, needs,
+                coalesce(spec, (SELECT d.spec FROM ci_job_definitions d WHERE d.id = ci_builds.definition_id)) AS \"spec!\", retry_max,
                 retry_when, attempt, retried, tags, timeout_secs, user_id, runner_id, runner_manager_id, failure_reason,
                 exit_code, trace_size, trace_archived, created_at, queued_at, started_at, finished_at, contacted_at,
                 cancel_requested_at
@@ -863,7 +941,8 @@ pub async fn live_builds_of_pipelines(e: impl PgExecutor<'_>, pipeline_ids: &[i6
 pub async fn lock_pipeline_builds(c: &mut PgConnection, pipeline_id: i64) -> Result<Vec<Build>> {
     sqlx::query_as!(
         Build,
-        "SELECT id, pipeline_id, project_id, name, stage, stage_idx, status, when_, allow_failure, needs, spec, retry_max,
+        "SELECT id, pipeline_id, project_id, name, stage, stage_idx, status, when_, allow_failure, needs,
+                coalesce(spec, (SELECT d.spec FROM ci_job_definitions d WHERE d.id = ci_builds.definition_id)) AS \"spec!\", retry_max,
                     retry_when, attempt, retried, tags, timeout_secs, user_id, runner_id, runner_manager_id, failure_reason,
                     exit_code, trace_size, trace_archived, created_at, queued_at, started_at, finished_at, contacted_at,
                     cancel_requested_at

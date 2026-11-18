@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT b.id, b.pipeline_id, b.project_id, b.name, b.stage, b.stage_idx, b.status, b.when_, b.allow_failure, b.needs, b.spec,\n                b.retry_max, b.retry_when, b.attempt, b.retried, b.tags, b.timeout_secs, b.user_id, b.runner_id, b.runner_manager_id,\n                b.failure_reason, b.exit_code, b.trace_size, b.trace_archived, b.created_at, b.queued_at, b.started_at, b.finished_at,\n                b.contacted_at, b.cancel_requested_at\n           FROM ci_builds b JOIN ci_pipelines p ON p.id = b.pipeline_id\n          WHERE b.project_id = $1 AND p.ref = $2 AND b.name = $3 AND b.status = 'success' AND NOT b.retried\n          ORDER BY p.id DESC, b.id DESC LIMIT 1",
+  "query": "SELECT id, pipeline_id, project_id, name, stage, stage_idx, status, when_, allow_failure, needs,\n                coalesce(spec, (SELECT d.spec FROM ci_job_definitions d WHERE d.id = ci_builds.definition_id)) AS \"spec!\", retry_max,\n                    retry_when, attempt, retried, tags, timeout_secs, user_id, runner_id, runner_manager_id, failure_reason,\n                    exit_code, trace_size, trace_archived, created_at, queued_at, started_at, finished_at, contacted_at,\n                    cancel_requested_at\n             FROM ci_builds WHERE id = $1 FOR UPDATE",
   "describe": {
     "columns": [
       {
@@ -115,14 +115,9 @@
       },
       {
         "ordinal": 10,
-        "name": "spec",
+        "name": "spec!",
         "type_info": "Jsonb",
-        "origin": {
-          "Table": {
-            "table": "ci_builds",
-            "name": "spec"
-          }
-        }
+        "origin": "Expression"
       },
       {
         "ordinal": 11,
@@ -336,9 +331,7 @@
     ],
     "parameters": {
       "Left": [
-        "Int8",
-        "Text",
-        "Text"
+        "Int8"
       ]
     },
     "nullable": [
@@ -352,7 +345,7 @@
       false,
       false,
       true,
-      false,
+      null,
       false,
       false,
       false,
@@ -374,5 +367,5 @@
       true
     ]
   },
-  "hash": "37f203a774754728a8f87e67519e5a2b393ea82889d76a322604703b3502aaf7"
+  "hash": "11e32fb135763f2cdaf7b188884aa465817d24179bbcc4ada4e7216d067b663f"
 }
