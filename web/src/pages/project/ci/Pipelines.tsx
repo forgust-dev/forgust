@@ -27,6 +27,11 @@ export const SOURCE: Record<string, string> = {
   ai_review: "AI review",
 };
 
+/** Forgust's own pipelines (the server's `is_system_source`): they run on a
+ *  merge request's commit, but are not its CI. */
+const SYSTEM_SOURCES = new Set(["renovate", "security", "ai_review"]);
+export const isSystemPipeline = (p: { source: string }) => SYSTEM_SOURCES.has(p.source);
+
 /** Where a pipeline lives on this server (another project's for multi-project pipelines). */
 export function pipelineHref(ctx: Ctx, l: S["PipelineLink"]) {
   return l.project_id === ctx.p.id ? `${ctx.web}/-/pipelines/${l.iid}` : `/${l.project_path}/-/pipelines/${l.iid}`;

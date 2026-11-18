@@ -12,7 +12,7 @@ import { Popover, Segmented, Select, Switch } from "../../components/controls";
 import { ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight, Circle, CircleAlert, Clock3, FileDiff, Dot, GitBranch, GitCommitHorizontal, GitMerge, GitPullRequestClosed, MessageSquare, Milestone as MilestoneIcon, FileWarning, Tag, PanelRightClose, PanelRightOpen, Pencil, RotateCcw, X, XCircle } from "lucide-react";
 import { fetchers, keys, usePrefetch } from "../../prefetch";
 import { StatusIcon, duration, isActive, statusLabel } from "./ci/Status";
-import { usePipeline } from "./ci/Pipelines";
+import { isSystemPipeline, usePipeline } from "./ci/Pipelines";
 import { usePref } from "../../shell/theme";
 import { useAct, useToast } from "../../shell/toast";
 import { useConfirm } from "../../shell/dialog";
@@ -773,7 +773,8 @@ function Readiness({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
     <div className="readiness">
       <Q q={st}>
         {(s) => {
-          const p = pipelines.data?.[0];
+          // the merge request's CI: not an AI review or a scan run on the same commit
+          const p = pipelines.data?.find((x) => !isSystemPipeline(x));
           const pstatus = s.pipeline_status ?? p?.status;
           const canRebase = s.user_can_merge && !s.fast_forward && s.conflicts.length === 0;
           // which checks there are and how they stand: shared with the rings of "Your work"
