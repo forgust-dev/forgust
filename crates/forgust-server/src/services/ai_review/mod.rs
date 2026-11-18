@@ -53,28 +53,35 @@ pub struct Overrides {
     pub ca_pem: Option<String>,
 }
 
-/// The settings in effect: the administrator's, else the config file's.
-/// `api_key` and `secret_options` are the config file's only: those set in
-/// the admin area are decrypted where a job needs them ([`secrets`]).
+/// The settings in effect: the administrator's, over the config file's field
+/// by field (a field the saved settings do not have, one added since they
+/// were saved, keeps the file's value). `api_key` and `secret_options` are
+/// the config file's only: those set in the admin area are decrypted where a
+/// job needs them ([`secrets`]).
 pub async fn config(state: &AppState) -> anyhow::Result<AiReviewConfig> {
-    let c = state.cfg.ai_review.clone();
-    let Ok(o) = serde_json::from_value::<Overrides>(forgust_db::ai_review::instance(&state.db).await?.overrides) else {
-        return Ok(c);
-    };
-    Ok(AiReviewConfig {
-        enabled: o.enabled,
-        provider: o.provider,
-        base_url: o.base_url,
-        model: o.model,
-        image: o.image,
-        tags: o.tags,
-        max_concurrent: o.max_concurrent,
-        timeout_secs: o.timeout_secs,
-        max_comments: o.max_comments,
-        options: o.options,
-        ca_pem: o.ca_pem,
-        ..c
+    Ok(config_of(state, forgust_db::ai_review::instance(&state.db).await?.overrides))
+}
+
+/// [`config`], with the saved settings already read.
+pub fn config_of(state: &AppState, saved: serde_json::Value) -> AiReviewConfig {
+    let file = &state.cfg.ai_review;
+    over(file, saved).unwrap_or_else(|e| {
+        tracing::warn!(error = %e, "the AI review settings saved in the admin area do not read: the config file's hold");
+        file.clone()
     })
+}
+
+/// `saved` (an [`Overrides`], or `{}`) over `file`; the key and the secret
+/// options stay the file's.
+fn over(file: &AiReviewConfig, saved: serde_json::Value) -> anyhow::Result<AiReviewConfig> {
+    let serde_json::Value::Object(saved) = saved else { anyhow::bail!("not an object") };
+    let serde_json::Value::Object(mut merged) = serde_json::to_value(file)? else { unreachable!("a struct") };
+    for (k, v) in saved {
+        if !matches!(k.as_str(), "api_key" | "secret_options") {
+            merged.insert(k, v);
+        }
+    }
+    Ok(serde_json::from_value(merged.into())?)
 }
 
 /// The settings in effect when AI review can run on this instance.
@@ -232,8 +239,9 @@ pub async fn request(state: &AppState, principal: &Principal, project: &Project,
     };
     let bot = ensure_bot(state, project, settings.bot_user_id).await?;
     if settings.bot_user_id != Some(bot.id) {
-        // the bot was removed and made again: the job runs, and posts, as this one
-        forgust_db::ai_review::set(&state.db, project.id, true, Some(bot.id), None).await?;
+        // the bot was removed and made again: the job runs, and posts, as this
+        // one (its id only: whether AI review is on is the project's to say)
+        forgust_db::ai_review::set_bot(&state.db, project.id, bot.id).await?;
     }
     // requests at once (two clicks, two merge requests): one review per
     // merge request, and no more than max_concurrent on the instance
@@ -388,8 +396,7 @@ pub async fn ingest(state: &AppState, build_id: i64) -> anyhow::Result<()> {
         return Ok(());
     }
     match post(state, &project, &mr, &latest, &run, &rep, bot, cfg.max_comments as usize).await {
-        Ok((posted, dropped)) => {
-            forgust_db::ai_review::set_counts(&state.db, pl.id, posted as i32, dropped as i32).await?;
+        Ok(()) => {
             state.events.publish(Event::MergeRequest { project_id: project.id, iid: mr.iid });
             Ok(())
         }
@@ -527,7 +534,7 @@ async fn post(
     rep: &Report,
     bot: &User,
     max_comments: usize,
-) -> anyhow::Result<(usize, usize)> {
+) -> anyhow::Result<()> {
     let paths: HashSet<&str> = rep.comments.iter().map(|c| c.path.as_str()).collect();
     let lines = commentable(state, project.id, latest, &paths).await?;
     let has = |m: &HashMap<String, HashSet<u32>>, path: &str, n: u32| m.get(path).is_some_and(|l| l.contains(&n));
@@ -649,20 +656,41 @@ async fn post(
         ids.push(mrdb::add_note(&mut *tx, mr.id, Some(bot.id), None, body, false, pos).await?);
     }
     mrdb::touch(&mut *tx, mr.id).await?;
+    // with the notes: a run is never left posted without its counts
+    forgust_db::ai_review::set_counts(&mut *tx, run.pipeline_id, notes.len() as i32, dropped as i32).await?;
     tx.commit().await?;
     // the bot's notes are sent to webhooks like any, but nobody is mentioned
     // or notified by what a model wrote; posted now, so no error past here
     for id in ids {
-        if let Ok(Some(note)) = mrdb::note(&state.db, mr.id, id).await {
-            super::mr::note_webhook(state, project, mr, &note, &bot.username).await;
+        match mrdb::note(&state.db, mr.id, id).await {
+            Ok(Some(note)) => super::mr::note_webhook(state, project, mr, &note, &bot.username).await,
+            Ok(None) => {} // deleted since
+            Err(e) => tracing::warn!(note = id, error = %e, "AI review note posted, its webhook not sent"),
         }
     }
-    Ok((notes.len(), dropped))
+    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn saved_settings_over_the_file_field_by_field() {
+        let file =
+            AiReviewConfig { model: "file-model".into(), max_comments: 8, api_key: Some("file-key".into()), ..AiReviewConfig::default() };
+        // saved before a field existed (or by hand): the file's value holds for it
+        let c = over(&file, json!({ "enabled": true, "model": "saved-model", "api_key": "not-this" })).unwrap();
+        assert!(c.enabled);
+        assert_eq!(c.model, "saved-model");
+        assert_eq!(c.max_comments, 8, "a field not saved keeps the file's value");
+        assert_eq!(c.api_key.as_deref(), Some("file-key"), "the key is never a saved setting");
+        // nothing saved: the file
+        assert_eq!(over(&file, json!({})).unwrap().model, "file-model");
+        // a value of the wrong type does not read (config() then keeps the file's)
+        assert!(over(&file, json!({ "max_comments": "many" })).is_err());
+        assert!(over(&file, json!([])).is_err());
+    }
 
     #[test]
     fn the_pipeline_parses() {

@@ -38,6 +38,14 @@ pub async fn set(e: impl PgExecutor<'_>, project_id: i64, enabled: bool, bot_use
 }
 
 /// Projects with AI review on.
+/// The project's bot was made again: its id, nothing else.
+pub async fn set_bot(e: impl PgExecutor<'_>, project_id: i64, bot_user_id: i64) -> Result<()> {
+    sqlx::query!("UPDATE ai_review_settings SET bot_user_id = $2, updated_at = now() WHERE project_id = $1", project_id, bot_user_id)
+        .execute(e)
+        .await?;
+    Ok(())
+}
+
 pub async fn enabled_count(e: impl PgExecutor<'_>) -> Result<i64> {
     sqlx::query_scalar!(r#"SELECT count(*) AS "n!" FROM ai_review_settings WHERE enabled"#).fetch_one(e).await
 }

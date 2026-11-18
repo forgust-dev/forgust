@@ -198,8 +198,22 @@ pub struct AdminAiReviewStatus {
 }
 
 async fn admin_status(state: &AppState) -> ApiResult<AdminAiReviewStatus> {
-    let c = svc::config(state).await.map_err(ApiError::Internal)?;
-    let (key, secret_options) = svc::secrets(state).await.map_err(ApiError::Internal)?;
+    let i = forgust_db::ai_review::instance(&state.db).await?;
+    let file = &state.cfg.ai_review;
+    // whether there is a key, not the key: one that no longer decrypts (the
+    // server's secret changed) can still be replaced from this page
+    let key_set = i.api_key_enc.is_some() || file.api_key.as_deref().is_some_and(|k| !k.is_empty());
+    let secret_option_names: Vec<String> = match &i.secret_options_enc {
+        Some(sealed) => match state.secrets.decrypt_json::<std::collections::BTreeMap<String, String>>(sealed) {
+            Ok(m) => m.into_keys().collect(),
+            Err(e) => {
+                tracing::warn!(error = %e, "the AI review secret options do not decrypt: set them again");
+                Vec::new()
+            }
+        },
+        None => file.secret_options.keys().cloned().collect(),
+    };
+    let c = svc::config_of(state, i.overrides);
     Ok(AdminAiReviewStatus {
         settings: AdminAiReview {
             enabled: c.enabled,
@@ -212,10 +226,10 @@ async fn admin_status(state: &AppState) -> ApiResult<AdminAiReviewStatus> {
             timeout_secs: c.timeout_secs,
             max_comments: c.max_comments,
             options: c.options,
-            secret_option_names: secret_options.into_keys().collect(),
+            secret_option_names,
             secret_options: None,
             ca_pem: c.ca_pem,
-            api_key_set: key.is_some(),
+            api_key_set: key_set,
             api_key: None,
         },
         enabled_projects: forgust_db::ai_review::enabled_count(&state.db).await?,

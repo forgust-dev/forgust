@@ -158,7 +158,9 @@ pub fn pipeline_vars(state: &AppState, i: &PipelineInfo<'_>) -> Vec<Var> {
         v.push(Var::public("CI_MERGE_REQUEST_SOURCE_PROJECT_ID", p.id.to_string()));
         v.push(Var::public("CI_MERGE_REQUEST_SOURCE_PROJECT_PATH", p.full_path.clone()));
         v.push(Var::public("CI_MERGE_REQUEST_TARGET_BRANCH_NAME", m.target_branch.clone()));
-        v.push(Var::public("CI_MERGE_REQUEST_TITLE", m.title.clone()));
+        // written by whoever opened the merge request, like the description:
+        // never expanded (a `$AI_REVIEW_API_KEY` in it stays text)
+        v.push(Var { raw: true, ..Var::public("CI_MERGE_REQUEST_TITLE", m.title.clone()) });
         // GitLab cuts it at 2700 characters, and says so
         let end = m.description.char_indices().nth(2700).map(|(i, _)| i);
         let description = &m.description[..end.unwrap_or(m.description.len())];

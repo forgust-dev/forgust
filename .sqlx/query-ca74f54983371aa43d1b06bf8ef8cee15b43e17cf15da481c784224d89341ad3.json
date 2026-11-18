@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE ai_review_settings SET bot_user_id = $2, updated_at = now() WHERE project_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ca74f54983371aa43d1b06bf8ef8cee15b43e17cf15da481c784224d89341ad3"
+}
