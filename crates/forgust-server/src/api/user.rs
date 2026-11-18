@@ -113,7 +113,7 @@ pub struct ChangePassword {
 /// Checks of the current password or a 2FA code inside a session share the
 /// sign-in limit, per account: a stolen session cannot guess the password.
 fn reauth_allowed(state: &AppState, user_id: i64) -> ApiResult<()> {
-    if state.login_limiter.allow(&format!("reauth|{user_id}")) {
+    if !state.login_failures.exceeded(&format!("acct|{user_id}")) && state.login_limiter.allow(&format!("reauth|{user_id}")) {
         Ok(())
     } else {
         Err(ApiError::forbidden("too many attempts, try again in a minute"))
@@ -130,16 +130,30 @@ async fn reauth(state: &AppState, jar: &axum_extra::extract::CookieJar, user_id:
     match forgust_db::users::password_hash(&state.db, user_id).await? {
         Some(hash) => {
             if !crypto::check_password(password, Some(hash)).await {
+                state.login_failures.allow(&format!("acct|{user_id}"));
                 return Err(ApiError::forbidden("password is wrong"));
             }
         }
         None => {
             let token = crate::auth::session_cookie(&state.cfg, jar).map(crypto::token_hash).unwrap_or_default();
-            let fresh = forgust_db::sessions::created_at(&state.db, &token).await?.is_some_and(|t| Utc::now() - t < FRESH_SIGN_IN);
+            let same_user = forgust_db::sessions::find_with_user(&state.db, &token)
+                .await?
+                .is_some_and(|(s, _)| s.user_id == user_id && s.impersonator_id.is_none());
+            let fresh =
+                same_user && forgust_db::sessions::created_at(&state.db, &token).await?.is_some_and(|t| Utc::now() - t < FRESH_SIGN_IN);
             if !fresh {
                 return Err(ApiError::forbidden("sign out and sign in again, then retry within 10 minutes"));
             }
         }
+    }
+    Ok(())
+}
+
+async fn consume_passwordless_reauth(state: &AppState, jar: &axum_extra::extract::CookieJar, password: &str) -> ApiResult<()> {
+    if password.is_empty()
+        && let Some(c) = crate::auth::session_cookie(&state.cfg, jar)
+    {
+        forgust_db::sessions::mark_not_recent(&state.db, &crypto::token_hash(c)).await?;
     }
     Ok(())
 }
@@ -301,6 +315,7 @@ pub async fn add_key(State(state): State<AppState>, SignedIn(u, p): SignedIn, Js
 }
 
 pub async fn delete_key(State(state): State<AppState>, SignedIn(u, p): SignedIn, Path(id): Path<i64>) -> ApiResult<Json<Value>> {
+    require_interactive(&u, &p)?;
     if !forgust_db::ssh_keys::delete_for_user(&state.db, u.id, id).await? {
         return Err(ApiError::NotFound);
     }
@@ -356,6 +371,7 @@ pub async fn create_token(
 }
 
 pub async fn revoke_token(State(state): State<AppState>, SignedIn(u, p): SignedIn, Path(id): Path<i64>) -> ApiResult<Json<Value>> {
+    require_interactive(&u, &p)?;
     if !forgust_db::tokens::revoke_pat(&state.db, u.id, id).await? {
         return Err(ApiError::NotFound);
     }
@@ -408,6 +424,9 @@ pub async fn totp_enable(
     Json(req): Json<TotpCode>,
 ) -> ApiResult<Json<TotpEnabled>> {
     require_interactive(&u, &p)?;
+    if u.totp_enabled {
+        return Err(ApiError::conflict("two-factor authentication is already enabled"));
+    }
     reauth(&state, &jar, u.id, &req.password).await?;
     // the app and its recovery codes come together, or not at all
     let mut tx = state.db.begin().await?;
@@ -439,6 +458,7 @@ pub async fn totp_disable(
     let mut tx = state.db.begin().await?;
     forgust_db::users::disable_totp(&mut tx, u.id).await?;
     tx.commit().await?;
+    consume_passwordless_reauth(&state, &jar, &req.password).await?;
     services::audit(&state, &p, "two_factor_disabled", Some(("user", u.id)), json!({}), None).await;
     let u = forgust_db::users::find(&state.db, u.id).await?.ok_or(ApiError::NotFound)?;
     Ok(Json(UserDto::from(&u, true)))
@@ -710,6 +730,7 @@ pub async fn webauthn_remove(
     let (kind, name) = forgust_db::webauthn::delete(&mut tx, u.id, id).await?.ok_or(ApiError::NotFound)?;
     let after = forgust_db::users::find(&mut *tx, u.id).await?.ok_or(ApiError::NotFound)?;
     tx.commit().await?;
+    consume_passwordless_reauth(&state, &jar, &req.password).await?;
     services::audit(&state, &p, "webauthn_removed", Some(("user", u.id)), json!({ "kind": kind, "name": name, "credential": id }), None)
         .await;
     webauthn_notice(&state, &u, kind, "removed", &name).await;

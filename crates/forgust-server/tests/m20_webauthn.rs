@@ -223,9 +223,11 @@ async fn security_keys_are_a_second_factor(pool: sqlx::PgPool) {
     let bob = srv.user("bob", false).await;
     let mut bobs = Authenticator::new();
     assert_eq!(register(&bob, "bob", &mut bobs, "security_key", "Bob's").await.0, 200);
+    let ask = key_question(&srv, &ch).await;
     let foreign = bobs.get(&ask, ORIGIN, false, None);
     assert_eq!(key_answer(&srv, &ch, foreign).await, 401);
     // hers: signed in, once
+    let ask = key_question(&srv, &ch).await;
     let answer = yubikey.get(&ask, ORIGIN, false, None);
     let mut signed_in = Client::new(&srv.base);
     let r = anon_send(&srv, "/api/v1/auth/login/webauthn", json!({ "challenge": ch, "credential": answer })).await;

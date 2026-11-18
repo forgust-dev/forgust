@@ -181,6 +181,9 @@ pub async fn decode_principal(state: &AppState, encoded: &str) -> ApiResult<Prin
     Ok(match kind {
         "user" | "bot" => {
             let user = forgust_db::users::find(&state.db, id).await?.ok_or(ApiError::Unauthorized)?;
+            if !user.is_active() {
+                return Err(ApiError::forbidden("this account is blocked"));
+            }
             // a token's push: what it may do already passed its scopes; what
             // stays is that it carries no administrator's powers
             Principal::User { user, scopes: by_token.then(|| vec!["api".to_string()]) }

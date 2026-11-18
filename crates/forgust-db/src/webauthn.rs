@@ -102,14 +102,15 @@ pub async fn list(e: impl PgExecutor<'_>, user_id: i64) -> Result<Vec<Credential
 }
 
 /// The account's credentials of one kind, with their key material.
-pub async fn credentials(e: impl PgExecutor<'_>, user_id: i64, kind: CredentialKind) -> Result<Vec<Stored>> {
+pub async fn credentials(e: impl PgExecutor<'_>, user_id: i64, kind: CredentialKind, rp_id: &str) -> Result<Vec<Stored>> {
     sqlx::query_as!(
         Stored,
         r#"SELECT c.id, c.user_id, c.kind AS "kind: CredentialKind", c.credential, u.webauthn_handle AS user_handle
              FROM webauthn_credentials c JOIN users u ON u.id = c.user_id
-            WHERE c.user_id = $1 AND c.kind = $2 ORDER BY c.id"#,
+            WHERE c.user_id = $1 AND c.kind = $2 AND c.rp_id = $3 ORDER BY c.id"#,
         user_id,
-        kind.as_str()
+        kind.as_str(),
+        rp_id
     )
     .fetch_all(e)
     .await
@@ -120,13 +121,14 @@ pub async fn credential_ids(e: impl PgExecutor<'_>, user_id: i64) -> Result<Vec<
     sqlx::query_scalar!("SELECT credential_id FROM webauthn_credentials WHERE user_id = $1", user_id).fetch_all(e).await
 }
 
-pub async fn find_by_credential_id(e: impl PgExecutor<'_>, credential_id: &[u8]) -> Result<Option<Stored>> {
+pub async fn find_by_credential_id(e: impl PgExecutor<'_>, credential_id: &[u8], rp_id: &str) -> Result<Option<Stored>> {
     sqlx::query_as!(
         Stored,
         r#"SELECT c.id, c.user_id, c.kind AS "kind: CredentialKind", c.credential, u.webauthn_handle AS user_handle
              FROM webauthn_credentials c JOIN users u ON u.id = c.user_id
-            WHERE c.credential_id = $1"#,
-        credential_id
+            WHERE c.credential_id = $1 AND c.rp_id = $2"#,
+        credential_id,
+        rp_id
     )
     .fetch_optional(e)
     .await
@@ -270,7 +272,7 @@ pub async fn take_ceremony(e: impl PgExecutor<'_>, token_hash: &[u8]) -> Result<
 
 /// What a pending sign-in's security key is asked to sign: false when the
 /// challenge is gone.
-pub async fn set_challenge_state(e: impl PgExecutor<'_>, token_hash: &[u8], state: &serde_json::Value) -> Result<bool> {
+pub async fn set_challenge_state(e: impl PgExecutor<'_>, token_hash: &[u8], state: Option<&serde_json::Value>) -> Result<bool> {
     Ok(sqlx::query!("UPDATE login_challenges SET webauthn_state = $2 WHERE token_hash = $1 AND expires_at > now()", token_hash, state)
         .execute(e)
         .await?

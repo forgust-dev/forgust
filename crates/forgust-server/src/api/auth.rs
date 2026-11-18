@@ -209,6 +209,7 @@ async fn second_factor(
         tx.commit().await?;
         return Err(ApiError::forbidden("too many wrong codes: sign in again in a few minutes"));
     }
+    let had_webauthn_state = webauthn_state.is_some();
     let ok = match factor {
         Factor::Totp(code) => session::verify_totp(&state, &mut tx, &user, code).await?,
         Factor::Recovery(code) => {
@@ -217,6 +218,10 @@ async fn second_factor(
         Factor::SecurityKey(answer) => security_key_signed(&state, &mut tx, &user, webauthn_state, answer).await?,
     };
     if !ok {
+        if matches!(factor, Factor::SecurityKey(_)) && had_webauthn_state {
+            forgust_db::webauthn::set_challenge_state(&mut *tx, &hash, None).await?;
+            tx.commit().await?;
+        }
         state.totp_failures.allow(&acct);
         return Err(ApiError::Unauthorized);
     }
@@ -288,6 +293,7 @@ fn second_step_allowed(state: &AppState, user_id: i64) -> ApiResult<()> {
 pub async fn second_factors(State(state): State<AppState>, Json(req): Json<PendingLogin>) -> ApiResult<Json<SecondFactors>> {
     let user_id =
         forgust_db::sessions::challenge_user(&state.db, &crypto::token_hash(&req.challenge)).await?.ok_or(ApiError::Unauthorized)?;
+    second_step_allowed(&state, user_id)?;
     let user = forgust_db::users::find(&state.db, user_id).await?.ok_or(ApiError::Unauthorized)?;
     Ok(Json(SecondFactors {
         totp: user.totp_enabled,
@@ -311,13 +317,13 @@ pub async fn security_key_start(State(state): State<AppState>, Json(req): Json<P
     let hash = crypto::token_hash(&req.challenge);
     let user_id = forgust_db::sessions::challenge_user(&state.db, &hash).await?.ok_or(ApiError::Unauthorized)?;
     second_step_allowed(&state, user_id)?;
-    let keys = forgust_db::webauthn::credentials(&state.db, user_id, CredentialKind::SecurityKey).await?;
+    let keys = forgust_db::webauthn::credentials(&state.db, user_id, CredentialKind::SecurityKey, &rp.id).await?;
     let keys: Vec<SecurityKey> = keys.into_iter().map(|k| webauthn::from_json(k.credential)).collect::<ApiResult<_>>()?;
     if keys.is_empty() {
         return Err(ApiError::conflict("this account has no security key"));
     }
     let (options, asked) = rp.start_securitykey_authentication(&keys).map_err(webauthn::internal)?;
-    if !forgust_db::webauthn::set_challenge_state(&state.db, &hash, &webauthn::to_json(&asked)?).await? {
+    if !forgust_db::webauthn::set_challenge_state(&state.db, &hash, Some(&webauthn::to_json(&asked)?)).await? {
         return Err(ApiError::Unauthorized);
     }
     Ok(Json(WebauthnChallenge { options: webauthn::to_json(&options)? }))
@@ -354,7 +360,9 @@ async fn security_key_signed(
 ) -> ApiResult<bool> {
     let rp = webauthn::of(state)?;
     let Some(asked) = asked.and_then(|a| webauthn::from_json::<SecurityKeyAuthentication>(a).ok()) else { return Ok(false) };
-    let Some(stored) = forgust_db::webauthn::find_by_credential_id(&mut *tx, answer.get_credential_id()).await? else { return Ok(false) };
+    let Some(stored) = forgust_db::webauthn::find_by_credential_id(&mut *tx, answer.get_credential_id(), &rp.id).await? else {
+        return Ok(false);
+    };
     if stored.user_id != user.id || stored.kind != CredentialKind::SecurityKey {
         return Ok(false);
     }
@@ -447,7 +455,7 @@ pub async fn passkey_finish(
     let Some(c) = ceremony.filter(|c| c.kind == forgust_db::webauthn::PASSKEY_LOGIN) else { return Err(refused(None)) };
     let Ok(asked) = webauthn::from_json::<DiscoverableAuthentication>(c.state) else { return Err(refused(None)) };
     let Ok((handle, credential_id)) = rp.identify_discoverable_authentication(&req.credential) else { return Err(refused(None)) };
-    let stored = forgust_db::webauthn::find_by_credential_id(&state.db, credential_id).await?;
+    let stored = forgust_db::webauthn::find_by_credential_id(&state.db, credential_id, &rp.id).await?;
     let Some(stored) = stored.filter(|s| s.kind == CredentialKind::Passkey) else { return Err(refused(None)) };
     // the authenticator's idea of whose passkey it is must be the account's
     if stored.user_handle != Some(handle) {

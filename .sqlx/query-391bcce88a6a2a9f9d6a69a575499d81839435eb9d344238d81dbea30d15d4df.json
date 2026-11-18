@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT c.id, c.user_id, c.kind AS \"kind: CredentialKind\", c.credential, u.webauthn_handle AS user_handle\n             FROM webauthn_credentials c JOIN users u ON u.id = c.user_id\n            WHERE c.credential_id = $1",
+  "query": "SELECT c.id, c.user_id, c.kind AS \"kind: CredentialKind\", c.credential, u.webauthn_handle AS user_handle\n             FROM webauthn_credentials c JOIN users u ON u.id = c.user_id\n            WHERE c.credential_id = $1 AND c.rp_id = $2",
   "describe": {
     "columns": [
       {
@@ -61,7 +61,8 @@
     ],
     "parameters": {
       "Left": [
-        "Bytea"
+        "Bytea",
+        "Text"
       ]
     },
     "nullable": [
@@ -72,5 +73,5 @@
       true
     ]
   },
-  "hash": "09575f785d51ce34105b6dd132b22d3dd7ebe8d27049a02993fc030ba582f740"
+  "hash": "391bcce88a6a2a9f9d6a69a575499d81839435eb9d344238d81dbea30d15d4df"
 }

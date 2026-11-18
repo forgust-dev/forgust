@@ -113,8 +113,9 @@ fn redirect_allowed(u: &str) -> bool {
     match url.scheme() {
         "https" => url.host().is_some(),
         "http" => is_loopback(&url),
-        "javascript" | "data" | "file" | "vbscript" | "blob" | "about" | "ftp" | "ws" | "wss" => false,
-        _ => true,
+        "javascript" | "data" | "file" | "vbscript" | "blob" | "about" | "ftp" | "ws" | "wss" | "mailto" | "tel" | "sms" | "intent"
+        | "view-source" => false,
+        _ => !url.cannot_be_a_base(),
     }
 }
 
@@ -157,7 +158,9 @@ struct Registration {
 async fn register(State(state): State<AppState>, ClientIp(ip): ClientIp, body: axum::body::Bytes) -> Response {
     static LIMITER: OnceLock<RateLimiter> = OnceLock::new();
     let limiter = LIMITER.get_or_init(|| RateLimiter::new(30, Duration::from_secs(3600)));
-    if !limiter.allow(&ip.map(|i| i.to_string()).unwrap_or_default()) {
+    if let Some(ip) = ip
+        && !limiter.allow(&ip.to_string())
+    {
         return oauth_error(StatusCode::TOO_MANY_REQUESTS, "rate_limited", "too many registrations from this address");
     }
     let Ok(reg) = serde_json::from_slice::<Registration>(&body) else {
@@ -359,7 +362,14 @@ fn token_name(client: &str) -> String {
 }
 
 /// `POST /oauth/token` (form-encoded): a code or a refresh token for tokens.
-async fn token(State(state): State<AppState>, Form(f): Form<HashMap<String, String>>) -> Response {
+async fn token(State(state): State<AppState>, ClientIp(ip): ClientIp, Form(f): Form<HashMap<String, String>>) -> Response {
+    static LIMITER: OnceLock<RateLimiter> = OnceLock::new();
+    let limiter = LIMITER.get_or_init(|| RateLimiter::new(60, Duration::from_secs(60)));
+    if let Some(ip) = ip
+        && !limiter.allow(&ip.to_string())
+    {
+        return oauth_error(StatusCode::TOO_MANY_REQUESTS, "rate_limited", "too many token requests from this address");
+    }
     match token_grant(&state, &f).await {
         Ok(v) => no_store(Json(v).into_response()),
         Err((error, description)) => oauth_error(
@@ -473,6 +483,8 @@ mod tests {
         assert!(redirect_allowed("cursor://anysphere.cursor-retrieval/oauth/callback"));
         assert!(!redirect_allowed("http://evil.example/cb"));
         assert!(!redirect_allowed("javascript:alert(1)"));
+        assert!(!redirect_allowed("mailto:alice@example.com"));
+        assert!(!redirect_allowed("tel:+1234567890"));
         assert!(!redirect_allowed("https://a.example/cb#frag"));
         let reg = vec!["http://127.0.0.1:5000/callback".to_string(), "https://app.example/cb".to_string()];
         assert!(redirect_matches(&reg, "http://127.0.0.1:61234/callback"));

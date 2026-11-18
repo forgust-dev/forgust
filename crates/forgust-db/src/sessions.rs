@@ -53,12 +53,27 @@ pub async fn created_at(e: impl PgExecutor<'_>, token_hash: &[u8]) -> Result<Opt
 }
 
 pub async fn delete_others(e: impl PgExecutor<'_>, user_id: i64, keep: &[u8]) -> Result<()> {
-    sqlx::query!("DELETE FROM sessions WHERE user_id = $1 AND token_hash <> $2", user_id, keep).execute(e).await?;
+    sqlx::query!(
+        "WITH c AS (DELETE FROM login_challenges WHERE user_id = $1),
+              w AS (DELETE FROM webauthn_ceremonies WHERE user_id = $1)
+         DELETE FROM sessions WHERE user_id = $1 AND token_hash <> $2",
+        user_id,
+        keep
+    )
+    .execute(e)
+    .await?;
     Ok(())
 }
 
 pub async fn delete_for_user(e: impl PgExecutor<'_>, user_id: i64) -> Result<()> {
-    sqlx::query!("DELETE FROM sessions WHERE user_id = $1", user_id).execute(e).await?;
+    sqlx::query!(
+        "WITH c AS (DELETE FROM login_challenges WHERE user_id = $1),
+              w AS (DELETE FROM webauthn_ceremonies WHERE user_id = $1)
+         DELETE FROM sessions WHERE user_id = $1",
+        user_id
+    )
+    .execute(e)
+    .await?;
     Ok(())
 }
 

@@ -313,6 +313,9 @@ pub async fn create_bot_token(
     if !matches!(principal, Principal::User { scopes: None, .. }) {
         return Err(ApiError::forbidden("tokens can only be created from a signed-in session"));
     }
+    if let Some(u) = principal.direct_user() {
+        super::user::require_confirmed(state, u)?;
+    }
     services::paths::validate_name(&req.name)?;
     super::user::check_scopes(&req.scopes)?;
     if req.scopes.iter().any(|s| s == "admin_mode") {
@@ -458,11 +461,12 @@ pub async fn list_deploy_tokens(
 
 pub async fn create_deploy_token(
     State(state): State<AppState>,
-    SignedIn(_, p): SignedIn,
+    SignedIn(u, p): SignedIn,
     Path(id): Path<String>,
     Json(req): Json<CreateDeployToken>,
 ) -> ApiResult<Json<NewToken>> {
     p.may_mint_credentials()?;
+    super::user::require_confirmed(&state, &u)?;
     let ns = group_for(&state, &p, &id, GroupAction::Admin).await?;
     Ok(Json(create_deploy(&state, &p, None, Some(ns.id), req).await?))
 }
