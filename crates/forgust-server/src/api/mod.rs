@@ -83,6 +83,7 @@ pub fn router() -> Router<AppState> {
         .route("/user/webauthn/{id}", put(user::webauthn_rename))
         .route("/user/webauthn/{id}/remove", post(user::webauthn_remove))
         .route("/user/projects", get(user::my_projects))
+        .route("/user/project_states", get(user::my_project_states))
         .route("/user/work", get(user::work))
         .route("/user/todos", get(user::todos))
         .route("/user/todos/done", post(user::todos_done))

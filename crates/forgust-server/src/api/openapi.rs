@@ -13,7 +13,7 @@ use super::{
     info(title = "Forgust API", description = "Forgust REST API (v1)"),
     paths(
         auth::login, auth::login_totp, auth::login_recovery, auth::second_factors, auth::security_key_start, auth::login_webauthn, auth::passkey_start, auth::passkey_finish, auth::session, auth::forgot_password, auth::reset_password, auth::confirm_email,
-        user::me, user::list_identities, user::list_keys, user::list_tokens, crate::oauth::authorize_info, crate::oauth::authorize, user::my_projects, user::work, user::todos, user::contributions, user::profile,
+        user::me, user::list_identities, user::list_keys, user::list_tokens, crate::oauth::authorize_info, crate::oauth::authorize, user::my_projects, user::my_project_states, user::work, user::todos, user::contributions, user::profile,
         groups::list_top, groups::create, groups::show, groups::subgroups, groups::projects, groups::project_states, groups::members, groups::storage,
         projects::explore, projects::protected_tags, projects::storage, projects::pages, projects::protect_tag, projects::unprotect_tag, projects::create, projects::show, projects::members, projects::users, projects::protected_branches,
         repo::tree, repo::last_commits, repo::stats, repo::blob, repo::commits, repo::commit, repo::commit_diff, repo::branches, repo::blame, repo::templates, repo::create_branch, repo::create_commit, repo::create_tag, repo::delete_tag,

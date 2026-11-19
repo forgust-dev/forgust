@@ -2536,6 +2536,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/user/project_states": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How your projects are doing, as on their own pages (open merge requests, the
+         *     default branch's latest pipeline): one request for the projects page, not two
+         *     for each project. Those whose code you may not read are left out.
+         */
+        get: operations["my_project_states"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/user/projects": {
         parameters: {
             query?: never;
@@ -10607,6 +10628,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Inbox"];
+                };
+            };
+        };
+    };
+    my_project_states: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectState"][];
                 };
             };
         };
