@@ -2,7 +2,7 @@ import { test, expect, P, ADMIN, at, isMobile } from "./fixtures";
 
 test("dashboard → project through the sidebar and breadcrumbs", async ({ page }) => {
   await page.goto("/dashboard/projects");
-  await expect(page.getByRole("heading", { name: "Your projects" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Projects", exact: true })).toBeVisible();
   if (isMobile(page)) {
     await expect(page.locator(".sidebar")).not.toBeInViewport();
     await page.getByLabel("Open navigation").click();
@@ -16,7 +16,7 @@ test("dashboard → project through the sidebar and breadcrumbs", async ({ page 
   await page.locator(".page").getByRole("link", { name: "e2e/shop" }).click();
   await at(page, P);
   await expect(page.locator(".page-head h1")).toBeVisible();
-  // project sidebar replaces "Your work"
+  // the project's menu replaces the main one
   if (isMobile(page)) await page.getByLabel("Open navigation").click();
   const side = page.locator(".sidebar");
   await expect(side.getByRole("link", { name: "Merge requests" })).toBeVisible();
@@ -57,7 +57,7 @@ test("sidebar collapse is remembered", async ({ page }) => {
 
 test("command palette jumps to projects and files", async ({ page }) => {
   await page.goto("/dashboard/projects");
-  await expect(page.getByRole("heading", { name: "Your projects" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Projects", exact: true })).toBeVisible();
   await page.keyboard.press("Control+k");
   await page.getByRole("dialog", { name: "Search" }).locator("input").fill("e2e/shop");
   await page.keyboard.press("Enter");

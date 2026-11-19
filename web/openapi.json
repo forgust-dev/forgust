@@ -563,6 +563,17 @@
           "groups"
         ],
         "operationId": "list_top",
+        "parameters": [
+          {
+            "name": "member",
+            "in": "path",
+            "description": "Only the groups you belong to (yours, not every one you may see).",
+            "required": true,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -4571,6 +4582,29 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Inbox"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/user/project_states": {
+      "get": {
+        "tags": [
+          "user"
+        ],
+        "summary": "How your projects are doing, as on their own pages (open merge requests, the\ndefault branch's latest pipeline): one request for the projects page, not two\nfor each project. Those whose code you may not read are left out.",
+        "operationId": "my_project_states",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProjectState"
+                  }
                 }
               }
             }

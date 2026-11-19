@@ -137,7 +137,15 @@ pub async fn children_visible(
 }
 
 /// Groups the user can see at the top level: their orgs, plus public/internal ones.
-pub async fn top_level_visible(e: impl PgExecutor<'_>, user_id: Option<i64>, is_admin: bool, signed_in: bool) -> Result<Vec<Namespace>> {
+/// The top-level groups `user_id` may see; `member`: only those they belong to (as a
+/// member of the group, of one of its subgroups or of one of its projects).
+pub async fn top_level_visible(
+    e: impl PgExecutor<'_>,
+    user_id: Option<i64>,
+    is_admin: bool,
+    signed_in: bool,
+    member: bool,
+) -> Result<Vec<Namespace>> {
     sqlx::query_as!(
         Namespace,
         r#"SELECT n.id, n.kind, n.name, n.path, r.path AS "full_path!", n.parent_id, n.traversal_ids, n.visibility,
@@ -145,7 +153,7 @@ pub async fn top_level_visible(e: impl PgExecutor<'_>, user_id: Option<i64>, is_
                   n.subgroup_creation_level, n.created_at, n.avatar_at
            FROM namespaces n JOIN routes r ON r.source_type = 'namespace' AND r.source_id = n.id
            WHERE n.kind = 'group' AND n.parent_id IS NULL
-             AND ($2 OR n.visibility = 20 OR (n.visibility = 10 AND $3)
+             AND ((NOT $4 AND ($2 OR n.visibility = 20 OR (n.visibility = 10 AND $3)))
                   OR ((NOT n.require_two_factor
                        OR EXISTS (SELECT 1 FROM users u WHERE u.id = $1 AND (u.two_factor_enabled OR u.is_admin OR u.user_type <> 'human')))
                       AND (EXISTS (SELECT 1 FROM namespaces d JOIN namespace_authorizations a ON a.namespace_id = d.id
@@ -156,7 +164,8 @@ pub async fn top_level_visible(e: impl PgExecutor<'_>, user_id: Option<i64>, is_
            ORDER BY lower(n.name)"#,
         user_id,
         is_admin,
-        signed_in
+        signed_in,
+        member
     )
     .fetch_all(e)
     .await

@@ -1,0 +1,33 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH done AS (\n               UPDATE todos SET state = 'done', updated_at = now()\n                WHERE user_id = $1 AND project_id = $2 AND target_type = $3 AND target_iid = $4 AND state = 'pending'\n            RETURNING CASE action WHEN 'mentioned' THEN 'mention' ELSE 'assignment' END AS kind\n           ), seen AS (\n               -- every to-do there is done: the kinds they came with are read\n               UPDATE notifications SET read_at = now()\n                WHERE user_id = $1 AND project_id = $2 AND target_type = $3 AND target_iid = $4\n                  AND read_at IS NULL AND kind::text IN (SELECT kind FROM done)\n            RETURNING id\n           )\n           SELECT (SELECT count(*) FROM done) AS \"todos!\", (SELECT count(*) FROM seen) AS \"read!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "todos!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "read!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "ce2cd22742fb4a5e4438a0c73f27094c295d45df727fe4e6d66ddb51de332aa3"
+}

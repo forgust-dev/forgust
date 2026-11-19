@@ -24,11 +24,18 @@ pub fn parse_level(v: &str) -> ApiResult<i16> {
     access::parse(v).ok_or_else(|| ApiError::bad("access level must be guest, reporter, developer, maintainer or owner"))
 }
 
-#[utoipa::path(get, path = "/api/v1/groups", responses((status = 200, body = [GroupDto])), tag = "groups")]
-pub async fn list_top(State(state): State<AppState>, Viewer(p): Viewer) -> ApiResult<Json<Vec<GroupDto>>> {
+#[derive(Deserialize, utoipa::IntoParams)]
+pub struct ListTop {
+    /// Only the groups you belong to (yours, not every one you may see).
+    #[serde(default)]
+    pub member: bool,
+}
+
+#[utoipa::path(get, path = "/api/v1/groups", params(ListTop), responses((status = 200, body = [GroupDto])), tag = "groups")]
+pub async fn list_top(State(state): State<AppState>, Viewer(p): Viewer, Query(q): Query<ListTop>) -> ApiResult<Json<Vec<GroupDto>>> {
     let uid = p.direct_user().map(|u| u.id);
     let signed_in = p.sees_internal();
-    let list = forgust_db::namespaces::top_level_visible(&state.db, uid, p.is_admin(), signed_in).await?;
+    let list = forgust_db::namespaces::top_level_visible(&state.db, uid, p.is_admin(), signed_in, q.member).await?;
     Ok(Json(list.iter().map(|n| GroupDto::from(n, &state.cfg)).collect()))
 }
 

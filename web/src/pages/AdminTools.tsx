@@ -6,6 +6,7 @@ import { api, bytes, qs, timeAgo, type S } from "../api/client";
 import { Card, ErrorBox, Field, Q, SearchField, useDebounced } from "../components/ui";
 import { DecideCard, type DecideRow } from "../components/decide";
 import { useConfirm } from "../shell/dialog";
+import { Fact } from "./InstanceCard";
 import { Segmented } from "../components/controls";
 import { useAct, useToast } from "../shell/toast";
 
@@ -92,16 +93,6 @@ function NeedsAdmin({ checks, update }: { checks: S["HealthCheck"][]; update?: S
   );
 }
 
-/** A fact of a right-column card: a label, its value, and what the value is made of. */
-function Fact({ label, value, hint, to }: { label: string; value: React.ReactNode; hint?: React.ReactNode; to?: string }) {
-  return (
-    <div>
-      <dt>{label}</dt>
-      <dd>{to ? <Link to={to}>{value}</Link> : value}</dd>
-      {hint && <p className="side-fact-hint">{hint}</p>}
-    </div>
-  );
-}
 
 export function AdminOverview() {
   const q = useQuery({ queryKey: ["admin-overview"], queryFn: () => api.get<S["Overview"]>("/admin/overview"), refetchInterval: 30_000 });

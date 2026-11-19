@@ -17,6 +17,16 @@ export function setCsrf(token: string | null) {
   csrf = token;
 }
 
+// Writes that change which projects and groups someone has, or how they are named:
+// creating one, its path, transfer, archiving, settings, deleting (an import's project
+// arrives later, by its job).
+const MINE = /^\/(projects|groups)(\/\d+(\/(path|transfer|archive|unarchive))?)?$/;
+let onMineChanged: (() => void) | null = null;
+/** Called after each write that changes the user's lists of projects or groups (main.tsx). */
+export function setOnMineChanged(fn: () => void) {
+  onMineChanged = fn;
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = {};
   // a file goes as it is (avatars), a form as multipart (uploads); anything else as JSON
@@ -34,6 +44,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   if (!res.ok) {
     throw new ApiError(res.status, data?.error ?? "error", data?.message ?? res.statusText);
   }
+  if (method !== "GET" && MINE.test(path)) onMineChanged?.();
   return data as T;
 }
 

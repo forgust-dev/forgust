@@ -7,17 +7,18 @@ import { StrictMode, Suspense, lazy, type ReactElement } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ApiError } from "./api/client";
+import { ApiError, setOnMineChanged } from "./api/client";
+import { refreshMine } from "./prefetch";
 import { SessionProvider, useSession } from "./session";
 import { PageErrorBoundary, Spinner } from "./components/ui";
 import { ForgotPassword, Login, ResetPassword, Setup, VerifyEmail } from "./pages/Auth";
-import { Dashboard, Explore } from "./pages/Dashboard";
+import { Dashboard, ExploreRoute } from "./pages/Dashboard";
 import { SearchPage } from "./pages/Search";
 import { UnsubscribePage } from "./pages/Unsubscribe";
 import { Work } from "./pages/Work";
 import { NewGroup, NewProject } from "./pages/New";
-import { Shell } from "./shell/Shell";
-import { NavProvider } from "./shell/nav";
+import { Shell, ShellFrame } from "./shell/Shell";
+import { KeepNav, NavProvider } from "./shell/nav";
 import { PaletteHost } from "./shell/palette";
 import { ThemeProvider } from "./shell/theme";
 import { ToastProvider } from "./shell/toast";
@@ -41,6 +42,8 @@ const queryClient = new QueryClient({
   },
 });
 
+setOnMineChanged(() => refreshMine(queryClient));
+
 function RequireUser({ children }: { children: ReactElement }) {
   const { user, loading } = useSession();
   const loc = useLocation();
@@ -52,12 +55,21 @@ function RequireUser({ children }: { children: ReactElement }) {
 function App() {
   const { loading } = useSession();
   const loc = useLocation();
-  if (loading) return <Spinner />;
+  // the frame, where the page will be, while we learn who is signed in
+  if (loading) return <ShellFrame />;
   return (
     <Shell>
       <PaletteHost />
       <PageErrorBoundary resetKey={loc.pathname}>
-      <Suspense fallback={<Spinner />}>
+      {/* a page's code still loading: the sidebar keeps its menu meanwhile */}
+      <Suspense
+        fallback={
+          <>
+            <KeepNav />
+            <Spinner />
+          </>
+        }
+      >
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/setup" element={<Setup />} />
@@ -66,7 +78,8 @@ function App() {
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/" element={<RequireUser><Work /></RequireUser>} />
         <Route path="/dashboard/projects" element={<RequireUser><Dashboard /></RequireUser>} />
-        <Route path="/explore" element={<Explore />} />
+        <Route path="/dashboard/groups" element={<RequireUser><Dashboard tab="groups" /></RequireUser>} />
+        <Route path="/explore" element={<ExploreRoute />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/unsubscribe" element={<UnsubscribePage />} />
         <Route path="/new/group" element={<RequireUser><NewGroup /></RequireUser>} />
@@ -84,22 +97,31 @@ function App() {
   );
 }
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <SessionProvider>
-          <ThemeProvider>
-            <ToastProvider>
-              <DialogProvider>
-                <NavProvider>
-                  <App />
-                </NavProvider>
-              </DialogProvider>
-            </ToastProvider>
-          </ThemeProvider>
-        </SessionProvider>
-      </BrowserRouter>
-    </QueryClientProvider>
-  </StrictMode>,
+// the first frame in the app's own fonts rather than swapping into them: they load
+// meanwhile (a few ms from the cache), 100 ms at most, then the fallback shows as before
+const fonts = Promise.race([
+  Promise.all(['700 18px "Bricolage Grotesque Variable"', '400 14px "Inter Variable"'].map((f) => document.fonts.load(f))),
+  new Promise((done) => setTimeout(done, 100)),
+]).catch(() => {});
+
+void fonts.then(() =>
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <SessionProvider>
+            <ThemeProvider>
+              <ToastProvider>
+                <DialogProvider>
+                  <NavProvider>
+                    <App />
+                  </NavProvider>
+                </DialogProvider>
+              </ToastProvider>
+            </ThemeProvider>
+          </SessionProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
+    </StrictMode>,
+  ),
 );

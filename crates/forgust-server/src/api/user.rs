@@ -798,6 +798,32 @@ pub async fn my_projects(
     ))
 }
 
+/// How many of your projects [`my_project_states`] reports on: the first, most
+/// active, as many as the projects page lists (`per_page=100`); archived ones have none.
+const MY_STATE_LIMIT: i64 = 100;
+
+/// How your projects are doing, as on their own pages (open merge requests, the
+/// default branch's latest pipeline): one request for the projects page, not two
+/// for each project. Those whose code you may not read are left out.
+#[utoipa::path(get, path = "/api/v1/user/project_states", responses((status = 200, body = [forgust_db::projects::ProjectState])), tag = "user")]
+pub async fn my_project_states(
+    State(state): State<AppState>,
+    SignedIn(u, p): SignedIn,
+) -> ApiResult<Json<Vec<forgust_db::projects::ProjectState>>> {
+    let rows = forgust_db::projects::for_user(&state.db, u.id, "", MY_STATE_LIMIT, 0).await?;
+    // a few checks at a time, not one after the other (in the list's order)
+    let open: Vec<_> = rows.iter().map(|(x, _)| x).filter(|x| !x.archived()).collect();
+    let mut ids = Vec::new();
+    for chunk in open.chunks(8) {
+        let read = futures::future::try_join_all(
+            chunk.iter().map(|x| crate::auth::authz::can_project(&state, &p, crate::auth::authz::ProjectAction::ReadCode, x)),
+        )
+        .await?;
+        ids.extend(chunk.iter().zip(read).filter(|(_, ok)| *ok).map(|(x, _)| x.id));
+    }
+    Ok(Json(forgust_db::projects::states(&state.db, &ids).await?))
+}
+
 /// User picker for member dialogs.
 pub async fn search_users(
     State(state): State<AppState>,
@@ -862,16 +888,26 @@ pub async fn todos(
 
 /// Mark one to-do done.
 pub async fn todo_done(State(state): State<AppState>, SignedIn(u, _): SignedIn, Path(id): Path<i64>) -> ApiResult<Json<Value>> {
-    let n = forgust_db::todos::mark_done(&state.db, u.id, Some(id)).await?;
-    if n == 0 {
+    let d = forgust_db::todos::mark_done(&state.db, u.id, Some(id)).await?;
+    if d.todos == 0 {
         return Err(ApiError::NotFound);
     }
-    Ok(Json(json!({ "done": n })))
+    bell_follows(&state, u.id, d);
+    Ok(Json(json!({ "done": d.todos })))
 }
 
 /// Mark every pending to-do done.
 pub async fn todos_done(State(state): State<AppState>, SignedIn(u, _): SignedIn) -> ApiResult<Json<Value>> {
-    Ok(Json(json!({ "done": forgust_db::todos::mark_done(&state.db, u.id, None).await? })))
+    let d = forgust_db::todos::mark_done(&state.db, u.id, None).await?;
+    bell_follows(&state, u.id, d);
+    Ok(Json(json!({ "done": d.todos })))
+}
+
+/// To-dos done read their notifications: the person's bell, in each tab, follows.
+pub(crate) fn bell_follows(state: &AppState, user_id: i64, d: forgust_db::todos::Done) {
+    if d.read > 0 {
+        state.events.publish(crate::events::Event::Inbox { user_id });
+    }
 }
 
 #[derive(Deserialize)]

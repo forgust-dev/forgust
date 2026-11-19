@@ -1,14 +1,17 @@
 import { useMemo, useState, type ReactElement, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AtSign, Check, CircleDot, Eye, GitMerge, UserCheck } from "lucide-react";
+import { ArrowRight, AtSign, Check, CircleDot, Eye, GitMerge, UserCheck } from "lucide-react";
+import type { UseQueryResult } from "@tanstack/react-query";
 import { api, timeAgo, type S } from "../api/client";
-import { Empty, Q, ListHead, UserLink } from "../components/ui";
+import { Empty, Q, ListHead, Tile, UserLink } from "../components/ui";
+import { ProjectStateBadges, Visibility } from "./Dashboard";
+import { InstanceCard } from "./InstanceCard";
 import { DecideCard, Ring } from "../components/decide";
 import { readinessChecks, readinessScore } from "../components/readiness";
 import { useSession } from "../session";
 import { useToast } from "../shell/toast";
-import { useWork } from "../prefetch";
+import { useMyProjects, useMyProjectStates, usePrefetch, useWork } from "../prefetch";
 
 const ACTION: Record<string, { icon: ReactElement; text: string }> = {
   assigned: { icon: <UserCheck size={14} />, text: "assigned you" },
@@ -159,15 +162,29 @@ function Section({ id, title, count, actions, children }: { id: string; title: s
 }
 
 /** Your to-dos (or the done ones): what someone asked of you. `quiet`: none is
- *  waiting and the page has other things, so an empty list takes one line. */
-function Todos({ pending, onDone, quiet }: { pending: S["Todo"][]; onDone: (path: string, msg: string) => void; quiet?: boolean }) {
+ *  waiting and the page has other things, so an empty list takes one line;
+ *  `clear`: nothing at all waits for you, said once in place of the lists. */
+function Todos({ pending, onDone, quiet, clear }: { pending: S["Todo"][]; onDone: (path: string, msg: string) => void; quiet?: boolean; clear?: boolean }) {
   const [state, setState] = useState<"pending" | "done">("pending");
   const done = useQuery({ queryKey: ["todos", "done"], queryFn: () => api.get<S["Todo"][]>(`/user/todos?state=done`), enabled: state === "done" });
   const toggle = (
     <button type="button" className="link-btn small" onClick={() => setState(state === "pending" ? "done" : "pending")}>
-      {state === "pending" ? "Show done" : "Show pending"}
+      {state === "pending" ? (clear ? "Show done to-dos" : "Show done") : "Show pending"}
     </button>
   );
+  if (clear && state === "pending")
+    return (
+      <div className="all-clear" role="status">
+        <span className="all-clear-icon" aria-hidden="true">
+          <Check size={16} />
+        </span>
+        <div className="grow" style={{ minWidth: 0 }}>
+          <div className="all-clear-title">Nothing is waiting for you</div>
+          <div className="all-clear-sub">Review requests, assignments and mentions show up here as they come.</div>
+        </div>
+        {toggle}
+      </div>
+    );
   const rows = (list: S["Todo"][]) =>
     list.length === 0 ? (
       quiet && state === "pending" ? (
@@ -289,13 +306,85 @@ function MrRows({ list, review, status, me }: { list: S["WorkMr"][]; review?: bo
   );
 }
 
-/** "Your work": what waits for you across projects, the first thing in its own card. */
+/** Projects shown as cards: two rows on a wide screen. */
+const CARDS = 6;
+
+/** One of your projects as a card: its picture, where it lives, what it is, how it is
+ *  doing (open merge requests, latest pipeline) and how lately it moved. */
+function ProjectCard({ p, st }: { p: S["MyProject"]; st?: S["ProjectState"] }) {
+  const pf = usePrefetch({ kind: "project", id: p.id, path: p.full_path });
+  const slash = p.full_path.lastIndexOf("/");
+  return (
+    <Link to={`/${p.full_path}`} className="project-card" title={p.full_path} {...pf}>
+      <span className="project-card-head">
+        <Tile name={p.name} src={p.avatar_url} />
+        <span className="grow" style={{ minWidth: 0 }}>
+          <span className="project-card-name ellipsis">{p.name}</span>
+          <span className="project-card-ns ellipsis">{p.full_path.slice(0, slash)}</span>
+        </span>
+      </span>
+      <span className={`project-card-desc${p.description ? "" : " none"}`}>{p.description || "No description"}</span>
+      <span className="project-card-foot">
+        <Visibility v={p.visibility} />
+        <span className="grow" />
+        <ProjectStateBadges p={p} st={st} plain />
+        <span title={new Date(p.last_activity_at).toLocaleString()}>{timeAgo(p.last_activity_at)}</span>
+      </span>
+    </Link>
+  );
+}
+
+/** Your latest active projects, a click away. */
+function YourProjects({ q }: { q: UseQueryResult<S["MyProject"][]> }) {
+  // the projects page's request
+  const states = useMyProjectStates();
+  const stateOf = new Map((states.data ?? []).map((s) => [s.project_id, s]));
+  const live = q.data?.filter((p) => !p.archived);
+  const total = live?.length;
+  return (
+    <Section
+      id="projects"
+      title="Your projects"
+      count={total}
+      actions={
+        total != null &&
+        total > 0 && (
+          <Link className="link-btn small section-link" to="/dashboard/projects">
+            {total > CARDS ? `All ${total} projects` : "All projects"} <ArrowRight size={13} />
+          </Link>
+        )
+      }
+    >
+      <Q q={q}>
+        {() =>
+          !live || live.length === 0 ? (
+            <p className="muted small" style={{ margin: 0 }}>
+              No project yet. <Link to="/new/project">Create one</Link>, <Link to="/import">import one</Link> or <Link to="/explore">explore</Link> what others share.
+            </p>
+          ) : (
+            <div className="project-cards">
+              {live.slice(0, CARDS).map((p) => (
+                <ProjectCard key={p.id} p={p} st={stateOf.get(p.id)} />
+              ))}
+            </div>
+          )
+        }
+      </Q>
+    </Section>
+  );
+}
+
+/** Home: what waits for you across projects (the first thing in its own card), then
+ *  your projects; an administrator has the instance beside them. */
 export function Work() {
   const w = useWork();
   const { user } = useSession();
   const qc = useQueryClient();
   const toast = useToast();
   const pending = useQuery({ queryKey: ["todos", "pending"], queryFn: () => api.get<S["Todo"][]>(`/user/todos?state=pending`) });
+  // asked for with the rest, not once the lists are in: they show together
+  const projects = useMyProjects();
+  const admin = !!user?.is_admin;
   // yours and those assigned to you, once each
   const mine = useMemo(() => {
     const d = w.data;
@@ -324,6 +413,8 @@ export function Work() {
     }
     qc.invalidateQueries({ queryKey: ["todos"] });
     qc.invalidateQueries({ queryKey: ["work"] });
+    // a to-do done reads its notifications: the bell follows
+    qc.invalidateQueries({ queryKey: ["inbox"] });
   };
   // the card needs both: shown once, in place, rather than moving the page when the to-dos arrive
   const both = {
@@ -333,66 +424,77 @@ export function Work() {
   };
   return (
     <div className="page stack list-page work-page">
-      <ListHead title="Your work" sub="What is waiting for you, across your projects." />
-      <Q q={both}>
-        {({ d, todos }) => {
-          const queue = queueOf(d, todos);
-          const waiting = d.review_requests.filter(isWaiting);
-          const reviewed = d.review_requests.filter((m) => !isWaiting(m));
-          // no to-do but other things: the to-dos go last, in a line
-          const quiet = todos.length === 0 && (d.review_requests.length > 0 || mine.length > 0 || d.assigned_issues.length > 0);
-          const todoSection = <Todos pending={todos} onDone={done} quiet={quiet} />;
-          return (
-            <>
-              {queue.length > 0 && <NextCard queue={queue} onDone={(t) => done(`/user/todos/${t.id}/done`, "Done")} />}
-              {waiting.length > 0 && (
-                <Section id="reviews" title="Waiting for your review" count={waiting.length}>
-                  <MrRows list={waiting} review />
-                </Section>
-              )}
-              {!quiet && todoSection}
-              {mine.length > 0 && (
-                <Section id="mrs" title="Your merge requests" count={mine.length}>
-                  <MrRows list={mine} status={statusOf} me={user?.username} />
-                </Section>
-              )}
-              {d.assigned_issues.length > 0 && (
-                <Section id="issues" title="Issues assigned to you" count={d.assigned_issues.length}>
-                  <div className="list rows">
-                    {d.assigned_issues.map((i) => (
-                      <div className="item" key={`${i.project_id}-${i.iid}`}>
-                        <span className="row-icon ic-ok">
-                          <CircleDot size={16} />
-                        </span>
-                        <div className="grow" style={{ minWidth: 0 }}>
-                          <div className="row-title">
-                            <Link to={`/${i.project_path}/-/issues/${i.iid}`} className="ellipsis">
-                              {i.title}
-                            </Link>
-                          </div>
-                          <div className="row-meta">
-                            <span>
-                              {i.project_path}#{i.iid}
+      <ListHead title="Home" sub="What is waiting for you, across your projects." />
+      <div className={`work-layout${admin ? "" : " solo"}`}>
+        <div className="stack work-main">
+          <Q q={both}>
+            {({ d, todos }) => {
+              const queue = queueOf(d, todos);
+              const waiting = d.review_requests.filter(isWaiting);
+              const reviewed = d.review_requests.filter((m) => !isWaiting(m));
+              // no to-do but other things: the to-dos go last, in a line
+              const others = d.review_requests.length > 0 || mine.length > 0 || d.assigned_issues.length > 0;
+              const quiet = todos.length === 0 && others;
+              const todoSection = <Todos pending={todos} onDone={done} quiet={quiet} clear={todos.length === 0 && !others} />;
+              return (
+                <>
+                  {queue.length > 0 && <NextCard queue={queue} onDone={(t) => done(`/user/todos/${t.id}/done`, "Done")} />}
+                  {waiting.length > 0 && (
+                    <Section id="reviews" title="Waiting for your review" count={waiting.length}>
+                      <MrRows list={waiting} review />
+                    </Section>
+                  )}
+                  {!quiet && todoSection}
+                  {mine.length > 0 && (
+                    <Section id="mrs" title="Your merge requests" count={mine.length}>
+                      <MrRows list={mine} status={statusOf} me={user?.username} />
+                    </Section>
+                  )}
+                  {d.assigned_issues.length > 0 && (
+                    <Section id="issues" title="Issues assigned to you" count={d.assigned_issues.length}>
+                      <div className="list rows">
+                        {d.assigned_issues.map((i) => (
+                          <div className="item" key={`${i.project_id}-${i.iid}`}>
+                            <span className="row-icon ic-ok">
+                              <CircleDot size={16} />
                             </span>
-                            <span>by {i.author_username ? <UserLink username={i.author_username} /> : "ghost"}</span>
+                            <div className="grow" style={{ minWidth: 0 }}>
+                              <div className="row-title">
+                                <Link to={`/${i.project_path}/-/issues/${i.iid}`} className="ellipsis">
+                                  {i.title}
+                                </Link>
+                              </div>
+                              <div className="row-meta">
+                                <span>
+                                  {i.project_path}#{i.iid}
+                                </span>
+                                <span>by {i.author_username ? <UserLink username={i.author_username} /> : "ghost"}</span>
+                              </div>
+                            </div>
+                            <span className="row-time">{timeAgo(i.updated_at)}</span>
                           </div>
-                        </div>
-                        <span className="row-time">{timeAgo(i.updated_at)}</span>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                </Section>
-              )}
-              {reviewed.length > 0 && (
-                <Section id="reviewed" title="Reviewed by you" count={reviewed.length}>
-                  <MrRows list={reviewed} review />
-                </Section>
-              )}
-              {quiet && todoSection}
-            </>
-          );
-        }}
-      </Q>
+                    </Section>
+                  )}
+                  {reviewed.length > 0 && (
+                    <Section id="reviewed" title="Reviewed by you" count={reviewed.length}>
+                      <MrRows list={reviewed} review />
+                    </Section>
+                  )}
+                  {quiet && todoSection}
+                  <YourProjects q={projects} />
+                </>
+              );
+            }}
+          </Q>
+        </div>
+        {admin && (
+          <aside className="repo-about work-side" aria-label="This instance">
+            <InstanceCard />
+          </aside>
+        )}
+      </div>
     </div>
   );
 }

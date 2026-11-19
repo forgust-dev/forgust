@@ -152,8 +152,9 @@ pub(crate) async fn hook(state: &AppState, p: &Project, i: &Issue, user: &forgus
 }
 
 async fn done(state: &AppState, user_id: i64, p: &Project, i: &Issue) {
-    if let Err(e) = forgust_db::todos::done_for_target(&state.db, user_id, p.id, "issue", i.iid).await {
-        tracing::warn!(error = %e, "to-dos not marked done");
+    match forgust_db::todos::done_for_target(&state.db, user_id, p.id, "issue", i.iid).await {
+        Ok(d) => crate::api::user::bell_follows(state, user_id, d),
+        Err(e) => tracing::warn!(error = %e, "to-dos not marked done"),
     }
 }
 

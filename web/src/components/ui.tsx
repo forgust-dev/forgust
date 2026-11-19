@@ -1,12 +1,48 @@
-import { Component, useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { Check, Copy, EyeOff, Lock, Search } from "lucide-react";
+import { Component, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Check, Copy, EyeOff, Loader2, Lock, Search } from "lucide-react";
 import { Link, NavLink } from "react-router-dom";
 import { ApiError, LEVELS, bytes } from "../api/client";
 import { Select } from "./controls";
 import { useConfirm, type Ask } from "../shell/dialog";
 
+/** How long a wait goes unmarked: a page that comes sooner never shows a loader. */
+const SPINNER_DELAY = 400;
+// One wait can pass through several loaders (the session, a page's code, then its data):
+// they share when it began, so the next one goes on where the last one was.
+let waitBegan = 0;
+let loaders = 0;
+let lastGone = -Infinity;
+
+/** A loader that shows only once a wait has lasted SPINNER_DELAY (styles.css fades it in). */
 export function Spinner({ label = "Loading…" }: { label?: string }) {
-  return <div className="spinner">{label}</div>;
+  const ref = useRef<HTMLDivElement>(null);
+  // timed when it reaches the screen, not when it renders: React can hold a render back
+  // (a page's code arrived just after its fallback showed), and a loader hidden by a
+  // Suspense fallback comes back through here too
+  useLayoutEffect(() => {
+    const now = performance.now();
+    // a new wait unless another loader is on screen or just left it
+    if (loaders === 0 && now - lastGone > 100) waitBegan = now;
+    loaders++;
+    const waited = now - waitBegan;
+    const el = ref.current;
+    if (el) {
+      el.style.animationDelay = `${SPINNER_DELAY - waited}ms`;
+      // the arc goes on turning from where the last loader's was
+      const icon = el.firstElementChild as SVGElement | null;
+      if (icon) icon.style.animationDelay = `${-waited}ms`;
+    }
+    return () => {
+      loaders--;
+      lastGone = performance.now();
+    };
+  }, []);
+  return (
+    <div className="spinner" ref={ref}>
+      <Loader2 size={16} className="spin" aria-hidden="true" />
+      {label}
+    </div>
+  );
 }
 
 export function ErrorBox({ error }: { error: unknown }) {

@@ -7,7 +7,7 @@ import { useDebounced } from "../components/ui";
 import { api, qs, refLink, type S } from "../api/client";
 import { useSession } from "../session";
 import { useNav } from "./nav";
-import { useGroups } from "../prefetch";
+import { useGroups, useMyProjects } from "../prefetch";
 
 // ---------------------------------------------------------------- shortcuts
 
@@ -106,13 +106,8 @@ function Palette({ mode, close }: { mode: Mode; close: () => void }) {
     enabled: !!project && project.can_read_code && !project.empty_repo,
     staleTime: 60_000,
   });
-  const projects = useQuery({
-    // the dashboard's key: one request for both
-    queryKey: ["my-projects", ""],
-    queryFn: () => api.get<S["MyProject"][]>(`/user/projects${qs({ per_page: 100 })}`),
-    enabled: !!user && mode === "all",
-    staleTime: 60_000,
-  });
+  // the dashboard's request
+  const projects = useMyProjects("", !!user && mode === "all");
   const groups = useGroups(!!user && mode === "all");
   // issues and merge requests across the instance, once typing settles
   const settled = useDebounced(term.trim(), 200);
