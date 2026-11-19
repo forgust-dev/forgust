@@ -125,6 +125,7 @@ def bootstrap():
     compose("exec", "-T", "-e", f"FORGUST_ADMIN_PASSWORD={PASSWORD}", "forgust", "forgust", "admin", "create-user",
             "--username", "root", "--email", "root@example.com", "--admin")
     root_s = Api.login("root", PASSWORD)
+    SESSIONS["root"] = root_s  # runners are credentials: made from a browser session, not a token
     tok = root_s.post("/user/tokens", {"name": "seed", "scopes": ["api", "write_repository", "admin_mode"]})["token"]
     root = Api(tok)
     root.put("/admin/settings", {"signup_enabled": True, "allow_personal_projects": True, "default_branch_name": "main"})
@@ -987,7 +988,7 @@ def main():
     shutil.rmtree(WORK, ignore_errors=True)  # the instance is new: so are the keys
     WORK.mkdir(parents=True)
     root, alice = apis["root"], apis["alice"]
-    register_runner(root)
+    register_runner(SESSIONS["root"])
 
     log("groups: acme (+ acme/platform), partners, imported")
     acme = alice.post("/groups", {"name": "Acme", "path": "acme", "visibility": "public", "description": "Acme Corp, makers of the web shop."})["id"]
