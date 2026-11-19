@@ -1,0 +1,33 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH done AS (\n               UPDATE todos SET state = 'done', updated_at = now()\n                WHERE user_id = $1 AND project_id = $2 AND target_type = $3 AND target_iid = $4 AND state = 'pending'\n            RETURNING id\n           ), seen AS (\n               UPDATE notifications SET read_at = now()\n                WHERE user_id = $1 AND project_id = $2 AND target_type = $3 AND target_iid = $4\n                  AND read_at IS NULL AND kind IN ('mention', 'assignment', 'review')\n            RETURNING id\n           )\n           SELECT (SELECT count(*) FROM done) AS \"todos!\", (SELECT count(*) FROM seen) AS \"read!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "todos!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "read!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "b39eda02417c7dc195dbc9d0a37aae5a122cb4dbc968da44b585beb58bb8d6e1"
+}

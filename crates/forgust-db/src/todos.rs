@@ -111,29 +111,62 @@ pub async fn pending_count(e: impl PgExecutor<'_>, user_id: i64) -> Result<i64> 
     .await
 }
 
-/// Mark one (`id`) or all of a user's to-dos done; returns how many changed.
-pub async fn mark_done(e: impl PgExecutor<'_>, user_id: i64, id: Option<i64>) -> Result<u64> {
-    Ok(sqlx::query!(
-        "UPDATE todos SET state = 'done', updated_at = now() WHERE user_id = $1 AND state = 'pending' AND ($2::bigint IS NULL OR id = $2)",
+/// What marking to-dos done changed: the to-dos done, and the unread notifications
+/// about the same things it read (`read_with_todos`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Done {
+    pub todos: u64,
+    pub read: u64,
+}
+
+// What a to-do is for told its person too, in the bell: a mention, an assignment, a
+// review request. Handled once (the to-do done), it is read there as well, so the
+// two never ask twice. Reading a notification does not do its to-do: reading is not
+// handling.
+
+/// Mark one (`id`) or all of a user's to-dos done, and read what told them of those.
+pub async fn mark_done(e: impl PgExecutor<'_>, user_id: i64, id: Option<i64>) -> Result<Done> {
+    let r = sqlx::query!(
+        r#"WITH done AS (
+               UPDATE todos SET state = 'done', updated_at = now()
+                WHERE user_id = $1 AND state = 'pending' AND ($2::bigint IS NULL OR id = $2)
+            RETURNING project_id, target_type, target_iid
+           ), seen AS (
+               UPDATE notifications n SET read_at = now() FROM done d
+                WHERE n.user_id = $1 AND n.read_at IS NULL AND n.kind IN ('mention', 'assignment', 'review')
+                  AND n.project_id = d.project_id AND n.target_type = d.target_type AND n.target_iid = d.target_iid
+            RETURNING n.id
+           )
+           SELECT (SELECT count(*) FROM done) AS "todos!", (SELECT count(*) FROM seen) AS "read!""#,
         user_id,
         id
     )
-    .execute(e)
-    .await?
-    .rows_affected())
+    .fetch_one(e)
+    .await?;
+    Ok(Done { todos: r.todos as u64, read: r.read as u64 })
 }
 
-/// The user acted on a target (commented, approved, merged...): its to-dos are done.
-pub async fn done_for_target(e: impl PgExecutor<'_>, user_id: i64, project_id: i64, target_type: &str, iid: i64) -> Result<()> {
-    sqlx::query!(
-        "UPDATE todos SET state = 'done', updated_at = now()
-         WHERE user_id = $1 AND project_id = $2 AND target_type = $3 AND target_iid = $4 AND state = 'pending'",
+/// The user acted on a target (commented, approved, merged...): its to-dos are done,
+/// and what told them of it is read.
+pub async fn done_for_target(e: impl PgExecutor<'_>, user_id: i64, project_id: i64, target_type: &str, iid: i64) -> Result<Done> {
+    let r = sqlx::query!(
+        r#"WITH done AS (
+               UPDATE todos SET state = 'done', updated_at = now()
+                WHERE user_id = $1 AND project_id = $2 AND target_type = $3 AND target_iid = $4 AND state = 'pending'
+            RETURNING id
+           ), seen AS (
+               UPDATE notifications SET read_at = now()
+                WHERE user_id = $1 AND project_id = $2 AND target_type = $3 AND target_iid = $4
+                  AND read_at IS NULL AND kind IN ('mention', 'assignment', 'review')
+            RETURNING id
+           )
+           SELECT (SELECT count(*) FROM done) AS "todos!", (SELECT count(*) FROM seen) AS "read!""#,
         user_id,
         project_id,
         target_type,
         iid
     )
-    .execute(e)
+    .fetch_one(e)
     .await?;
-    Ok(())
+    Ok(Done { todos: r.todos as u64, read: r.read as u64 })
 }

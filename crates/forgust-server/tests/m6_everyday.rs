@@ -406,11 +406,26 @@ async fn references_mentions_todos_and_closing(pool: sqlx::PgPool) {
     assert_eq!(to_rita.len(), 1, "{to_rita:?}");
     assert!(to_rita[0].body.contains("mentioned you"));
 
-    // acting on the MR clears rita's to-dos for it
+    // what a to-do is for told her in the bell too
+    let asked = |inbox: &serde_json::Value, target: &str, iid: i64| {
+        inbox["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|n| n["read"] == false && n["target_type"] == target && n["target_iid"] == iid)
+            .filter(|n| ["mention", "assignment", "review"].contains(&n["kind"].as_str().unwrap_or_default()))
+            .count()
+    };
+    let inbox = rep.ok_get("/api/v1/user/notifications").await;
+    assert!(asked(&inbox, "merge_request", 1) > 0, "{inbox}");
+
+    // acting on the MR clears rita's to-dos for it, and the bell with them
     rep.ok_post(&format!("{mrs}/1/notes"), json!({ "body": "on it" })).await;
     assert_eq!(rep.ok_get("/api/v1/user/work").await["todos_pending"], 0);
     let done = rep.ok_get("/api/v1/user/todos?state=done").await;
     assert!(done.as_array().unwrap().len() >= 2);
+    let inbox = rep.ok_get("/api/v1/user/notifications").await;
+    assert_eq!(asked(&inbox, "merge_request", 1), 0, "{inbox}");
 
     // merging into the default branch closes #1, not #2
     let st = owner.ok_get(&format!("{mrs}/1/merge_status")).await;
@@ -425,6 +440,19 @@ async fn references_mentions_todos_and_closing(pool: sqlx::PgPool) {
     let notes = rep.ok_get(&format!("{issues}/2/notes")).await;
     let last = notes.as_array().unwrap().iter().rev().find(|n| n["system"] == false).unwrap();
     assert!(last["body_html"].as_str().unwrap().contains("ref-issue closed"), "{last}");
+    // a to-do marked done reads its notification: handled once, not twice
+    owner.ok_post(&format!("{issues}/2/notes"), json!({ "body": "@rita is this still a typo?" })).await;
+    wait_jobs(&srv.state).await;
+    let todo = rep.ok_get("/api/v1/user/todos").await[0].clone();
+    assert_eq!((todo["target_type"].as_str(), todo["target_iid"].as_i64()), (Some("issue"), Some(2)), "{todo}");
+    assert_eq!(asked(&rep.ok_get("/api/v1/user/notifications").await, "issue", 2), 1);
+    rep.ok_post(&format!("/api/v1/user/todos/{}/done", todo["id"]), json!({})).await;
+    assert_eq!(asked(&rep.ok_get("/api/v1/user/notifications").await, "issue", 2), 0);
+    // reading a notification does not do its to-do
+    owner.ok_post(&format!("{issues}/2/notes"), json!({ "body": "@rita one more thing" })).await;
+    wait_jobs(&srv.state).await;
+    rep.ok_post("/api/v1/user/notifications/read", json!({})).await;
+    assert_eq!(rep.ok_get("/api/v1/user/work").await["todos_pending"], 1);
     // the mark-all endpoint
     owner.ok_post("/api/v1/user/todos/done", json!({})).await;
     assert_eq!(owner.ok_get("/api/v1/user/work").await["todos_pending"], 0);

@@ -884,16 +884,26 @@ pub async fn todos(
 
 /// Mark one to-do done.
 pub async fn todo_done(State(state): State<AppState>, SignedIn(u, _): SignedIn, Path(id): Path<i64>) -> ApiResult<Json<Value>> {
-    let n = forgust_db::todos::mark_done(&state.db, u.id, Some(id)).await?;
-    if n == 0 {
+    let d = forgust_db::todos::mark_done(&state.db, u.id, Some(id)).await?;
+    if d.todos == 0 {
         return Err(ApiError::NotFound);
     }
-    Ok(Json(json!({ "done": n })))
+    bell_follows(&state, u.id, d);
+    Ok(Json(json!({ "done": d.todos })))
 }
 
 /// Mark every pending to-do done.
 pub async fn todos_done(State(state): State<AppState>, SignedIn(u, _): SignedIn) -> ApiResult<Json<Value>> {
-    Ok(Json(json!({ "done": forgust_db::todos::mark_done(&state.db, u.id, None).await? })))
+    let d = forgust_db::todos::mark_done(&state.db, u.id, None).await?;
+    bell_follows(&state, u.id, d);
+    Ok(Json(json!({ "done": d.todos })))
+}
+
+/// To-dos done read their notifications: the person's bell, in each tab, follows.
+pub(crate) fn bell_follows(state: &AppState, user_id: i64, d: forgust_db::todos::Done) {
+    if d.read > 0 {
+        state.events.publish(crate::events::Event::Inbox { user_id });
+    }
 }
 
 #[derive(Deserialize)]

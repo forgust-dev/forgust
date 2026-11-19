@@ -1186,8 +1186,9 @@ pub(crate) fn mr_target(m: &MergeRequest) -> super::refs::Target<'_> {
 
 /// Someone acted on the MR: their to-dos about it are done.
 async fn done(state: &AppState, user_id: i64, p: &Project, m: &MergeRequest) {
-    if let Err(e) = forgust_db::todos::done_for_target(&state.db, user_id, p.id, "merge_request", m.iid).await {
-        tracing::warn!(error = %e, "to-dos not marked done");
+    match forgust_db::todos::done_for_target(&state.db, user_id, p.id, "merge_request", m.iid).await {
+        Ok(d) => crate::api::user::bell_follows(state, user_id, d),
+        Err(e) => tracing::warn!(error = %e, "to-dos not marked done"),
     }
 }
 
