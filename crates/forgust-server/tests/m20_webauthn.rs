@@ -56,7 +56,7 @@ impl Authenticator {
         let o = &options["publicKey"];
         let rp_id = o["rp"]["id"].as_str().unwrap();
         self.user_handle = Some(B64.decode(o["user"]["id"].as_str().unwrap()).unwrap());
-        let point = self.key.verifying_key().to_encoded_point(false);
+        let point = self.key.verifying_key().to_sec1_point(false);
         // COSE_Key {1: 2 (EC2), 3: -7 (ES256), -1: 1 (P-256), -2: x, -3: y}
         let mut cose = vec![0xa5, 0x01, 0x02, 0x03, 0x26, 0x20, 0x01, 0x21, 0x58, 0x20];
         cose.extend_from_slice(point.x().unwrap());
