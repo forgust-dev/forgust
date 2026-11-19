@@ -7,7 +7,7 @@
 # cargo-auditable records there; BUILDKIT_SBOM_SCAN_STAGE adds one more SBOM
 # per build stage, for the npm packages and the toolchains.
 
-FROM node:26.13-bookworm-slim@sha256:5df79989ed685e09f0a98019db4cebfb22fb9df1a53c0161664a011f7ff6b0f1 AS web
+FROM node:26.13-trixie-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS web
 ARG BUILDKIT_SBOM_SCAN_STAGE=true
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
