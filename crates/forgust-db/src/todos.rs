@@ -34,13 +34,21 @@ pub struct NewTodo<'a> {
     pub action: &'a str,
     pub author_id: Option<i64>,
     pub body: &'a str,
+    /// Made by an internal comment: listed only while its owner may read those.
+    pub internal: bool,
 }
 
-/// Add a to-do unless the same one (user, target, action) is still pending.
+/// Add a to-do unless the same one (user, target, action) is still pending. A
+/// public one replaces a pending internal one (which someone who lost sight of
+/// internal notes would not see), so the public mention is not lost.
 pub async fn add(e: impl PgExecutor<'_>, t: NewTodo<'_>) -> Result<()> {
     sqlx::query!(
-        "INSERT INTO todos (user_id, project_id, target_type, target_iid, action, author_id, body)
-         SELECT $1, $2, $3, $4, $5, $6, $7
+        "WITH public AS (
+             UPDATE todos SET internal = false, body = $7, author_id = $6, updated_at = now()
+             WHERE user_id = $1 AND project_id = $2 AND target_type = $3 AND target_iid = $4 AND action = $5
+               AND state = 'pending' AND internal AND NOT $8)
+         INSERT INTO todos (user_id, project_id, target_type, target_iid, action, author_id, body, internal)
+         SELECT $1, $2, $3, $4, $5, $6, $7, $8
          WHERE NOT EXISTS (SELECT 1 FROM todos WHERE user_id = $1 AND project_id = $2 AND target_type = $3
                            AND target_iid = $4 AND action = $5 AND state = 'pending')",
         t.user_id,
@@ -49,7 +57,8 @@ pub async fn add(e: impl PgExecutor<'_>, t: NewTodo<'_>) -> Result<()> {
         t.target_iid,
         t.action,
         t.author_id,
-        t.body
+        t.body,
+        t.internal
     )
     .execute(e)
     .await?;
@@ -58,7 +67,8 @@ pub async fn add(e: impl PgExecutor<'_>, t: NewTodo<'_>) -> Result<()> {
 
 /// A user's to-dos in `state`, newest first, with what they point at. Only
 /// projects the user can still see (an authorization row) are listed, and
-/// issues they still may see (a confidential one they lost sight of is not).
+/// issues they still may see (a confidential one they lost sight of is not),
+/// and internal comments only while they still may read them.
 pub async fn list(e: impl PgExecutor<'_>, user_id: i64, state: &str, limit: i64) -> Result<Vec<Todo>> {
     sqlx::query_as!(
         Todo,
@@ -77,6 +87,7 @@ pub async fn list(e: impl PgExecutor<'_>, user_id: i64, state: &str, limit: i64)
              -- merge requests are code: Reporters and above (a Guest, or someone demoted, sees none)
              AND (t.target_type <> 'merge_request' OR a.access_level >= 20)
              AND (i.id IS NULL OR issue_visible(i, me.id, me.is_admin))
+             AND (NOT t.internal OR sees_internal(t.project_id, me.id, me.is_admin))
            ORDER BY t.created_at DESC, t.id DESC LIMIT $3"#,
         user_id,
         state,
@@ -92,7 +103,8 @@ pub async fn pending_count(e: impl PgExecutor<'_>, user_id: i64) -> Result<i64> 
            JOIN users me ON me.id = t.user_id
            LEFT JOIN issues i ON t.target_type = 'issue' AND i.project_id = t.project_id AND i.iid = t.target_iid
            WHERE t.user_id = $1 AND t.state = 'pending' AND (t.target_type <> 'merge_request' OR a.access_level >= 20)
-             AND (i.id IS NULL OR issue_visible(i, me.id, me.is_admin))"#,
+             AND (i.id IS NULL OR issue_visible(i, me.id, me.is_admin))
+             AND (NOT t.internal OR sees_internal(t.project_id, me.id, me.is_admin))"#,
         user_id
     )
     .fetch_one(e)

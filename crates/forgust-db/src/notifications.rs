@@ -217,6 +217,8 @@ pub struct NewNotification<'a> {
     pub actor_id: Option<i64>,
     pub title: &'a str,
     pub summary: &'a str,
+    /// About an internal comment: listed only while its owner may read those.
+    pub internal: bool,
 }
 
 /// The same notification in the inbox of each of these people: (user, its id
@@ -227,8 +229,8 @@ pub async fn add(
     n: NewNotification<'_>,
 ) -> Result<Vec<(i64, i64, chrono::DateTime<chrono::Utc>)>> {
     Ok(sqlx::query!(
-        "INSERT INTO notifications (user_id, project_id, kind, target_type, target_iid, actor_id, title, summary)
-         SELECT u, $2, $3, $4, $5, $6, $7, $8 FROM unnest($1::bigint[]) u
+        "INSERT INTO notifications (user_id, project_id, kind, target_type, target_iid, actor_id, title, summary, internal)
+         SELECT u, $2, $3, $4, $5, $6, $7, $8, $9 FROM unnest($1::bigint[]) u
          RETURNING user_id, id, created_at",
         user_ids,
         n.project_id,
@@ -237,7 +239,8 @@ pub async fn add(
         n.target_iid,
         n.actor_id,
         n.title,
-        n.summary
+        n.summary,
+        n.internal
     )
     .fetch_all(e)
     .await?

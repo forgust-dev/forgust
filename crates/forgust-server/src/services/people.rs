@@ -222,6 +222,7 @@ async fn todo(
             action,
             author_id: Some(author),
             body: "",
+            internal: false,
         };
         forgust_db::todos::add(&mut *conn, t).await?;
     }

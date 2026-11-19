@@ -340,3 +340,68 @@ async fn confidential_issues_and_internal_notes(pool: sqlx::PgPool) {
     let a = deliveries(plain).await;
     assert!(a.iter().any(|(e, body)| e == "issue" && body.contains("Login page") && body.contains("\"close\"")), "{a:?}");
 }
+
+/// What stays hidden once someone loses sight of internal notes, and what
+/// threads and counts tell those who never had it.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn internal_notes_after_a_demotion(pool: sqlx::PgPool) {
+    let srv = TestServer::start(pool).await;
+    let owner = srv.user("olivia", false).await;
+    let rita = srv.user("rita", false).await;
+    let nora = srv.user("nora", false).await;
+    let g = owner.ok_post("/api/v1/groups", json!({ "name": "Open", "path": "open", "visibility": "public" })).await;
+    let proj =
+        owner.ok_post("/api/v1/projects", json!({ "name": "Site", "path": "site", "namespace_id": g["id"], "visibility": "public" })).await;
+    let base = format!("/api/v1/projects/{}", proj["id"].as_i64().unwrap());
+    owner.ok_post(&format!("{base}/members"), json!({ "username": "rita", "access_level": "reporter" })).await;
+    let work = srv.work_dir("site");
+    seed_repo(&work).await;
+    must(git(&work, &["push", "-q", &srv.http_url("olivia", REPO), "main"]).await);
+    must(git(&work, &["checkout", "-q", "-b", "topic"]).await);
+    commit_file(&work, "a.txt", "a\n", "a").await;
+    must(git(&work, &["push", "-q", &srv.http_url("olivia", REPO), "topic"]).await);
+    wait_jobs(&srv.state).await;
+    let mr = format!("{base}/merge_requests/1");
+    owner.ok_post(&format!("{base}/merge_requests"), json!({ "source_branch": "topic", "title": "Topic" })).await;
+
+    // a Reporter is mentioned internally on a public issue: a to-do with the text, an inbox entry
+    owner.ok_post(&format!("{base}/issues"), json!({ "title": "Login page" })).await;
+    owner.ok_post(&format!("{base}/issues/1/notes"), json!({ "body": "@rita the secret plan", "internal": true })).await;
+    wait_jobs(&srv.state).await;
+    let on_1 = |list: &Value| list.as_array().unwrap().iter().filter(|t| t["target_type"] == "issue" && t["target_iid"] == 1).count();
+    let todos = rita.ok_get("/api/v1/user/todos").await;
+    assert_eq!(on_1(&todos), 1, "{todos}");
+    assert!(todos.to_string().contains("the secret plan"), "{todos}");
+    assert_eq!(on_1(&rita.ok_get("/api/v1/user/notifications").await["items"]), 1);
+    assert_eq!(rita.ok_get("/api/v1/user/work").await["todos_pending"], 1);
+
+    // demoted to Guest: neither the text nor that it was written
+    let rita_id = user_id(&srv, "rita").await;
+    owner.delete(&format!("{base}/members/{rita_id}")).await;
+    owner.ok_post(&format!("{base}/members"), json!({ "username": "rita", "access_level": "guest" })).await;
+    let todos = rita.ok_get("/api/v1/user/todos").await;
+    assert_eq!(on_1(&todos), 0, "{todos}");
+    assert_eq!(rita.ok_get("/api/v1/user/work").await["todos_pending"], 0);
+    let inbox = rita.ok_get("/api/v1/user/notifications").await;
+    assert_eq!(on_1(&inbox["items"]), 0, "{inbox}");
+
+    // a public mention after it is a to-do again, with its own text
+    owner.ok_post(&format!("{base}/issues/1/notes"), json!({ "body": "@rita have a look" })).await;
+    wait_jobs(&srv.state).await;
+    let todos = rita.ok_get("/api/v1/user/todos").await;
+    assert_eq!(on_1(&todos), 1, "{todos}");
+    assert!(todos.to_string().contains("have a look") && !todos.to_string().contains("secret plan"), "{todos}");
+
+    // unresolved threads: an internal one counts only for who may read it
+    let line = json!({ "new_path": "a.txt", "new_line": 1 });
+    let public = owner.ok_post(&format!("{mr}/notes"), json!({ "body": "public thread", "position": line })).await;
+    owner.ok_post(&format!("{mr}/notes"), json!({ "body": "internal thread", "position": line, "internal": true })).await;
+    assert_eq!(owner.ok_get(&format!("{mr}/merge_status")).await["unresolved_threads"], 2);
+    assert_eq!(nora.ok_get(&format!("{mr}/merge_status")).await["unresolved_threads"], 1);
+
+    // a reply is as internal as its thread: not internal in a public one
+    let (s, e) = owner.post(&format!("{mr}/notes"), json!({ "body": "aside", "parent_id": public["id"], "internal": true })).await;
+    assert_eq!(s, 400, "{e}");
+    let reply = owner.ok_post(&format!("{mr}/notes"), json!({ "body": "fine", "parent_id": public["id"] })).await;
+    assert_eq!(reply["internal"], false);
+}

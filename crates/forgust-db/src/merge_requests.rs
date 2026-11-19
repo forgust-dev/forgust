@@ -413,7 +413,6 @@ pub struct Note {
     pub internal: bool,
 }
 
-/// Make a note internal: seen only by the project's Reporters and up.
 /// Make a comment the one a review verdict came with.
 pub async fn set_note_review(e: impl PgExecutor<'_>, note_id: i64, review: &str) -> Result<()> {
     sqlx::query!("UPDATE notes SET review = $2 WHERE id = $1", note_id, review).execute(e).await?;
@@ -528,12 +527,15 @@ pub async fn set_resolved(e: impl PgExecutor<'_>, id: i64, by: Option<i64>) -> R
     Ok(())
 }
 
-/// Unresolved threads that started on a diff line or as discussions (not system notes).
-pub async fn unresolved_threads(e: impl PgExecutor<'_>, mr_id: i64) -> Result<i64> {
+/// Unresolved threads that started on a diff line or as discussions (not system
+/// notes); internal ones only `with_internal`, so the count names nothing hidden.
+pub async fn unresolved_threads(e: impl PgExecutor<'_>, mr_id: i64, with_internal: bool) -> Result<i64> {
     sqlx::query_scalar!(
         r#"SELECT count(*) AS "n!" FROM notes
-           WHERE merge_request_id = $1 AND parent_id IS NULL AND NOT system AND head_sha IS NOT NULL AND resolved_at IS NULL"#,
-        mr_id
+           WHERE merge_request_id = $1 AND parent_id IS NULL AND NOT system AND head_sha IS NOT NULL AND resolved_at IS NULL
+             AND ($2 OR NOT internal)"#,
+        mr_id,
+        with_internal
     )
     .fetch_one(e)
     .await

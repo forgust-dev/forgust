@@ -1115,8 +1115,8 @@ function Thread({ ctx, m, root, replies, boxed }: { ctx: Ctx; m: S["MrDetail"]; 
                   <AuthorLink x={n} name />
                 </strong>{" "}
                 {n.author_bot && <Badge>bot</Badge>} <span className="faint">{timeAgo(n.created_at)}</span>
-                {/* a code thread shows it in its head; replies to an internal thread are internal too */}
-                {n.internal && !boxed && (n.id === root.id || !root.internal) && <InternalMark />}
+                {/* a code thread shows its own in its head; replies to an internal thread are internal too */}
+                {n.internal && (n.id === root.id ? !boxed : !root.internal) && <InternalMark />}
                 <ImportedMark x={n} />
                 {user?.id === n.author_id && (
                   <button

@@ -176,6 +176,7 @@ pub async fn on_write(
                     action: "mentioned",
                     author_id: Some(actor.id),
                     body: &snippet(text),
+                    internal,
                 },
             )
             .await;

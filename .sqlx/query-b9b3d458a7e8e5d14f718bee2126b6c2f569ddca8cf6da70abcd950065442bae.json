@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH public AS (\n             UPDATE todos SET internal = false, body = $7, author_id = $6, updated_at = now()\n             WHERE user_id = $1 AND project_id = $2 AND target_type = $3 AND target_iid = $4 AND action = $5\n               AND state = 'pending' AND internal AND NOT $8)\n         INSERT INTO todos (user_id, project_id, target_type, target_iid, action, author_id, body, internal)\n         SELECT $1, $2, $3, $4, $5, $6, $7, $8\n         WHERE NOT EXISTS (SELECT 1 FROM todos WHERE user_id = $1 AND project_id = $2 AND target_type = $3\n                           AND target_iid = $4 AND action = $5 AND state = 'pending')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text",
+        "Int8",
+        "Text",
+        "Int8",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b9b3d458a7e8e5d14f718bee2126b6c2f569ddca8cf6da70abcd950065442bae"
+}

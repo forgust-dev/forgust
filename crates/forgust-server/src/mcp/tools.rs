@@ -296,7 +296,7 @@ fn build_defs() -> Vec<Def> {
         Def {
             name: "save_note",
             title: "Comment",
-            description: "Comment on an issue (`issue_iid`) or a merge request (`merge_request_iid`); on a merge request, `file_path` with `new_line` (or `old_line`) comments on a line of the diff, and a ```suggestion block in `body` proposes a change. An `internal` comment is seen only by the project's Reporters and up.",
+            description: "Comment on an issue (`issue_iid`) or a merge request (`merge_request_iid`); on a merge request, `file_path` with `new_line` (or `old_line`) comments on a line of the diff, and a ```suggestion block in `body` proposes a change. An `internal` comment is seen only by the project's Reporters and up; a reply (`reply_to_id`) is as internal as its thread.",
             write: true,
             schema: object(
                 json!({ "project_id": project(), "issue_iid": { "type": "integer" }, "merge_request_iid": { "type": "integer" }, "body": { "type": "string" },

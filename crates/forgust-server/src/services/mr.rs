@@ -474,7 +474,8 @@ pub async fn merge_status(state: &AppState, principal: &Principal, p: &Project, 
             blockers.push(format!("@{} requested changes", r.user.username));
         }
     }
-    let unresolved_threads = mrdb::unresolved_threads(&state.db, mr.id).await?;
+    let members = can_project(state, principal, ProjectAction::ReadInternal, p).await?;
+    let unresolved_threads = mrdb::unresolved_threads(&state.db, mr.id, members).await?;
     // "pipelines must succeed": the newest pipeline for the source head
     let mut pipeline_status = None;
     if let Some(h) = &head {
@@ -981,7 +982,12 @@ pub async fn add_note(
     let mut internal = internal;
     if let Some(pid) = parent_id {
         let parent = mrdb::note(&state.db, mr.id, pid).await?.filter(|n| members || !n.internal).ok_or(ApiError::NotFound)?;
-        internal |= parent.internal;
+        // a reply is as internal as its thread: an internal one in a public
+        // thread would read as public to everyone around it
+        if internal && !parent.internal {
+            return Err(ApiError::bad("a reply in a public thread cannot be internal: start an internal thread"));
+        }
+        internal = parent.internal;
         if parent.parent_id.is_some() || parent.system {
             return Err(ApiError::bad("replies go to the first comment of a thread"));
         }

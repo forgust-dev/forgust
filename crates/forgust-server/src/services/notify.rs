@@ -423,6 +423,7 @@ pub async fn deliver(state: &AppState, n: Notice<'_>, people: Vec<(i64, Reason)>
             actor_id: n.actor,
             title: &n.about.title,
             summary: &n.about.summary,
+            internal: n.about.internal,
         };
         let actor = match n.actor {
             Some(id) => forgust_db::users::find(&state.db, id).await.ok().flatten(),
