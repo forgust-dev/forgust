@@ -7176,6 +7176,10 @@
               "format": "int64"
             }
           },
+          "confidential": {
+            "type": "boolean",
+            "description": "Seen only by the project's Reporters and up, its author and its assignees."
+          },
           "description": {
             "type": "string"
           },
@@ -7287,6 +7291,10 @@
         "properties": {
           "body": {
             "type": "string"
+          },
+          "internal": {
+            "type": "boolean",
+            "description": "Seen only by the project's Reporters and up (who alone may write one)."
           },
           "parent_id": {
             "type": [
@@ -9317,7 +9325,8 @@
           "state",
           "created_at",
           "updated_at",
-          "notes_count"
+          "notes_count",
+          "confidential"
         ],
         "properties": {
           "author_id": {
@@ -9352,6 +9361,10 @@
               "null"
             ],
             "format": "int64"
+          },
+          "confidential": {
+            "type": "boolean",
+            "description": "Seen only by the project's Reporters and up, its author and its assignees."
           },
           "created_at": {
             "type": "string",
@@ -9398,7 +9411,7 @@
           "notes_count": {
             "type": "integer",
             "format": "int64",
-            "description": "Comments written by people (not system notes)."
+            "description": "Comments written by people that everyone who sees the issue sees (not\nsystem notes, not internal ones)."
           },
           "project_id": {
             "type": "integer",
@@ -9428,6 +9441,8 @@
               "can_edit",
               "can_label",
               "can_assign",
+              "can_set_confidential",
+              "can_comment_internal",
               "merge_requests"
             ],
             "properties": {
@@ -9435,12 +9450,20 @@
                 "type": "boolean",
                 "description": "Reporter+ or the author: may set assignees."
               },
+              "can_comment_internal": {
+                "type": "boolean",
+                "description": "Reporter+: may write (and reads) internal comments."
+              },
               "can_edit": {
                 "type": "boolean"
               },
               "can_label": {
                 "type": "boolean",
                 "description": "Developer+: may set labels."
+              },
+              "can_set_confidential": {
+                "type": "boolean",
+                "description": "The author, an assignee or a Reporter+: may make it confidential or not."
               },
               "description_html": {
                 "type": "string",
@@ -9517,7 +9540,8 @@
           "body",
           "system",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "internal"
         ],
         "properties": {
           "author_id": {
@@ -9555,6 +9579,10 @@
               "string",
               "null"
             ]
+          },
+          "internal": {
+            "type": "boolean",
+            "description": "Seen only by the project's Reporters and up."
           },
           "issue_id": {
             "type": "integer",
@@ -10930,6 +10958,7 @@
               "approvals",
               "can_edit",
               "can_approve",
+              "can_comment_internal",
               "approved_by_me",
               "description_html",
               "labels",
@@ -10965,6 +10994,10 @@
               },
               "can_approve": {
                 "type": "boolean"
+              },
+              "can_comment_internal": {
+                "type": "boolean",
+                "description": "Reporter+: may write (and reads) internal comments."
               },
               "can_edit": {
                 "type": "boolean"
@@ -11464,7 +11497,8 @@
           "system",
           "created_at",
           "updated_at",
-          "author_bot"
+          "author_bot",
+          "internal"
         ],
         "properties": {
           "author_bot": {
@@ -11525,6 +11559,10 @@
               "string",
               "null"
             ]
+          },
+          "internal": {
+            "type": "boolean",
+            "description": "Seen only by the project's Reporters and up."
           },
           "merge_request_id": {
             "type": "integer",
@@ -11629,6 +11667,10 @@
         "properties": {
           "body": {
             "type": "string"
+          },
+          "internal": {
+            "type": "boolean",
+            "description": "A new comment seen only by the project's Reporters and up (who alone may\nwrite one). Not changed by an edit."
           }
         }
       },
@@ -15742,6 +15784,13 @@
               "format": "int64"
             },
             "description": "Replace the assignees (user ids)."
+          },
+          "confidential": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "The author, an assignee or a Reporter+."
           },
           "description": {
             "type": [

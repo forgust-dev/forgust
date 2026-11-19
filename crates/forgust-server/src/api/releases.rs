@@ -76,7 +76,7 @@ pub async fn views(state: &AppState, principal: &Principal, p: &Project, list: V
         Default::default()
     };
     let items: Vec<(&str, &str)> = list.iter().map(|r| (r.description.as_str(), r.tag_name.as_str())).collect();
-    let mut html = crate::services::refs::render_at(state, p, &items, code).await.into_iter();
+    let mut html = crate::services::refs::render_at(state, p, &items, code, principal.search_viewer()).await.into_iter();
     let mut out = Vec::new();
     for r in list {
         let commit =

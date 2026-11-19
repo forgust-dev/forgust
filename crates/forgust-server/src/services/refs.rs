@@ -8,6 +8,7 @@ use forgust_db::access::{GUEST, REPORTER};
 use forgust_db::issues::{self as idb, NewIssueNote};
 use forgust_db::merge_requests::{self as mrdb, Position};
 use forgust_db::projects::Project;
+use forgust_db::search::Viewer;
 use forgust_db::todos::{self, NewTodo};
 use forgust_db::users::User;
 
@@ -16,8 +17,9 @@ use crate::state::AppState;
 
 /// Look up what the references in `texts` point at (one query per kind).
 /// Merge request titles only for a reader who sees code (`code`): a Guest
-/// reading an issue must not learn them from `!12` links.
-pub async fn targets(state: &AppState, p: &Project, texts: &[&str], code: bool) -> RefTargets {
+/// reading an issue must not learn them from `!12` links; issue titles only of
+/// those `v` may see (a confidential one stays a bare `#12`).
+pub async fn targets(state: &AppState, p: &Project, texts: &[&str], code: bool, v: Viewer) -> RefTargets {
     let mut t = RefTargets { project_url: format!("/{}", p.full_path), ..Default::default() };
     let (mut users, mut issues, mut mrs) = (Vec::new(), Vec::new(), Vec::new());
     for text in texts {
@@ -33,7 +35,7 @@ pub async fn targets(state: &AppState, p: &Project, texts: &[&str], code: bool) 
             list.into_iter().map(|u| (u.username.to_ascii_lowercase(), if u.name.is_empty() { u.username } else { u.name })).collect();
     }
     if !issues.is_empty()
-        && let Ok(list) = idb::titles(&state.db, p.id, &issues).await
+        && let Ok(list) = idb::titles(&state.db, p.id, &issues, v).await
     {
         t.issues = list.into_iter().map(|(iid, title, st)| (iid, (title, st))).collect();
     }
@@ -47,14 +49,14 @@ pub async fn targets(state: &AppState, p: &Project, texts: &[&str], code: bool) 
 }
 
 /// Markdown of an issue or MR (description, comment) → sanitized HTML with links.
-pub async fn render(state: &AppState, p: &Project, text: &str, git_ref: &str, code: bool) -> String {
-    let t = targets(state, p, &[text], code).await;
+pub async fn render(state: &AppState, p: &Project, text: &str, git_ref: &str, code: bool, v: Viewer) -> String {
+    let t = targets(state, p, &[text], code, v).await;
     render::link_refs(&render::markdown_with(text, &t.project_url, git_ref, "", state.images.as_ref()), &t)
 }
 
 /// Several texts of one page with a single lookup.
-pub async fn render_many(state: &AppState, p: &Project, texts: &[&str], git_ref: &str, code: bool) -> Vec<String> {
-    let t = targets(state, p, texts, code).await;
+pub async fn render_many(state: &AppState, p: &Project, texts: &[&str], git_ref: &str, code: bool, v: Viewer) -> Vec<String> {
+    let t = targets(state, p, texts, code, v).await;
     texts
         .iter()
         .map(|text| render::link_refs(&render::markdown_with(text, &t.project_url, git_ref, "", state.images.as_ref()), &t))
@@ -62,9 +64,9 @@ pub async fn render_many(state: &AppState, p: &Project, texts: &[&str], git_ref:
 }
 
 /// Texts each rendered at its own ref (a release's tag), with one lookup.
-pub async fn render_at(state: &AppState, p: &Project, items: &[(&str, &str)], code: bool) -> Vec<String> {
+pub async fn render_at(state: &AppState, p: &Project, items: &[(&str, &str)], code: bool, v: Viewer) -> Vec<String> {
     let texts: Vec<&str> = items.iter().map(|(t, _)| *t).collect();
-    let t = targets(state, p, &texts, code).await;
+    let t = targets(state, p, &texts, code, v).await;
     items
         .iter()
         .map(|(text, git_ref)| render::link_refs(&render::markdown_with(text, &t.project_url, git_ref, "", state.images.as_ref()), &t))
@@ -75,7 +77,7 @@ pub async fn render_at(state: &AppState, p: &Project, items: &[(&str, &str)], co
 #[derive(Debug, Clone, Copy)]
 pub enum Target<'a> {
     MergeRequest { id: i64, iid: i64, title: &'a str },
-    Issue { id: i64, iid: i64, title: &'a str },
+    Issue { id: i64, iid: i64, title: &'a str, confidential: bool },
 }
 
 impl Target<'_> {
@@ -127,7 +129,18 @@ fn snippet(text: &str) -> String {
 /// `previous` before): new mentions get a to-do and an email, newly referenced
 /// issues and MRs get a "mentioned in" note. Returns the ids of the users
 /// mentioned, so the comment email can leave them out. Failures are logged.
-pub async fn on_write(state: &AppState, p: &Project, actor: &User, target: Target<'_>, text: &str, previous: Option<&str>) -> Vec<i64> {
+///
+/// Text only members see (an `internal` comment, a confidential issue) tells
+/// only those who may read it, and its "mentioned in" notes are internal.
+pub async fn on_write(
+    state: &AppState,
+    p: &Project,
+    actor: &User,
+    target: Target<'_>,
+    text: &str,
+    previous: Option<&str>,
+    internal: bool,
+) -> Vec<i64> {
     let now = render::refs_in_prose(text);
     let before = previous.map(render::refs_in_prose).unwrap_or_default();
     let mut mentioned = Vec::new();
@@ -135,12 +148,22 @@ pub async fn on_write(state: &AppState, p: &Project, actor: &User, target: Targe
     // mentions: users who can see the project, not the writer
     let names: Vec<String> = now.users.iter().filter(|u| !before.users.contains(u)).cloned().collect();
     if !names.is_empty() {
-        let users = forgust_db::people::by_usernames(&state.db, &names).await.unwrap_or_default();
-        for u in users.into_iter().filter(|u| u.id != actor.id) {
+        let ids: Vec<i64> = forgust_db::people::by_usernames(&state.db, &names).await.unwrap_or_default().iter().map(|u| u.id).collect();
+        let mut users = forgust_db::users::find_many(&state.db, &ids).await.unwrap_or_default();
+        users.retain(|u| u.id != actor.id);
+        for u in &users {
             // a merge request (code) is not for a Guest: no to-do with its title and text
             let level = forgust_db::authz::project_level(&state.db, u.id, p.id).await.ok().flatten().unwrap_or(0);
-            let need = if matches!(target, Target::MergeRequest { .. }) { REPORTER } else { GUEST };
+            let need = if internal || matches!(target, Target::MergeRequest { .. }) { REPORTER } else { GUEST };
             if level < need {
+                continue;
+            }
+            // a confidential issue, below Reporter: only who may see it (its
+            // author, an assignee, an administrator, as `notify::deliver` checks)
+            if let Target::Issue { id, confidential: true, .. } = target
+                && level < REPORTER
+                && !idb::visible(&state.db, id, Viewer { user_id: Some(u.id), admin: u.is_admin, internal: false }).await.unwrap_or(false)
+            {
                 continue;
             }
             let r = todos::add(
@@ -153,6 +176,7 @@ pub async fn on_write(state: &AppState, p: &Project, actor: &User, target: Targe
                     action: "mentioned",
                     author_id: Some(actor.id),
                     body: &snippet(text),
+                    internal,
                 },
             )
             .await;
@@ -161,12 +185,12 @@ pub async fn on_write(state: &AppState, p: &Project, actor: &User, target: Targe
             }
             mentioned.push(u.id);
         }
-        let to = forgust_db::users::find_many(&state.db, &mentioned).await.unwrap_or_default();
+        users.retain(|u| mentioned.contains(&u.id));
         super::notify::tell(
             state,
             p,
             actor.id,
-            &to,
+            &users,
             super::notify::Reason::Mention,
             target.thread(),
             super::notify::About {
@@ -177,6 +201,11 @@ pub async fn on_write(state: &AppState, p: &Project, actor: &User, target: Targe
                 },
                 title: title_of(&target).to_string(),
                 summary: "mentioned you".into(),
+                internal,
+                secret_issue: match target {
+                    Target::Issue { id, confidential: true, .. } => Some(id),
+                    _ => None,
+                },
             },
             &format!("{} {}: {}", p.full_path, target_ref(&target), title_of(&target)),
             &format!("{} mentioned you in {}:\n\n{}\n\n{}\n", actor.username, target.label(), text.trim(), target.url(state, p)),
@@ -184,7 +213,10 @@ pub async fn on_write(state: &AppState, p: &Project, actor: &User, target: Targe
         .await;
     }
 
-    // cross-references: a note on each newly referenced issue or MR
+    // cross-references: a note on each newly referenced issue or MR (internal
+    // when the text is for members only: it names where it was written). A
+    // public one is added even after an internal one: the others see it too.
+    let members_only = internal || matches!(target, Target::Issue { confidential: true, .. });
     let from = target.short();
     let note = format!("mentioned in {from}");
     let issues: HashSet<i64> = now.issues.iter().filter(|i| !before.issues.contains(i)).copied().collect();
@@ -193,7 +225,7 @@ pub async fn on_write(state: &AppState, p: &Project, actor: &User, target: Targe
             continue;
         }
         if let Ok(Some(issue)) = idb::find(&state.db, p.id, iid).await {
-            let seen = idb::notes(&state.db, issue.id).await.unwrap_or_default().iter().any(|n| n.system && n.body == note);
+            let seen = idb::notes(&state.db, issue.id, members_only).await.unwrap_or_default().iter().any(|n| n.system && n.body == note);
             if !seen {
                 let n = NewIssueNote {
                     issue_id: issue.id,
@@ -202,6 +234,7 @@ pub async fn on_write(state: &AppState, p: &Project, actor: &User, target: Targe
                     body: &note,
                     system: true,
                     created_at: None,
+                    internal: members_only,
                 };
                 if let Err(e) = idb::add_note(&state.db, n).await {
                     tracing::warn!(error = %e, "cross-reference note not added");
@@ -215,9 +248,10 @@ pub async fn on_write(state: &AppState, p: &Project, actor: &User, target: Targe
             continue;
         }
         if let Ok(Some(m)) = mrdb::find(&state.db, p.id, iid).await {
-            let seen = mrdb::notes(&state.db, m.id).await.unwrap_or_default().iter().any(|n| n.system && n.body == note);
+            let seen = mrdb::notes(&state.db, m.id, members_only).await.unwrap_or_default().iter().any(|n| n.system && n.body == note);
             if !seen {
-                if let Err(e) = mrdb::add_note(&state.db, m.id, Some(actor.id), None, &note, true, Position::default()).await {
+                if let Err(e) = mrdb::add_note(&state.db, m.id, Some(actor.id), None, &note, true, members_only, Position::default()).await
+                {
                     tracing::warn!(error = %e, "cross-reference note not added");
                 }
                 state.events.publish(crate::events::Event::MergeRequest { project_id: p.id, iid });
@@ -281,6 +315,7 @@ pub async fn close_issues(state: &AppState, p: &Project, actor: &User, mr_iid: i
                 body: &body,
                 system: true,
                 created_at: None,
+                internal: false,
             };
             idb::add_note(&mut *tx, n).await?;
             tx.commit().await?;
@@ -289,6 +324,10 @@ pub async fn close_issues(state: &AppState, p: &Project, actor: &User, mr_iid: i
         .await;
         if let Err(e) = r {
             tracing::warn!(iid, error = %e, "issue not closed by the merge");
+            continue;
+        }
+        if let Ok(Some(now)) = idb::find(&state.db, p.id, iid).await {
+            super::issues::hook(state, p, &now, actor, "close").await;
         }
     }
 }

@@ -70,8 +70,8 @@ pub struct SourceIssue {
     /// Its milestone (a group one on GitLab becomes the project's).
     pub milestone: Option<SourceMilestone>,
     pub due_date: Option<chrono::NaiveDate>,
-    /// Hidden on the source from all but the project's members (GitLab).
-    /// Forgust has no such issues, so it is left out rather than published.
+    /// Hidden on the source from all but the project's members, the author and
+    /// the assignees (GitLab): imported confidential.
     pub confidential: bool,
 }
 
@@ -81,6 +81,9 @@ pub struct SourceComment {
     pub author: Option<SourceUser>,
     pub body: String,
     pub created_at: DateTime<Utc>,
+    /// Seen on the source by the project's members only (GitLab's internal
+    /// notes): imported internal.
+    pub internal: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -155,6 +158,8 @@ pub struct SourceNote {
     pub body: String,
     pub created_at: DateTime<Utc>,
     pub position: Option<SourcePosition>,
+    /// As [`SourceComment::internal`].
+    pub internal: bool,
 }
 
 /// A comment and its replies.

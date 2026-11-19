@@ -1149,6 +1149,20 @@ form.stack {
 .thread.plain.resolved {
   opacity: 1;
 }
+/* internal comments (Reporters and up only): tinted, so members see they are hidden from others */
+.thread.plain.internal {
+  padding: 8px 12px;
+  border: 1px solid var(--warn-border);
+  border-radius: var(--radius);
+  background: var(--warn-soft);
+}
+.thread.boxed.internal .thread-notes {
+  background: color-mix(in srgb, var(--warn-soft) 50%, var(--bg));
+}
+.confidential-mark,
+.internal-mark {
+  flex: none;
+}
 /* code threads: framed, tinted while open */
 .thread.boxed {
   padding: 0;

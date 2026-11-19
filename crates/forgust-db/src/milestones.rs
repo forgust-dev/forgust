@@ -6,6 +6,7 @@ use serde::Serialize;
 use sqlx::PgExecutor;
 
 use crate::Result;
+use crate::search::Viewer;
 
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct Milestone {
@@ -27,12 +28,13 @@ pub struct Milestone {
 }
 
 /// `state`: active, closed or all. Active first by due date, then the rest.
-pub async fn list(e: impl PgExecutor<'_>, project_id: i64, state: &str, search: &str) -> Result<Vec<Milestone>> {
+/// Issue counts are of those `v` may see.
+pub async fn list(e: impl PgExecutor<'_>, project_id: i64, state: &str, search: &str, v: Viewer) -> Result<Vec<Milestone>> {
     sqlx::query_as!(
         Milestone,
         r#"SELECT m.id, m.project_id, m.iid, m.title, m.description, m.state, m.start_date, m.due_date, m.created_at, m.updated_at,
-                  (SELECT count(*) FROM issues i WHERE i.milestone_id = m.id AND i.state = 'opened') AS "open_issues!",
-                  (SELECT count(*) FROM issues i WHERE i.milestone_id = m.id AND i.state = 'closed') AS "closed_issues!",
+                  (SELECT count(*) FROM issues i WHERE i.milestone_id = m.id AND i.state = 'opened' AND issue_visible(i, $4, $5)) AS "open_issues!",
+                  (SELECT count(*) FROM issues i WHERE i.milestone_id = m.id AND i.state = 'closed' AND issue_visible(i, $4, $5)) AS "closed_issues!",
                   (SELECT count(*) FROM merge_requests r WHERE r.milestone_id = m.id AND r.state = 'opened') AS "open_merge_requests!",
                   (SELECT count(*) FROM merge_requests r WHERE r.milestone_id = m.id AND r.state = 'merged') AS "merged_merge_requests!"
            FROM milestones m
@@ -41,23 +43,28 @@ pub async fn list(e: impl PgExecutor<'_>, project_id: i64, state: &str, search: 
            ORDER BY m.state = 'closed', m.due_date ASC NULLS LAST, m.id DESC"#,
         project_id,
         state,
-        search
+        search,
+        v.user_id,
+        v.admin
     )
     .fetch_all(e)
     .await
 }
 
-pub async fn find(e: impl PgExecutor<'_>, project_id: i64, id: i64) -> Result<Option<Milestone>> {
+/// Issue counts are of those `v` may see.
+pub async fn find(e: impl PgExecutor<'_>, project_id: i64, id: i64, v: Viewer) -> Result<Option<Milestone>> {
     sqlx::query_as!(
         Milestone,
         r#"SELECT m.id, m.project_id, m.iid, m.title, m.description, m.state, m.start_date, m.due_date, m.created_at, m.updated_at,
-                  (SELECT count(*) FROM issues i WHERE i.milestone_id = m.id AND i.state = 'opened') AS "open_issues!",
-                  (SELECT count(*) FROM issues i WHERE i.milestone_id = m.id AND i.state = 'closed') AS "closed_issues!",
+                  (SELECT count(*) FROM issues i WHERE i.milestone_id = m.id AND i.state = 'opened' AND issue_visible(i, $3, $4)) AS "open_issues!",
+                  (SELECT count(*) FROM issues i WHERE i.milestone_id = m.id AND i.state = 'closed' AND issue_visible(i, $3, $4)) AS "closed_issues!",
                   (SELECT count(*) FROM merge_requests r WHERE r.milestone_id = m.id AND r.state = 'opened') AS "open_merge_requests!",
                   (SELECT count(*) FROM merge_requests r WHERE r.milestone_id = m.id AND r.state = 'merged') AS "merged_merge_requests!"
            FROM milestones m WHERE m.project_id = $1 AND m.id = $2"#,
         project_id,
-        id
+        id,
+        v.user_id,
+        v.admin
     )
     .fetch_optional(e)
     .await

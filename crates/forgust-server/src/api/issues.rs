@@ -15,16 +15,20 @@ use crate::error::{ApiError, ApiResult};
 use crate::services::issues::{self, CreateIssue, UpdateIssue};
 use crate::state::AppState;
 
-async fn load(state: &AppState, principal: &crate::auth::Principal, id: &str, iid: i64) -> ApiResult<(Project, Issue)> {
+/// The project and one of its issues the viewer may see (a confidential one
+/// they may not: 404).
+pub(crate) async fn load(state: &AppState, principal: &crate::auth::Principal, id: &str, iid: i64) -> ApiResult<(Project, Issue)> {
     let p = project_for(state, principal, id, ProjectAction::Read).await?;
     let i = idb::find(&state.db, p.id, iid).await?.ok_or(ApiError::NotFound)?;
+    issues::require_see(state, principal, &i).await?;
     Ok((p, i))
 }
 
-/// Markdown of an issue for `viewer` (who may be a Guest: no merge request titles).
+/// Markdown of an issue for `viewer` (who may be a Guest: no merge request
+/// titles, nor those of confidential issues they may not see).
 async fn render_for(state: &AppState, viewer: &crate::auth::Principal, p: &Project, texts: &[&str]) -> Vec<String> {
     let code = crate::services::releases::sees_code(state, viewer, p).await;
-    crate::services::refs::render_many(state, p, texts, p.default_branch.as_deref().unwrap_or("HEAD"), code).await
+    crate::services::refs::render_many(state, p, texts, p.default_branch.as_deref().unwrap_or("HEAD"), code, viewer.search_viewer()).await
 }
 
 #[derive(Serialize, ToSchema)]
@@ -65,6 +69,8 @@ pub struct ListQuery {
     author_id: Option<i64>,
     /// A milestone title, `None` (none set) or `Any`.
     milestone: Option<String>,
+    /// Only confidential issues (`true`) or only the others.
+    confidential: Option<bool>,
 }
 
 fn opened() -> String {
@@ -103,11 +109,13 @@ pub async fn list(
         assignee_id: q.assignee_id,
         author_id: q.author_id,
         milestone_id: crate::services::milestones::filter(&state, p.id, q.milestone.as_deref()).await?,
+        confidential: q.confidential,
+        viewer: v.search_viewer(),
         limit: per,
         offset,
     };
     let issues = with_labels(&state, idb::list(&state.db, p.id, filter).await?).await?;
-    let (opened, closed) = idb::counts(&state.db, p.id).await?;
+    let (opened, closed) = idb::counts(&state.db, p.id, v.search_viewer()).await?;
     Ok(Json(IssueList { issues, opened, closed }))
 }
 
@@ -125,6 +133,9 @@ pub struct CreateIssueBody {
     pub milestone_id: Option<i64>,
     /// `YYYY-MM-DD`.
     pub due_date: Option<String>,
+    /// Seen only by the project's Reporters and up, its author and its assignees.
+    #[serde(default)]
+    pub confidential: bool,
 }
 
 /// Milestone (`0` removes it) and due date (`""` clears it), when given; the
@@ -174,7 +185,13 @@ pub async fn create(
 ) -> ApiResult<Json<IssueDto>> {
     let p = project_for(&state, &p0, &id, ProjectAction::Read).await?;
     check_plan(&state, &p0, &p, req.milestone_id, req.due_date.as_deref()).await?;
-    let i = issues::create(&state, &p0, &p, CreateIssue { title: &req.title, description: &req.description, labels: &req.labels }).await?;
+    let i = issues::create(
+        &state,
+        &p0,
+        &p,
+        CreateIssue { title: &req.title, description: &req.description, labels: &req.labels, confidential: req.confidential },
+    )
+    .await?;
     if !req.assignee_ids.is_empty() {
         crate::services::people::set_issue(&state, &p0, &p, &i, &req.assignee_ids).await?;
     }
@@ -193,6 +210,10 @@ pub struct IssueDetail {
     pub can_label: bool,
     /// Reporter+ or the author: may set assignees.
     pub can_assign: bool,
+    /// The author, an assignee or a Reporter+: may make it confidential or not.
+    pub can_set_confidential: bool,
+    /// Reporter+: may write (and reads) internal comments.
+    pub can_comment_internal: bool,
     /// Merge requests that reference this issue (for readers of the code).
     pub merge_requests: Vec<RelatedMr>,
 }
@@ -209,8 +230,8 @@ pub struct RelatedMr {
 
 /// Merge requests whose title or description references the issue, or that
 /// mentioned it in a comment ("mentioned in merge request !4" notes).
-async fn related_mrs(state: &AppState, p: &Project, i: &Issue) -> ApiResult<Vec<RelatedMr>> {
-    let mentioned: Vec<i64> = idb::notes(&state.db, i.id)
+async fn related_mrs(state: &AppState, p: &Project, i: &Issue, members: bool) -> ApiResult<Vec<RelatedMr>> {
+    let mentioned: Vec<i64> = idb::notes(&state.db, i.id, members)
         .await?
         .iter()
         .filter(|n| n.system)
@@ -232,14 +253,27 @@ pub async fn show(State(state): State<AppState>, Viewer(v): Viewer, Path((id, ii
     let (p, i) = load(&state, &v, &id, iid).await?;
     let can_edit = v.direct_user().is_some() && issues::may_edit(&state, &v, &p, &i).await.is_ok();
     let can_label = v.direct_user().is_some() && can_project(&state, &v, ProjectAction::Push, &p).await?;
-    let can_assign = v.direct_user().is_some_and(|u| i.author_id == Some(u.id))
-        || (v.direct_user().is_some() && crate::auth::authz::project_role(&state, &v, &p).await?.level >= forgust_db::access::REPORTER);
+    let can_comment_internal = can_project(&state, &v, ProjectAction::ReadInternal, &p).await?;
+    let can_assign = can_comment_internal || v.direct_user().is_some_and(|u| i.author_id == Some(u.id));
+    let can_set_confidential = !p.archived() && issues::may_set_confidential(&state, &v, &i, can_comment_internal).await?;
     let description_html = render_for(&state, &v, &p, &[&i.description]).await.pop().unwrap_or_default();
     // MR titles are for readers of the code (a Guest sees none)
-    let merge_requests =
-        if can_project(&state, &v, ProjectAction::ReadCode, &p).await? { related_mrs(&state, &p, &i).await? } else { Vec::new() };
+    let merge_requests = if can_project(&state, &v, ProjectAction::ReadCode, &p).await? {
+        related_mrs(&state, &p, &i, can_comment_internal).await?
+    } else {
+        Vec::new()
+    };
     let issue = with_labels(&state, vec![i]).await?.remove(0);
-    Ok(Json(IssueDetail { issue, description_html, can_edit, can_label, can_assign, merge_requests }))
+    Ok(Json(IssueDetail {
+        issue,
+        description_html,
+        can_edit,
+        can_label,
+        can_assign,
+        can_set_confidential,
+        can_comment_internal,
+        merge_requests,
+    }))
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -256,6 +290,8 @@ pub struct UpdateIssueBody {
     pub milestone_id: Option<i64>,
     /// `YYYY-MM-DD`; empty clears it.
     pub due_date: Option<String>,
+    /// The author, an assignee or a Reporter+.
+    pub confidential: Option<bool>,
 }
 
 #[utoipa::path(put, path = "/api/v1/projects/{id}/issues/{iid}", request_body = UpdateIssueBody, responses((status = 200, body = IssueDto)), tag = "issues")]
@@ -277,7 +313,13 @@ pub async fn update(
         &p0,
         &p,
         &i,
-        UpdateIssue { title: req.title.as_deref(), description: req.description.as_deref(), open, labels: req.labels.as_deref() },
+        UpdateIssue {
+            title: req.title.as_deref(),
+            description: req.description.as_deref(),
+            open,
+            labels: req.labels.as_deref(),
+            confidential: req.confidential,
+        },
     )
     .await?;
     if let Some(ids) = &req.assignee_ids {
@@ -302,7 +344,7 @@ pub async fn notes(
     Path((id, iid)): Path<(String, i64)>,
 ) -> ApiResult<Json<Vec<IssueNoteDto>>> {
     let (p, i) = load(&state, &v, &id, iid).await?;
-    let notes = idb::notes(&state.db, i.id).await?;
+    let notes = idb::notes(&state.db, i.id, can_project(&state, &v, ProjectAction::ReadInternal, &p).await?).await?;
     let bodies: Vec<&str> = notes.iter().map(|n| n.body.as_str()).collect();
     let html = render_for(&state, &v, &p, &bodies).await;
     let out = notes.into_iter().zip(html).map(|(n, body_html)| IssueNoteDto { body_html, note: n }).collect();
@@ -312,6 +354,10 @@ pub async fn notes(
 #[derive(Deserialize, ToSchema)]
 pub struct NoteBody {
     pub body: String,
+    /// A new comment seen only by the project's Reporters and up (who alone may
+    /// write one). Not changed by an edit.
+    #[serde(default)]
+    pub internal: bool,
 }
 
 #[utoipa::path(post, path = "/api/v1/projects/{id}/issues/{iid}/notes", request_body = NoteBody, responses((status = 200)), tag = "issues")]
@@ -322,7 +368,7 @@ pub async fn create_note(
     Json(req): Json<NoteBody>,
 ) -> ApiResult<Json<Value>> {
     let (p, i) = load(&state, &p0, &id, iid).await?;
-    let note_id = issues::add_note(&state, &p0, &p, &i, &req.body).await?;
+    let note_id = issues::add_note(&state, &p0, &p, &i, &req.body, req.internal).await?;
     Ok(Json(json!({ "id": note_id })))
 }
 
@@ -354,7 +400,7 @@ pub async fn delete_note(
 #[utoipa::path(get, path = "/api/v1/projects/{id}/labels", responses((status = 200, body = [LabelWithCounts])), tag = "issues")]
 pub async fn labels(State(state): State<AppState>, Viewer(v): Viewer, Path(id): Path<String>) -> ApiResult<Json<Vec<LabelWithCounts>>> {
     let p = project_for(&state, &v, &id, ProjectAction::Read).await?;
-    Ok(Json(idb::labels(&state.db, p.id).await?))
+    Ok(Json(idb::labels(&state.db, p.id, v.search_viewer()).await?))
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -391,9 +437,9 @@ pub async fn create_label(
 ) -> ApiResult<Json<Label>> {
     let p = project_for(&state, &p0, &id, ProjectAction::Read).await?;
     require_project(&state, &p0, ProjectAction::Push, &p).await?;
-    let existing = idb::labels(&state.db, p.id).await?;
+    let existing = idb::label_names(&state.db, p.id).await?;
     let (name, color) = check_label(&req, existing.len())?;
-    if existing.iter().any(|l| l.name == name) {
+    if existing.contains(&name) {
         return Err(ApiError::conflict(format!("label `{name}` already exists")));
     }
     Ok(Json(idb::upsert_label(&state.db, p.id, &name, &color, req.description.trim()).await?))

@@ -117,7 +117,7 @@ pub async fn disable(state: &AppState, principal: &Principal, p: &Project, m: &M
 
 async fn note(state: &AppState, m: &MergeRequest, author: Option<i64>, text: &str) {
     let r: anyhow::Result<()> = async {
-        mrdb::add_note(&state.db, m.id, author, None, text, true, Position::default()).await?;
+        mrdb::add_note(&state.db, m.id, author, None, text, true, false, Position::default()).await?;
         mrdb::touch(&state.db, m.id).await?;
         Ok(())
     }

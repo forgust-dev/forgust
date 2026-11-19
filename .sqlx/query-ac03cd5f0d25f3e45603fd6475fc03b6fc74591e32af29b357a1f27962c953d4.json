@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO notifications (user_id, project_id, kind, target_type, target_iid, actor_id, title, summary)\n         SELECT u, $2, $3, $4, $5, $6, $7, $8 FROM unnest($1::bigint[]) u\n         RETURNING user_id, id, created_at",
+  "query": "INSERT INTO notifications (user_id, project_id, kind, target_type, target_iid, actor_id, title, summary, internal)\n         SELECT u, $2, $3, $4, $5, $6, $7, $8, $9 FROM unnest($1::bigint[]) u\n         RETURNING user_id, id, created_at",
   "describe": {
     "columns": [
       {
@@ -53,7 +53,8 @@
         "Int8",
         "Int8",
         "Text",
-        "Text"
+        "Text",
+        "Bool"
       ]
     },
     "nullable": [
@@ -62,5 +63,5 @@
       false
     ]
   },
-  "hash": "9a9498510076557458de141d928b05ce1bcdae79f9fe98cf97a46a8efd91a5ea"
+  "hash": "ac03cd5f0d25f3e45603fd6475fc03b6fc74591e32af29b357a1f27962c953d4"
 }

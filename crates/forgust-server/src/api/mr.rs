@@ -246,6 +246,8 @@ pub struct MrDetail {
     pub approvals: Vec<mrdb::Approval>,
     pub can_edit: bool,
     pub can_approve: bool,
+    /// Reporter+: may write (and reads) internal comments.
+    pub can_comment_internal: bool,
     pub approved_by_me: bool,
     /// Sanitized HTML of the description (Markdown).
     pub description_html: String,
@@ -265,7 +267,8 @@ pub async fn show(State(state): State<AppState>, Viewer(v): Viewer, Path((id, ii
     let approvals = mrdb::approvals(&state.db, m.id, p.id).await?;
     let me = v.direct_user().map(|u| u.id);
     let can_edit = mr::may_edit(&state, &v, &p, &m).await.is_ok();
-    let level = crate::auth::authz::project_role(&state, &v, &p).await?.level;
+    let role = crate::auth::authz::project_role(&state, &v, &p).await?;
+    let level = role.level;
     let labels = labels_by_mr(&state, &[m.id]).await?.remove(&m.id).unwrap_or_default();
     let (mut assignees, mut reviewers) = people_by_mr(&state, &[m.id]).await?;
     let stack = crate::services::stack::view(&state, &p, &m).await?;
@@ -282,7 +285,8 @@ pub async fn show(State(state): State<AppState>, Viewer(v): Viewer, Path((id, ii
         approved_by_me: me.is_some_and(|me| approvals.iter().any(|a| a.user_id == me)),
         can_approve: me.is_some() && level >= forgust_db::access::REPORTER && m.author_id != me && m.state == "opened",
         can_edit,
-        description_html: crate::services::refs::render(&state, &p, &m.description, &m.target_branch, true).await,
+        can_comment_internal: crate::auth::authz::allows(&v, &role, ProjectAction::ReadInternal, &p),
+        description_html: crate::services::refs::render(&state, &p, &m.description, &m.target_branch, true, v.search_viewer()).await,
         versions,
         approvals,
         merge_request: m,
@@ -547,9 +551,10 @@ pub async fn notes(
     let versions = mrdb::diffs(&state.db, m.id).await?;
     let target = pick(&versions, q.version).ok();
     let mut out = Vec::new();
-    let notes = mrdb::notes(&state.db, m.id).await?;
+    let members = can_project(&state, &v, ProjectAction::ReadInternal, &p).await?;
+    let notes = mrdb::notes(&state.db, m.id, members).await?;
     let bodies: Vec<&str> = notes.iter().map(|n| n.body.as_str()).collect();
-    let mut html = crate::services::refs::render_many(&state, &p, &bodies, &m.target_branch, true).await.into_iter();
+    let mut html = crate::services::refs::render_many(&state, &p, &bodies, &m.target_branch, true, v.search_viewer()).await.into_iter();
     for n in notes {
         let version = n.diff_id.and_then(|d| versions.iter().find(|v| v.id == d)).map(|v| v.version);
         let (position, outdated) = match (n.head_sha.is_some() && n.parent_id.is_none(), target) {
@@ -571,6 +576,9 @@ pub struct CreateNote {
     pub body: String,
     pub parent_id: Option<i64>,
     pub position: Option<NewPosition>,
+    /// Seen only by the project's Reporters and up (who alone may write one).
+    #[serde(default)]
+    pub internal: bool,
 }
 
 pub async fn create_note(
@@ -580,7 +588,7 @@ pub async fn create_note(
     Json(req): Json<CreateNote>,
 ) -> ApiResult<Json<Note>> {
     let (p, m) = load(&state, &p0, &id, iid, ProjectAction::ReadCode).await?;
-    Ok(Json(mr::add_note(&state, &p0, &p, &m, &req.body, req.parent_id, req.position).await?))
+    Ok(Json(mr::add_note(&state, &p0, &p, &m, &req.body, req.parent_id, req.position, req.internal).await?))
 }
 
 #[derive(Deserialize, ToSchema)]

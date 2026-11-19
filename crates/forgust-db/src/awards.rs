@@ -43,33 +43,37 @@ pub struct Award {
     pub created_at: DateTime<Utc>,
 }
 
-/// Reactions on a merge request and on all its comments, oldest first.
-pub async fn of_merge_request(e: impl PgExecutor<'_>, mr_id: i64) -> Result<Vec<Award>> {
+/// Reactions on a merge request and on all its comments (internal ones only
+/// `with_internal`), oldest first.
+pub async fn of_merge_request(e: impl PgExecutor<'_>, mr_id: i64, with_internal: bool) -> Result<Vec<Award>> {
     sqlx::query_as!(
         Award,
         "SELECT a.id, a.user_id, u.username, u.name AS user_name, a.name, a.merge_request_id, a.issue_id, a.note_id, a.issue_note_id, a.created_at
            FROM award_emoji a JOIN users u ON u.id = a.user_id
           WHERE a.id IN (SELECT id FROM award_emoji WHERE merge_request_id = $1
                          UNION ALL
-                         SELECT x.id FROM award_emoji x JOIN notes n ON n.id = x.note_id WHERE n.merge_request_id = $1)
+                         SELECT x.id FROM award_emoji x JOIN notes n ON n.id = x.note_id WHERE n.merge_request_id = $1 AND ($2 OR NOT n.internal))
           ORDER BY a.id",
-        mr_id
+        mr_id,
+        with_internal
     )
     .fetch_all(e)
     .await
 }
 
-/// Reactions on an issue and on all its comments, oldest first.
-pub async fn of_issue(e: impl PgExecutor<'_>, issue_id: i64) -> Result<Vec<Award>> {
+/// Reactions on an issue and on all its comments (internal ones only
+/// `with_internal`), oldest first.
+pub async fn of_issue(e: impl PgExecutor<'_>, issue_id: i64, with_internal: bool) -> Result<Vec<Award>> {
     sqlx::query_as!(
         Award,
         "SELECT a.id, a.user_id, u.username, u.name AS user_name, a.name, a.merge_request_id, a.issue_id, a.note_id, a.issue_note_id, a.created_at
            FROM award_emoji a JOIN users u ON u.id = a.user_id
           WHERE a.id IN (SELECT id FROM award_emoji WHERE issue_id = $1
                          UNION ALL
-                         SELECT x.id FROM award_emoji x JOIN issue_notes n ON n.id = x.issue_note_id WHERE n.issue_id = $1)
+                         SELECT x.id FROM award_emoji x JOIN issue_notes n ON n.id = x.issue_note_id WHERE n.issue_id = $1 AND ($2 OR NOT n.internal))
           ORDER BY a.id",
-        issue_id
+        issue_id,
+        with_internal
     )
     .fetch_all(e)
     .await

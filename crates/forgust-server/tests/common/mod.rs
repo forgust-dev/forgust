@@ -344,3 +344,53 @@ pub async fn challenge(srv: &TestServer, username: &str) -> String {
     assert_eq!(v["two_factor_required"], true, "{v}");
     v["challenge"].as_str().unwrap().to_string()
 }
+
+/// An MCP client: JSON-RPC over `POST /api/v4/mcp`, with an optional bearer token.
+pub struct Mcp {
+    pub base: String,
+    pub token: Option<String>,
+    pub http: reqwest::Client,
+}
+
+impl Mcp {
+    pub fn new(srv: &TestServer, token: Option<&str>) -> Mcp {
+        Mcp { base: srv.base.clone(), token: token.map(str::to_string), http: reqwest::Client::new() }
+    }
+
+    pub async fn raw(&self, body: Value) -> reqwest::Response {
+        let mut r = self.http.post(format!("{}/api/v4/mcp", self.base)).header("accept", "application/json, text/event-stream").json(&body);
+        if let Some(t) = &self.token {
+            r = r.bearer_auth(t);
+        }
+        r.send().await.unwrap()
+    }
+
+    pub async fn rpc(&self, method: &str, params: Value) -> Value {
+        let r = self.raw(json!({ "jsonrpc": "2.0", "id": 1, "method": method, "params": params })).await;
+        assert_eq!(r.status(), 200);
+        let v: Value = r.json().await.unwrap();
+        assert!(v.get("error").is_none(), "{method}: {v}");
+        v["result"].clone()
+    }
+
+    /// (is_error, text)
+    pub async fn call(&self, tool: &str, args: Value) -> (bool, String) {
+        let r = self.rpc("tools/call", json!({ "name": tool, "arguments": args })).await;
+        (r["isError"] == true, r["content"][0]["text"].as_str().unwrap().to_string())
+    }
+
+    pub async fn ok(&self, tool: &str, args: Value) -> String {
+        let (err, text) = self.call(tool, args.clone()).await;
+        assert!(!err, "{tool} {args}: {text}");
+        text
+    }
+
+    pub async fn tools(&self) -> Vec<String> {
+        self.rpc("tools/list", json!({})).await["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t["name"].as_str().unwrap().to_string())
+            .collect()
+    }
+}

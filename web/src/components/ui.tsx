@@ -1,5 +1,5 @@
 import { Component, useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { Check, Copy, Search } from "lucide-react";
+import { Check, Copy, EyeOff, Lock, Search } from "lucide-react";
 import { Link, NavLink } from "react-router-dom";
 import { ApiError, LEVELS, bytes } from "../api/client";
 import { Select } from "./controls";
@@ -411,6 +411,34 @@ export function ImportedMark({ x }: { x: Authored }) {
       imported
     </span>
   ) : null;
+}
+
+/** A confidential issue: seen only by Reporters and up, its author and its assignees. */
+export function ConfidentialMark() {
+  return (
+    <span className="pill warn confidential-mark" title="Confidential: only Reporters and up, the author and assignees can see it">
+      <Lock size={11} aria-hidden /> Confidential
+    </span>
+  );
+}
+
+/** An internal comment: seen only by the project's Reporters and up. */
+export function InternalMark() {
+  return (
+    <span className="pill warn internal-mark" title="Internal: only Reporters and up can see this comment">
+      <EyeOff size={11} aria-hidden /> Internal
+    </span>
+  );
+}
+
+/** The "Internal comment" checkbox of a comment form; render it only when the viewer may comment internally. */
+export function InternalToggle({ checked, onChange, grow }: { checked: boolean; onChange: (checked: boolean) => void; grow?: boolean }) {
+  return (
+    <label className={grow ? "check grow small" : "check small"} title="Only Reporters and up see it">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      Internal comment
+    </label>
+  );
 }
 
 /**

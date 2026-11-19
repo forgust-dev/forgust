@@ -1,4 +1,5 @@
-//! Issues (Renovate's dependency dashboard, `glab issue`).
+//! Issues (Renovate's dependency dashboard, `glab issue`), confidential ones
+//! and internal notes included.
 
 use std::collections::HashMap;
 
@@ -13,8 +14,9 @@ use serde_json::{Value, json};
 
 use super::json as j;
 use super::{Ids, Labels, PageQuery, paged, relabel};
+use crate::api::issues::load;
 use crate::api::project_for;
-use crate::auth::authz::ProjectAction;
+use crate::auth::authz::{ProjectAction, can_project};
 use crate::auth::{SignedIn, Viewer};
 use crate::error::{ApiError, ApiResult};
 use crate::services::issues::{self as svc, CreateIssue, UpdateIssue};
@@ -41,6 +43,7 @@ pub struct ListQuery {
     assignee_id: Option<i64>,
     assignee_username: Option<String>,
     milestone: Option<String>,
+    confidential: Option<bool>,
 }
 
 pub async fn list(
@@ -81,6 +84,8 @@ pub async fn list(
             assignee_id: assignee,
             author_id: author,
             milestone_id: crate::services::milestones::filter(&state, p.id, q.milestone.as_deref()).await?,
+            confidential: q.confidential,
+            viewer: v.search_viewer(),
             limit,
             offset,
         },
@@ -107,18 +112,8 @@ pub async fn list(
 }
 
 pub async fn show(State(state): State<AppState>, Viewer(v): Viewer, Path((id, iid)): Path<(String, i64)>) -> ApiResult<Json<Value>> {
-    let p = project_for(&state, &v, &id, ProjectAction::Read).await?;
-    let i = idb::find(&state.db, p.id, iid).await?.ok_or(ApiError::NotFound)?;
+    let (p, i) = load(&state, &v, &id, iid).await?;
     Ok(Json(render(&state, &p, &i).await?))
-}
-
-/// Forgust has no confidential issues: asking for one is refused, not quietly
-/// published (a security report filed as confidential must not go public).
-fn no_confidential(asked: Option<bool>) -> ApiResult<()> {
-    if asked == Some(true) {
-        return Err(ApiError::bad("confidential issues are not supported on Forgust: everyone who can see the project sees its issues"));
-    }
-    Ok(())
 }
 
 #[derive(Deserialize)]
@@ -140,7 +135,6 @@ pub async fn create(
     Path(id): Path<String>,
     Json(req): Json<CreateBody>,
 ) -> ApiResult<Response> {
-    no_confidential(req.confidential)?;
     let p = project_for(&state, &v, &id, ProjectAction::Read).await?;
     let names = req.labels.as_ref().map(Labels::names).unwrap_or_default();
     svc::ensure_labels(&state, &v, &p, &names).await?;
@@ -149,7 +143,12 @@ pub async fn create(
         &state,
         &v,
         &p,
-        CreateIssue { title: &req.title, description: req.description.as_deref().unwrap_or(""), labels: &names },
+        CreateIssue {
+            title: &req.title,
+            description: req.description.as_deref().unwrap_or(""),
+            labels: &names,
+            confidential: req.confidential.unwrap_or(false),
+        },
     )
     .await?;
     if let Some(ids) = req.assignee_ids.as_ref().or(req.assignee_id.as_ref()).map(Ids::ids) {
@@ -182,9 +181,7 @@ pub async fn update(
     Path((id, iid)): Path<(String, i64)>,
     Json(req): Json<UpdateBody>,
 ) -> ApiResult<Json<Value>> {
-    no_confidential(req.confidential)?;
-    let p = project_for(&state, &v, &id, ProjectAction::Read).await?;
-    let i = idb::find(&state.db, p.id, iid).await?.ok_or(ApiError::NotFound)?;
+    let (p, i) = load(&state, &v, &id, iid).await?;
     let open = match req.state_event.as_deref() {
         None => None,
         Some("close") => Some(false),
@@ -201,7 +198,13 @@ pub async fn update(
         &v,
         &p,
         &i,
-        UpdateIssue { title: req.title.as_deref(), description: req.description.as_deref(), open, labels: names.as_deref() },
+        UpdateIssue {
+            title: req.title.as_deref(),
+            description: req.description.as_deref(),
+            open,
+            labels: names.as_deref(),
+            confidential: req.confidential,
+        },
     )
     .await?;
     if let Some(ids) = req.assignee_ids.as_ref().or(req.assignee_id.as_ref()).map(Ids::ids) {
@@ -221,29 +224,22 @@ pub async fn notes(
     Path((id, iid)): Path<(String, i64)>,
     Query(pg): Query<PageQuery>,
 ) -> ApiResult<Response> {
-    let p = project_for(&state, &v, &id, ProjectAction::Read).await?;
-    let i = idb::find(&state.db, p.id, iid).await?.ok_or(ApiError::NotFound)?;
-    let all = idb::notes(&state.db, i.id).await?;
+    let (p, i) = load(&state, &v, &id, iid).await?;
+    let all = idb::notes(&state.db, i.id, can_project(&state, &v, ProjectAction::ReadInternal, &p).await?).await?;
     let total = all.len() as i64;
     let items: Vec<Value> =
         all.iter().skip(pg.offset() as usize).take(pg.per_page() as usize).map(|n| j::issue_note(&state.cfg, n, i.iid)).collect();
     Ok(paged(&state, &uri, &pg, items, Some(total)))
 }
 
-#[derive(Deserialize)]
-pub struct NoteBody {
-    body: String,
-}
-
 pub async fn create_note(
     State(state): State<AppState>,
     SignedIn(_, v): SignedIn,
     Path((id, iid)): Path<(String, i64)>,
-    Json(req): Json<NoteBody>,
+    Json(req): Json<super::mrs::NoteBody>,
 ) -> ApiResult<Response> {
-    let p = project_for(&state, &v, &id, ProjectAction::Read).await?;
-    let i = idb::find(&state.db, p.id, iid).await?.ok_or(ApiError::NotFound)?;
-    let note_id = svc::add_note(&state, &v, &p, &i, &req.body).await?;
+    let (p, i) = load(&state, &v, &id, iid).await?;
+    let note_id = svc::add_note(&state, &v, &p, &i, &req.body, req.internal()).await?;
     let n = idb::note(&state.db, i.id, note_id).await?.ok_or(ApiError::NotFound)?;
     Ok((StatusCode::CREATED, Json(j::issue_note(&state.cfg, &n, i.iid))).into_response())
 }
@@ -257,7 +253,7 @@ pub async fn labels(
     Query(pg): Query<PageQuery>,
 ) -> ApiResult<Response> {
     let p = project_for(&state, &v, &id, ProjectAction::Read).await?;
-    let all = forgust_db::issues::labels(&state.db, p.id).await?;
+    let all = forgust_db::issues::labels(&state.db, p.id, v.search_viewer()).await?;
     let total = all.len() as i64;
     let items: Vec<Value> = all
         .iter()

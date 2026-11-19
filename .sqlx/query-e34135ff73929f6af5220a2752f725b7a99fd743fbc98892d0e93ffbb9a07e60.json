@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT l.id, l.name, l.color, l.description,\n                  (SELECT count(*) FROM issue_labels il JOIN issues i ON i.id = il.issue_id\n                    WHERE il.label_id = l.id AND i.state = 'opened') AS \"open_issues!\",\n                  (SELECT count(*) FROM merge_request_labels ml JOIN merge_requests m ON m.id = ml.merge_request_id\n                    WHERE ml.label_id = l.id AND m.state = 'opened') AS \"open_merge_requests!\"\n           FROM labels l WHERE l.project_id = $1 ORDER BY lower(l.name)",
+  "query": "SELECT l.id, l.name, l.color, l.description,\n                  (SELECT count(*) FROM issue_labels il JOIN issues i ON i.id = il.issue_id\n                    WHERE il.label_id = l.id AND i.state = 'opened' AND issue_visible(i, $2, $3)) AS \"open_issues!\",\n                  (SELECT count(*) FROM merge_request_labels ml JOIN merge_requests m ON m.id = ml.merge_request_id\n                    WHERE ml.label_id = l.id AND m.state = 'opened') AS \"open_merge_requests!\"\n           FROM labels l WHERE l.project_id = $1 ORDER BY lower(l.name)",
   "describe": {
     "columns": [
       {
@@ -62,7 +62,9 @@
     ],
     "parameters": {
       "Left": [
-        "Int8"
+        "Int8",
+        "Int8",
+        "Bool"
       ]
     },
     "nullable": [
@@ -74,5 +76,5 @@
       null
     ]
   },
-  "hash": "1b2fe161ce9ad657512e64bcd35065678ea77be19a03d495695771bfb9f8ee5a"
+  "hash": "e34135ff73929f6af5220a2752f725b7a99fd743fbc98892d0e93ffbb9a07e60"
 }

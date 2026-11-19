@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT i.id, i.project_id, i.iid, i.title, i.description, i.author_id, u.username AS \"author_username?\",\n                  u.name AS \"author_name?\", i.imported_author, i.state, i.closed_by, i.closed_at, i.created_at, i.updated_at,\n                  (SELECT count(*) FROM issue_notes n WHERE n.issue_id = i.id AND NOT n.system) AS \"notes_count!\",\n                  i.milestone_id, ms.title AS \"milestone_title?\", i.due_date\n           FROM issues i LEFT JOIN users u ON u.id = i.author_id LEFT JOIN milestones ms ON ms.id = i.milestone_id\n           WHERE i.project_id = $1 AND ($2 = 'all' OR i.state = $2)\n             AND ($3 = '' OR i.title ILIKE '%' || $3 || '%' OR ('#' || i.iid::text) = $3 OR i.iid::text = $3)\n             AND ($4 = '' OR EXISTS (SELECT 1 FROM issue_labels il JOIN labels l ON l.id = il.label_id\n                                     WHERE il.issue_id = i.id AND l.name = $4))\n             AND ($7::bigint IS NULL OR EXISTS (SELECT 1 FROM issue_assignees a WHERE a.issue_id = i.id AND a.user_id = $7))\n             AND ($8::bigint IS NULL OR i.author_id = $8)\n             AND ($9::bigint IS NULL OR ($9 = 0 AND i.milestone_id IS NULL) OR i.milestone_id = $9)\n           ORDER BY i.updated_at DESC LIMIT $5 OFFSET $6",
+  "query": "SELECT i.id, i.project_id, i.iid, i.title, i.description, i.author_id, u.username AS \"author_username?\",\n                  u.name AS \"author_name?\", i.imported_author, i.state, i.closed_by, i.closed_at, i.created_at, i.updated_at,\n                  (SELECT count(*) FROM issue_notes n WHERE n.issue_id = i.id AND NOT n.system AND NOT n.internal) AS \"notes_count!\",\n                  i.milestone_id, ms.title AS \"milestone_title?\", i.due_date, i.confidential\n           FROM issues i LEFT JOIN users u ON u.id = i.author_id LEFT JOIN milestones ms ON ms.id = i.milestone_id\n           WHERE i.project_id = $1 AND ($2 = 'all' OR i.state = $2)\n             AND ($3 = '' OR i.title ILIKE '%' || $3 || '%' OR ('#' || i.iid::text) = $3 OR i.iid::text = $3)\n             AND ($4 = '' OR EXISTS (SELECT 1 FROM issue_labels il JOIN labels l ON l.id = il.label_id\n                                     WHERE il.issue_id = i.id AND l.name = $4))\n             AND ($7::bigint IS NULL OR EXISTS (SELECT 1 FROM issue_assignees a WHERE a.issue_id = i.id AND a.user_id = $7))\n             AND ($8::bigint IS NULL OR i.author_id = $8)\n             AND ($9::bigint IS NULL OR ($9 = 0 AND i.milestone_id IS NULL) OR i.milestone_id = $9)\n             AND ($10::boolean IS NULL OR i.confidential = $10)\n             AND issue_visible(i, $11, $12)\n           ORDER BY i.updated_at DESC LIMIT $5 OFFSET $6",
   "describe": {
     "columns": [
       {
@@ -195,6 +195,17 @@
             "name": "due_date"
           }
         }
+      },
+      {
+        "ordinal": 18,
+        "name": "confidential",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "issues",
+            "name": "confidential"
+          }
+        }
       }
     ],
     "parameters": {
@@ -207,7 +218,10 @@
         "Int8",
         "Int8",
         "Int8",
-        "Int8"
+        "Int8",
+        "Bool",
+        "Int8",
+        "Bool"
       ]
     },
     "nullable": [
@@ -228,8 +242,9 @@
       null,
       true,
       false,
-      true
+      true,
+      false
     ]
   },
-  "hash": "de04ba29935387f8e187cb60589215621391b67e2b08aee5ef5ab59b2af7e056"
+  "hash": "bc06afae5c3040f6a64d1961b6bdfd6ee50c43b3d553d9899b7bb2586632c219"
 }

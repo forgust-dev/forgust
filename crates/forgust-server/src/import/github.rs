@@ -427,6 +427,7 @@ impl Source for GitHub {
                 author: user(c.user.clone()),
                 body: c.body.clone().unwrap_or_default(),
                 created_at: c.created_at,
+                internal: false,
             })
             .collect())
     }
@@ -496,6 +497,7 @@ impl Source for GitHub {
                     body: c.body.clone().unwrap_or_default(),
                     created_at: c.created_at,
                     position: None,
+                    internal: false,
                 }],
                 resolved: false,
             });
@@ -518,7 +520,14 @@ impl Source for GitHub {
                 _ => body,
             };
             threads.push(SourceThread {
-                notes: vec![SourceNote { id: format!("r{}", r.id), author: user(r.user), body: text, created_at: at, position: None }],
+                notes: vec![SourceNote {
+                    id: format!("r{}", r.id),
+                    author: user(r.user),
+                    body: text,
+                    created_at: at,
+                    position: None,
+                    internal: false,
+                }],
                 resolved: false,
             });
         }
@@ -532,6 +541,7 @@ impl Source for GitHub {
                 body: c.body.clone(),
                 created_at: c.created_at,
                 position,
+                internal: false,
             };
             match c.in_reply_to_id.and_then(|r| index.get(&r).copied()) {
                 Some(i) => {

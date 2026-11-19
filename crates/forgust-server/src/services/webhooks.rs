@@ -13,14 +13,21 @@ use crate::error::{ApiError, ApiResult};
 use crate::jobs::DeliverWebhook;
 use crate::state::AppState;
 
-pub const EVENTS: &[&str] = &["push", "merge_request", "note", "release", "pipeline", "build"];
+/// `confidential_issue` and `confidential_note` carry what only a project's
+/// members see (confidential issues, internal comments): a hook gets them only
+/// when it asks for them.
+pub const EVENTS: &[&str] =
+    &["push", "merge_request", "issue", "confidential_issue", "note", "confidential_note", "release", "pipeline", "build"];
 
 /// GitLab's `X-Gitlab-Event` for an event, for receivers written for GitLab.
 pub fn gitlab_event(event: &str) -> &'static str {
     match event {
         "push" => "Push Hook",
         "merge_request" => "Merge Request Hook",
+        "issue" => "Issue Hook",
+        "confidential_issue" => "Confidential Issue Hook",
         "note" => "Note Hook",
+        "confidential_note" => "Confidential Note Hook",
         "release" => "Release Hook",
         "pipeline" => "Pipeline Hook",
         "build" => "Job Hook",
@@ -48,6 +55,15 @@ pub async fn emit(state: &AppState, p: &Project, event: &str, payload: Value) {
     if let Err(e) = r {
         tracing::warn!(project = p.id, event, error = %e, "webhook not queued");
     }
+}
+
+/// [`emit`] `event` (`issue`, `note`), or its `confidential_` twin when only the
+/// project's members may read the payload: a hook chooses to get those. The
+/// payload's `event_type` names the one sent.
+pub async fn emit_members_only(state: &AppState, p: &Project, event: &str, members_only: bool, mut payload: Value) {
+    let event = if members_only { format!("confidential_{event}") } else { event.to_string() };
+    payload["event_type"] = Value::from(event.as_str());
+    emit(state, p, &event, payload).await;
 }
 
 pub fn validate_url(raw: &str) -> ApiResult<url::Url> {

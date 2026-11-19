@@ -758,9 +758,9 @@ impl<'a> Runner<'a> {
 
     async fn labels(&mut self, p: &Project, sp: &SourceProject) -> Result<()> {
         let labels = self.src.labels(sp).await?;
-        let existing = issuedb::labels(&self.state.db, p.id).await.map_err(other)?;
+        let existing = issuedb::label_names(&self.state.db, p.id).await.map_err(other)?;
         for l in &labels {
-            if existing.iter().any(|e| e.name == l.name) {
+            if existing.contains(&l.name) {
                 continue;
             }
             let name: String = l.name.chars().take(255).collect::<String>().replace(',', " ");
@@ -853,18 +853,6 @@ impl<'a> Runner<'a> {
         // keep the source numbers before writing any: an issue made here while the
         // import runs, or after it fails halfway, must not take one of them
         mrdb::bump_iid(&self.state.db, p.id, "issues", max_iid).await.map_err(other)?;
-        // confidential issues are left out (their numbers stay kept above, so a
-        // `#N` naming one never comes to name another issue)
-        let (secret, issues): (Vec<SourceIssue>, Vec<SourceIssue>) = issues.into_iter().partition(|i| i.confidential);
-        if !secret.is_empty() {
-            let list: Vec<String> = secret.iter().map(|i| format!("#{}", i.iid)).collect();
-            self.warnings.push(format!(
-                "{} confidential issue{} not imported, as Forgust has no confidential issues: {}.",
-                secret.len(),
-                if secret.len() == 1 { " was" } else { "s were" },
-                list.join(", ")
-            ));
-        }
         let total = issues.len();
         let done_ids = idb::imported_ids(&self.state.db, p.id, "issue").await.map_err(other)?;
         let todo: Vec<&SourceIssue> = issues.iter().filter(|i| !done_ids.contains(&i.id)).collect();
@@ -913,6 +901,7 @@ impl<'a> Runner<'a> {
                 closed_at: if issue.open { None } else { issue.closed_at.or(Some(issue.updated_at)) },
                 milestone_id,
                 due_date: issue.due_date,
+                confidential: issue.confidential,
             },
         )
         .await
@@ -928,6 +917,7 @@ impl<'a> Runner<'a> {
                     body: &c.body,
                     system: false,
                     created_at: Some(c.created_at),
+                    internal: c.internal,
                 },
             )
             .await
@@ -1158,6 +1148,7 @@ impl<'a> Runner<'a> {
                         pos,
                         resolved: i == 0 && t.resolved,
                         created_at: n.created_at,
+                        internal: n.internal,
                     },
                 )
                 .await

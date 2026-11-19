@@ -155,7 +155,7 @@ pub async fn merge_blocker(state: &AppState, m: &MergeRequest) -> ApiResult<Opti
 }
 
 async fn note(state: &AppState, m: &MergeRequest, author: Option<i64>, text: &str) -> ApiResult<()> {
-    mrdb::add_note(&state.db, m.id, author, None, text, true, Position::default()).await?;
+    mrdb::add_note(&state.db, m.id, author, None, text, true, false, Position::default()).await?;
     mrdb::touch(&state.db, m.id).await?;
     Ok(())
 }

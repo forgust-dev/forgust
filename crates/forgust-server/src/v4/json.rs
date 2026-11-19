@@ -232,7 +232,7 @@ pub fn issue(cfg: &Config, p: &Project, i: &Issue, labels: Vec<String>, assignee
         "merge_requests_count": 0,
         "upvotes": 0,
         "downvotes": 0,
-        "confidential": false,
+        "confidential": i.confidential,
         "discussion_locked": null,
         "web_url": format!("{}/{}/-/issues/{}", base(cfg), p.full_path, i.iid),
         "references": { "short": format!("#{}", i.iid), "relative": format!("#{}", i.iid), "full": format!("{}#{}", p.full_path, i.iid) },
@@ -260,8 +260,8 @@ pub fn note(cfg: &Config, n: &Note, mr_iid: i64) -> Value {
         "resolvable": n.parent_id.is_none() && position.is_some(),
         "resolved": n.resolved_at.is_some(),
         "position": position,
-        "internal": false,
-        "confidential": false,
+        "internal": n.internal,
+        "confidential": n.internal,
     })
 }
 
@@ -277,8 +277,8 @@ pub fn issue_note(cfg: &Config, n: &IssueNote, issue_iid: i64) -> Value {
         "noteable_type": "Issue",
         "noteable_iid": issue_iid,
         "resolvable": false,
-        "internal": false,
-        "confidential": false,
+        "internal": n.internal,
+        "confidential": n.internal,
     })
 }
 

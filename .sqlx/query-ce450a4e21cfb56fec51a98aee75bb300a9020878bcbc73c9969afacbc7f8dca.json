@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT a.id, a.user_id, u.username, u.name AS user_name, a.name, a.merge_request_id, a.issue_id, a.note_id, a.issue_note_id, a.created_at\n           FROM award_emoji a JOIN users u ON u.id = a.user_id\n          WHERE a.id IN (SELECT id FROM award_emoji WHERE merge_request_id = $1\n                         UNION ALL\n                         SELECT x.id FROM award_emoji x JOIN notes n ON n.id = x.note_id WHERE n.merge_request_id = $1)\n          ORDER BY a.id",
+  "query": "SELECT a.id, a.user_id, u.username, u.name AS user_name, a.name, a.merge_request_id, a.issue_id, a.note_id, a.issue_note_id, a.created_at\n           FROM award_emoji a JOIN users u ON u.id = a.user_id\n          WHERE a.id IN (SELECT id FROM award_emoji WHERE merge_request_id = $1\n                         UNION ALL\n                         SELECT x.id FROM award_emoji x JOIN notes n ON n.id = x.note_id WHERE n.merge_request_id = $1 AND ($2 OR NOT n.internal))\n          ORDER BY a.id",
   "describe": {
     "columns": [
       {
@@ -116,7 +116,8 @@
     ],
     "parameters": {
       "Left": [
-        "Int8"
+        "Int8",
+        "Bool"
       ]
     },
     "nullable": [
@@ -132,5 +133,5 @@
       false
     ]
   },
-  "hash": "6626c309d99083793f50438849fd6f1da5486e3bde888c62c146c8d9870b9bf5"
+  "hash": "ce450a4e21cfb56fec51a98aee75bb300a9020878bcbc73c9969afacbc7f8dca"
 }

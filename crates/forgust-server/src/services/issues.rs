@@ -3,13 +3,17 @@
 //!
 //! Anyone who can see a project can open issues and comment; the author or a
 //! Developer+ can edit, close and relabel; Maintainers can delete any comment.
+//!
+//! A confidential issue is seen by the project's Reporters and up, its author
+//! and its assignees (the SQL function `issue_visible` decides it for every
+//! list, count and reference); an internal comment by Reporters and up.
 
 use forgust_db::issues::{self as idb, Issue, Label, NewIssue, NewIssueNote};
 use forgust_db::merge_requests::next_iid;
 use forgust_db::projects::Project;
 
 use crate::auth::Principal;
-use crate::auth::authz::{ProjectAction, require_project};
+use crate::auth::authz::{ProjectAction, can_project, require_project};
 use crate::error::{ApiError, ApiResult};
 use crate::state::AppState;
 
@@ -44,10 +48,10 @@ pub async fn ensure_labels(state: &AppState, principal: &Principal, p: &Project,
     }
     require_project(state, principal, ProjectAction::Push, p).await.map_err(|_| ApiError::forbidden("only Developers can set labels"))?;
     let project_id = p.id;
-    let existing = idb::labels(&state.db, project_id).await?;
+    let existing = idb::label_names(&state.db, project_id).await?;
     let mut n = existing.len();
     for name in names.iter().map(|s| s.trim()).filter(|s| !s.is_empty()) {
-        if name.len() > 255 || name.contains(',') || existing.iter().any(|l| l.name == name) {
+        if name.len() > 255 || name.contains(',') || existing.iter().any(|l| l == name) {
             continue;
         }
         idb::upsert_label(&state.db, project_id, name, PALETTE[n % PALETTE.len()], "").await?;
@@ -60,6 +64,29 @@ pub struct CreateIssue<'a> {
     pub title: &'a str,
     pub description: &'a str,
     pub labels: &'a [String],
+    pub confidential: bool,
+}
+
+/// Whether `principal` may see the issue (its project already seen): a
+/// confidential one is for Reporters and up, its author and its assignees.
+pub async fn may_see(state: &AppState, principal: &Principal, issue: &Issue) -> ApiResult<bool> {
+    Ok(!issue.confidential || idb::visible(&state.db, issue.id, principal.search_viewer()).await?)
+}
+
+/// [`may_see`], or 404: a confidential issue is not known to the others.
+pub async fn require_see(state: &AppState, principal: &Principal, issue: &Issue) -> ApiResult<()> {
+    if may_see(state, principal, issue).await? { Ok(()) } else { Err(ApiError::NotFound) }
+}
+
+/// The author, an assignee, or a Reporter+ (`members`: [`ProjectAction::ReadInternal`])
+/// may make an issue confidential or not.
+pub async fn may_set_confidential(state: &AppState, principal: &Principal, issue: &Issue, members: bool) -> ApiResult<bool> {
+    let Some(user) = principal.direct_user() else { return Ok(false) };
+    if members || issue.author_id == Some(user.id) {
+        return Ok(true);
+    }
+    let assignees = forgust_db::people::issue_assignees(&state.db, &[issue.id]).await?;
+    Ok(assignees.iter().any(|(_, u)| u.id == user.id))
 }
 
 pub async fn create(state: &AppState, principal: &Principal, p: &Project, req: CreateIssue<'_>) -> ApiResult<Issue> {
@@ -91,19 +118,37 @@ pub async fn create(state: &AppState, principal: &Principal, p: &Project, req: C
             closed_at: None,
             milestone_id: None,
             due_date: None,
+            confidential: req.confidential,
         },
     )
     .await?;
     idb::set_issue_labels(&mut tx, id, &labels.iter().map(|l| l.id).collect::<Vec<_>>()).await?;
     tx.commit().await?;
     let issue = idb::find(&state.db, p.id, iid).await?.ok_or(ApiError::NotFound)?;
-    super::refs::on_write(state, p, user, issue_target(&issue), &issue.description, None).await;
+    super::refs::on_write(state, p, user, issue_target(&issue), &issue.description, None, false).await;
     super::notify::new_issue(state, p, &issue, user).await;
+    hook(state, p, &issue, user, "open").await;
     Ok(issue)
 }
 
 pub(crate) fn issue_target(i: &Issue) -> super::refs::Target<'_> {
-    super::refs::Target::Issue { id: i.id, iid: i.iid, title: &i.title }
+    super::refs::Target::Issue { id: i.id, iid: i.iid, title: &i.title, confidential: i.confidential }
+}
+
+/// The `issue` webhook (`confidential_issue` for a confidential one). `action`:
+/// open, close, reopen or update.
+pub(crate) async fn hook(state: &AppState, p: &Project, i: &Issue, user: &forgust_db::users::User, action: &str) {
+    let payload = serde_json::json!({
+        "object_kind": "issue",
+        "user": { "id": user.id, "username": user.username, "name": user.name },
+        "project": super::mr::project_json(state, p),
+        "object_attributes": {
+            "id": i.id, "iid": i.iid, "title": i.title, "description": i.description, "state": i.state,
+            "confidential": i.confidential, "action": action, "url": state.cfg.issue_url(&p.full_path, i.iid),
+            "created_at": i.created_at, "updated_at": i.updated_at,
+        },
+    });
+    super::webhooks::emit_members_only(state, p, "issue", i.confidential, payload).await;
 }
 
 async fn done(state: &AppState, user_id: i64, p: &Project, i: &Issue) {
@@ -130,10 +175,24 @@ pub struct UpdateIssue<'a> {
     pub open: Option<bool>,
     /// Replace the labels (names).
     pub labels: Option<&'a [String]>,
+    pub confidential: Option<bool>,
 }
 
 pub async fn update(state: &AppState, principal: &Principal, p: &Project, issue: &Issue, req: UpdateIssue<'_>) -> ApiResult<Issue> {
-    may_edit(state, principal, p, issue).await?;
+    // the confidential switch is the author's, an assignee's or a Reporter's;
+    // the rest the author's or a Developer's
+    let confidential = req.confidential.filter(|c| *c != issue.confidential);
+    if confidential.is_none() || req.title.is_some() || req.description.is_some() || req.open.is_some() || req.labels.is_some() {
+        may_edit(state, principal, p, issue).await?;
+    }
+    if confidential.is_some() {
+        require_project(state, principal, ProjectAction::Read, p).await?;
+        crate::auth::authz::writable(p)?;
+        let members = can_project(state, principal, ProjectAction::ReadInternal, p).await?;
+        if !may_set_confidential(state, principal, issue, members).await? {
+            return Err(ApiError::forbidden("only the author, an assignee or a Reporter can change whether an issue is confidential"));
+        }
+    }
     let user = principal.direct_user().ok_or(ApiError::Unauthorized)?;
     let new_labels = match req.labels {
         Some(names) => {
@@ -155,6 +214,11 @@ pub async fn update(state: &AppState, principal: &Principal, p: &Project, issue:
         let n = system(if open { "reopened" } else { "closed" });
         idb::add_note(&mut *tx, n.as_new()).await?;
     }
+    if let Some(c) = confidential {
+        idb::set_confidential(&mut *tx, issue.id, c).await?;
+        let n = system(if c { "made the issue confidential" } else { "made the issue visible to everyone" });
+        idb::add_note(&mut *tx, n.as_new()).await?;
+    }
     if let Some(labels) = new_labels {
         let before: Vec<Label> = idb::labels_of_issues(&mut *tx, &[issue.id]).await?.into_iter().map(|(_, l)| l).collect();
         let added: Vec<&str> = labels.iter().filter(|l| !before.iter().any(|b| b.id == l.id)).map(|l| l.name.as_str()).collect();
@@ -168,7 +232,7 @@ pub async fn update(state: &AppState, principal: &Principal, p: &Project, issue:
     tx.commit().await?;
     let now = idb::find(&state.db, p.id, issue.iid).await?.ok_or(ApiError::NotFound)?;
     if now.description != issue.description {
-        super::refs::on_write(state, p, user, issue_target(&now), &now.description, Some(&issue.description)).await;
+        super::refs::on_write(state, p, user, issue_target(&now), &now.description, Some(&issue.description), false).await;
         // a ticked box in the Dependency Dashboard
         super::renovate::on_description_edit(state, p.id, issue.author_id, user, &issue.description, &now.description).await;
     }
@@ -177,6 +241,14 @@ pub async fn update(state: &AppState, principal: &Principal, p: &Project, issue:
     }
     if now.state != issue.state {
         super::notify::issue_state(state, p, &now, now.state == "opened", user).await;
+    }
+    if now.updated_at != issue.updated_at {
+        let action = match (now.state != issue.state, now.state.as_str()) {
+            (true, "opened") => "reopen",
+            (true, _) => "close",
+            _ => "update",
+        };
+        hook(state, p, &now, user, action).await;
     }
     Ok(now)
 }
@@ -192,25 +264,53 @@ pub fn label_change(added: &[&str], removed: &[&str]) -> Option<String> {
     }
 }
 
-pub async fn add_note(state: &AppState, principal: &Principal, p: &Project, issue: &Issue, body: &str) -> ApiResult<i64> {
+/// A comment; an `internal` one (Reporters and up write and read those).
+pub async fn add_note(state: &AppState, principal: &Principal, p: &Project, issue: &Issue, body: &str, internal: bool) -> ApiResult<i64> {
     require_project(state, principal, ProjectAction::Read, p).await?;
     crate::auth::authz::writable(p)?;
     let user = principal.direct_user().ok_or(ApiError::Unauthorized)?;
     if body.trim().is_empty() {
         return Err(ApiError::bad("the comment is empty"));
     }
+    if internal && !can_project(state, principal, ProjectAction::ReadInternal, p).await? {
+        return Err(ApiError::forbidden("internal comments need at least the Reporter role"));
+    }
     let mut tx = state.db.begin().await?;
     let id = idb::add_note(
         &mut *tx,
-        NewIssueNote { issue_id: issue.id, author_id: Some(user.id), imported_author: None, body, system: false, created_at: None },
+        NewIssueNote {
+            issue_id: issue.id,
+            author_id: Some(user.id),
+            imported_author: None,
+            body,
+            system: false,
+            created_at: None,
+            internal,
+        },
     )
     .await?;
     idb::touch(&mut *tx, issue.id).await?;
     tx.commit().await?;
-    let mentioned = super::refs::on_write(state, p, user, issue_target(issue), body, None).await;
-    super::notify::issue_note(state, p, issue, user, body, &mentioned).await;
+    let mentioned = super::refs::on_write(state, p, user, issue_target(issue), body, None, internal).await;
+    super::notify::issue_note(state, p, issue, user, body, internal, &mentioned).await;
     done(state, user.id, p, issue).await;
+    let payload = serde_json::json!({
+        "object_kind": "note", "project": super::mr::project_json(state, p),
+        "issue": { "iid": issue.iid, "title": issue.title, "confidential": issue.confidential },
+        "note": { "id": id, "body": body, "author": user.username, "internal": internal, "noteable_type": "Issue" },
+    });
+    super::webhooks::emit_members_only(state, p, "note", internal || issue.confidential, payload).await;
     Ok(id)
+}
+
+/// A comment of the issue, if `principal` may see it (an internal one:
+/// Reporters and up), or 404.
+pub async fn visible_note(state: &AppState, principal: &Principal, p: &Project, issue: &Issue, note_id: i64) -> ApiResult<idb::IssueNote> {
+    let note = idb::note(&state.db, issue.id, note_id).await?.ok_or(ApiError::NotFound)?;
+    if note.internal && !can_project(state, principal, ProjectAction::ReadInternal, p).await? {
+        return Err(ApiError::NotFound);
+    }
+    Ok(note)
 }
 
 /// Authors edit their own comments; Maintainers can delete any.
@@ -222,13 +322,13 @@ pub async fn edit_note(
     note_id: i64,
     body: Option<&str>,
 ) -> ApiResult<()> {
-    let note = idb::note(&state.db, issue.id, note_id).await?.ok_or(ApiError::NotFound)?;
+    let note = visible_note(state, principal, p, issue, note_id).await?;
     super::check_note_change(state, principal, p, note.author_id, note.system, body).await?;
     match body {
         Some(b) => {
             idb::edit_note(&state.db, note.id, b).await?;
             if let Some(user) = principal.direct_user() {
-                super::refs::on_write(state, p, user, issue_target(issue), b, Some(&note.body)).await;
+                super::refs::on_write(state, p, user, issue_target(issue), b, Some(&note.body), note.internal).await;
             }
         }
         None => idb::delete_note(&state.db, note.id).await?,
@@ -252,6 +352,7 @@ impl SystemNote {
             body: &self.body,
             system: true,
             created_at: None,
+            internal: false,
         }
     }
 }

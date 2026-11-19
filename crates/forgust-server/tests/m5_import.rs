@@ -55,8 +55,6 @@ async fn mock_gitlab_counted(routes: HashMap<String, Value>, delay_ms: u64, anon
         let flight = flight.clone();
         async move {
             seen.lock().unwrap().push(req.uri().path().to_string());
-            // the one list filter an import asks for
-            let only_confidential = req.uri().query().is_some_and(|q| q.split('&').any(|kv| kv == "confidential=true"));
             let n = flight.now.fetch_add(1, SeqCst) + 1;
             flight.peak.fetch_max(n, SeqCst);
             tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
@@ -81,12 +79,6 @@ async fn mock_gitlab_counted(routes: HashMap<String, Value>, delay_ms: u64, anon
                     .into_response(),
                 Some(Value::String(raw)) => raw.clone().into_response(),
                 Some(v) => {
-                    let v = match v.as_array() {
-                        Some(items) if only_confidential => {
-                            Value::Array(items.iter().filter(|i| i["confidential"] == true).cloned().collect())
-                        }
-                        _ => v.clone(),
-                    };
                     let total = v.as_array().map(|a| a.len()).unwrap_or(1);
                     ([("x-total", total.to_string()), ("content-type", "application/json".into())], v.to_string()).into_response()
                 }
@@ -197,6 +189,10 @@ async fn import_a_gitlab_project(pool: sqlx::PgPool) {
             ]),
         ),
         ("/api/v4/projects/42/issues/5/notes", json!([])),
+        (
+            "/api/v4/projects/42/issues/8/notes",
+            json!([{ "id": 4, "body": "rotated", "author": jane, "created_at": "2024-06-05T09:00:00Z", "system": false, "confidential": true }]),
+        ),
         ("/api/v4/projects/42/merge_requests", json!([mr1, mr2])),
         ("/api/v4/projects/42/merge_requests/1", mr1.clone()),
         ("/api/v4/projects/42/merge_requests/2", mr2.clone()),
@@ -210,7 +206,8 @@ async fn import_a_gitlab_project(pool: sqlx::PgPool) {
                     { "id": 12, "body": "Because.", "author": jane, "created_at": "2025-01-02T11:00:00Z", "resolved": true }
                 ] },
                 { "id": "d2", "notes": [{ "id": 13, "body": "added 1 commit", "author": jane, "created_at": "2025-01-03T10:00:00Z", "system": true }] },
-                { "id": "d3", "notes": [{ "id": 14, "body": "Looks good", "author": jane, "created_at": "2025-01-04T10:00:00Z" }] }
+                { "id": "d3", "notes": [{ "id": 14, "body": "Looks good", "author": jane, "created_at": "2025-01-04T10:00:00Z" }] },
+                { "id": "d4", "notes": [{ "id": 15, "body": "Between us", "author": jane, "created_at": "2025-01-05T10:00:00Z", "internal": true }] }
             ]),
         ),
         ("/api/v4/projects/42/merge_requests/2/discussions", json!([])),
@@ -262,11 +259,8 @@ async fn import_a_gitlab_project(pool: sqlx::PgPool) {
     let planned = owner.ok_get(&format!("/api/v1/imports/{id}")).await;
     assert_eq!(planned["status"], "planned", "{planned}");
     let report = &planned["projects"][0]["report"];
-    assert_eq!(report["issues"], 2, "the confidential one is not counted");
-    assert!(
-        report["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().starts_with("1 confidential issue will not be imported")),
-        "{report}"
-    );
+    assert_eq!(report["issues"], 3, "the confidential one is counted: it is imported");
+    assert!(!report["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("confidential")), "{report}");
     assert_eq!(report["merge_requests"], 2);
     assert!(report["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("secrets")), "{report}");
     assert!(planned["projects"][0]["project_id"].is_null(), "a dry run creates nothing");
@@ -279,7 +273,7 @@ async fn import_a_gitlab_project(pool: sqlx::PgPool) {
     assert_eq!(done["status"], "finished", "{done}");
     assert_eq!(done["has_token"], false, "the token is erased at the end");
     let said = done["projects"][0]["report"]["warnings"].as_array().unwrap();
-    assert!(said.iter().any(|w| w.as_str().unwrap().contains("1 confidential issue was not imported")), "{said:?}");
+    assert!(!said.iter().any(|w| w.as_str().unwrap().contains("confidential")), "{said:?}");
     let row = &done["projects"][0];
     assert_eq!(row["status"], "finished", "{row}");
     let pid = row["project_id"].as_i64().unwrap();
@@ -301,8 +295,14 @@ async fn import_a_gitlab_project(pool: sqlx::PgPool) {
     // issues keep their numbers, dates and authors
     let issues = owner.ok_get(&format!("/api/v1/projects/{pid}/issues?state=all")).await;
     let list = issues["issues"].as_array().unwrap();
-    assert_eq!(list.len(), 2);
+    assert_eq!(list.len(), 3);
+    // a confidential GitLab issue stays confidential, its internal note internal
+    let i8 = list.iter().find(|i| i["iid"] == 8).unwrap();
+    assert_eq!(i8["confidential"], true, "{i8}");
+    let n8 = owner.ok_get(&format!("/api/v1/projects/{pid}/issues/8/notes")).await;
+    assert_eq!((n8[0]["body"].as_str(), n8[0]["internal"].as_bool()), (Some("rotated"), Some(true)), "GitLab 14's `confidential` name");
     let i3 = list.iter().find(|i| i["iid"] == 3).unwrap();
+    assert_eq!(i3["confidential"], false);
     assert_eq!(i3["author_username"], "jane", "matched by email");
     assert_eq!(i3["created_at"], "2024-05-01T08:00:00Z");
     assert_eq!(i3["labels"][0]["name"], "bug");
@@ -324,8 +324,11 @@ async fn import_a_gitlab_project(pool: sqlx::PgPool) {
     assert_eq!(first["open_issues"], 1);
     assert_eq!(ms.as_array().unwrap().iter().find(|m| m["title"] == "Q3 (group)").unwrap()["state"], "closed");
     let notes = owner.ok_get(&format!("/api/v1/projects/{pid}/issues/3/notes")).await;
-    assert_eq!(notes.as_array().unwrap().len(), 1, "system and internal notes are left behind");
+    let notes = notes.as_array().unwrap();
+    assert_eq!(notes.len(), 2, "system notes are left behind, internal ones come internal");
     assert_eq!(notes[0]["imported_author"], "Ghost Y (@ghosty)");
+    assert_eq!(notes[0]["internal"], false);
+    assert_eq!((notes[1]["body"].as_str(), notes[1]["internal"].as_bool()), (Some("members only"), Some(true)));
     let next = owner.ok_post(&format!("/api/v1/projects/{pid}/issues"), json!({ "title": "New here" })).await;
     assert_eq!(next["iid"], 9, "new numbers follow the imported ones, the confidential issue's kept");
 
@@ -344,7 +347,9 @@ async fn import_a_gitlab_project(pool: sqlx::PgPool) {
     assert_eq!(srv.state.storage.resolve(pid, "refs/merge-requests/2/head").await.unwrap().as_deref(), v2["head_sha"].as_str());
     let mnotes = owner.ok_get(&format!("/api/v1/projects/{pid}/merge_requests/1/notes")).await;
     let mnotes = mnotes.as_array().unwrap();
-    assert_eq!(mnotes.len(), 3, "{mnotes:?}");
+    assert_eq!(mnotes.len(), 4, "{mnotes:?}");
+    assert_eq!(mnotes.iter().find(|n| n["body"] == "Between us").unwrap()["internal"], true, "an internal note stays internal");
+    assert!(mnotes.iter().filter(|n| n["body"] != "Between us").all(|n| n["internal"] == false));
     let root = mnotes.iter().find(|n| n["body"] == "Why two?").unwrap();
     assert_eq!(root["new_line"], 2);
     assert_eq!(root["position"]["new_line"], 2, "the thread sits on its line");
@@ -405,7 +410,7 @@ async fn import_a_gitlab_project(pool: sqlx::PgPool) {
     drop(conn);
     wait_jobs(&srv.state).await;
     let again = owner.ok_get(&format!("/api/v1/projects/{pid}/issues?state=all")).await;
-    assert_eq!(again["issues"].as_array().unwrap().len(), 3, "2 imported + the new one");
+    assert_eq!(again["issues"].as_array().unwrap().len(), 4, "3 imported + the new one");
     let mrs = owner.ok_get(&format!("/api/v1/projects/{pid}/merge_requests?state=all")).await;
     assert_eq!(mrs.as_array().unwrap().len(), 2, "nothing imported twice");
 

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT n.id, n.merge_request_id, n.author_id, u.username AS \"author_username?\", u.name AS \"author_name?\",\n                  n.parent_id, n.body, n.system, n.diff_id, n.base_sha, n.start_sha, n.head_sha, n.old_path, n.new_path,\n                  n.old_line, n.new_line, n.resolved_by, n.resolved_at, n.created_at, n.updated_at, n.imported_author,\n                  n.suggestion_applied_sha, n.start_old_line, n.start_new_line, n.review,\n                  coalesce(u.user_type <> 'human', false) AS \"author_bot!\"\n           FROM notes n LEFT JOIN users u ON u.id = n.author_id\n           WHERE n.merge_request_id = $1 ORDER BY n.id",
+  "query": "SELECT n.id, n.merge_request_id, n.author_id, u.username AS \"author_username?\", u.name AS \"author_name?\",\n                  n.parent_id, n.body, n.system, n.diff_id, n.base_sha, n.start_sha, n.head_sha, n.old_path, n.new_path,\n                  n.old_line, n.new_line, n.resolved_by, n.resolved_at, n.created_at, n.updated_at, n.imported_author,\n                  n.suggestion_applied_sha, n.start_old_line, n.start_new_line, n.review,\n                  coalesce(u.user_type <> 'human', false) AS \"author_bot!\", n.internal\n           FROM notes n LEFT JOIN users u ON u.id = n.author_id\n           WHERE n.merge_request_id = $1 AND ($2 OR NOT n.internal) ORDER BY n.id",
   "describe": {
     "columns": [
       {
@@ -283,11 +283,23 @@
         "name": "author_bot!",
         "type_info": "Bool",
         "origin": "Expression"
+      },
+      {
+        "ordinal": 26,
+        "name": "internal",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "notes",
+            "name": "internal"
+          }
+        }
       }
     ],
     "parameters": {
       "Left": [
-        "Int8"
+        "Int8",
+        "Bool"
       ]
     },
     "nullable": [
@@ -316,8 +328,9 @@
       true,
       true,
       true,
-      null
+      null,
+      false
     ]
   },
-  "hash": "8a698cc1dd59335f2db457735a21986f0283bcc3e157d583f2cb212597451d85"
+  "hash": "27ab23135ba6e0cf2b9886a3f4d4951e36da6ad9df1a712b7c72df35febfc1ba"
 }
