@@ -50,13 +50,13 @@ import {
   Workflow,
 } from "lucide-react";
 import { api, qs, refLink, type S } from "../api/client";
-import { useSession } from "../session";
+import { useSession, wasSignedIn } from "../session";
 import { useToast } from "./toast";
 import { usePref, useTheme } from "./theme";
 import { openPalette } from "./palette";
-import { useNav, type Nav } from "./nav";
+import { useNav, useSettleNav, type Nav } from "./nav";
 import { HoverCards } from "../components/HoverCards";
-import { Avatar, Tile } from "../components/ui";
+import { Avatar, Spinner, Tile } from "../components/ui";
 import { ResendLink } from "../components/ResendLink";
 import { Logo } from "../components/Logo";
 import { fetchers, keys, useGroups, useMyProjects, usePrefetch, useWork, type PrefetchTarget } from "../prefetch";
@@ -143,11 +143,12 @@ function recentItems(recent: RecentProject[], mine: S["MyProject"][] | undefined
 
 /** What the sidebar shows: the main menu (0), or a group or a project, the deeper the
  *  more groups it sits in. Going deeper slides the menu in from the right, back up from
- *  the left, and across (a sibling) it fades in. */
+ *  the left, and across (a sibling) it fades in. Pending (no menu yet), it just shows. */
 function levelOf(nav: Nav, area: Area | null): { key: string; depth: number } {
   if (nav.kind === "project") return { key: `project-${nav.project.id}`, depth: 1 + nav.project.ancestors.length };
   if (nav.kind === "group") return { key: `group-${nav.group.id}`, depth: 1 + nav.group.ancestors.length };
   if (area) return { key: area, depth: 1 };
+  if (nav.kind === "pending") return { key: "pending", depth: 0 };
   return { key: "global", depth: 0 };
 }
 
@@ -189,8 +190,11 @@ function areaItems(base: string, pages: { path: string; label: string }[], icons
   }));
 }
 
-/** A level shown less than this (the first page's context still loading) is left without a slide. */
+/** A level shown less than this is left without a slide: changes in quick succession don't slide one after the other. */
 const SETTLED_MS = 400;
+
+/** How long the first menu waits for its lists, to come in one piece (Sidebar). */
+const MENU_WAIT_MS = 300;
 
 /** A group's kind, as its card in the sidebar names it. */
 function groupKind(g: S["GroupDetail"]) {
@@ -422,17 +426,38 @@ function Sidebar({ collapsed, setCollapsed, mobileOpen, closeMobile }: { collaps
   const loc = useLocation();
   // the admin area and your settings open their own menu, as a project does
   const area: Area | null =
-    nav.kind !== "global" || !user ? null : user.is_admin && /^\/admin(\/|$)/.test(loc.pathname) ? "admin" : /^\/profile(\/|$)/.test(loc.pathname) ? "settings" : null;
+    (nav.kind !== "global" && nav.kind !== "pending") || !user
+      ? null
+      : user.is_admin && /^\/admin(\/|$)/.test(loc.pathname)
+        ? "admin"
+        : /^\/profile(\/|$)/.test(loc.pathname)
+          ? "settings"
+          : null;
   // the main menu: home, projects, the admin area, recent projects, organizations
   const global = nav.kind === "global" && !area;
+  // opened on a project's or a group's address: no menu until its context comes
+  const pending = nav.kind === "pending" && !area;
   const work = useWork(!!user && global);
   const waiting = work.data ? work.data.todos_pending : undefined;
   const c = collapsed && !mobileOpen;
   useRememberProject(user?.id, nav.kind === "project" ? nav.project : null);
   const recent = useRecentProjects(user?.id);
   const mine = useMyProjects("", !!user && global);
-  const orgs = useGroups(!!user && global).data ?? [];
-  const recents = global && user ? recentItems(recent, mine.data) : [];
+  const groups = useGroups(!!user && global);
+  const orgs = groups.data ?? [];
+  // the first menu comes in one piece: the main menu waits for its lists (the to-do
+  // count, recent projects, organizations) rather than growing as each one answers,
+  // MENU_WAIT_MS at most; later, a menu that slides in brings what it has
+  const [opened, setOpened] = useState(false);
+  const [waitedOut, setWaitedOut] = useState(false);
+  const hold = global && !!user && !opened && !waitedOut && (work.isLoading || mine.isLoading || groups.isLoading);
+  useEffect(() => {
+    if (!hold) return;
+    const t = setTimeout(() => setWaitedOut(true), MENU_WAIT_MS);
+    return () => clearTimeout(t);
+  }, [hold]);
+  if (!opened && !hold && !pending) setOpened(true);
+  const recents = global && user && !hold ? recentItems(recent, mine.data) : [];
 
   // back one level: to the group the project or subgroup is in, else home; a personal
   // project's namespace is its owner's page, not a menu (home then)
@@ -446,15 +471,17 @@ function Sidebar({ collapsed, setCollapsed, mobileOpen, closeMobile }: { collaps
   const personal = !!top && (top.full_path === user?.username || topKind.data?.kind === "user");
   const parent = nav.kind === "project" ? nav.project.ancestors.at(-1) : nav.kind === "group" ? nav.group.ancestors.at(-1) : undefined;
   const up = parent && !personal ? parent : undefined;
-  const back = global ? null : up ? { to: `/${up.full_path}`, label: up.name, title: `Back to ${up.name}` } : { to: "/", label: "Home", title: "Back to Home" };
-  const backPf = usePrefetch(up ? { kind: "group", id: up.id, path: up.full_path } : null);
+  const back = global || pending ? null : up ? { to: `/${up.full_path}`, label: up.name, title: `Back to ${up.name}` } : { to: "/", label: "Home", title: "Back to Home" };
+  // back to home: its page and the main menu's lists, so the menu slides in whole
+  const backPf = usePrefetch(up ? { kind: "group", id: up.id, path: up.full_path } : back ? { kind: "home" } : null);
 
   // the level shown, and how the menu came in when it changed (derived while rendering)
   const level = levelOf(nav, area);
   const [shown, setShown] = useState(() => ({ ...level, since: Date.now(), enter: "" }));
   if (shown.key !== level.key) {
     const settled = Date.now() - shown.since > SETTLED_MS;
-    const enter = !settled ? "" : level.depth > shown.depth ? "in-deeper" : level.depth < shown.depth ? "in-back" : "in-across";
+    // the first menu of a page opened from its address just shows: nothing was left
+    const enter = !settled || shown.key === "pending" ? "" : level.depth > shown.depth ? "in-deeper" : level.depth < shown.depth ? "in-back" : "in-across";
     setShown({ ...level, since: Date.now(), enter });
   }
 
@@ -511,6 +538,8 @@ function Sidebar({ collapsed, setCollapsed, mobileOpen, closeMobile }: { collaps
       </div>
     );
     items = areaItems("/profile", PROFILE_PAGES, PROFILE_ICONS);
+  } else if (pending || hold) {
+    items = [];
   } else if (!user) {
     // signed out: what is public
     items = [{ to: "/explore", label: "Explore", icon: <Compass size={16} /> }];
@@ -546,7 +575,7 @@ function Sidebar({ collapsed, setCollapsed, mobileOpen, closeMobile }: { collaps
               ))}
             </SideGroup>
           )}
-          {global && user && orgs.length > 0 && (
+          {global && user && !hold && orgs.length > 0 && (
             <SideGroup label="Organizations">
               {orgs.slice(0, SIDE_GROUP_MAX).map((g) => (
                 <SideLink key={g.id} item={{ to: `/${g.full_path}`, label: g.name, title: g.full_path, icon: <Tile name={g.name} src={g.avatar_url} group /> }} collapsed={c} onNavigate={closeMobile} />
@@ -559,14 +588,20 @@ function Sidebar({ collapsed, setCollapsed, mobileOpen, closeMobile }: { collaps
         </nav>
       </div>
       <div className="spacer" />
-      <button className="side-link collapse-btn" onClick={() => setCollapsed(!collapsed)} title={collapsed ? "Expand sidebar" : "Collapse sidebar"} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}>
-        {collapsed ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
-        <span className="side-label">Collapse</span>
-      </button>
+      <CollapseButton collapsed={collapsed} setCollapsed={setCollapsed} />
       <div inert={c}>
         <SideVersion />
       </div>
     </aside>
+  );
+}
+
+function CollapseButton({ collapsed, setCollapsed }: { collapsed: boolean; setCollapsed: (c: boolean) => void }) {
+  return (
+    <button className="side-link collapse-btn" onClick={() => setCollapsed(!collapsed)} title={collapsed ? "Expand sidebar" : "Collapse sidebar"} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}>
+      {collapsed ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
+      <span className="side-label">Collapse</span>
+    </button>
   );
 }
 
@@ -834,6 +869,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = usePref("sidebar.collapsed", false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const loc = useLocation();
+  useSettleNav();
   useEffect(() => setMobileOpen(false), [loc.pathname]);
   // the page slides along as the sidebar folds or unfolds (FLIP: its margin
   // changes at once, a transform eases it over); the sidebar itself is clipped
@@ -920,6 +956,65 @@ export function Shell({ children }: { children: ReactNode }) {
         {children}
       </main>
       <HoverCards />
+    </div>
+  );
+}
+
+/**
+ * The shell's frame while the app learns who is signed in (main.tsx): the top bar and,
+ * if someone was signed in here last time, the sidebar, each where the shell puts it, so
+ * nothing moves when the page comes; a slow answer shows the loader where the page goes.
+ */
+export function ShellFrame() {
+  const [collapsed, setCollapsed] = usePref("sidebar.collapsed", false);
+  const loc = useLocation();
+  if (!wasSignedIn()) {
+    // the sign-in pages bring their own frame
+    if (AUTH_PATHS.includes(loc.pathname)) {
+      return (
+        <main className="main-solo">
+          <Spinner />
+        </main>
+      );
+    }
+    return (
+      <>
+        <header className="topbar">
+          <Link to="/" className="brand">
+            <Logo size={24} />
+            Forgust
+          </Link>
+          <div className="grow" />
+          <ThemeButton />
+          <Link to="/login" className="btn small">
+            Sign in
+          </Link>
+        </header>
+        <main className="main-solo">
+          <Spinner />
+        </main>
+      </>
+    );
+  }
+  return (
+    <div className={`app ${collapsed ? "side-collapsed" : ""}`}>
+      <header className="topbar">
+        {/* in place for the brand's sake on small screens; the menu has nothing yet */}
+        <button className="icon-btn mobile-only" aria-label="Open navigation">
+          <Menu size={18} />
+        </button>
+        <Link to="/" className="brand">
+          <Logo size={24} />
+          <span className="brand-name">Forgust</span>
+        </Link>
+      </header>
+      <aside className={`sidebar ${collapsed ? "collapsed" : ""}`} aria-label="Navigation">
+        <div className="spacer" />
+        <CollapseButton collapsed={collapsed} setCollapsed={setCollapsed} />
+      </aside>
+      <main className="main">
+        <Spinner />
+      </main>
     </div>
   );
 }

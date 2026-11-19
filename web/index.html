@@ -12,6 +12,13 @@
       // apply the stored theme before first paint (no light flash for dark users)
       try { var t = localStorage.getItem("forgust.theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
     </script>
+    <style>
+      /* the page's color (styles.css --bg-page) from the first frame, before the stylesheet
+         (in development it comes with the scripts); :where() lets styles.css override it */
+      :where(html) { background: #f9f7f4; }
+      @media (prefers-color-scheme: dark) { :where(html:not([data-theme="light"])) { background: #0d0e12; } }
+      :where(html[data-theme="dark"]) { background: #0d0e12; }
+    </style>
     <title>Forgust</title>
   </head>
   <body>

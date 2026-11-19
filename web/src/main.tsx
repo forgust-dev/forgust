@@ -16,8 +16,8 @@ import { SearchPage } from "./pages/Search";
 import { UnsubscribePage } from "./pages/Unsubscribe";
 import { Work } from "./pages/Work";
 import { NewGroup, NewProject } from "./pages/New";
-import { Shell } from "./shell/Shell";
-import { NavProvider } from "./shell/nav";
+import { Shell, ShellFrame } from "./shell/Shell";
+import { KeepNav, NavProvider } from "./shell/nav";
 import { PaletteHost } from "./shell/palette";
 import { ThemeProvider } from "./shell/theme";
 import { ToastProvider } from "./shell/toast";
@@ -52,12 +52,21 @@ function RequireUser({ children }: { children: ReactElement }) {
 function App() {
   const { loading } = useSession();
   const loc = useLocation();
-  if (loading) return <Spinner />;
+  // the frame, where the page will be, while we learn who is signed in
+  if (loading) return <ShellFrame />;
   return (
     <Shell>
       <PaletteHost />
       <PageErrorBoundary resetKey={loc.pathname}>
-      <Suspense fallback={<Spinner />}>
+      {/* a page's code still loading: the sidebar keeps its menu meanwhile */}
+      <Suspense
+        fallback={
+          <>
+            <KeepNav />
+            <Spinner />
+          </>
+        }
+      >
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/setup" element={<Setup />} />
@@ -85,22 +94,31 @@ function App() {
   );
 }
 
-createRoot(document.getElementById("root")!).render(
-  <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <SessionProvider>
-          <ThemeProvider>
-            <ToastProvider>
-              <DialogProvider>
-                <NavProvider>
-                  <App />
-                </NavProvider>
-              </DialogProvider>
-            </ToastProvider>
-          </ThemeProvider>
-        </SessionProvider>
-      </BrowserRouter>
-    </QueryClientProvider>
-  </StrictMode>,
+// the first frame in the app's own fonts rather than swapping into them: they load
+// meanwhile (a few ms from the cache), 100 ms at most, then the fallback shows as before
+const fonts = Promise.race([
+  Promise.all(['700 18px "Bricolage Grotesque Variable"', '400 14px "Inter Variable"'].map((f) => document.fonts.load(f))),
+  new Promise((done) => setTimeout(done, 100)),
+]).catch(() => {});
+
+void fonts.then(() =>
+  createRoot(document.getElementById("root")!).render(
+    <StrictMode>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <SessionProvider>
+            <ThemeProvider>
+              <ToastProvider>
+                <DialogProvider>
+                  <NavProvider>
+                    <App />
+                  </NavProvider>
+                </DialogProvider>
+              </ToastProvider>
+            </ThemeProvider>
+          </SessionProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
+    </StrictMode>,
+  ),
 );

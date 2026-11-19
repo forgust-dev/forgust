@@ -832,9 +832,20 @@ form.stack {
   color: var(--text-muted);
 }
 .spinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   padding: 32px;
-  text-align: center;
   color: var(--text-faint);
+  /* hidden for the first moments of a wait (Spinner sets the delay), then fades in:
+     a page that comes sooner goes straight to its content */
+  animation: spinner-in 200ms var(--ease-out) both;
+}
+@keyframes spinner-in {
+  from {
+    opacity: 0;
+  }
 }
 .token-box {
   padding: 12px;
@@ -6311,14 +6322,6 @@ a.item.import-row {
 }
 a.item.import-row:hover {
   text-decoration: none;
-}
-.spin {
-  animation: spin 1s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 @media (max-width: 760px) {
   .import-target input {
