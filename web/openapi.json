@@ -563,6 +563,17 @@
           "groups"
         ],
         "operationId": "list_top",
+        "parameters": [
+          {
+            "name": "member",
+            "in": "path",
+            "description": "Only the groups you belong to (yours, not every one you may see).",
+            "required": true,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {

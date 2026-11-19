@@ -81,3 +81,13 @@ export function useRememberProject(uid: number | undefined, p: RecentProject | n
     save(uid, [{ id, name, full_path: path, avatar_url: avatar }, ...list.filter((x) => x.id !== id)].slice(0, MAX));
   }, [uid, id, name, path, avatar]);
 }
+
+/** Takes a project that is not found any more (deleted, moved away, no longer yours)
+ *  out of the user's recent projects: `full_path` is the address that was not found. */
+export function useForgetProject(uid: number | undefined, fullPath: string | null) {
+  useEffect(() => {
+    if (uid == null || !fullPath) return;
+    const list = load(uid);
+    if (list.some((x) => x.full_path === fullPath)) save(uid, list.filter((x) => x.full_path !== fullPath));
+  }, [uid, fullPath]);
+}

@@ -799,8 +799,8 @@ pub async fn my_projects(
 }
 
 /// How many of your projects [`my_project_states`] reports on: the first, most
-/// active, that are not archived (the projects page shows the state of those).
-const MY_STATE_LIMIT: i64 = 50;
+/// active, as many as the projects page lists (`per_page=100`); archived ones have none.
+const MY_STATE_LIMIT: i64 = 100;
 
 /// How your projects are doing, as on their own pages (open merge requests, the
 /// default branch's latest pipeline): one request for the projects page, not two
@@ -811,11 +811,15 @@ pub async fn my_project_states(
     SignedIn(u, p): SignedIn,
 ) -> ApiResult<Json<Vec<forgust_db::projects::ProjectState>>> {
     let rows = forgust_db::projects::for_user(&state.db, u.id, "", MY_STATE_LIMIT, 0).await?;
+    // a few checks at a time, not one after the other (in the list's order)
+    let open: Vec<_> = rows.iter().map(|(x, _)| x).filter(|x| !x.archived()).collect();
     let mut ids = Vec::new();
-    for (x, _) in rows.iter().filter(|(x, _)| !x.archived()) {
-        if crate::auth::authz::can_project(&state, &p, crate::auth::authz::ProjectAction::ReadCode, x).await? {
-            ids.push(x.id);
-        }
+    for chunk in open.chunks(8) {
+        let read = futures::future::try_join_all(
+            chunk.iter().map(|x| crate::auth::authz::can_project(&state, &p, crate::auth::authz::ProjectAction::ReadCode, x)),
+        )
+        .await?;
+        ids.extend(chunk.iter().zip(read).filter(|(_, ok)| *ok).map(|(x, _)| x.id));
     }
     Ok(Json(forgust_db::projects::states(&state.db, &ids).await?))
 }

@@ -6,7 +6,7 @@ import type { UseQueryResult } from "@tanstack/react-query";
 import { api, timeAgo, type S } from "../api/client";
 import { Empty, Q, ListHead, Tile, UserLink } from "../components/ui";
 import { ProjectStateBadges, Visibility } from "./Dashboard";
-import { InstanceCard } from "./AdminTools";
+import { InstanceCard } from "./InstanceCard";
 import { DecideCard, Ring } from "../components/decide";
 import { readinessChecks, readinessScore } from "../components/readiness";
 import { useSession } from "../session";

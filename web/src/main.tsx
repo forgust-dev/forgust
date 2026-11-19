@@ -7,7 +7,8 @@ import { StrictMode, Suspense, lazy, type ReactElement } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ApiError } from "./api/client";
+import { ApiError, setOnMineChanged } from "./api/client";
+import { refreshMine } from "./prefetch";
 import { SessionProvider, useSession } from "./session";
 import { PageErrorBoundary, Spinner } from "./components/ui";
 import { ForgotPassword, Login, ResetPassword, Setup, VerifyEmail } from "./pages/Auth";
@@ -40,6 +41,8 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+setOnMineChanged(() => refreshMine(queryClient));
 
 function RequireUser({ children }: { children: ReactElement }) {
   const { user, loading } = useSession();

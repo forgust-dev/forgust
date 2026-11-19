@@ -1033,3 +1033,55 @@ async fn oidc_callbacks_need_the_starting_browser(pool: sqlx::PgPool) {
     let to = location(&r);
     assert!(to.contains("unknown%20or%20expired%20login%20state"), "{to}");
 }
+
+/// A to-do done reads only the notifications it came with: not the author's review
+/// verdicts, not another to-do's still waiting. And the sidebar's organizations are yours.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn todos_read_only_their_own_notifications(pool: sqlx::PgPool) {
+    let srv = TestServer::start(pool).await;
+    let (owner, dev, rep, proj, work) = setup(&srv).await;
+    let rita = user_id(&owner, proj, "rita").await;
+    must(git(&work, &["checkout", "-q", "-b", "feature/b"]).await);
+    commit_file(&work, "b.txt", "b\n", "add b").await;
+    must(git(&work, &["push", "-q", &srv.http_url("dave", REPO), "feature/b"]).await);
+    let mr = dev.ok_post(&format!("/api/v1/projects/{proj}/merge_requests"), json!({ "source_branch": "feature/b", "title": "B" })).await;
+    let path = format!("/api/v1/projects/{proj}/merge_requests/{}", mr["iid"]);
+    let unread = |inbox: &Value, kind: &str| {
+        inbox["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|n| n["read"] == false && n["target_type"] == "merge_request" && n["kind"] == kind)
+            .count()
+    };
+
+    // the author's "requested changes" is no to-do's: commenting leaves it unread
+    owner.ok_post(&format!("{path}/request_changes"), json!({ "body": "not yet" })).await;
+    wait_jobs(&srv.state).await;
+    assert_eq!(unread(&dev.ok_get("/api/v1/user/notifications").await, "review"), 1);
+    dev.ok_post(&format!("{path}/notes"), json!({ "body": "on it" })).await;
+    assert_eq!(unread(&dev.ok_get("/api/v1/user/notifications").await, "review"), 1, "read without a to-do");
+
+    // rita: asked to review, and mentioned; the mention done, the request still waits
+    owner.ok_put(&path, json!({ "reviewer_ids": [rita] })).await;
+    owner.ok_post(&format!("{path}/notes"), json!({ "body": "@rita have a look" })).await;
+    wait_jobs(&srv.state).await;
+    let todos = rep.ok_get("/api/v1/user/todos").await;
+    let of = |action: &str| {
+        todos.as_array().unwrap().iter().find(|t| t["action"] == action).unwrap_or_else(|| panic!("{action} in {todos}"))["id"].clone()
+    };
+    let inbox = rep.ok_get("/api/v1/user/notifications").await;
+    assert_eq!((unread(&inbox, "mention"), unread(&inbox, "assignment")), (1, 1), "{inbox}");
+    rep.ok_post(&format!("/api/v1/user/todos/{}/done", of("mentioned")), json!({})).await;
+    let inbox = rep.ok_get("/api/v1/user/notifications").await;
+    assert_eq!((unread(&inbox, "mention"), unread(&inbox, "assignment")), (0, 1), "the review request still waits {inbox}");
+    rep.ok_post(&format!("/api/v1/user/todos/{}/done", of("review_requested")), json!({})).await;
+    assert_eq!(unread(&rep.ok_get("/api/v1/user/notifications").await, "assignment"), 0);
+
+    // organizations: every one dave may see, or only those he belongs to
+    let sam = srv.user("sam", false).await;
+    sam.ok_post("/api/v1/groups", json!({ "name": "Elsewhere", "path": "elsewhere", "visibility": "public" })).await;
+    let paths = |v: Value| v.as_array().unwrap().iter().map(|g| g["full_path"].as_str().unwrap().to_string()).collect::<Vec<_>>();
+    assert!(paths(dev.ok_get("/api/v1/groups").await).contains(&"elsewhere".to_string()));
+    assert_eq!(paths(dev.ok_get("/api/v1/groups?member=true").await), vec!["acme".to_string()]);
+}

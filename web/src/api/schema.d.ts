@@ -6985,7 +6985,10 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                /** @description Only the groups you belong to (yours, not every one you may see). */
+                member: boolean;
+            };
             cookie?: never;
         };
         requestBody?: never;

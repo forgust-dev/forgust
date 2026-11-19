@@ -8,6 +8,8 @@ const ProjectPage = lazy(() => import("./project/Project").then((m) => ({ defaul
 const UserProfilePage = lazy(() => import("./UserProfile").then((m) => ({ default: m.UserProfilePage })));
 import { useSession } from "../session";
 import { KeepNav } from "../shell/nav";
+import { useForgetProject } from "../shell/recent";
+import { ApiError } from "../api/client";
 
 /**
  * A URL path decoded; a malformed escape (a `%` typed or pasted as is) is
@@ -45,6 +47,9 @@ export function PathRoute() {
     queryFn: () => fetchers.pathResolve(base),
     enabled: !!base,
   });
+
+  // an address not found: a project there leaves your recent projects
+  useForgetProject(user?.id, q.error instanceof ApiError && q.error.status === 404 ? base : null);
 
   useEffect(() => {
     if (q.data?.redirected) {

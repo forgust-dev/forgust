@@ -46,6 +46,7 @@ import {
   ScrollText,
   Server,
   ShieldCheck,
+  Sparkles,
   Ticket,
   Workflow,
 } from "lucide-react";
@@ -54,16 +55,16 @@ import { useSession, wasSignedIn } from "../session";
 import { useToast } from "./toast";
 import { usePref, useTheme } from "./theme";
 import { openPalette } from "./palette";
-import { useNav, useSettleNav, type Nav } from "./nav";
+import { useNav, useSettleNav, useSideView, type Area, type Nav } from "./nav";
 import { HoverCards } from "../components/HoverCards";
 import { Avatar, Spinner, Tile } from "../components/ui";
 import { ResendLink } from "../components/ResendLink";
 import { Logo } from "../components/Logo";
-import { fetchers, keys, useGroups, useMyProjects, usePrefetch, useWork, type PrefetchTarget } from "../prefetch";
+import { fetchers, keys, useMyGroups, useMyProjects, usePrefetch, useWork, type PrefetchTarget } from "../prefetch";
 import { useRecentProjects, useRememberProject, type RecentProject } from "./recent";
 import { SETTINGS_PAGES } from "../pages/project/settingsPages";
-import { ADMIN_PAGES } from "../pages/adminPages";
-import { PROFILE_PAGES } from "../pages/profilePages";
+import { ADMIN_PAGES, type AdminPath } from "../pages/adminPages";
+import { PROFILE_PAGES, type ProfilePath } from "../pages/profilePages";
 import { InboxBell } from "../components/Inbox";
 
 /** A nav entry; `children` show under it while its section is active. `title`: the
@@ -128,13 +129,14 @@ function SideGroup({ label, children }: { label: string; children: ReactNode }) 
 /** Shown in the sidebar under each heading. */
 const SIDE_GROUP_MAX = 5;
 
-/** The projects you opened last, then (to fill up) your latest active ones. */
+/** The projects you opened last, then (to fill up) your latest active ones; archived
+ *  ones left out (one that is gone leaves the list when its address is not found). */
 function recentItems(recent: RecentProject[], mine: S["MyProject"][] | undefined): Item[] {
   const fresh = new Map((mine ?? []).map((p) => [p.id, p]));
   const seen = new Set<number>();
   const out: Item[] = [];
   for (const p of [...recent.map((r) => fresh.get(r.id) ?? r), ...(mine ?? [])]) {
-    if (seen.has(p.id) || out.length >= SIDE_GROUP_MAX) continue;
+    if (seen.has(p.id) || out.length >= SIDE_GROUP_MAX || ("archived" in p && p.archived)) continue;
     seen.add(p.id);
     out.push({ to: `/${p.full_path}`, label: p.name, title: p.full_path, icon: <Tile name={p.name} src={p.avatar_url} />, prefetch: { kind: "project", id: p.id, path: p.full_path } });
   }
@@ -152,11 +154,9 @@ function levelOf(nav: Nav, area: Area | null): { key: string; depth: number } {
   return { key: "global", depth: 0 };
 }
 
-/** The areas that are not a project or a group but open their own menu, as one does:
- *  the instance's administration and your settings. */
-type Area = "admin" | "settings";
 
-const ADMIN_ICONS: Record<string, ReactNode> = {
+// a page without an icon would leave a blank row on the folded rail: the type wants each
+const ADMIN_ICONS: Record<AdminPath, ReactNode> = {
   "": <Gauge size={16} />,
   users: <Users size={16} />,
   projects: <FolderGit2 size={16} />,
@@ -168,10 +168,11 @@ const ADMIN_ICONS: Record<string, ReactNode> = {
   settings: <Settings size={16} />,
   "dependency-updates": <RefreshCw size={16} />,
   "security-scanning": <ShieldCheck size={16} />,
+  "ai-review": <Sparkles size={16} />,
   audit: <ScrollText size={16} />,
 };
 
-const PROFILE_ICONS: Record<string, ReactNode> = {
+const PROFILE_ICONS: Record<ProfilePath, ReactNode> = {
   "": <User size={16} />,
   keys: <KeyRound size={16} />,
   gpg_keys: <FileKey size={16} />,
@@ -181,7 +182,7 @@ const PROFILE_ICONS: Record<string, ReactNode> = {
 };
 
 /** An area's pages as entries: `base` is its path ("/admin"), each page's under it. */
-function areaItems(base: string, pages: { path: string; label: string }[], icons: Record<string, ReactNode>): Item[] {
+function areaItems<P extends string>(base: string, pages: readonly { path: P; label: string }[], icons: Record<P, ReactNode>): Item[] {
   return pages.map(({ path, label }) => ({
     to: path ? `${base}/${path}` : base,
     label,
@@ -407,8 +408,19 @@ function groupItems(g: S["GroupDetail"]): Item[] {
 }
 
 function Sidebar({ collapsed, setCollapsed, mobileOpen, closeMobile }: { collapsed: boolean; setCollapsed: (c: boolean) => void; mobileOpen: boolean; closeMobile: () => void }) {
-  const nav = useNav();
   const { user } = useSession();
+  const loc = useLocation();
+  // the admin area and your settings open their own menu, as a project does; while a
+  // page loads, the sidebar keeps what it showed (its context and area)
+  const { nav, area } = useSideView((n) =>
+    (n.kind !== "global" && n.kind !== "pending") || !user
+      ? null
+      : user.is_admin && /^\/admin(\/|$)/.test(loc.pathname)
+        ? "admin"
+        : /^\/profile(\/|$)/.test(loc.pathname)
+          ? "settings"
+          : null,
+  );
   const mrs = useQuery({
     // under ["mrs", id]: the merge request pages' invalidations refresh it
     // the same key as the merge request list's unfiltered count: one request
@@ -423,16 +435,6 @@ function Sidebar({ collapsed, setCollapsed, mobileOpen, closeMobile }: { collaps
     enabled: nav.kind === "project",
     staleTime: 30_000,
   });
-  const loc = useLocation();
-  // the admin area and your settings open their own menu, as a project does
-  const area: Area | null =
-    (nav.kind !== "global" && nav.kind !== "pending") || !user
-      ? null
-      : user.is_admin && /^\/admin(\/|$)/.test(loc.pathname)
-        ? "admin"
-        : /^\/profile(\/|$)/.test(loc.pathname)
-          ? "settings"
-          : null;
   // the main menu: home, projects, the admin area, recent projects, organizations
   const global = nav.kind === "global" && !area;
   // opened on a project's or a group's address: no menu until its context comes
@@ -443,7 +445,8 @@ function Sidebar({ collapsed, setCollapsed, mobileOpen, closeMobile }: { collaps
   useRememberProject(user?.id, nav.kind === "project" ? nav.project : null);
   const recent = useRecentProjects(user?.id);
   const mine = useMyProjects("", !!user && global);
-  const groups = useGroups(!!user && global);
+  // your organizations: the top-level groups you belong to, not every one you may see
+  const groups = useMyGroups(!!user && global);
   const orgs = groups.data ?? [];
   // the first menu comes in one piece: the main menu waits for its lists (the to-do
   // count, recent projects, organizations) rather than growing as each one answers,

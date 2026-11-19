@@ -119,10 +119,12 @@ pub struct Done {
     pub read: u64,
 }
 
-// What a to-do is for told its person too, in the bell: a mention, an assignment, a
-// review request. Handled once (the to-do done), it is read there as well, so the
-// two never ask twice. Reading a notification does not do its to-do: reading is not
-// handling.
+// What a to-do is for told its person too, in the bell: a mention (`mention`), an
+// assignment or a review request (both `assignment`). Handled once (the to-do done),
+// it is read there as well, so the two never ask twice; only that kind, and only
+// once no other to-do of that kind waits on the same thing. Reading a notification
+// does not do its to-do: reading is not handling. (`review` is the author's "approved"
+// or "requested changes": no to-do comes with it.)
 
 /// Mark one (`id`) or all of a user's to-dos done, and read what told them of those.
 pub async fn mark_done(e: impl PgExecutor<'_>, user_id: i64, id: Option<i64>) -> Result<Done> {
@@ -130,11 +132,17 @@ pub async fn mark_done(e: impl PgExecutor<'_>, user_id: i64, id: Option<i64>) ->
         r#"WITH done AS (
                UPDATE todos SET state = 'done', updated_at = now()
                 WHERE user_id = $1 AND state = 'pending' AND ($2::bigint IS NULL OR id = $2)
-            RETURNING project_id, target_type, target_iid
+            RETURNING id, project_id, target_type, target_iid,
+                      CASE action WHEN 'mentioned' THEN 'mention' ELSE 'assignment' END AS kind
            ), seen AS (
                UPDATE notifications n SET read_at = now() FROM done d
-                WHERE n.user_id = $1 AND n.read_at IS NULL AND n.kind IN ('mention', 'assignment', 'review')
+                WHERE n.user_id = $1 AND n.read_at IS NULL AND n.kind::text = d.kind
                   AND n.project_id = d.project_id AND n.target_type = d.target_type AND n.target_iid = d.target_iid
+                  -- another to-do of that kind still waits there: its notification too
+                  AND NOT EXISTS (SELECT 1 FROM todos t
+                                  WHERE t.user_id = $1 AND t.state = 'pending' AND t.id NOT IN (SELECT id FROM done)
+                                    AND t.project_id = d.project_id AND t.target_type = d.target_type AND t.target_iid = d.target_iid
+                                    AND CASE t.action WHEN 'mentioned' THEN 'mention' ELSE 'assignment' END = d.kind)
             RETURNING n.id
            )
            SELECT (SELECT count(*) FROM done) AS "todos!", (SELECT count(*) FROM seen) AS "read!""#,
@@ -153,11 +161,12 @@ pub async fn done_for_target(e: impl PgExecutor<'_>, user_id: i64, project_id: i
         r#"WITH done AS (
                UPDATE todos SET state = 'done', updated_at = now()
                 WHERE user_id = $1 AND project_id = $2 AND target_type = $3 AND target_iid = $4 AND state = 'pending'
-            RETURNING id
+            RETURNING CASE action WHEN 'mentioned' THEN 'mention' ELSE 'assignment' END AS kind
            ), seen AS (
+               -- every to-do there is done: the kinds they came with are read
                UPDATE notifications SET read_at = now()
                 WHERE user_id = $1 AND project_id = $2 AND target_type = $3 AND target_iid = $4
-                  AND read_at IS NULL AND kind IN ('mention', 'assignment', 'review')
+                  AND read_at IS NULL AND kind::text IN (SELECT kind FROM done)
             RETURNING id
            )
            SELECT (SELECT count(*) FROM done) AS "todos!", (SELECT count(*) FROM seen) AS "read!""#,

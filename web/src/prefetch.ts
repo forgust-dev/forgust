@@ -10,6 +10,17 @@ const groupsQuery = queryOptions({ queryKey: ["groups"], queryFn: () => api.get<
 /** The groups the user can see (dashboard, pickers, the palette). */
 export const useGroups = (enabled = true) => useQuery({ ...groupsQuery, enabled });
 
+const myGroupsQuery = queryOptions({ queryKey: ["groups", "mine"], queryFn: () => api.get<S["GroupDto"][]>("/groups?member=true"), staleTime: 60_000 });
+
+/** The top-level groups the user belongs to: the sidebar's organizations. */
+export const useMyGroups = (enabled = true) => useQuery({ ...myGroupsQuery, enabled });
+
+/** A project or a group was made, renamed, moved, archived or deleted: the lists of
+ *  yours (kept a minute) are read again where they show. */
+export function refreshMine(qc: QueryClient) {
+  for (const queryKey of [["my-projects"], ["my-project-states"], ["groups"]]) qc.invalidateQueries({ queryKey });
+}
+
 const myProjectsQuery = (search: string) =>
   queryOptions({
     queryKey: ["my-projects", search],
@@ -106,7 +117,7 @@ export function prefetch(qc: QueryClient, t: PrefetchTarget) {
           qc.prefetchQuery({ queryKey: keys.group(t.id), queryFn: () => fetchers.group(t.id), staleTime: STALE }),
         ]);
       case "home":
-        return Promise.all([qc.prefetchQuery(workQuery), qc.prefetchQuery(myProjectsQuery("")), qc.prefetchQuery(groupsQuery), qc.prefetchQuery(myProjectStatesQuery)]);
+        return Promise.all([qc.prefetchQuery(workQuery), qc.prefetchQuery(myProjectsQuery("")), qc.prefetchQuery(myGroupsQuery), qc.prefetchQuery(myProjectStatesQuery)]);
     }
   };
   run()?.catch(() => {
