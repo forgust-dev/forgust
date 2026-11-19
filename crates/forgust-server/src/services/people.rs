@@ -118,7 +118,7 @@ pub async fn set_mr(
     }
     let everyone = users_of(&mut tx, &[&assigned.added[..], &assigned.removed, &requested.added, &requested.removed].concat()).await?;
     for text in [assign_note(&assigned, &everyone), review_note(&requested, &everyone)].into_iter().flatten() {
-        mrdb::add_note(&mut *tx, m.id, Some(actor.id), None, &text, true, Position::default()).await?;
+        mrdb::add_note(&mut *tx, m.id, Some(actor.id), None, &text, true, false, Position::default()).await?;
     }
     let notify = |ids: &[i64]| everyone.iter().filter(|u| ids.contains(&u.id) && u.id != actor.id).cloned().collect::<Vec<_>>();
     todo(&mut tx, p, "merge_request", m.iid, "assigned", actor.id, &notify(&assigned.added)).await?;
@@ -168,7 +168,7 @@ pub async fn rerequest(state: &AppState, principal: &Principal, p: &Project, m: 
     pdb::set_review_state(&mut *tx, m.id, user_id, "unreviewed", None).await?;
     let users = users_of(&mut tx, &[user_id]).await?;
     let text = format!("requested review from {}", mentions(&users, &[user_id]));
-    mrdb::add_note(&mut *tx, m.id, Some(actor.id), None, &text, true, Position::default()).await?;
+    mrdb::add_note(&mut *tx, m.id, Some(actor.id), None, &text, true, false, Position::default()).await?;
     mrdb::touch(&mut *tx, m.id).await?;
     let to: Vec<User> = users.into_iter().filter(|u| u.id != actor.id).collect();
     todo(&mut tx, p, "merge_request", m.iid, "review_requested", actor.id, &to).await?;
@@ -258,6 +258,7 @@ pub async fn set_issue(state: &AppState, principal: &Principal, p: &Project, i: 
                 body: &text,
                 system: true,
                 created_at: None,
+                internal: false,
             },
         )
         .await?;
@@ -310,7 +311,7 @@ pub async fn request_changes(
     }
     let comment = comment.map(str::trim).filter(|c| !c.is_empty());
     let note = match comment {
-        Some(text) => Some(super::mr::add_note(state, principal, p, m, text, None, None).await?.id),
+        Some(text) => Some(super::mr::add_note(state, principal, p, m, text, None, None, false).await?.id),
         None => None,
     };
     let mut tx = state.db.begin().await?;
@@ -319,7 +320,7 @@ pub async fn request_changes(
     match note {
         Some(id) => mrdb::set_note_review(&mut *tx, id, "requested_changes").await?,
         None => {
-            mrdb::add_note(&mut *tx, m.id, Some(user.id), None, "requested changes", true, Position::default()).await?;
+            mrdb::add_note(&mut *tx, m.id, Some(user.id), None, "requested changes", true, false, Position::default()).await?;
         }
     }
     mrdb::touch(&mut *tx, m.id).await?;

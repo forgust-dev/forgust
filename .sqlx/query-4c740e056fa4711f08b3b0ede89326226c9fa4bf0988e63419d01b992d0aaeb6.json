@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT i.id, i.project_id, i.iid, i.title, i.description, i.author_id, u.username AS \"author_username?\",\n                  u.name AS \"author_name?\", i.imported_author, i.state, i.closed_by, i.closed_at, i.created_at, i.updated_at,\n                  (SELECT count(*) FROM issue_notes n WHERE n.issue_id = i.id AND NOT n.system) AS \"notes_count!\",\n                  i.milestone_id, ms.title AS \"milestone_title?\", i.due_date\n           FROM issues i LEFT JOIN users u ON u.id = i.author_id LEFT JOIN milestones ms ON ms.id = i.milestone_id\n           WHERE i.project_id = $1 AND i.iid = $2",
+  "query": "SELECT i.id, i.project_id, i.iid, i.title, i.description, i.author_id, u.username AS \"author_username?\",\n                  u.name AS \"author_name?\", i.imported_author, i.state, i.closed_by, i.closed_at, i.created_at, i.updated_at,\n                  (SELECT count(*) FROM issue_notes n WHERE n.issue_id = i.id AND NOT n.system AND NOT n.internal) AS \"notes_count!\",\n                  i.milestone_id, ms.title AS \"milestone_title?\", i.due_date, i.confidential\n           FROM issues i LEFT JOIN users u ON u.id = i.author_id LEFT JOIN milestones ms ON ms.id = i.milestone_id\n           WHERE i.project_id = $1 AND i.iid = $2",
   "describe": {
     "columns": [
       {
@@ -195,6 +195,17 @@
             "name": "due_date"
           }
         }
+      },
+      {
+        "ordinal": 18,
+        "name": "confidential",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "issues",
+            "name": "confidential"
+          }
+        }
       }
     ],
     "parameters": {
@@ -221,8 +232,9 @@
       null,
       true,
       true,
-      true
+      true,
+      false
     ]
   },
-  "hash": "24abeb1b651f7912f1f7ec5b1d509dabcabc5db9962db39f7c9a5b48902a76fd"
+  "hash": "4c740e056fa4711f08b3b0ede89326226c9fa4bf0988e63419d01b992d0aaeb6"
 }

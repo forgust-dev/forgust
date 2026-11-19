@@ -409,8 +409,11 @@ pub struct Note {
     pub review: Option<String>,
     /// Written by a bot (an AI review, Renovate, a token's bot), not a person.
     pub author_bot: bool,
+    /// Seen only by the project's Reporters and up.
+    pub internal: bool,
 }
 
+/// Make a note internal: seen only by the project's Reporters and up.
 /// Make a comment the one a review verdict came with.
 pub async fn set_note_review(e: impl PgExecutor<'_>, note_id: i64, review: &str) -> Result<()> {
     sqlx::query!("UPDATE notes SET review = $2 WHERE id = $1", note_id, review).execute(e).await?;
@@ -431,6 +434,8 @@ pub struct Position<'a> {
     pub start_new_line: Option<i32>,
 }
 
+/// A note; an `internal` one is for Reporters and up.
+#[allow(clippy::too_many_arguments)]
 pub async fn add_note(
     e: impl PgExecutor<'_>,
     mr_id: i64,
@@ -438,17 +443,19 @@ pub async fn add_note(
     parent: Option<i64>,
     body: &str,
     system: bool,
+    internal: bool,
     pos: Position<'_>,
 ) -> Result<i64> {
     sqlx::query_scalar!(
-        "INSERT INTO notes (merge_request_id, author_id, parent_id, body, system, diff_id, base_sha, start_sha, head_sha,
+        "INSERT INTO notes (merge_request_id, author_id, parent_id, body, system, internal, diff_id, base_sha, start_sha, head_sha,
                             old_path, new_path, old_line, new_line, start_old_line, start_new_line)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id",
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id",
         mr_id,
         author,
         parent,
         body,
         system,
+        internal,
         pos.diff_id,
         pos.base_sha,
         pos.start_sha,
@@ -464,17 +471,19 @@ pub async fn add_note(
     .await
 }
 
-pub async fn notes(e: impl PgExecutor<'_>, mr_id: i64) -> Result<Vec<Note>> {
+/// A merge request's notes; internal ones only `with_internal` (for Reporters and up).
+pub async fn notes(e: impl PgExecutor<'_>, mr_id: i64, with_internal: bool) -> Result<Vec<Note>> {
     sqlx::query_as!(
         Note,
         r#"SELECT n.id, n.merge_request_id, n.author_id, u.username AS "author_username?", u.name AS "author_name?",
                   n.parent_id, n.body, n.system, n.diff_id, n.base_sha, n.start_sha, n.head_sha, n.old_path, n.new_path,
                   n.old_line, n.new_line, n.resolved_by, n.resolved_at, n.created_at, n.updated_at, n.imported_author,
                   n.suggestion_applied_sha, n.start_old_line, n.start_new_line, n.review,
-                  coalesce(u.user_type <> 'human', false) AS "author_bot!"
+                  coalesce(u.user_type <> 'human', false) AS "author_bot!", n.internal
            FROM notes n LEFT JOIN users u ON u.id = n.author_id
-           WHERE n.merge_request_id = $1 ORDER BY n.id"#,
-        mr_id
+           WHERE n.merge_request_id = $1 AND ($2 OR NOT n.internal) ORDER BY n.id"#,
+        mr_id,
+        with_internal
     )
     .fetch_all(e)
     .await
@@ -487,7 +496,7 @@ pub async fn note(e: impl PgExecutor<'_>, mr_id: i64, id: i64) -> Result<Option<
                   n.parent_id, n.body, n.system, n.diff_id, n.base_sha, n.start_sha, n.head_sha, n.old_path, n.new_path,
                   n.old_line, n.new_line, n.resolved_by, n.resolved_at, n.created_at, n.updated_at, n.imported_author,
                   n.suggestion_applied_sha, n.start_old_line, n.start_new_line, n.review,
-                  coalesce(u.user_type <> 'human', false) AS "author_bot!"
+                  coalesce(u.user_type <> 'human', false) AS "author_bot!", n.internal
            FROM notes n LEFT JOIN users u ON u.id = n.author_id
            WHERE n.merge_request_id = $1 AND n.id = $2"#,
         mr_id,
@@ -691,13 +700,14 @@ pub struct ImportedNote<'a> {
     pub pos: Position<'a>,
     pub resolved: bool,
     pub created_at: DateTime<Utc>,
+    pub internal: bool,
 }
 
 pub async fn add_note_imported(e: impl PgExecutor<'_>, n: ImportedNote<'_>) -> Result<i64> {
     sqlx::query_scalar!(
         "INSERT INTO notes (merge_request_id, author_id, imported_author, parent_id, body, system, diff_id, base_sha, start_sha, head_sha,
-                            old_path, new_path, old_line, new_line, resolved_at, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, CASE WHEN $15::boolean THEN $16::timestamptz END, $16, $16) RETURNING id",
+                            old_path, new_path, old_line, new_line, resolved_at, created_at, updated_at, internal)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, CASE WHEN $15::boolean THEN $16::timestamptz END, $16, $16, $17) RETURNING id",
         n.merge_request_id,
         n.author_id,
         n.imported_author,
@@ -713,7 +723,8 @@ pub async fn add_note_imported(e: impl PgExecutor<'_>, n: ImportedNote<'_>) -> R
         n.pos.old_line,
         n.pos.new_line,
         n.resolved,
-        n.created_at
+        n.created_at,
+        n.internal
     )
     .fetch_one(e)
     .await
@@ -955,10 +966,12 @@ pub async fn set_remove_source_branch(e: impl PgExecutor<'_>, mr_id: i64, remove
     Ok(())
 }
 
-/// Comments written by people (not system notes), per MR.
+/// Comments written by people that everyone who sees the MR sees (not system
+/// notes, not internal ones), per MR.
 pub async fn user_notes_counts(e: impl PgExecutor<'_>, mr_ids: &[i64]) -> Result<Vec<(i64, i64)>> {
     Ok(sqlx::query!(
-        r#"SELECT merge_request_id, count(*) AS "n!" FROM notes WHERE merge_request_id = ANY($1) AND NOT system GROUP BY merge_request_id"#,
+        r#"SELECT merge_request_id, count(*) AS "n!" FROM notes
+           WHERE merge_request_id = ANY($1) AND NOT system AND NOT internal GROUP BY merge_request_id"#,
         mr_ids
     )
     .fetch_all(e)

@@ -544,7 +544,8 @@ async fn post(
     // a removed line's number is of the old file: the review's base, which is
     // the merge request's only when the whole of it was reviewed
     let whole = run.base_sha == latest.base_sha;
-    let existing = mrdb::notes(&state.db, mr.id).await?;
+    // its own notes, never internal
+    let existing = mrdb::notes(&state.db, mr.id, false).await?;
     let mut seen: HashSet<LineNote> = existing
         .iter()
         .filter(|n| n.author_id == Some(bot.id))
@@ -643,7 +644,7 @@ async fn post(
     // all of it or nothing: a posting that fails half-way is tried again, and
     // would post the summary twice
     let mut tx = state.db.begin().await?;
-    let mut ids = vec![mrdb::add_note(&mut *tx, mr.id, Some(bot.id), None, &summary, false, mrdb::Position::default()).await?];
+    let mut ids = vec![mrdb::add_note(&mut *tx, mr.id, Some(bot.id), None, &summary, false, false, mrdb::Position::default()).await?];
     for (LineNote { path, new_line, old_line, body }, start_new_line, _) in &notes {
         let pos = mrdb::Position {
             diff_id: Some(latest.id),
@@ -657,7 +658,7 @@ async fn post(
             start_old_line: None,
             start_new_line: *start_new_line,
         };
-        ids.push(mrdb::add_note(&mut *tx, mr.id, Some(bot.id), None, body, false, pos).await?);
+        ids.push(mrdb::add_note(&mut *tx, mr.id, Some(bot.id), None, body, false, false, pos).await?);
     }
     mrdb::touch(&mut *tx, mr.id).await?;
     // with the notes: a run is never left posted without its counts

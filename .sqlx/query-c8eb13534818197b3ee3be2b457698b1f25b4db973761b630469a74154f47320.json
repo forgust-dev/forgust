@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO notes (merge_request_id, author_id, imported_author, parent_id, body, system, diff_id, base_sha, start_sha, head_sha,\n                            old_path, new_path, old_line, new_line, resolved_at, created_at, updated_at)\n         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, CASE WHEN $15::boolean THEN $16::timestamptz END, $16, $16) RETURNING id",
+  "query": "INSERT INTO notes (merge_request_id, author_id, imported_author, parent_id, body, system, diff_id, base_sha, start_sha, head_sha,\n                            old_path, new_path, old_line, new_line, resolved_at, created_at, updated_at, internal)\n         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, CASE WHEN $15::boolean THEN $16::timestamptz END, $16, $16, $17) RETURNING id",
   "describe": {
     "columns": [
       {
@@ -32,12 +32,13 @@
         "Int4",
         "Int4",
         "Bool",
-        "Timestamptz"
+        "Timestamptz",
+        "Bool"
       ]
     },
     "nullable": [
       false
     ]
   },
-  "hash": "55b86aa43936ce6064b9c686d27c1d6669823f38996d3eb84414ebf84a150a4b"
+  "hash": "c8eb13534818197b3ee3be2b457698b1f25b4db973761b630469a74154f47320"
 }

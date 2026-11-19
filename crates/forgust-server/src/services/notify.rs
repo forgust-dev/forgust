@@ -232,20 +232,49 @@ pub struct About {
     pub target: Target,
     pub title: String,
     pub summary: String,
+    /// An internal comment: only the project's Reporters and up hear of it.
+    pub internal: bool,
+    /// The id of a confidential issue: only who may see it hears of it.
+    pub secret_issue: Option<i64>,
 }
 
 impl About {
     /// What a scan of `git_ref` found: it leads to the project's findings.
     pub fn security(git_ref: &str, summary: String) -> About {
-        About { kind: Kind::Security, target: Target::Security, title: format!("Security scan of {git_ref}"), summary }
+        About {
+            kind: Kind::Security,
+            target: Target::Security,
+            title: format!("Security scan of {git_ref}"),
+            summary,
+            internal: false,
+            secret_issue: None,
+        }
     }
 
     pub fn mr(kind: Kind, mr: &MergeRequest, summary: &str) -> About {
-        About { kind, target: Target::MergeRequest(mr.iid), title: mr.title.clone(), summary: summary.into() }
+        About {
+            kind,
+            target: Target::MergeRequest(mr.iid),
+            title: mr.title.clone(),
+            summary: summary.into(),
+            internal: false,
+            secret_issue: None,
+        }
     }
 
     pub fn issue(kind: Kind, issue: &forgust_db::issues::Issue, summary: &str) -> About {
-        About { kind, target: Target::Issue(issue.iid), title: issue.title.clone(), summary: summary.into() }
+        About {
+            kind,
+            target: Target::Issue(issue.iid),
+            title: issue.title.clone(),
+            summary: summary.into(),
+            internal: false,
+            secret_issue: issue.confidential.then_some(issue.id),
+        }
+    }
+
+    pub fn internal(self, internal: bool) -> About {
+        About { internal, ..self }
     }
 }
 
@@ -339,6 +368,15 @@ pub async fn deliver(state: &AppState, n: Notice<'_>, people: Vec<(i64, Reason)>
         }
         let who = crate::auth::Principal::User { user: u.clone(), scopes: None };
         if !can_project(state, &who, n.about.target.need(), n.project).await.unwrap_or(false) {
+            continue;
+        }
+        if n.about.internal && !can_project(state, &who, ProjectAction::ReadInternal, n.project).await.unwrap_or(false) {
+            continue;
+        }
+        // a confidential issue: who may not see it hears nothing (unknown: nobody)
+        if let Some(id) = n.about.secret_issue
+            && !forgust_db::issues::visible(&state.db, id, who.search_viewer()).await.unwrap_or(false)
+        {
             continue;
         }
         if on(u.id, Channel::Web) {
@@ -475,7 +513,7 @@ pub async fn merge_request_note(state: &AppState, p: &Project, mr: &MergeRequest
     };
     let people = mr_audience(state, p, mr).await.into_iter().filter(|(id, _)| !skip.contains(id)).collect();
     let n = Notice {
-        about: About::mr(Kind::Activity, mr, "commented"),
+        about: About::mr(Kind::Activity, mr, "commented").internal(note.internal),
         thread: mr_thread(mr.id),
         starts_thread: false,
         project: p,
@@ -552,10 +590,18 @@ pub async fn new_issue(state: &AppState, p: &Project, issue: &forgust_db::issues
     deliver(state, n, watchers(state, p).await).await;
 }
 
-pub async fn issue_note(state: &AppState, p: &Project, issue: &forgust_db::issues::Issue, author: &User, body: &str, skip: &[i64]) {
+pub async fn issue_note(
+    state: &AppState,
+    p: &Project,
+    issue: &forgust_db::issues::Issue,
+    author: &User,
+    body: &str,
+    internal: bool,
+    skip: &[i64],
+) {
     let people = issue_audience(state, p, issue.id).await.into_iter().filter(|(id, _)| !skip.contains(id)).collect();
     let n = Notice {
-        about: About::issue(Kind::Activity, issue, "commented"),
+        about: About::issue(Kind::Activity, issue, "commented").internal(internal),
         thread: issue_thread(issue.id),
         starts_thread: false,
         project: p,
@@ -641,7 +687,14 @@ pub async fn pipeline_finished(state: &AppState, pipeline: &forgust_db::ci::Pipe
     let commit = pipeline.commit_title.as_deref().unwrap_or("");
     let url = state.cfg.project_page(&p.full_path, &format!("pipelines/{}", pipeline.iid));
     let n = Notice {
-        about: About { kind, target: Target::Pipeline(pipeline.iid), title: title.clone(), summary: outcome.into() },
+        about: About {
+            kind,
+            target: Target::Pipeline(pipeline.iid),
+            title: title.clone(),
+            summary: outcome.into(),
+            internal: false,
+            secret_issue: None,
+        },
         thread: None,
         starts_thread: false,
         project: &p,

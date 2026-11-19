@@ -97,7 +97,7 @@ pub async fn apply(state: &AppState, principal: &Principal, p: &Project, mr: &Me
     if mr.state != "opened" {
         return Err(ApiError::conflict("only open merge requests take suggestions"));
     }
-    let note = mrdb::note(&state.db, mr.id, note_id).await?.ok_or(ApiError::NotFound)?;
+    let note = super::mr::visible_note(state, principal, p, mr, note_id).await?;
     if note.suggestion_applied_sha.is_some() {
         return Err(ApiError::conflict("this suggestion was applied already"));
     }
@@ -177,7 +177,7 @@ pub async fn apply(state: &AppState, principal: &Principal, p: &Project, mr: &Me
     mrdb::set_suggestion_applied(&mut *tx, note.id, &commit).await?;
     mrdb::set_resolved(&mut *tx, root.id, Some(user.id)).await?;
     let text = format!("applied a suggestion to `{path}` ({})", &commit[..8]);
-    mrdb::add_note(&mut *tx, mr.id, Some(user.id), None, &text, true, Position::default()).await?;
+    mrdb::add_note(&mut *tx, mr.id, Some(user.id), None, &text, true, false, Position::default()).await?;
     state
         .jobs
         .enqueue(

@@ -4,7 +4,7 @@ import { api, timeAgo, type S } from "../api/client";
 import { Badge, ErrorBox, Field, levelName, Q } from "./ui";
 import { Select } from "./controls";
 
-const EVENTS = ["push", "merge_request", "note", "release", "pipeline", "build"];
+const EVENTS = ["push", "merge_request", "issue", "confidential_issue", "note", "confidential_note", "release", "pipeline", "build"];
 
 /** What a hook posts: the JSON payload, or one message for a chat app's incoming webhook. */
 const FORMATS = [

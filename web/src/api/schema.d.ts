@@ -3460,6 +3460,8 @@ export interface components {
         };
         CreateIssueBody: {
             assignee_ids?: number[];
+            /** @description Seen only by the project's Reporters and up, its author and its assignees. */
+            confidential?: boolean;
             description?: string;
             /** @description `YYYY-MM-DD`. */
             due_date?: string | null;
@@ -3499,6 +3501,8 @@ export interface components {
         };
         CreateNote: {
             body: string;
+            /** @description Seen only by the project's Reporters and up (who alone may write one). */
+            internal?: boolean;
             /** Format: int64 */
             parent_id?: number | null;
             position?: components["schemas"]["NewPosition"] | null;
@@ -4097,6 +4101,8 @@ export interface components {
             closed_at?: string | null;
             /** Format: int64 */
             closed_by?: number | null;
+            /** @description Seen only by the project's Reporters and up, its author and its assignees. */
+            confidential: boolean;
             /** Format: date-time */
             created_at: string;
             description: string;
@@ -4113,7 +4119,8 @@ export interface components {
             milestone_title?: string | null;
             /**
              * Format: int64
-             * @description Comments written by people (not system notes).
+             * @description Comments written by people that everyone who sees the issue sees (not
+             *     system notes, not internal ones).
              */
             notes_count: number;
             /** Format: int64 */
@@ -4126,9 +4133,13 @@ export interface components {
         IssueDetail: components["schemas"]["IssueDto"] & {
             /** @description Reporter+ or the author: may set assignees. */
             can_assign: boolean;
+            /** @description Reporter+: may write (and reads) internal comments. */
+            can_comment_internal: boolean;
             can_edit: boolean;
             /** @description Developer+: may set labels. */
             can_label: boolean;
+            /** @description The author, an assignee or a Reporter+: may make it confidential or not. */
+            can_set_confidential: boolean;
             /** @description Sanitized HTML of the description (Markdown). */
             description_html: string;
             /** @description Merge requests that reference this issue (for readers of the code). */
@@ -4156,6 +4167,8 @@ export interface components {
             /** Format: int64 */
             id: number;
             imported_author?: string | null;
+            /** @description Seen only by the project's Reporters and up. */
+            internal: boolean;
             /** Format: int64 */
             issue_id: number;
             system: boolean;
@@ -4578,6 +4591,8 @@ export interface components {
             assignees: components["schemas"]["UserBrief"][];
             auto_merge_user?: components["schemas"]["UserBrief"] | null;
             can_approve: boolean;
+            /** @description Reporter+: may write (and reads) internal comments. */
+            can_comment_internal: boolean;
             can_edit: boolean;
             /** @description Sanitized HTML of the description (Markdown). */
             description_html: string;
@@ -4741,6 +4756,8 @@ export interface components {
             /** Format: int64 */
             id: number;
             imported_author?: string | null;
+            /** @description Seen only by the project's Reporters and up. */
+            internal: boolean;
             /** Format: int64 */
             merge_request_id: number;
             /** Format: int32 */
@@ -4773,6 +4790,11 @@ export interface components {
         };
         NoteBody: {
             body: string;
+            /**
+             * @description A new comment seen only by the project's Reporters and up (who alone may
+             *     write one). Not changed by an edit.
+             */
+            internal?: boolean;
         };
         NoteDto: components["schemas"]["Note"] & {
             /** @description Sanitized HTML of the body (Markdown). */
@@ -6181,6 +6203,8 @@ export interface components {
         UpdateIssueBody: {
             /** @description Replace the assignees (user ids). */
             assignee_ids?: number[] | null;
+            /** @description The author, an assignee or a Reporter+. */
+            confidential?: boolean | null;
             description?: string | null;
             /** @description `YYYY-MM-DD`; empty clears it. */
             due_date?: string | null;

@@ -57,11 +57,12 @@ pub async fn list(
         Some("closed") => "closed",
         _ => "all",
     };
-    let all: Vec<Milestone> = forgust_db::milestones::list(&state.db, p.id, st, &forgust_db::like_escape(q.search.trim()))
-        .await?
-        .into_iter()
-        .filter(|m| q.title.as_deref().is_none_or(|t| m.title == t))
-        .collect();
+    let all: Vec<Milestone> =
+        forgust_db::milestones::list(&state.db, p.id, st, &forgust_db::like_escape(q.search.trim()), v.search_viewer())
+            .await?
+            .into_iter()
+            .filter(|m| q.title.as_deref().is_none_or(|t| m.title == t))
+            .collect();
     let total = all.len() as i64;
     let items: Vec<Value> =
         all.iter().skip(pg.offset() as usize).take(pg.per_page() as usize).map(|m| milestone_json(&state, &p, m)).collect();

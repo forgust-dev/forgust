@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) AS \"n!\" FROM todos t JOIN listed_project_authorizations a ON a.project_id = t.project_id AND a.user_id = t.user_id\n           JOIN users me ON me.id = t.user_id\n           LEFT JOIN issues i ON t.target_type = 'issue' AND i.project_id = t.project_id AND i.iid = t.target_iid\n           WHERE t.user_id = $1 AND t.state = 'pending' AND (t.target_type <> 'merge_request' OR a.access_level >= 20)\n             AND (i.id IS NULL OR issue_visible(i, me.id, me.is_admin))",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "n!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "e536db43a32ff26933e44f9b1fa5ba00ddbd3dae07cf5fde67d1cb63671753eb"
+}

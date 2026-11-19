@@ -131,6 +131,8 @@ volumes: { forgust-data: {}, db-data: {} }
 
 ### 🗂️ Planning
 - Issues with labels, milestones, due dates, assignees and templates
+- Confidential issues (only Reporters and up, the author and the assignees see them)
+  and internal comments on issues and merge requests (only Reporters and up)
 - Mentions, `#12` and `!45` references, to-dos and a "Your work" inbox
 - Emoji reactions, watching projects, per-project notification levels, an inbox in the app (live), and a switch per kind of notification for the app and for email
 
@@ -157,9 +159,11 @@ volumes: { forgust-data: {}, db-data: {} }
 - Background jobs, health checks, backups from the UI, an instance banner, a notice to administrators when a new release is out (can be turned off)
 
 ### 🔌 Integrations
-- Import from GitLab and GitHub: repositories, merge requests, issues, labels,
-  members; a dry run first, resumable
-- Webhooks, also formatted for Slack, Discord, Matrix, Mattermost and Teams
+- Import from GitLab and GitHub: repositories, merge requests, issues (confidential
+  ones stay confidential, internal notes internal), labels, members; a dry run first,
+  resumable
+- Webhooks, also formatted for Slack, Discord, Matrix, Mattermost and Teams; confidential
+  issues and internal comments only go to hooks that ask for their own events
 - A GitLab-compatible `/api/v4` subset, so Renovate and `glab` work
 - An MCP server for AI assistants, with OAuth sign-in
 
@@ -183,7 +187,7 @@ against 300 ms).
 
 Forgust is young (0.1) and built for private teams first. Not there yet: forks and
 merge requests from forks, wikis, snippets, package registries, push and pull
-mirroring, issue boards, confidential issues, system hooks, and SAML or LDAP sign-in. Code search covers each project's default branch, not other branches
+mirroring, issue boards, system hooks, and SAML or LDAP sign-in. Code search covers each project's default branch, not other branches
 or tags.
 
 ## Tech Stack

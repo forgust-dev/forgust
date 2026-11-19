@@ -3,8 +3,8 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, CircleDot, GitMerge, GitPullRequestClosed, GitPullRequestArrow, MessageSquare, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { api, qs, timeAgo, type S } from "../../api/client";
-import { AuthorLink, Avatar, Empty, ErrorBox, Field, FieldGroup, FilterTabs, ImportedMark, ListHead, Q, SearchField, authorOf, Pager, useDebounced } from "../../components/ui";
-import { Select } from "../../components/controls";
+import { AuthorLink, Avatar, ConfidentialMark, Empty, ErrorBox, Field, FieldGroup, FilterTabs, ImportedMark, InternalMark, InternalToggle, ListHead, Q, SearchField, authorOf, Pager, useDebounced } from "../../components/ui";
+import { Select, Switch } from "../../components/controls";
 import { TemplatePicker } from "../../components/templates";
 import { MarkdownEditor } from "../../components/MarkdownEditor";
 import { EditLabelsButton, LabelChip, LabelList, LabelPicker, MilestoneChip, SystemText, useLabels } from "../../components/labels";
@@ -130,6 +130,7 @@ export function IssueList({ ctx }: { ctx: Ctx }) {
                       <Link to={`${ctx.web}/-/issues/${i.iid}`} className="ellipsis">
                         {i.title}
                       </Link>
+                      {i.confidential && <ConfidentialMark />}
                       <LabelList labels={i.labels} to={labelTo} />
                     </div>
                     <div className="row-meta">
@@ -175,12 +176,13 @@ export function NewIssue({ ctx }: { ctx: Ctx }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [labels, setLabels] = useState<string[]>([]);
+  const [confidential, setConfidential] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const all = useLabels(ctx.p.id);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      const i = await api.post<S["IssueDto"]>(`/projects/${ctx.p.id}/issues`, { title, description, labels });
+      const i = await api.post<S["IssueDto"]>(`/projects/${ctx.p.id}/issues`, { title, description, labels, confidential });
       qc.invalidateQueries({ queryKey: ["issues", ctx.p.id] });
       nav(`${ctx.web}/-/issues/${i.iid}`);
     } catch (err) {
@@ -219,6 +221,12 @@ export function NewIssue({ ctx }: { ctx: Ctx }) {
             </div>
           </FieldGroup>
         )}
+        <div className="stack" style={{ gap: 4 }}>
+          <Switch checked={confidential} onChange={setConfidential}>
+            Confidential
+          </Switch>
+          <span className="muted small">Only Reporters and up, the author and assignees can see it.</span>
+        </div>
         <div className="form-actions">
           <Link className="btn" to={`${ctx.web}/-/issues`}>
             Cancel
@@ -261,6 +269,7 @@ export function IssuePage({ ctx, iid }: { ctx: Ctx; iid: number }) {
           <header className="mr-head">
             <div className="mr-status">
               <span className={`mr-state ${i.state}`}>{i.state === "opened" ? "Open" : "Closed"}</span>
+              {i.confidential && <ConfidentialMark />}
               <span>#{i.iid}</span>
               <span aria-hidden="true">·</span>
               <span>
@@ -335,6 +344,21 @@ export function IssuePage({ ctx, iid }: { ctx: Ctx; iid: number }) {
                           {m.closes && <span className="related-closes">closes</span>}
                         </Link>
                       ))}
+                    </div>
+                  </div>
+                )}
+                {(i.can_set_confidential || i.confidential) && (
+                  <div className="fact">
+                    <span className="fact-label">Visibility</span>
+                    <div className="fact-value column">
+                      {i.can_set_confidential ? (
+                        <Switch checked={i.confidential} onChange={(v) => update({ confidential: v }, v ? "Issue made confidential" : "Issue made visible to everyone")}>
+                          Confidential
+                        </Switch>
+                      ) : (
+                        <span>Confidential</span>
+                      )}
+                      <span className="muted small">{i.confidential ? "Only Reporters and up, the author and assignees can see it." : "Everyone who can see the project can see it."}</span>
                     </div>
                   </div>
                 )}
@@ -416,13 +440,15 @@ function IssueActivity({ ctx, i, notes, labels, refresh }: { ctx: Ctx; i: S["Iss
   const milestones = useMilestones(ctx.p.id, "all");
   const toast = useToast();
   const [body, setBody] = useState("");
+  const [internal, setInternal] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const path = `/projects/${ctx.p.id}/issues/${i.iid}`;
   const send = async (close?: boolean) => {
     try {
-      if (body.trim()) await api.post(`${path}/notes`, { body });
+      if (body.trim()) await api.post(`${path}/notes`, { body, internal });
       if (close != null) await api.put(path, { state_event: close ? "close" : "reopen" });
       setBody("");
+      setInternal(false);
       setError(null);
       refresh();
     } catch (err) {
@@ -465,8 +491,9 @@ function IssueActivity({ ctx, i, notes, labels, refresh }: { ctx: Ctx; i: S["Iss
           }}
         >
           <ErrorBox error={error} />
-          <MarkdownEditor projectId={ctx.p.id} rows={3} placeholder="Leave a comment" value={body} onChange={setBody} label="Comment" />
-          <div className="row" style={{ justifyContent: "flex-end" }}>
+          <MarkdownEditor projectId={ctx.p.id} rows={3} placeholder={internal ? "Leave an internal comment" : "Leave a comment"} value={body} onChange={setBody} label="Comment" />
+          <div className="row wrap" style={{ justifyContent: "flex-end" }}>
+            {i.can_comment_internal && <InternalToggle grow checked={internal} onChange={setInternal} />}
             {i.can_edit && (
               <button type="button" className="btn" onClick={() => send(i.state === "opened")}>
                 {i.state === "opened" ? (body.trim() ? "Close with comment" : "Close issue") : body.trim() ? "Reopen with comment" : "Reopen issue"}
@@ -494,12 +521,13 @@ function IssueComment({ ctx, i, n, refresh, toast }: { ctx: Ctx; i: S["IssueDeta
   const path = `/projects/${ctx.p.id}/issues/${i.iid}/notes/${n.id}`;
   const own = user?.id === n.author_id;
   return (
-    <div className="thread plain">
+    <div className={`thread plain ${n.internal ? "internal" : ""}`}>
       <div className="note-meta">
         <strong>
           <AuthorLink x={n} />
         </strong>{" "}
         <span className="faint">{timeAgo(n.created_at)}</span>
+        {n.internal && <InternalMark />}
         <ImportedMark x={n} />
         {own && !editing && (
           <button className="link-btn small" onClick={() => setEditing(true)}>

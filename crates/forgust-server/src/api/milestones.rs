@@ -33,7 +33,7 @@ pub async fn list(
     if !["active", "closed", "all"].contains(&st) {
         return Err(ApiError::bad("state must be active, closed or all"));
     }
-    Ok(Json(forgust_db::milestones::list(&state.db, p.id, st, &forgust_db::like_escape(q.search.trim())).await?))
+    Ok(Json(forgust_db::milestones::list(&state.db, p.id, st, &forgust_db::like_escape(q.search.trim()), v.search_viewer()).await?))
 }
 
 #[utoipa::path(get, path = "/api/v1/projects/{id}/milestones/{milestone_id}", responses((status = 200, body = Milestone)), tag = "issues")]

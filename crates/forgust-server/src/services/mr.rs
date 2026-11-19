@@ -15,7 +15,7 @@ use utoipa::ToSchema;
 
 use super::audit;
 use crate::auth::Principal;
-use crate::auth::authz::{ProjectAction, project_role, require_project};
+use crate::auth::authz::{ProjectAction, can_project, project_role, require_project};
 use crate::error::{ApiError, ApiResult};
 use crate::events::Event;
 use crate::jobs::{PostReceive, RefUpdate};
@@ -132,7 +132,7 @@ pub async fn create(state: &AppState, principal: &Principal, p: &Project, req: C
     }
     audit(state, principal, "merge_request_opened", Some(("project", p.id)), json!({ "iid": iid }), None).await;
     after_change(state, p, &mr, "open", Some(&user)).await;
-    super::refs::on_write(state, p, &user, mr_target(&mr), &mr.description, None).await;
+    super::refs::on_write(state, p, &user, mr_target(&mr), &mr.description, None, false).await;
     super::notify::new_merge_request(state, p, &mr, &user).await;
     // a merge request pipeline, when the config has jobs for them, and when the
     // author may run pipelines on the source (a protected one has protected variables)
@@ -196,7 +196,7 @@ pub async fn update_details(state: &AppState, principal: &Principal, p: &Project
     if let Some(user) = principal.direct_user()
         && description != m.description
     {
-        super::refs::on_write(state, p, user, mr_target(m), description, Some(&m.description)).await;
+        super::refs::on_write(state, p, user, mr_target(m), description, Some(&m.description), false).await;
         // a ticked box (rebase, retry) in a Renovate merge request
         super::renovate::on_description_edit(state, p.id, m.author_id, user, &m.description, description).await;
     }
@@ -259,7 +259,7 @@ pub(crate) async fn add_version(
             mrdb::reset_approvals(&mut *tx, mr_id).await?;
         }
         let msg = format!("added version {} ({} commit{})", d.version, commits, if commits == 1 { "" } else { "s" });
-        mrdb::add_note(&mut *tx, mr_id, None, None, &msg, true, Position::default()).await?;
+        mrdb::add_note(&mut *tx, mr_id, None, None, &msg, true, false, Position::default()).await?;
     }
     mrdb::touch(&mut *tx, mr_id).await?;
     tx.commit().await?;
@@ -702,6 +702,7 @@ pub async fn merge(
         None,
         &format!("merged into `{}` ({})", mr.target_branch, &new_target[..8]),
         true,
+        false,
         Position::default(),
     )
     .await?;
@@ -838,7 +839,7 @@ pub async fn set_open(state: &AppState, principal: &Principal, p: &Project, mr: 
         super::stack::detach(state, p, &current, user).await?;
     }
     mrdb::set_state(&mut *tx, mr.id, if open { "opened" } else { "closed" }).await?;
-    mrdb::add_note(&mut *tx, mr.id, user, None, if open { "reopened" } else { "closed" }, true, Position::default()).await?;
+    mrdb::add_note(&mut *tx, mr.id, user, None, if open { "reopened" } else { "closed" }, true, false, Position::default()).await?;
     tx.commit().await?;
     if open {
         // commits pushed while it was closed were never recorded (pushes skip
@@ -877,7 +878,7 @@ pub async fn set_labels(
     let mut tx = state.db.begin().await?;
     idb::set_mr_labels(&mut tx, m.id, &labels.iter().map(|l| l.id).collect::<Vec<_>>()).await?;
     if let Some(text) = super::issues::label_change(&added, &removed) {
-        mrdb::add_note(&mut *tx, m.id, Some(user.id), None, &text, true, Position::default()).await?;
+        mrdb::add_note(&mut *tx, m.id, Some(user.id), None, &text, true, false, Position::default()).await?;
         mrdb::touch(&mut *tx, m.id).await?;
     }
     tx.commit().await?;
@@ -925,8 +926,17 @@ pub async fn approve(state: &AppState, principal: &Principal, p: &Project, mr: &
         mrdb::unapprove(&state.db, mr.id, user.id).await?;
         super::people::reviewed(state, mr, user.id, super::people::ReviewAction::Unapproved).await;
     }
-    mrdb::add_note(&state.db, mr.id, Some(user.id), None, if approve { "approved" } else { "revoked approval" }, true, Position::default())
-        .await?;
+    mrdb::add_note(
+        &state.db,
+        mr.id,
+        Some(user.id),
+        None,
+        if approve { "approved" } else { "revoked approval" },
+        true,
+        false,
+        Position::default(),
+    )
+    .await?;
     state.events.publish(Event::MergeRequest { project_id: p.id, iid: mr.iid });
     super::auto_merge::poke(state, p.id, mr.iid).await;
     Ok(())
@@ -947,6 +957,10 @@ pub struct NewPosition {
     pub start_new_line: Option<i32>,
 }
 
+/// A comment, a reply (`parent_id`) or a comment on a line (`position`); an
+/// `internal` one is for the project's Reporters and up (a reply to an internal
+/// comment is internal too).
+#[allow(clippy::too_many_arguments)]
 pub async fn add_note(
     state: &AppState,
     principal: &Principal,
@@ -955,6 +969,7 @@ pub async fn add_note(
     body: &str,
     parent_id: Option<i64>,
     position: Option<NewPosition>,
+    internal: bool,
 ) -> ApiResult<Note> {
     require_project(state, principal, ProjectAction::ReadCode, p).await?;
     crate::auth::authz::writable(p)?;
@@ -962,8 +977,11 @@ pub async fn add_note(
     if body.trim().is_empty() || body.len() > 100_000 {
         return Err(ApiError::bad("a comment of 1-100,000 characters is required"));
     }
+    let members = can_project(state, principal, ProjectAction::ReadInternal, p).await?;
+    let mut internal = internal;
     if let Some(pid) = parent_id {
-        let parent = mrdb::note(&state.db, mr.id, pid).await?.ok_or(ApiError::NotFound)?;
+        let parent = mrdb::note(&state.db, mr.id, pid).await?.filter(|n| members || !n.internal).ok_or(ApiError::NotFound)?;
+        internal |= parent.internal;
         if parent.parent_id.is_some() || parent.system {
             return Err(ApiError::bad("replies go to the first comment of a thread"));
         }
@@ -1014,26 +1032,32 @@ pub async fn add_note(
             start_new_line: np.start_new_line,
         };
     }
-    let id = mrdb::add_note(&state.db, mr.id, Some(user.id), parent_id, body, false, pos).await?;
+    if internal && !members {
+        return Err(ApiError::forbidden("internal comments need at least the Reporter role"));
+    }
+    let id = mrdb::add_note(&state.db, mr.id, Some(user.id), parent_id, body, false, internal, pos).await?;
     mrdb::touch(&state.db, mr.id).await?;
     super::people::reviewed(state, mr, user.id, super::people::ReviewAction::Commented).await;
     let note = mrdb::note(&state.db, mr.id, id).await?.ok_or(ApiError::NotFound)?;
     state.events.publish(Event::MergeRequest { project_id: p.id, iid: mr.iid });
     note_webhook(state, p, mr, &note, &user.username).await;
-    let mentioned = super::refs::on_write(state, p, &user, mr_target(mr), body, None).await;
+    let mentioned = super::refs::on_write(state, p, &user, mr_target(mr), body, None, internal).await;
     done(state, user.id, p, mr).await;
     super::notify::merge_request_note(state, p, mr, &user, &note, &mentioned).await;
     Ok(note)
 }
 
-/// The `note` webhook of a merge request's comment.
+/// The `note` webhook of a merge request's comment (an internal one only to
+/// the hooks that asked for confidential notes).
 pub(crate) async fn note_webhook(state: &AppState, p: &Project, mr: &MergeRequest, note: &Note, author: &str) {
-    super::webhooks::emit(
+    super::webhooks::emit_members_only(
         state,
         p,
         "note",
+        note.internal,
         json!({ "object_kind": "note", "project": project_json(state, p), "merge_request": { "iid": mr.iid, "title": mr.title },
-                "note": { "id": note.id, "body": note.body, "author": author, "new_path": note.new_path, "new_line": note.new_line } }),
+                "note": { "id": note.id, "body": note.body, "author": author, "new_path": note.new_path, "new_line": note.new_line,
+                          "internal": note.internal, "noteable_type": "MergeRequest" } }),
     )
     .await;
 }
@@ -1101,7 +1125,7 @@ pub async fn resolve_thread(
 ) -> ApiResult<()> {
     crate::auth::authz::writable(p)?;
     let user = principal.direct_user().ok_or(ApiError::Unauthorized)?;
-    let note = mrdb::note(&state.db, mr.id, note_id).await?.ok_or(ApiError::NotFound)?;
+    let note = visible_note(state, principal, p, mr, note_id).await?;
     if note.parent_id.is_some() || note.system {
         return Err(ApiError::bad("resolve the first comment of a thread"));
     }
@@ -1123,19 +1147,29 @@ pub async fn edit_note(
     note_id: i64,
     body: Option<&str>,
 ) -> ApiResult<()> {
-    let note = mrdb::note(&state.db, mr.id, note_id).await?.ok_or(ApiError::NotFound)?;
+    let note = visible_note(state, principal, p, mr, note_id).await?;
     super::check_note_change(state, principal, p, note.author_id, note.system, body).await?;
     match body {
         Some(b) => {
             mrdb::edit_note(&state.db, note.id, b).await?;
             if let Some(user) = principal.direct_user() {
-                super::refs::on_write(state, p, user, mr_target(mr), b, Some(&note.body)).await;
+                super::refs::on_write(state, p, user, mr_target(mr), b, Some(&note.body), note.internal).await;
             }
         }
         None => mrdb::delete_note(&state.db, note.id).await?,
     }
     state.events.publish(Event::MergeRequest { project_id: p.id, iid: mr.iid });
     Ok(())
+}
+
+/// A note of the merge request, if `principal` may see it (an internal one:
+/// Reporters and up), or 404.
+pub async fn visible_note(state: &AppState, principal: &Principal, p: &Project, mr: &MergeRequest, note_id: i64) -> ApiResult<Note> {
+    let note = mrdb::note(&state.db, mr.id, note_id).await?.ok_or(ApiError::NotFound)?;
+    if note.internal && !can_project(state, principal, ProjectAction::ReadInternal, p).await? {
+        return Err(ApiError::NotFound);
+    }
+    Ok(note)
 }
 
 // ------------------------------------------------------------------ side effects

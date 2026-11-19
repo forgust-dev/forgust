@@ -910,7 +910,7 @@ pub async fn markdown(
     }
     let r = p.default_branch.clone().unwrap_or_else(|| "main".into());
     // previews are of comments and descriptions: references link as they will
-    Ok(axum::Json(MarkdownHtml { html: crate::services::refs::render(&state, &p, &b.text, &r, true).await }))
+    Ok(axum::Json(MarkdownHtml { html: crate::services::refs::render(&state, &p, &b.text, &r, true, v.search_viewer()).await }))
 }
 
 #[derive(Serialize, ToSchema)]

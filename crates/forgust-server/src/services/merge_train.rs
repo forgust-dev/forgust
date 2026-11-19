@@ -114,7 +114,7 @@ pub async fn drop_mr(state: &AppState, p: &Project, mr_id: i64, why: &str) -> an
 }
 
 async fn note(state: &AppState, mr_id: i64, user_id: Option<i64>, body: &str) {
-    if let Err(e) = mrdb::add_note(&state.db, mr_id, user_id, None, body, true, Position::default()).await {
+    if let Err(e) = mrdb::add_note(&state.db, mr_id, user_id, None, body, true, false, Position::default()).await {
         tracing::warn!(mr_id, error = %e, "merge train note not written");
     }
 }

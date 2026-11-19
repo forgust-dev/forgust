@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT count(*) FILTER (WHERE state = 'opened') AS \"opened!\", count(*) FILTER (WHERE state = 'closed') AS \"closed!\"\n           FROM issues WHERE project_id = $1",
+  "query": "SELECT count(*) FILTER (WHERE state = 'opened') AS \"opened!\", count(*) FILTER (WHERE state = 'closed') AS \"closed!\"\n           FROM issues i WHERE project_id = $1 AND issue_visible(i, $2, $3)",
   "describe": {
     "columns": [
       {
@@ -18,7 +18,9 @@
     ],
     "parameters": {
       "Left": [
-        "Int8"
+        "Int8",
+        "Int8",
+        "Bool"
       ]
     },
     "nullable": [
@@ -26,5 +28,5 @@
       null
     ]
   },
-  "hash": "518714bdc0ff7b44165c976b1b3d47e66e6a798b9f8b1b24892b6bb3210c30fa"
+  "hash": "1c6f2f7356880e46613decf5cb0b0f73adab49e0bcbaf66397202002bb3ffdaf"
 }

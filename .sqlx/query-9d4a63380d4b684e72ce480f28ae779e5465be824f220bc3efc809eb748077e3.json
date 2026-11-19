@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT merge_request_id, count(*) AS \"n!\" FROM notes WHERE merge_request_id = ANY($1) AND NOT system GROUP BY merge_request_id",
+  "query": "SELECT merge_request_id, count(*) AS \"n!\" FROM notes\n           WHERE merge_request_id = ANY($1) AND NOT system AND NOT internal GROUP BY merge_request_id",
   "describe": {
     "columns": [
       {
@@ -31,5 +31,5 @@
       null
     ]
   },
-  "hash": "7589acad19b77b6f34bacb88582efb254bc4e5ee47580cc9c2f2dbe4c43972fb"
+  "hash": "9d4a63380d4b684e72ce480f28ae779e5465be824f220bc3efc809eb748077e3"
 }

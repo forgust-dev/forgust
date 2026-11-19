@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT m.id, m.project_id, m.iid, m.title, m.description, m.state, m.start_date, m.due_date, m.created_at, m.updated_at,\n                  (SELECT count(*) FROM issues i WHERE i.milestone_id = m.id AND i.state = 'opened') AS \"open_issues!\",\n                  (SELECT count(*) FROM issues i WHERE i.milestone_id = m.id AND i.state = 'closed') AS \"closed_issues!\",\n                  (SELECT count(*) FROM merge_requests r WHERE r.milestone_id = m.id AND r.state = 'opened') AS \"open_merge_requests!\",\n                  (SELECT count(*) FROM merge_requests r WHERE r.milestone_id = m.id AND r.state = 'merged') AS \"merged_merge_requests!\"\n           FROM milestones m\n           WHERE m.project_id = $1 AND ($2 = 'all' OR m.state = $2)\n             AND ($3 = '' OR m.title ILIKE '%' || $3 || '%' ESCAPE '\\')\n           ORDER BY m.state = 'closed', m.due_date ASC NULLS LAST, m.id DESC",
+  "query": "SELECT m.id, m.project_id, m.iid, m.title, m.description, m.state, m.start_date, m.due_date, m.created_at, m.updated_at,\n                  (SELECT count(*) FROM issues i WHERE i.milestone_id = m.id AND i.state = 'opened' AND issue_visible(i, $4, $5)) AS \"open_issues!\",\n                  (SELECT count(*) FROM issues i WHERE i.milestone_id = m.id AND i.state = 'closed' AND issue_visible(i, $4, $5)) AS \"closed_issues!\",\n                  (SELECT count(*) FROM merge_requests r WHERE r.milestone_id = m.id AND r.state = 'opened') AS \"open_merge_requests!\",\n                  (SELECT count(*) FROM merge_requests r WHERE r.milestone_id = m.id AND r.state = 'merged') AS \"merged_merge_requests!\"\n           FROM milestones m\n           WHERE m.project_id = $1 AND ($2 = 'all' OR m.state = $2)\n             AND ($3 = '' OR m.title ILIKE '%' || $3 || '%' ESCAPE '\\')\n           ORDER BY m.state = 'closed', m.due_date ASC NULLS LAST, m.id DESC",
   "describe": {
     "columns": [
       {
@@ -142,7 +142,9 @@
       "Left": [
         "Int8",
         "Text",
-        "Text"
+        "Text",
+        "Int8",
+        "Bool"
       ]
     },
     "nullable": [
@@ -162,5 +164,5 @@
       null
     ]
   },
-  "hash": "bb3f452f1b39be20829916db13434cdea442192f49d1217783f8e73a3644380c"
+  "hash": "1d43c8a8861c1b463163c77b3f69cba81e7b6987871e1eb09cf134a44731e1b1"
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO issue_notes (issue_id, author_id, imported_author, body, system, created_at, updated_at)\n         VALUES ($1, $2, $3, $4, $5, coalesce($6, now()), coalesce($6, now())) RETURNING id",
+  "query": "INSERT INTO issue_notes (issue_id, author_id, imported_author, body, system, created_at, updated_at, internal)\n         VALUES ($1, $2, $3, $4, $5, coalesce($6, now()), coalesce($6, now()), $7) RETURNING id",
   "describe": {
     "columns": [
       {
@@ -22,12 +22,13 @@
         "Text",
         "Text",
         "Bool",
-        "Timestamptz"
+        "Timestamptz",
+        "Bool"
       ]
     },
     "nullable": [
       false
     ]
   },
-  "hash": "0e284b6e47b89db05d8e6ffc51b05f2f41cbe663227608cc0ee8e8d3a628f117"
+  "hash": "b4cb62d6c827c3c3cb1ca76b52271308f24bebf9beb30c787b191c2673ccf438"
 }

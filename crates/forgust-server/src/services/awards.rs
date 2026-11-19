@@ -9,7 +9,7 @@ use serde::Serialize;
 use utoipa::ToSchema;
 
 use crate::auth::Principal;
-use crate::auth::authz::{ProjectAction, require_project};
+use crate::auth::authz::{ProjectAction, can_project, require_project};
 use crate::error::{ApiError, ApiResult};
 use crate::state::AppState;
 
@@ -67,7 +67,8 @@ pub enum On {
     Issue { iid: i64, note_id: Option<i64> },
 }
 
-/// The row to react to, checked: the viewer may see it, and the comment is on it.
+/// The row to react to, checked: the viewer may see it (a confidential issue,
+/// an internal comment), and the comment is on it.
 async fn resolve(state: &AppState, principal: &Principal, p: &Project, on: On) -> ApiResult<Target> {
     match on {
         On::MergeRequest { iid, note_id } => {
@@ -75,21 +76,16 @@ async fn resolve(state: &AppState, principal: &Principal, p: &Project, on: On) -
             let m = forgust_db::merge_requests::find(&state.db, p.id, iid).await?.ok_or(ApiError::NotFound)?;
             match note_id {
                 None => Ok(Target::MergeRequest(m.id)),
-                Some(n) => {
-                    let note = forgust_db::merge_requests::note(&state.db, m.id, n).await?.ok_or(ApiError::NotFound)?;
-                    Ok(Target::Note(note.id))
-                }
+                Some(n) => Ok(Target::Note(super::mr::visible_note(state, principal, p, &m, n).await?.id)),
             }
         }
         On::Issue { iid, note_id } => {
             require_project(state, principal, ProjectAction::Read, p).await?;
             let i = forgust_db::issues::find(&state.db, p.id, iid).await?.ok_or(ApiError::NotFound)?;
+            super::issues::require_see(state, principal, &i).await?;
             match note_id {
                 None => Ok(Target::Issue(i.id)),
-                Some(n) => {
-                    let note = forgust_db::issues::note(&state.db, i.id, n).await?.ok_or(ApiError::NotFound)?;
-                    Ok(Target::IssueNote(note.id))
-                }
+                Some(n) => Ok(Target::IssueNote(super::issues::visible_note(state, principal, p, &i, n).await?.id)),
             }
         }
     }
@@ -121,12 +117,14 @@ pub async fn add(state: &AppState, principal: &Principal, p: &Project, on: On, n
     Ok(forgust_db::awards::add(&state.db, user.id, name, target).await?)
 }
 
-/// All reactions on the MR or issue and its comments, as the viewer sees them.
+/// All reactions on the MR or issue and its comments, as the viewer sees them
+/// (none on internal comments for those who do not see them).
 pub async fn list(state: &AppState, principal: &Principal, p: &Project, on: On) -> ApiResult<Vec<Award>> {
     let target = resolve(state, principal, p, on).await?;
+    let members = can_project(state, principal, ProjectAction::ReadInternal, p).await?;
     Ok(match target {
-        Target::MergeRequest(id) => forgust_db::awards::of_merge_request(&state.db, id).await?,
-        Target::Issue(id) => forgust_db::awards::of_issue(&state.db, id).await?,
+        Target::MergeRequest(id) => forgust_db::awards::of_merge_request(&state.db, id, members).await?,
+        Target::Issue(id) => forgust_db::awards::of_issue(&state.db, id, members).await?,
         _ => return Err(ApiError::bad("reactions are listed per merge request or issue")),
     })
 }

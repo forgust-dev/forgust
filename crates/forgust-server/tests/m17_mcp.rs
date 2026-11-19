@@ -11,55 +11,6 @@ use sha2::{Digest, Sha256};
 
 const REPO: &str = "acme/platform/api";
 
-struct Mcp {
-    base: String,
-    token: Option<String>,
-    http: reqwest::Client,
-}
-
-impl Mcp {
-    fn new(srv: &TestServer, token: Option<&str>) -> Mcp {
-        Mcp { base: srv.base.clone(), token: token.map(str::to_string), http: reqwest::Client::new() }
-    }
-
-    async fn raw(&self, body: Value) -> reqwest::Response {
-        let mut r = self.http.post(format!("{}/api/v4/mcp", self.base)).header("accept", "application/json, text/event-stream").json(&body);
-        if let Some(t) = &self.token {
-            r = r.bearer_auth(t);
-        }
-        r.send().await.unwrap()
-    }
-
-    async fn rpc(&self, method: &str, params: Value) -> Value {
-        let r = self.raw(json!({ "jsonrpc": "2.0", "id": 1, "method": method, "params": params })).await;
-        assert_eq!(r.status(), 200);
-        let v: Value = r.json().await.unwrap();
-        assert!(v.get("error").is_none(), "{method}: {v}");
-        v["result"].clone()
-    }
-
-    /// (is_error, text)
-    async fn call(&self, tool: &str, args: Value) -> (bool, String) {
-        let r = self.rpc("tools/call", json!({ "name": tool, "arguments": args })).await;
-        (r["isError"] == true, r["content"][0]["text"].as_str().unwrap().to_string())
-    }
-
-    async fn ok(&self, tool: &str, args: Value) -> String {
-        let (err, text) = self.call(tool, args.clone()).await;
-        assert!(!err, "{tool} {args}: {text}");
-        text
-    }
-
-    async fn tools(&self) -> Vec<String> {
-        self.rpc("tools/list", json!({})).await["tools"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|t| t["name"].as_str().unwrap().to_string())
-            .collect()
-    }
-}
-
 async fn token(c: &Client, name: &str, scopes: &[&str]) -> String {
     c.ok_post("/api/v1/user/tokens", json!({ "name": name, "scopes": scopes })).await["token"].as_str().unwrap().to_string()
 }

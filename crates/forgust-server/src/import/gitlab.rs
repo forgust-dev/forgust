@@ -156,8 +156,7 @@ struct GNote {
     created_at: DateTime<Utc>,
     #[serde(default)]
     system: bool,
-    /// Shown on GitLab to the project's members only: never imported, as a
-    /// note here is as visible as its issue or merge request
+    /// Shown on GitLab to the project's members only: imported internal
     #[serde(default)]
     internal: bool,
     /// The same, as GitLab 14 named it (later versions send both)
@@ -423,8 +422,14 @@ impl Source for GitLab {
             self.http.all(&format!("{}/issues/{}/notes", pid(p), issue.iid), &[("order_by", "created_at"), ("sort", "asc")]).await?;
         Ok(list
             .into_iter()
-            .filter(|n| !n.system && !n.members_only())
-            .map(|n| SourceComment { id: n.id.to_string(), author: user(n.author), body: n.body, created_at: n.created_at })
+            .filter(|n| !n.system)
+            .map(|n| SourceComment {
+                internal: n.members_only(),
+                id: n.id.to_string(),
+                author: user(n.author),
+                body: n.body,
+                created_at: n.created_at,
+            })
             .collect())
     }
 
@@ -479,8 +484,9 @@ impl Source for GitLab {
                 let notes: Vec<SourceNote> = d
                     .notes
                     .into_iter()
-                    .filter(|n| !n.system && !n.members_only())
+                    .filter(|n| !n.system)
                     .map(|n| SourceNote {
+                        internal: n.members_only(),
                         id: n.id.to_string(),
                         author: user(n.author),
                         body: n.body,
@@ -579,10 +585,8 @@ impl Source for GitLab {
     async fn plan(&self, p: &SourceProject) -> Result<Report> {
         let base = pid(p);
         let full: GProject = self.http.get(&base, &[("statistics", "true")]).await?;
-        // left out of the import (see `issues`), so not counted in it
-        let secret = self.http.count(&format!("{base}/issues"), &[("scope", "all"), ("confidential", "true")]).await?.unwrap_or(0);
         let mut r = Report {
-            issues: self.http.count(&format!("{base}/issues"), &[("scope", "all")]).await?.map(|n| (n - secret).max(0)),
+            issues: self.http.count(&format!("{base}/issues"), &[("scope", "all")]).await?,
             merge_requests: self.http.count(&format!("{base}/merge_requests"), &[("scope", "all"), ("state", "all")]).await?,
             labels: self.http.count(&format!("{base}/labels"), &[("include_ancestor_groups", "true")]).await?,
             variables: self.http.count(&format!("{base}/variables"), &[]).await?,
@@ -609,12 +613,6 @@ impl Source for GitLab {
         }
         if full.wiki_enabled == Some(true) && self.http.count(&format!("{base}/wikis"), &[]).await?.unwrap_or(0) > 0 {
             w.push("The wiki has pages; wikis are not supported yet.".into());
-        }
-        if secret > 0 {
-            w.push(format!(
-                "{secret} confidential issue{} will not be imported, nor will internal notes: Forgust has no confidential content.",
-                if secret == 1 { "" } else { "s" }
-            ));
         }
         if self.http.count(&format!("{base}/packages"), &[]).await?.unwrap_or(0) > 0 {
             w.push("The package registry has packages; they are not imported.".into());

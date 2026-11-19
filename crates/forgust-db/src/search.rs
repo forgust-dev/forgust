@@ -4,7 +4,7 @@
 //! rule `can_project` applies: admins see everything; anyone sees public
 //! projects, signed-in people internal ones, members their own. Issues need the
 //! project to be seen; merge requests its code (members of a private project:
-//! Reporter and up). Counts follow the same rule, so they never tell about
+//! Reporter and up), confidential issues `issue_visible`. Counts follow the same rule, so they never tell about
 //! hidden things.
 
 use chrono::{DateTime, Utc};
@@ -73,7 +73,7 @@ pub async fn issues(e: impl PgExecutor<'_>, v: Viewer, pattern: &str, state: &st
              FROM issues i JOIN projects p ON p.id = i.project_id
              JOIN routes r ON r.source_type = 'project' AND r.source_id = p.id
              LEFT JOIN users u ON u.id = i.author_id
-            WHERE i.title ILIKE '%' || $3 || '%' ESCAPE '\' AND ($4 = 'all' OR i.state = $4)
+            WHERE i.title ILIKE '%' || $3 || '%' ESCAPE '\' AND ($4 = 'all' OR i.state = $4) AND issue_visible(i, $1, $2)
               AND ($2 OR p.visibility = 20 OR (p.visibility = 10 AND $7)
                    OR EXISTS (SELECT 1 FROM listed_project_authorizations a WHERE a.project_id = p.id AND a.user_id = $1))
             ORDER BY i.updated_at DESC, i.id DESC LIMIT $5 OFFSET $6"#,
@@ -139,7 +139,8 @@ pub async fn counts(e: impl PgExecutor<'_>, v: Viewer, pattern: &str) -> Result<
                    OR EXISTS (SELECT 1 FROM listed_project_authorizations a WHERE a.project_id = p.id AND a.user_id = $1)
            )
            SELECT (SELECT count(*) FROM seen WHERE seen.name ILIKE '%' || $3 || '%' ESCAPE '\' OR seen.path ILIKE '%' || $3 || '%' ESCAPE '\') AS "projects!",
-                  (SELECT count(*) FROM issues i JOIN seen ON seen.id = i.project_id WHERE i.title ILIKE '%' || $3 || '%' ESCAPE '\') AS "issues!",
+                  (SELECT count(*) FROM issues i JOIN seen ON seen.id = i.project_id
+                    WHERE i.title ILIKE '%' || $3 || '%' ESCAPE '\' AND issue_visible(i, $1, $2)) AS "issues!",
                   (SELECT count(*) FROM merge_requests m JOIN seen ON seen.id = m.project_id AND seen.code
                     WHERE m.title ILIKE '%' || $3 || '%' ESCAPE '\') AS "merge_requests!""#,
         v.user_id,

@@ -5,6 +5,7 @@ use serde::Serialize;
 use sqlx::PgExecutor;
 
 use crate::Result;
+use crate::search::Viewer;
 
 // ------------------------------------------------------------------ labels
 
@@ -27,19 +28,27 @@ pub struct LabelWithCounts {
     pub open_merge_requests: i64,
 }
 
-pub async fn labels(e: impl PgExecutor<'_>, project_id: i64) -> Result<Vec<LabelWithCounts>> {
+/// The issue counts are of those `v` may see (confidential ones hidden).
+pub async fn labels(e: impl PgExecutor<'_>, project_id: i64, v: Viewer) -> Result<Vec<LabelWithCounts>> {
     sqlx::query_as!(
         LabelWithCounts,
         r#"SELECT l.id, l.name, l.color, l.description,
                   (SELECT count(*) FROM issue_labels il JOIN issues i ON i.id = il.issue_id
-                    WHERE il.label_id = l.id AND i.state = 'opened') AS "open_issues!",
+                    WHERE il.label_id = l.id AND i.state = 'opened' AND issue_visible(i, $2, $3)) AS "open_issues!",
                   (SELECT count(*) FROM merge_request_labels ml JOIN merge_requests m ON m.id = ml.merge_request_id
                     WHERE ml.label_id = l.id AND m.state = 'opened') AS "open_merge_requests!"
            FROM labels l WHERE l.project_id = $1 ORDER BY lower(l.name)"#,
-        project_id
+        project_id,
+        v.user_id,
+        v.admin
     )
     .fetch_all(e)
     .await
+}
+
+/// The project's label names, without counts.
+pub async fn label_names(e: impl PgExecutor<'_>, project_id: i64) -> Result<Vec<String>> {
+    sqlx::query_scalar!("SELECT name FROM labels WHERE project_id = $1", project_id).fetch_all(e).await
 }
 
 pub async fn label(e: impl PgExecutor<'_>, project_id: i64, id: i64) -> Result<Option<Label>> {
@@ -168,11 +177,14 @@ pub struct Issue {
     pub closed_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
-    /// Comments written by people (not system notes).
+    /// Comments written by people that everyone who sees the issue sees (not
+    /// system notes, not internal ones).
     pub notes_count: i64,
     pub milestone_id: Option<i64>,
     pub milestone_title: Option<String>,
     pub due_date: Option<chrono::NaiveDate>,
+    /// Seen only by the project's Reporters and up, its author and its assignees.
+    pub confidential: bool,
 }
 
 pub struct NewIssue<'a> {
@@ -189,13 +201,14 @@ pub struct NewIssue<'a> {
     pub closed_at: Option<DateTime<Utc>>,
     pub milestone_id: Option<i64>,
     pub due_date: Option<chrono::NaiveDate>,
+    pub confidential: bool,
 }
 
 pub async fn insert(e: impl PgExecutor<'_>, i: NewIssue<'_>) -> Result<i64> {
     sqlx::query_scalar!(
         "INSERT INTO issues (project_id, iid, title, description, author_id, imported_author, state, created_at, updated_at, closed_at,
-                             milestone_id, due_date)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, coalesce($8, now()), coalesce($9, $8, now()), $10, $11, $12) RETURNING id",
+                             milestone_id, due_date, confidential)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, coalesce($8, now()), coalesce($9, $8, now()), $10, $11, $12, $13) RETURNING id",
         i.project_id,
         i.iid,
         i.title,
@@ -207,19 +220,21 @@ pub async fn insert(e: impl PgExecutor<'_>, i: NewIssue<'_>) -> Result<i64> {
         i.updated_at,
         i.closed_at,
         i.milestone_id,
-        i.due_date
+        i.due_date,
+        i.confidential
     )
     .fetch_one(e)
     .await
 }
 
+/// Any issue, confidential or not: what a viewer may see is checked with [`visible`].
 pub async fn find(e: impl PgExecutor<'_>, project_id: i64, iid: i64) -> Result<Option<Issue>> {
     sqlx::query_as!(
         Issue,
         r#"SELECT i.id, i.project_id, i.iid, i.title, i.description, i.author_id, u.username AS "author_username?",
                   u.name AS "author_name?", i.imported_author, i.state, i.closed_by, i.closed_at, i.created_at, i.updated_at,
-                  (SELECT count(*) FROM issue_notes n WHERE n.issue_id = i.id AND NOT n.system) AS "notes_count!",
-                  i.milestone_id, ms.title AS "milestone_title?", i.due_date
+                  (SELECT count(*) FROM issue_notes n WHERE n.issue_id = i.id AND NOT n.system AND NOT n.internal) AS "notes_count!",
+                  i.milestone_id, ms.title AS "milestone_title?", i.due_date, i.confidential
            FROM issues i LEFT JOIN users u ON u.id = i.author_id LEFT JOIN milestones ms ON ms.id = i.milestone_id
            WHERE i.project_id = $1 AND i.iid = $2"#,
         project_id,
@@ -240,6 +255,10 @@ pub struct ListFilter<'a> {
     pub author_id: Option<i64>,
     /// Only issues on this milestone (`Some(0)`: on none).
     pub milestone_id: Option<i64>,
+    /// Only confidential ones (`Some(true)`) or only the others.
+    pub confidential: Option<bool>,
+    /// Who reads: confidential issues they may not see are left out.
+    pub viewer: Viewer,
     pub limit: i64,
     pub offset: i64,
 }
@@ -249,8 +268,8 @@ pub async fn list(e: impl PgExecutor<'_>, project_id: i64, f: ListFilter<'_>) ->
         Issue,
         r#"SELECT i.id, i.project_id, i.iid, i.title, i.description, i.author_id, u.username AS "author_username?",
                   u.name AS "author_name?", i.imported_author, i.state, i.closed_by, i.closed_at, i.created_at, i.updated_at,
-                  (SELECT count(*) FROM issue_notes n WHERE n.issue_id = i.id AND NOT n.system) AS "notes_count!",
-                  i.milestone_id, ms.title AS "milestone_title?", i.due_date
+                  (SELECT count(*) FROM issue_notes n WHERE n.issue_id = i.id AND NOT n.system AND NOT n.internal) AS "notes_count!",
+                  i.milestone_id, ms.title AS "milestone_title?", i.due_date, i.confidential
            FROM issues i LEFT JOIN users u ON u.id = i.author_id LEFT JOIN milestones ms ON ms.id = i.milestone_id
            WHERE i.project_id = $1 AND ($2 = 'all' OR i.state = $2)
              AND ($3 = '' OR i.title ILIKE '%' || $3 || '%' OR ('#' || i.iid::text) = $3 OR i.iid::text = $3)
@@ -259,6 +278,8 @@ pub async fn list(e: impl PgExecutor<'_>, project_id: i64, f: ListFilter<'_>) ->
              AND ($7::bigint IS NULL OR EXISTS (SELECT 1 FROM issue_assignees a WHERE a.issue_id = i.id AND a.user_id = $7))
              AND ($8::bigint IS NULL OR i.author_id = $8)
              AND ($9::bigint IS NULL OR ($9 = 0 AND i.milestone_id IS NULL) OR i.milestone_id = $9)
+             AND ($10::boolean IS NULL OR i.confidential = $10)
+             AND issue_visible(i, $11, $12)
            ORDER BY i.updated_at DESC LIMIT $5 OFFSET $6"#,
         project_id,
         f.state,
@@ -268,18 +289,23 @@ pub async fn list(e: impl PgExecutor<'_>, project_id: i64, f: ListFilter<'_>) ->
         f.offset,
         f.assignee_id,
         f.author_id,
-        f.milestone_id
+        f.milestone_id,
+        f.confidential,
+        f.viewer.user_id,
+        f.viewer.admin
     )
     .fetch_all(e)
     .await
 }
 
-/// Open and closed issue counts, for the list tabs.
-pub async fn counts(e: impl PgExecutor<'_>, project_id: i64) -> Result<(i64, i64)> {
+/// Open and closed issue counts, for the list tabs (of those `v` may see).
+pub async fn counts(e: impl PgExecutor<'_>, project_id: i64, v: Viewer) -> Result<(i64, i64)> {
     let r = sqlx::query!(
         r#"SELECT count(*) FILTER (WHERE state = 'opened') AS "opened!", count(*) FILTER (WHERE state = 'closed') AS "closed!"
-           FROM issues WHERE project_id = $1"#,
-        project_id
+           FROM issues i WHERE project_id = $1 AND issue_visible(i, $2, $3)"#,
+        project_id,
+        v.user_id,
+        v.admin
     )
     .fetch_one(e)
     .await?;
@@ -309,6 +335,20 @@ pub async fn set_state(e: impl PgExecutor<'_>, id: i64, open: bool, by: Option<i
     Ok(())
 }
 
+/// Whether `v` may see the issue (confidential ones: Reporters and up, the
+/// author, the assignees). Seeing the project is checked apart.
+pub async fn visible(e: impl PgExecutor<'_>, id: i64, v: Viewer) -> Result<bool> {
+    let ok = sqlx::query_scalar!(r#"SELECT issue_visible(i, $2, $3) AS "ok!" FROM issues i WHERE i.id = $1"#, id, v.user_id, v.admin)
+        .fetch_optional(e)
+        .await?;
+    Ok(ok.unwrap_or(false))
+}
+
+pub async fn set_confidential(e: impl PgExecutor<'_>, id: i64, confidential: bool) -> Result<()> {
+    sqlx::query!("UPDATE issues SET confidential = $2, updated_at = now() WHERE id = $1", id, confidential).execute(e).await?;
+    Ok(())
+}
+
 pub async fn touch(e: impl PgExecutor<'_>, id: i64) -> Result<()> {
     sqlx::query!("UPDATE issues SET updated_at = now() WHERE id = $1", id).execute(e).await?;
     Ok(())
@@ -328,6 +368,8 @@ pub struct IssueNote {
     pub system: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    /// Seen only by the project's Reporters and up.
+    pub internal: bool,
 }
 
 pub struct NewIssueNote<'a> {
@@ -337,31 +379,35 @@ pub struct NewIssueNote<'a> {
     pub body: &'a str,
     pub system: bool,
     pub created_at: Option<DateTime<Utc>>,
+    pub internal: bool,
 }
 
 pub async fn add_note(e: impl PgExecutor<'_>, n: NewIssueNote<'_>) -> Result<i64> {
     sqlx::query_scalar!(
-        "INSERT INTO issue_notes (issue_id, author_id, imported_author, body, system, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, coalesce($6, now()), coalesce($6, now())) RETURNING id",
+        "INSERT INTO issue_notes (issue_id, author_id, imported_author, body, system, created_at, updated_at, internal)
+         VALUES ($1, $2, $3, $4, $5, coalesce($6, now()), coalesce($6, now()), $7) RETURNING id",
         n.issue_id,
         n.author_id,
         n.imported_author,
         n.body,
         n.system,
-        n.created_at
+        n.created_at,
+        n.internal
     )
     .fetch_one(e)
     .await
 }
 
-pub async fn notes(e: impl PgExecutor<'_>, issue_id: i64) -> Result<Vec<IssueNote>> {
+/// An issue's notes; internal ones only `with_internal` (for Reporters and up).
+pub async fn notes(e: impl PgExecutor<'_>, issue_id: i64, with_internal: bool) -> Result<Vec<IssueNote>> {
     sqlx::query_as!(
         IssueNote,
         r#"SELECT n.id, n.issue_id, n.author_id, u.username AS "author_username?", u.name AS "author_name?", n.imported_author,
-                  n.body, n.system, n.created_at, n.updated_at
+                  n.body, n.system, n.created_at, n.updated_at, n.internal
            FROM issue_notes n LEFT JOIN users u ON u.id = n.author_id
-           WHERE n.issue_id = $1 ORDER BY n.created_at, n.id"#,
-        issue_id
+           WHERE n.issue_id = $1 AND ($2 OR NOT n.internal) ORDER BY n.created_at, n.id"#,
+        issue_id,
+        with_internal
     )
     .fetch_all(e)
     .await
@@ -371,7 +417,7 @@ pub async fn note(e: impl PgExecutor<'_>, issue_id: i64, id: i64) -> Result<Opti
     sqlx::query_as!(
         IssueNote,
         r#"SELECT n.id, n.issue_id, n.author_id, u.username AS "author_username?", u.name AS "author_name?", n.imported_author,
-                  n.body, n.system, n.created_at, n.updated_at
+                  n.body, n.system, n.created_at, n.updated_at, n.internal
            FROM issue_notes n LEFT JOIN users u ON u.id = n.author_id
            WHERE n.issue_id = $1 AND n.id = $2"#,
         issue_id,
@@ -391,10 +437,18 @@ pub async fn delete_note(e: impl PgExecutor<'_>, id: i64) -> Result<()> {
     Ok(())
 }
 
-/// (iid, title, state) of a project's issues among `iids`, for `#12` references.
-pub async fn titles(e: impl PgExecutor<'_>, project_id: i64, iids: &[i64]) -> Result<Vec<(i64, String, String)>> {
-    let rows =
-        sqlx::query!("SELECT iid, title, state FROM issues WHERE project_id = $1 AND iid = ANY($2)", project_id, iids).fetch_all(e).await?;
+/// (iid, title, state) of a project's issues among `iids` that `v` may see,
+/// for `#12` references.
+pub async fn titles(e: impl PgExecutor<'_>, project_id: i64, iids: &[i64], v: Viewer) -> Result<Vec<(i64, String, String)>> {
+    let rows = sqlx::query!(
+        "SELECT iid, title, state FROM issues i WHERE project_id = $1 AND iid = ANY($2) AND issue_visible(i, $3, $4)",
+        project_id,
+        iids,
+        v.user_id,
+        v.admin
+    )
+    .fetch_all(e)
+    .await?;
     Ok(rows.into_iter().map(|r| (r.iid, r.title, r.state)).collect())
 }
 

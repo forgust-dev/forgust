@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, qs, refLink, timeAgo, type S } from "../../api/client";
 import { useSession } from "../../session";
-import { AuthorLink, Avatar, Badge, Empty, ErrorBox, Field, FilterTabs, ImportedMark, ListHead, Q, SearchField, UserLink, authorOf, noteAuthor, useDebounced } from "../../components/ui";
+import { AuthorLink, Avatar, Badge, Empty, ErrorBox, Field, FilterTabs, ImportedMark, InternalMark, InternalToggle, ListHead, Q, SearchField, UserLink, authorOf, noteAuthor, useDebounced } from "../../components/ui";
 import { MarkdownEditor } from "../../components/MarkdownEditor";
 import { TemplatePicker } from "../../components/templates";
 import { EditLabelsButton, LabelList, LabelPicker, MilestoneChip, SystemText, useLabels } from "../../components/labels";
@@ -1074,7 +1074,7 @@ function Thread({ ctx, m, root, replies, boxed }: { ctx: Ctx; m: S["MrDetail"]; 
   const end = root.start_new_line != null ? root.new_line : root.old_line;
   const span = start != null && end != null && start !== end ? `lines ${start}–${end}` : null;
   return (
-    <div id={`note_${root.id}`} className={`thread ${boxed ? "boxed" : "plain"} ${root.resolved_at ? "resolved" : ""} ${root.review ? "review" : ""}`}>
+    <div id={`note_${root.id}`} className={`thread ${boxed ? "boxed" : "plain"} ${root.resolved_at ? "resolved" : ""} ${root.review ? "review" : ""} ${root.internal ? "internal" : ""}`}>
       {root.review === "requested_changes" && (
         <div className="thread-review">
           <FileWarning size={13} /> Requested changes
@@ -1090,6 +1090,7 @@ function Thread({ ctx, m, root, replies, boxed }: { ctx: Ctx; m: S["MrDetail"]; 
             </Link>
           )}
           {root.outdated && <Badge>outdated</Badge>}
+          {root.internal && <InternalMark />}
           <span className="grow" />
           {resolvable && (
             <button
@@ -1114,6 +1115,8 @@ function Thread({ ctx, m, root, replies, boxed }: { ctx: Ctx; m: S["MrDetail"]; 
                   <AuthorLink x={n} name />
                 </strong>{" "}
                 {n.author_bot && <Badge>bot</Badge>} <span className="faint">{timeAgo(n.created_at)}</span>
+                {/* a code thread shows it in its head; replies to an internal thread are internal too */}
+                {n.internal && !boxed && (n.id === root.id || !root.internal) && <InternalMark />}
                 <ImportedMark x={n} />
                 {user?.id === n.author_id && (
                   <button
@@ -1165,7 +1168,7 @@ function Thread({ ctx, m, root, replies, boxed }: { ctx: Ctx; m: S["MrDetail"]; 
         <ErrorBox error={error} />
         {open ? (
           <form className="stack" style={{ gap: 6 }} onSubmit={send}>
-            <MarkdownEditor projectId={ctx.p.id} autoFocus rows={3} value={reply} onChange={setReply} placeholder="Reply…" label="Reply" />
+            <MarkdownEditor projectId={ctx.p.id} autoFocus rows={3} value={reply} onChange={setReply} placeholder={root.internal ? "Reply internally…" : "Reply…"} label="Reply" />
             <div className="row">
               <button className="btn primary small" disabled={!reply.trim()}>
                 Reply
@@ -1215,6 +1218,7 @@ export function systemEvent(body: string): { icon: ReactNode; tone: string } {
 function Activity({ ctx, m, notes }: { ctx: Ctx; m: S["MrDetail"]; notes: S["NoteDto"][] }) {
   const qc = useQueryClient();
   const [body, setBody] = useState("");
+  const [internal, setInternal] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [filter, setFilter] = usePref<"all" | "comments" | "history">("mr.activity", "all");
   const pipelines = useMrPipelines(ctx, m);
@@ -1224,8 +1228,9 @@ function Activity({ ctx, m, notes }: { ctx: Ctx; m: S["MrDetail"]; notes: S["Not
   const send = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      await api.post(`/projects/${ctx.p.id}/merge_requests/${m.iid}/notes`, { body });
+      await api.post(`/projects/${ctx.p.id}/merge_requests/${m.iid}/notes`, { body, internal });
       setBody("");
+      setInternal(false);
       qc.invalidateQueries({ queryKey: ["mr", ctx.p.id, m.iid] });
     } catch (err) {
       setError(err);
@@ -1295,8 +1300,9 @@ function Activity({ ctx, m, notes }: { ctx: Ctx; m: S["MrDetail"]; notes: S["Not
       <Timeline entries={entries} />
       <form className="composer" onSubmit={send}>
         <ErrorBox error={error} />
-        <MarkdownEditor projectId={ctx.p.id} rows={3} placeholder="Leave a comment" value={body} onChange={setBody} label="Comment" />
-        <div className="row" style={{ justifyContent: "flex-end" }}>
+        <MarkdownEditor projectId={ctx.p.id} rows={3} placeholder={internal ? "Leave an internal comment" : "Leave a comment"} value={body} onChange={setBody} label="Comment" />
+        <div className="row wrap" style={{ justifyContent: "flex-end" }}>
+          {m.can_comment_internal && <InternalToggle grow checked={internal} onChange={setInternal} />}
           <button className="btn dark" disabled={!body.trim()}>
             Comment
           </button>
@@ -1400,11 +1406,11 @@ function Changes({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
             threads,
             unresolved,
             composer: (_key, pos: NewComment, close) => (
-              <Composer projectId={ctx.p.id} path={path} version={version} pos={pos} close={close} onDone={() => qc.invalidateQueries({ queryKey: ["mr", ctx.p.id, m.iid] })} />
+              <Composer projectId={ctx.p.id} path={path} version={version} pos={pos} canInternal={m.can_comment_internal} close={close} onDone={() => qc.invalidateQueries({ queryKey: ["mr", ctx.p.id, m.iid] })} />
             ),
           }
         : undefined,
-    [from, threads, unresolved, version, path, ctx.p.id, m.iid, qc],
+    [from, threads, unresolved, version, path, ctx.p.id, m.iid, m.can_comment_internal, qc],
   );
 
   return (
@@ -1446,8 +1452,25 @@ function Changes({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
   );
 }
 
-function Composer({ projectId, path, version, pos, close, onDone }: { projectId: number; path: string; version: number; pos: NewComment; close: () => void; onDone: () => void }) {
+function Composer({
+  projectId,
+  path,
+  version,
+  pos,
+  canInternal,
+  close,
+  onDone,
+}: {
+  projectId: number;
+  path: string;
+  version: number;
+  pos: NewComment;
+  canInternal: boolean;
+  close: () => void;
+  onDone: () => void;
+}) {
   const [body, setBody] = useState("");
+  const [internal, setInternal] = useState(false);
   const [error, setError] = useState<unknown>(null);
   return (
     <form
@@ -1457,7 +1480,7 @@ function Composer({ projectId, path, version, pos, close, onDone }: { projectId:
         e.preventDefault();
         try {
           const { text: _text, above: _above, ...position } = pos;
-          await api.post(`${path}/notes`, { body, position: { version, ...position } });
+          await api.post(`${path}/notes`, { body, internal, position: { version, ...position } });
           close();
           onDone();
         } catch (err) {
@@ -1472,6 +1495,7 @@ function Composer({ projectId, path, version, pos, close, onDone }: { projectId:
         </span>
       )}
       <MarkdownEditor projectId={projectId} autoFocus rows={3} value={body} onChange={setBody} placeholder="Comment on this line" label="Line comment" />
+      {canInternal && <InternalToggle checked={internal} onChange={setInternal} />}
       <div className="row">
         <button className="btn primary small" disabled={!body.trim()}>
           Comment

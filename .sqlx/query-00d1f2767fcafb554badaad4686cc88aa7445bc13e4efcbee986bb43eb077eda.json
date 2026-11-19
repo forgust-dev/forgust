@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT n.id, n.issue_id, n.author_id, u.username AS \"author_username?\", u.name AS \"author_name?\", n.imported_author,\n                  n.body, n.system, n.created_at, n.updated_at\n           FROM issue_notes n LEFT JOIN users u ON u.id = n.author_id\n           WHERE n.issue_id = $1 ORDER BY n.created_at, n.id",
+  "query": "SELECT n.id, n.issue_id, n.author_id, u.username AS \"author_username?\", u.name AS \"author_name?\", n.imported_author,\n                  n.body, n.system, n.created_at, n.updated_at, n.internal\n           FROM issue_notes n LEFT JOIN users u ON u.id = n.author_id\n           WHERE n.issue_id = $1 AND n.id = $2",
   "describe": {
     "columns": [
       {
@@ -112,10 +112,22 @@
             "name": "updated_at"
           }
         }
+      },
+      {
+        "ordinal": 10,
+        "name": "internal",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "issue_notes",
+            "name": "internal"
+          }
+        }
       }
     ],
     "parameters": {
       "Left": [
+        "Int8",
         "Int8"
       ]
     },
@@ -123,14 +135,15 @@
       false,
       false,
       true,
-      false,
-      false,
       true,
+      true,
+      true,
+      false,
       false,
       false,
       false,
       false
     ]
   },
-  "hash": "5dfe13ec35ebbebd9f18ec9d2fa46b57e55f14bfc88ed4f9741940e782f17ee4"
+  "hash": "00d1f2767fcafb554badaad4686cc88aa7445bc13e4efcbee986bb43eb077eda"
 }

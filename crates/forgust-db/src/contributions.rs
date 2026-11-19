@@ -46,12 +46,16 @@ pub async fn calendar(e: impl PgExecutor<'_>, user_id: i64, v: Viewer, since: Da
                SELECT project_id, created_at AS at, true AS code FROM push_events WHERE user_id = $1 AND created_at >= $2
                UNION ALL SELECT project_id, created_at, true FROM merge_requests WHERE author_id = $1 AND created_at >= $2
                UNION ALL SELECT project_id, merged_at, true FROM merge_requests WHERE merged_by = $1 AND merged_at >= $2
-               UNION ALL SELECT project_id, created_at, false FROM issues WHERE author_id = $1 AND created_at >= $2
-               UNION ALL SELECT project_id, closed_at, false FROM issues WHERE closed_by = $1 AND closed_at >= $2
+               UNION ALL SELECT project_id, created_at, false FROM issues i
+                         WHERE author_id = $1 AND created_at >= $2 AND issue_visible(i, $4, $5)
+               UNION ALL SELECT project_id, closed_at, false FROM issues i
+                         WHERE closed_by = $1 AND closed_at >= $2 AND issue_visible(i, $4, $5)
                UNION ALL SELECT m.project_id, n.created_at, true FROM notes n JOIN merge_requests m ON m.id = n.merge_request_id
                          WHERE n.author_id = $1 AND NOT n.system AND n.created_at >= $2
+                           AND (NOT n.internal OR sees_internal(m.project_id, $4, $5))
                UNION ALL SELECT i.project_id, n.created_at, false FROM issue_notes n JOIN issues i ON i.id = n.issue_id
-                         WHERE n.author_id = $1 AND NOT n.system AND n.created_at >= $2
+                         WHERE n.author_id = $1 AND NOT n.system AND n.created_at >= $2 AND issue_visible(i, $4, $5)
+                           AND (NOT n.internal OR sees_internal(i.project_id, $4, $5))
                UNION ALL SELECT m.project_id, a.created_at, true FROM approvals a JOIN merge_requests m ON m.id = a.merge_request_id
                          WHERE a.user_id = $1 AND a.created_at >= $2
            )
@@ -100,16 +104,19 @@ pub async fn recent(e: impl PgExecutor<'_>, user_id: i64, v: Viewer, limit: i64)
                           WHERE author_id = $1 ORDER BY created_at DESC LIMIT $4)
                UNION ALL (SELECT 'merged_merge_request', true, project_id, iid, title, 0, merged_at FROM merge_requests
                           WHERE merged_by = $1 AND merged_at IS NOT NULL ORDER BY merged_at DESC LIMIT $4)
-               UNION ALL (SELECT 'opened_issue', false, project_id, iid, title, 0, created_at FROM issues
-                          WHERE author_id = $1 ORDER BY created_at DESC LIMIT $4)
-               UNION ALL (SELECT 'closed_issue', false, project_id, iid, title, 0, closed_at FROM issues
-                          WHERE closed_by = $1 AND closed_at IS NOT NULL ORDER BY closed_at DESC LIMIT $4)
+               UNION ALL (SELECT 'opened_issue', false, project_id, iid, title, 0, created_at FROM issues i
+                          WHERE author_id = $1 AND issue_visible(i, $2, $3) ORDER BY created_at DESC LIMIT $4)
+               UNION ALL (SELECT 'closed_issue', false, project_id, iid, title, 0, closed_at FROM issues i
+                          WHERE closed_by = $1 AND closed_at IS NOT NULL AND issue_visible(i, $2, $3) ORDER BY closed_at DESC LIMIT $4)
                UNION ALL (SELECT 'commented_merge_request', true, m.project_id, m.iid, m.title, 0, n.created_at
                           FROM notes n JOIN merge_requests m ON m.id = n.merge_request_id
-                          WHERE n.author_id = $1 AND NOT n.system ORDER BY n.created_at DESC LIMIT $4)
+                          WHERE n.author_id = $1 AND NOT n.system AND (NOT n.internal OR sees_internal(m.project_id, $2, $3))
+                          ORDER BY n.created_at DESC LIMIT $4)
                UNION ALL (SELECT 'commented_issue', false, i.project_id, i.iid, i.title, 0, n.created_at
                           FROM issue_notes n JOIN issues i ON i.id = n.issue_id
-                          WHERE n.author_id = $1 AND NOT n.system ORDER BY n.created_at DESC LIMIT $4)
+                          WHERE n.author_id = $1 AND NOT n.system AND issue_visible(i, $2, $3)
+                            AND (NOT n.internal OR sees_internal(i.project_id, $2, $3))
+                          ORDER BY n.created_at DESC LIMIT $4)
                UNION ALL (SELECT 'approved', true, m.project_id, m.iid, m.title, 0, a.created_at
                           FROM approvals a JOIN merge_requests m ON m.id = a.merge_request_id
                           WHERE a.user_id = $1 ORDER BY a.created_at DESC LIMIT $4)

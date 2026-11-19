@@ -57,7 +57,8 @@ pub async fn add(e: impl PgExecutor<'_>, t: NewTodo<'_>) -> Result<()> {
 }
 
 /// A user's to-dos in `state`, newest first, with what they point at. Only
-/// projects the user can still see (an authorization row) are listed.
+/// projects the user can still see (an authorization row) are listed, and
+/// issues they still may see (a confidential one they lost sight of is not).
 pub async fn list(e: impl PgExecutor<'_>, user_id: i64, state: &str, limit: i64) -> Result<Vec<Todo>> {
     sqlx::query_as!(
         Todo,
@@ -71,9 +72,11 @@ pub async fn list(e: impl PgExecutor<'_>, user_id: i64, state: &str, limit: i64)
            LEFT JOIN merge_requests m ON t.target_type = 'merge_request' AND m.project_id = t.project_id AND m.iid = t.target_iid
            LEFT JOIN issues i ON t.target_type = 'issue' AND i.project_id = t.project_id AND i.iid = t.target_iid
            LEFT JOIN users u ON u.id = t.author_id
+           JOIN users me ON me.id = t.user_id
            WHERE t.user_id = $1 AND t.state = $2
              -- merge requests are code: Reporters and above (a Guest, or someone demoted, sees none)
              AND (t.target_type <> 'merge_request' OR a.access_level >= 20)
+             AND (i.id IS NULL OR issue_visible(i, me.id, me.is_admin))
            ORDER BY t.created_at DESC, t.id DESC LIMIT $3"#,
         user_id,
         state,
@@ -86,7 +89,10 @@ pub async fn list(e: impl PgExecutor<'_>, user_id: i64, state: &str, limit: i64)
 pub async fn pending_count(e: impl PgExecutor<'_>, user_id: i64) -> Result<i64> {
     sqlx::query_scalar!(
         r#"SELECT count(*) AS "n!" FROM todos t JOIN listed_project_authorizations a ON a.project_id = t.project_id AND a.user_id = t.user_id
-           WHERE t.user_id = $1 AND t.state = 'pending' AND (t.target_type <> 'merge_request' OR a.access_level >= 20)"#,
+           JOIN users me ON me.id = t.user_id
+           LEFT JOIN issues i ON t.target_type = 'issue' AND i.project_id = t.project_id AND i.iid = t.target_iid
+           WHERE t.user_id = $1 AND t.state = 'pending' AND (t.target_type <> 'merge_request' OR a.access_level >= 20)
+             AND (i.id IS NULL OR issue_visible(i, me.id, me.is_admin))"#,
         user_id
     )
     .fetch_one(e)

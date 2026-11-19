@@ -271,35 +271,37 @@ fn build_defs() -> Vec<Def> {
         Def {
             name: "create_issue",
             title: "Create an issue",
-            description: "Open an issue (labels must exist; assignees by username).",
+            description: "Open an issue (labels must exist; assignees by username); a `confidential` one is seen only by the project's Reporters and up, its author and its assignees.",
             write: true,
             schema: object(
                 json!({ "project_id": project(), "title": { "type": "string" }, "description": { "type": "string" },
-                        "labels": { "type": "array", "items": { "type": "string" } }, "assignee_usernames": { "type": "array", "items": { "type": "string" } } }),
+                        "labels": { "type": "array", "items": { "type": "string" } }, "assignee_usernames": { "type": "array", "items": { "type": "string" } },
+                        "confidential": { "type": "boolean" } }),
                 &["project_id", "title"],
             ),
         },
         Def {
             name: "update_issue",
             title: "Update an issue",
-            description: "Change an issue's title, description, labels (`labels` replaces, `add_labels`/`remove_labels` adjust), assignees, or close/reopen it (`state_event`).",
+            description: "Change an issue's title, description, labels (`labels` replaces, `add_labels`/`remove_labels` adjust), assignees, whether it is `confidential`, or close/reopen it (`state_event`).",
             write: true,
             schema: object(
                 json!({ "project_id": project(), "issue_iid": { "type": "integer" }, "title": { "type": "string" }, "description": { "type": "string" },
                         "labels": { "type": "array", "items": { "type": "string" } }, "add_labels": { "type": "array", "items": { "type": "string" } },
                         "remove_labels": { "type": "array", "items": { "type": "string" } }, "assignee_usernames": { "type": "array", "items": { "type": "string" } },
-                        "state_event": { "enum": ["close", "reopen"] } }),
+                        "state_event": { "enum": ["close", "reopen"] }, "confidential": { "type": "boolean" } }),
                 &["project_id", "issue_iid"],
             ),
         },
         Def {
             name: "save_note",
             title: "Comment",
-            description: "Comment on an issue (`issue_iid`) or a merge request (`merge_request_iid`); on a merge request, `file_path` with `new_line` (or `old_line`) comments on a line of the diff, and a ```suggestion block in `body` proposes a change.",
+            description: "Comment on an issue (`issue_iid`) or a merge request (`merge_request_iid`); on a merge request, `file_path` with `new_line` (or `old_line`) comments on a line of the diff, and a ```suggestion block in `body` proposes a change. An `internal` comment is seen only by the project's Reporters and up.",
             write: true,
             schema: object(
                 json!({ "project_id": project(), "issue_iid": { "type": "integer" }, "merge_request_iid": { "type": "integer" }, "body": { "type": "string" },
-                        "file_path": { "type": "string" }, "new_line": { "type": "integer" }, "old_line": { "type": "integer" }, "reply_to_id": { "type": "integer" } }),
+                        "file_path": { "type": "string" }, "new_line": { "type": "integer" }, "old_line": { "type": "integer" }, "reply_to_id": { "type": "integer" },
+                        "internal": { "type": "boolean" } }),
                 &["project_id", "body"],
             ),
         },
@@ -782,7 +784,8 @@ async fn run(c: &Caller, name: &str, a: &Value) -> R {
             Ok(Value::Array(
                 items
                     .iter()
-                    .map(|x| json!({ "iid": x["iid"], "title": x["title"], "state": x["state"], "labels": x["labels"], "author": x["author_username"], "updated_at": x["updated_at"] }))
+                    .map(|x| json!({ "iid": x["iid"], "title": x["title"], "state": x["state"], "labels": x["labels"], "author": x["author_username"],
+                                    "confidential": x["confidential"], "updated_at": x["updated_at"] }))
                     .collect(),
             ))
         }
@@ -997,7 +1000,8 @@ async fn run(c: &Caller, name: &str, a: &Value) -> R {
         "create_issue" => {
             let assignees = user_ids(c, &a["assignee_usernames"]).await?.unwrap_or_default();
             let body = json!({ "title": s(a, "title").ok_or("title is required")?, "description": a["description"].as_str().unwrap_or(""),
-                               "labels": a["labels"].as_array().cloned().unwrap_or_default(), "assignee_ids": assignees });
+                               "labels": a["labels"].as_array().cloned().unwrap_or_default(), "assignee_ids": assignees,
+                               "confidential": a["confidential"].as_bool().unwrap_or(false) });
             call_api(api::issues::create(st(c), signed(c), Path(project_arg(a)?), j(body)?).await).await
         }
         "update_issue" => {
@@ -1008,6 +1012,9 @@ async fn run(c: &Caller, name: &str, a: &Value) -> R {
                 if let Some(v) = a.get(k).filter(|v| v.is_string()) {
                     body[k] = v.clone();
                 }
+            }
+            if let Some(c) = a["confidential"].as_bool() {
+                body["confidential"] = json!(c);
             }
             if a["labels"].is_array() || a["add_labels"].is_array() || a["remove_labels"].is_array() {
                 let current = call_api(api::issues::show(st(c), viewer(c), Path((id.clone(), iid))).await).await?;
@@ -1035,14 +1042,16 @@ async fn run(c: &Caller, name: &str, a: &Value) -> R {
         "save_note" => {
             let id = project_arg(a)?;
             let body = s(a, "body").ok_or("body is required")?;
+            let internal = a["internal"].as_bool().unwrap_or(false);
             if let Some(iid) = i(a, "merge_request_iid") {
                 let position = s(a, "file_path")
                     .map(|f| json!({ "new_path": f, "old_path": f, "new_line": i(a, "new_line"), "old_line": i(a, "old_line") }));
-                let note = json!({ "body": body, "parent_id": i(a, "reply_to_id"), "position": position });
+                let note = json!({ "body": body, "parent_id": i(a, "reply_to_id"), "position": position, "internal": internal });
                 return call_api(api::mr::create_note(st(c), signed(c), Path((id, iid)), j(note)?).await).await;
             }
             let iid = iid_arg(a, "issue_iid", "issues")?;
-            call_api(api::issues::create_note(st(c), signed(c), Path((id, iid)), j(json!({ "body": body }))?).await).await
+            call_api(api::issues::create_note(st(c), signed(c), Path((id, iid)), j(json!({ "body": body, "internal": internal }))?).await)
+                .await
         }
         "save_merge_request_review" => {
             let id = project_arg(a)?;

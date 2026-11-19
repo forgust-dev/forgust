@@ -220,16 +220,39 @@ fn message(event: &str, p: &Value) -> Option<Msg> {
                     .code(s(a, &["target_branch"])),
             )
         }
-        "note" => {
-            let mr = &p["merge_request"];
-            let iid = mr["iid"].as_i64().unwrap_or(0);
+        "issue" | "confidential_issue" => {
+            let a = &p["object_attributes"];
+            let verb = match s(a, &["action"]) {
+                "open" => "opened",
+                "reopen" => "reopened",
+                "close" => "closed",
+                // edits are too frequent for a channel
+                _ => return None,
+            };
+            let who = match s(p, &["user", "name"]) {
+                "" => "Someone".to_string(),
+                n => n.to_string(),
+            };
+            let iid = a["iid"].as_i64().unwrap_or(0);
+            Some(
+                m.t(format!("{who} {verb} "))
+                    .link(format!("#{iid} {}", first_line(s(a, &["title"]))), s(a, &["url"]))
+                    .t(" in ")
+                    .link(project, project_url),
+            )
+        }
+        "note" | "confidential_note" => {
+            // on a merge request or an issue
+            let (thing, sigil, path) =
+                if p["issue"].is_object() { (&p["issue"], "#", "issues") } else { (&p["merge_request"], "!", "merge_requests") };
+            let iid = thing["iid"].as_i64().unwrap_or(0);
             let author = s(p, &["note", "author"]);
-            let url = format!("{project_url}/-/merge_requests/{iid}");
+            let url = format!("{project_url}/-/{path}/{iid}");
             let body = s(p, &["note", "body"]);
             let excerpt = truncate(&body.split_whitespace().collect::<Vec<_>>().join(" "), 200);
             Some(
                 m.t(format!("{author} commented on "))
-                    .link(format!("!{iid} {}", first_line(s(mr, &["title"]))), url)
+                    .link(format!("{sigil}{iid} {}", first_line(s(thing, &["title"]))), url)
                     .t(" in ")
                     .link(project, project_url)
                     .br()
@@ -349,6 +372,34 @@ mod tests {
         let mut upd = p.clone();
         upd["object_attributes"]["action"] = json!("update");
         assert!(render("slack", "merge_request", &upd).is_none());
+    }
+
+    #[test]
+    fn issues_and_their_comments() {
+        let p = json!({
+            "user": { "name": "Alice" },
+            "project": project(),
+            "object_attributes": { "iid": 7, "title": "Token leak", "action": "close", "url": "https://forge.example/acme/shop/-/issues/7" },
+        });
+        for event in ["issue", "confidential_issue"] {
+            let slack = render("slack", event, &p).unwrap();
+            assert_eq!(
+                slack["text"],
+                "Alice closed <https://forge.example/acme/shop/-/issues/7|#7 Token leak> in <https://forge.example/acme/shop|acme/shop>"
+            );
+        }
+        let mut upd = p.clone();
+        upd["object_attributes"]["action"] = json!("update");
+        assert!(render("slack", "issue", &upd).is_none(), "edits are not for a channel");
+        let note =
+            json!({ "project": project(), "issue": { "iid": 7, "title": "Token leak" }, "note": { "author": "bob", "body": "rotated" } });
+        let slack = render("slack", "confidential_note", &note).unwrap();
+        assert!(
+            slack["text"].as_str().unwrap().starts_with("bob commented on <https://forge.example/acme/shop/-/issues/7|#7 Token leak>"),
+            "{slack}"
+        );
+        let mr = json!({ "project": project(), "merge_request": { "iid": 3, "title": "Fix" }, "note": { "author": "bob", "body": "ok" } });
+        assert!(render("slack", "note", &mr).unwrap()["text"].as_str().unwrap().contains("/-/merge_requests/3|!3 Fix>"));
     }
 
     #[test]

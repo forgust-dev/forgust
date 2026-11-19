@@ -17,7 +17,7 @@ use serde_json::{Value, json};
 use super::json::{self as j, MrExtras};
 use super::{Ids, Labels, PageQuery, paged, query_ids, relabel};
 use crate::api::project_for;
-use crate::auth::authz::ProjectAction;
+use crate::auth::authz::{ProjectAction, can_project};
 use crate::auth::{Principal, SignedIn, Viewer};
 use crate::error::{ApiError, ApiResult};
 use crate::services::mr::{self, MergeMethod, MergeOptions};
@@ -549,8 +549,8 @@ pub async fn notes(
     Path((id, iid)): Path<(String, i64)>,
     Query(pg): Query<PageQuery>,
 ) -> ApiResult<Response> {
-    let (_p, m) = load(&state, &v, &id, iid).await?;
-    let all = mrdb::notes(&state.db, m.id).await?;
+    let (p, m) = load(&state, &v, &id, iid).await?;
+    let all = mrdb::notes(&state.db, m.id, can_project(&state, &v, ProjectAction::ReadInternal, &p).await?).await?;
     let total = all.len() as i64;
     let items: Vec<Value> =
         all.iter().skip(pg.offset() as usize).take(pg.per_page() as usize).map(|n| j::note(&state.cfg, n, m.iid)).collect();
@@ -558,8 +558,18 @@ pub async fn notes(
 }
 
 #[derive(Deserialize)]
+/// A comment on a merge request or an issue.
 pub struct NoteBody {
-    body: String,
+    pub(super) body: String,
+    /// Reporters and up; `confidential` is GitLab 14's name for it.
+    internal: Option<bool>,
+    confidential: Option<bool>,
+}
+
+impl NoteBody {
+    pub(super) fn internal(&self) -> bool {
+        self.internal.or(self.confidential).unwrap_or(false)
+    }
 }
 
 pub async fn create_note(
@@ -569,7 +579,7 @@ pub async fn create_note(
     Json(req): Json<NoteBody>,
 ) -> ApiResult<Response> {
     let (p, m) = load(&state, &v, &id, iid).await?;
-    let n = mr::add_note(&state, &v, &p, &m, &req.body, None, None).await?;
+    let n = mr::add_note(&state, &v, &p, &m, &req.body, None, None, req.internal()).await?;
     let n = mrdb::note(&state.db, m.id, n.id).await?.ok_or(ApiError::NotFound)?;
     Ok((StatusCode::CREATED, Json(j::note(&state.cfg, &n, m.iid))).into_response())
 }
@@ -582,7 +592,7 @@ pub async fn edit_note(
 ) -> ApiResult<Json<Value>> {
     let (p, m) = load(&state, &v, &id, iid).await?;
     mr::edit_note(&state, &v, &p, &m, note_id, Some(&req.body)).await?;
-    let n = mrdb::note(&state.db, m.id, note_id).await?.ok_or(ApiError::NotFound)?;
+    let n = mr::visible_note(&state, &v, &p, &m, note_id).await?;
     Ok(Json(j::note(&state.cfg, &n, m.iid)))
 }
 
@@ -610,8 +620,8 @@ pub async fn discussions(
     Path((id, iid)): Path<(String, i64)>,
     Query(pg): Query<PageQuery>,
 ) -> ApiResult<Response> {
-    let (_p, m) = load(&state, &v, &id, iid).await?;
-    let all = mrdb::notes(&state.db, m.id).await?;
+    let (p, m) = load(&state, &v, &id, iid).await?;
+    let all = mrdb::notes(&state.db, m.id, can_project(&state, &v, ProjectAction::ReadInternal, &p).await?).await?;
     let roots: Vec<_> = all.iter().filter(|n| n.parent_id.is_none()).collect();
     let total = roots.len() as i64;
     let items: Vec<Value> = roots
@@ -633,7 +643,7 @@ pub async fn create_discussion(
     Json(req): Json<NoteBody>,
 ) -> ApiResult<Response> {
     let (p, m) = load(&state, &v, &id, iid).await?;
-    let n = mr::add_note(&state, &v, &p, &m, &req.body, None, None).await?;
+    let n = mr::add_note(&state, &v, &p, &m, &req.body, None, None, req.internal()).await?;
     let n = mrdb::note(&state.db, m.id, n.id).await?.ok_or(ApiError::NotFound)?;
     Ok((StatusCode::CREATED, Json(discussion(&state, &n, &[], m.iid))).into_response())
 }
@@ -646,7 +656,7 @@ pub async fn reply(
 ) -> ApiResult<Response> {
     let (p, m) = load(&state, &v, &id, iid).await?;
     let root: i64 = discussion_id.parse().map_err(|_| ApiError::NotFound)?;
-    let n = mr::add_note(&state, &v, &p, &m, &req.body, Some(root), None).await?;
+    let n = mr::add_note(&state, &v, &p, &m, &req.body, Some(root), None, req.internal()).await?;
     let n = mrdb::note(&state.db, m.id, n.id).await?.ok_or(ApiError::NotFound)?;
     Ok((StatusCode::CREATED, Json(j::note(&state.cfg, &n, m.iid))).into_response())
 }

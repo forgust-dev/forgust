@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT m.id, m.project_id, m.iid, m.title, m.description, m.state, m.start_date, m.due_date, m.created_at, m.updated_at,\n                  (SELECT count(*) FROM issues i WHERE i.milestone_id = m.id AND i.state = 'opened') AS \"open_issues!\",\n                  (SELECT count(*) FROM issues i WHERE i.milestone_id = m.id AND i.state = 'closed') AS \"closed_issues!\",\n                  (SELECT count(*) FROM merge_requests r WHERE r.milestone_id = m.id AND r.state = 'opened') AS \"open_merge_requests!\",\n                  (SELECT count(*) FROM merge_requests r WHERE r.milestone_id = m.id AND r.state = 'merged') AS \"merged_merge_requests!\"\n           FROM milestones m WHERE m.project_id = $1 AND m.id = $2",
+  "query": "SELECT m.id, m.project_id, m.iid, m.title, m.description, m.state, m.start_date, m.due_date, m.created_at, m.updated_at,\n                  (SELECT count(*) FROM issues i WHERE i.milestone_id = m.id AND i.state = 'opened' AND issue_visible(i, $3, $4)) AS \"open_issues!\",\n                  (SELECT count(*) FROM issues i WHERE i.milestone_id = m.id AND i.state = 'closed' AND issue_visible(i, $3, $4)) AS \"closed_issues!\",\n                  (SELECT count(*) FROM merge_requests r WHERE r.milestone_id = m.id AND r.state = 'opened') AS \"open_merge_requests!\",\n                  (SELECT count(*) FROM merge_requests r WHERE r.milestone_id = m.id AND r.state = 'merged') AS \"merged_merge_requests!\"\n           FROM milestones m WHERE m.project_id = $1 AND m.id = $2",
   "describe": {
     "columns": [
       {
@@ -141,7 +141,9 @@
     "parameters": {
       "Left": [
         "Int8",
-        "Int8"
+        "Int8",
+        "Int8",
+        "Bool"
       ]
     },
     "nullable": [
@@ -161,5 +163,5 @@
       null
     ]
   },
-  "hash": "7b0f25621060891b5da5c18323824168505c74c711d2284eda700f62f9082825"
+  "hash": "45eab6ac045ace1338a49c613b0bbf47747f6814b3ef50c52bc59536472f9560"
 }

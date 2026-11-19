@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, CalendarDays, CheckCircle2, CircleDot, GitMerge, Milestone as MilestoneIcon, Pencil, Plus, Trash2 } from "lucide-react";
 import { api, plural, qs, type S } from "../../api/client";
-import { Empty, ErrorBox, Field, FilterTabs, ListHead, Q } from "../../components/ui";
+import { ConfidentialMark, Empty, ErrorBox, Field, FilterTabs, ListHead, Q } from "../../components/ui";
 import { DecideCard, Ring, type DecideRow } from "../../components/decide";
 import { Select } from "../../components/controls";
 import { MarkdownEditor } from "../../components/MarkdownEditor";
@@ -362,6 +362,7 @@ export function MilestonePage({ ctx, id }: { ctx: Ctx; id: number }) {
                         <Link to={`${ctx.web}/-/issues/${i.iid}`} className="grow ellipsis">
                           {i.title}
                         </Link>
+                        {i.confidential && <ConfidentialMark />}
                         <span className="faint small">#{i.iid}</span>
                       </div>
                     ))}

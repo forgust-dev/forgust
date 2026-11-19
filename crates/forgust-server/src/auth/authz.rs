@@ -17,12 +17,22 @@ pub enum ProjectAction {
     Read,
     /// Clone, browse files and history.
     ReadCode,
+    /// Read and write internal comments, see the confidential issues of
+    /// others: Reporter and up.
+    ReadInternal,
     /// Push (protected branches are checked again in the pre-receive hook).
     Push,
     /// Manage members, protected branches, deploy keys, tokens.
     Admin,
     /// Rename the path, transfer, delete.
     Own,
+}
+
+impl ProjectAction {
+    /// Only reads: an administrator's bypass for it is not audited.
+    fn reads(self) -> bool {
+        matches!(self, ProjectAction::Read | ProjectAction::ReadCode | ProjectAction::ReadInternal)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -131,10 +141,11 @@ pub fn writable(project: &Project) -> ApiResult<()> {
 }
 
 /// What `role` lets the principal do (no queries).
-fn allows(principal: &Principal, role: &ProjectRole, action: ProjectAction, project: &Project) -> bool {
+pub fn allows(principal: &Principal, role: &ProjectRole, action: ProjectAction, project: &Project) -> bool {
     match action {
         ProjectAction::Read => role.can_read,
         ProjectAction::ReadCode => role.can_read_code,
+        ProjectAction::ReadInternal => principal.direct_user().is_some() && role.level >= REPORTER,
         ProjectAction::Push => role.can_push,
         ProjectAction::Admin => principal.direct_user().is_some() && role.level >= MAINTAINER && !project.archived(),
         ProjectAction::Own => principal.direct_user().is_some() && role.level >= OWNER,
@@ -145,7 +156,7 @@ fn allows(principal: &Principal, role: &ProjectRole, action: ProjectAction, proj
 pub async fn can_project(state: &AppState, principal: &Principal, action: ProjectAction, project: &Project) -> ApiResult<bool> {
     let role = project_role(state, principal, project).await?;
     let ok = allows(principal, &role, action, project);
-    if ok && role.bypass && !matches!(action, ProjectAction::Read | ProjectAction::ReadCode) {
+    if ok && role.bypass && !action.reads() {
         audit_bypass(state, principal, "project", project.id, &format!("{action:?}")).await;
     }
     Ok(ok)
@@ -156,7 +167,7 @@ pub async fn can_project(state: &AppState, principal: &Principal, action: Projec
 pub async fn require_project(state: &AppState, principal: &Principal, action: ProjectAction, project: &Project) -> ApiResult<()> {
     let role = project_role(state, principal, project).await?;
     if allows(principal, &role, action, project) {
-        if role.bypass && !matches!(action, ProjectAction::Read | ProjectAction::ReadCode) {
+        if role.bypass && !action.reads() {
             audit_bypass(state, principal, "project", project.id, &format!("{action:?}")).await;
         }
         return Ok(());

@@ -60,7 +60,7 @@ fn title_of(raw: &str) -> ApiResult<&str> {
 
 pub async fn find(state: &AppState, principal: &Principal, p: &Project, id: i64) -> ApiResult<Milestone> {
     require_project(state, principal, ProjectAction::Read, p).await?;
-    forgust_db::milestones::find(&state.db, p.id, id).await?.ok_or(ApiError::NotFound)
+    forgust_db::milestones::find(&state.db, p.id, id, principal.search_viewer()).await?.ok_or(ApiError::NotFound)
 }
 
 pub async fn create(state: &AppState, principal: &Principal, p: &Project, b: &MilestoneBody) -> ApiResult<Milestone> {
@@ -79,12 +79,12 @@ pub async fn create(state: &AppState, principal: &Principal, p: &Project, b: &Mi
         .await?
         .ok_or_else(|| ApiError::conflict(format!("a milestone called `{title}` already exists")))?;
     super::audit(state, principal, "milestone_created", Some(("project", p.id)), json!({ "title": title }), None).await;
-    forgust_db::milestones::find(&state.db, p.id, id).await?.ok_or(ApiError::NotFound)
+    forgust_db::milestones::find(&state.db, p.id, id, principal.search_viewer()).await?.ok_or(ApiError::NotFound)
 }
 
 pub async fn update(state: &AppState, principal: &Principal, p: &Project, id: i64, b: &MilestoneBody) -> ApiResult<Milestone> {
     require_project(state, principal, ProjectAction::Push, p).await?;
-    let m = forgust_db::milestones::find(&state.db, p.id, id).await?.ok_or(ApiError::NotFound)?;
+    let m = forgust_db::milestones::find(&state.db, p.id, id, principal.search_viewer()).await?.ok_or(ApiError::NotFound)?;
     let title = title_of(b.title.as_deref().unwrap_or(&m.title))?;
     let fields = MilestoneFields {
         title,
@@ -95,12 +95,12 @@ pub async fn update(state: &AppState, principal: &Principal, p: &Project, id: i6
     if !forgust_db::milestones::update(&state.db, m.id, fields, &state_of(b, &m.state)?).await? {
         return Err(ApiError::conflict(format!("a milestone called `{title}` already exists")));
     }
-    forgust_db::milestones::find(&state.db, p.id, id).await?.ok_or(ApiError::NotFound)
+    forgust_db::milestones::find(&state.db, p.id, id, principal.search_viewer()).await?.ok_or(ApiError::NotFound)
 }
 
 pub async fn delete(state: &AppState, principal: &Principal, p: &Project, id: i64) -> ApiResult<()> {
     require_project(state, principal, ProjectAction::Push, p).await?;
-    let m = forgust_db::milestones::find(&state.db, p.id, id).await?.ok_or(ApiError::NotFound)?;
+    let m = forgust_db::milestones::find(&state.db, p.id, id, principal.search_viewer()).await?.ok_or(ApiError::NotFound)?;
     forgust_db::milestones::delete(&state.db, m.id).await?;
     super::audit(state, principal, "milestone_deleted", Some(("project", p.id)), json!({ "title": m.title }), None).await;
     Ok(())
@@ -130,13 +130,23 @@ pub async fn check_target(state: &AppState, principal: &Principal, p: &Project, 
     match milestone_id.filter(|id| *id != 0) {
         None => Ok(None),
         Some(id) => Ok(Some(
-            forgust_db::milestones::find(&state.db, p.id, id).await?.ok_or_else(|| ApiError::bad("no such milestone in this project"))?,
+            forgust_db::milestones::find(&state.db, p.id, id, principal.search_viewer())
+                .await?
+                .ok_or_else(|| ApiError::bad("no such milestone in this project"))?,
         )),
     }
 }
 
 fn issue_note<'a>(issue_id: i64, author: i64, body: &'a str) -> forgust_db::issues::NewIssueNote<'a> {
-    forgust_db::issues::NewIssueNote { issue_id, author_id: Some(author), imported_author: None, body, system: true, created_at: None }
+    forgust_db::issues::NewIssueNote {
+        issue_id,
+        author_id: Some(author),
+        imported_author: None,
+        body,
+        system: true,
+        created_at: None,
+        internal: false,
+    }
 }
 
 /// The system note of a milestone change (`%"title"` references it).
@@ -205,7 +215,7 @@ pub async fn set_merge_request(
         let text = milestone_note(m.as_ref(), mr.milestone_title.as_deref());
         let mut tx = state.db.begin().await?;
         forgust_db::milestones::set_merge_request(&mut *tx, mr.id, m.map(|m| m.id)).await?;
-        forgust_db::merge_requests::add_note(&mut *tx, mr.id, Some(user.id), None, &text, true, Default::default()).await?;
+        forgust_db::merge_requests::add_note(&mut *tx, mr.id, Some(user.id), None, &text, true, false, Default::default()).await?;
         tx.commit().await?;
         state.events.publish(crate::events::Event::MergeRequest { project_id: p.id, iid: mr.iid });
     }
