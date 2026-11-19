@@ -50,11 +50,11 @@ pub struct Trigger<'a> {
     pub config: Option<String>,
 }
 
-/// A pipeline Forgust runs itself (built-in Renovate, security scans): instance
+/// A pipeline Forgust runs itself (built-in Renovate, security scans, AI review): instance
 /// runners only, no project CI variables, never a ref's or commit's status (the
 /// database's `is_system_source` says the same).
 pub fn is_system(source: &str) -> bool {
-    matches!(source, crate::services::renovate::SOURCE | crate::services::scanning::SOURCE)
+    matches!(source, crate::services::renovate::SOURCE | crate::services::scanning::SOURCE | crate::services::ai_review::SOURCE)
 }
 
 impl<'a> Trigger<'a> {

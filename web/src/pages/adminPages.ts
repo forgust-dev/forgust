@@ -12,6 +12,7 @@ export const ADMIN_PAGES: { path: string; label: string }[] = [
   { path: "settings", label: "Settings" },
   { path: "dependency-updates", label: "Dependency updates" },
   { path: "security-scanning", label: "Security scanning" },
+  { path: "ai-review", label: "AI review" },
   { path: "audit", label: "Audit log" },
 ];
 

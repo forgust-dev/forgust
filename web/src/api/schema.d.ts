@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/api/v1/admin/ai_review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** AI review on this instance: the settings in effect (the config file, then changes made here). */
+        get: operations["admin_get"];
+        put: operations["admin_set"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/renovate": {
         parameters: {
             query?: never;
@@ -650,6 +667,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/ai_review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** AI review of the project's merge requests (Maintainers). */
+        get: operations["get"];
+        /** Turn AI review on or off for the project. */
+        put: operations["set"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/ci/settings": {
         parameters: {
             query?: never;
@@ -1068,6 +1103,24 @@ export interface paths {
         get: operations["show"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/merge_requests/{iid}/ai_review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The merge request's latest AI review. */
+        get: operations["mr_status"];
+        put?: never;
+        /** Ask for an AI review of the merge request's latest version (who can push). */
+        post: operations["mr_request"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2673,6 +2726,50 @@ export interface components {
             user_id?: number | null;
             username?: string | null;
         };
+        AdminAiReview: {
+            /** @description Read: whether a key is set. Never returned. */
+            api_key_set?: boolean;
+            /** @description The API's base, reached from the runners (e.g. `http://ollama:11434/v1`). */
+            base_url: string;
+            /** @description PEM of an in-house CA the endpoint's certificate is signed by. */
+            ca_pem?: string | null;
+            enabled: boolean;
+            /** @description The reviewer image set here; "" follows the default (`default_image`). */
+            image?: string;
+            /** Format: int32 */
+            max_comments: number;
+            /** Format: int32 */
+            max_concurrent: number;
+            model: string;
+            /**
+             * @description The reviewer's options (`MAX_DIFF_BYTES`, `TEMPERATURE`...), given to
+             *     the job as `AI_REVIEW_<NAME>`. Not masked: no secrets.
+             */
+            options?: {
+                [key: string]: string;
+            };
+            /**
+             * @description Which API (`openai`: any OpenAI-compatible endpoint); the reviewer
+             *     image says which it knows.
+             */
+            provider: string;
+            /** @description Read: the names of the secret options set. Their values are never returned. */
+            secret_option_names?: string[];
+            tags: string[];
+            /** Format: int64 */
+            timeout_secs: number;
+        };
+        AdminAiReviewStatus: components["schemas"]["AdminAiReview"] & {
+            /** Format: int64 */
+            active_runs: number;
+            /**
+             * @description The image when none is set here: the config file's, by default the
+             *     reviewer released with this server (it moves with each upgrade).
+             */
+            default_image: string;
+            /** Format: int64 */
+            enabled_projects: number;
+        };
         AdminGroup: {
             /** Format: date-time */
             created_at: string;
@@ -2787,6 +2884,51 @@ export interface components {
             two_factor_enabled: boolean;
             user_type: string;
             username: string;
+        };
+        AiReviewRun: {
+            base_sha: string;
+            /** Format: int32 */
+            comments_dropped: number;
+            /**
+             * Format: int32
+             * @description Line comments posted: each opens a thread.
+             */
+            comments_posted: number;
+            /** Format: date-time */
+            created_at: string;
+            /** @description Reviewed the merge request's latest version. */
+            current: boolean;
+            error?: string | null;
+            /** Format: date-time */
+            finished_at?: string | null;
+            head_sha: string;
+            /** @description Reviewed only the changes since an earlier review (from its head). */
+            incremental: boolean;
+            /** Format: int64 */
+            pipeline_iid: number;
+            pipeline_status: string;
+            /** @description pending, posted, outdated or failed */
+            state: string;
+        };
+        AiReviewSettings: {
+            /** @description The instance has AI review on and set up. */
+            available: boolean;
+            enabled: boolean;
+            /** @description Where the code of reviewed merge requests is sent (host of the endpoint). */
+            endpoint?: string | null;
+            model: string;
+        };
+        AiReviewSettingsBody: {
+            enabled: boolean;
+        };
+        AiReviewStatus: {
+            /** @description AI review is on for the project (and the instance). */
+            available: boolean;
+            /** @description The viewer may ask for a review. */
+            can_request: boolean;
+            /** @description Where a review sends the code (for who can push). */
+            endpoint?: string | null;
+            latest?: components["schemas"]["AiReviewRun"] | null;
         };
         AllowProject: {
             /** @description Path (`group/project`) or numeric id of the project whose job tokens may read this one. */
@@ -4583,6 +4725,8 @@ export interface components {
             username?: string | null;
         };
         Note: {
+            /** @description Written by a bot (an AI review, Renovate, a token's bot), not a person. */
+            author_bot: boolean;
             /** Format: int64 */
             author_id?: number | null;
             author_name?: string | null;
@@ -6336,6 +6480,48 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    "application/json": components["schemas"]["AdminAiReviewStatus"];
+                };
+            };
+        };
+    };
+    admin_set: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminAiReview"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAiReviewStatus"];
+                };
+            };
+        };
+    };
+    admin_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
                     "application/json": components["schemas"]["AdminRenovateStatus"];
                 };
             };
@@ -7373,6 +7559,48 @@ export interface operations {
             };
         };
     };
+    get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiReviewSettings"];
+                };
+            };
+        };
+    };
+    set: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiReviewSettingsBody"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiReviewSettings"];
+                };
+            };
+        };
+    };
     ci_settings: {
         parameters: {
             query?: never;
@@ -8081,6 +8309,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MrDetail"];
+                };
+            };
+        };
+    };
+    mr_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiReviewStatus"];
+                };
+            };
+        };
+    };
+    mr_request: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiReviewStatus"];
                 };
             };
         };

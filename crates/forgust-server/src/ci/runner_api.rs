@@ -377,6 +377,10 @@ async fn job_payload(state: &AppState, runner: &Runner, build: &Build, token: &s
             .ok_or_else(|| anyhow::anyhow!("a Renovate job not run by the project's Renovate bot"))?;
         predefined.extend(crate::services::renovate::job_variables(state, &project, settings, bot, build.timeout_secs as i64).await?);
     }
+    if pipeline.source == crate::services::ai_review::SOURCE {
+        // only ever for the project's own AI review bot, with the feature on
+        predefined.extend(crate::services::ai_review::job_variables(state, &project, user.as_ref()).await?);
+    }
     // the job's environment
     let mut environment = None;
     if let Some(env) = &spec.job.environment {
@@ -426,6 +430,15 @@ async fn job_payload(state: &AppState, runner: &Runner, build: &Build, token: &s
         settings_vars,
         pipeline_vars,
     );
+    // a job's `GIT_DEPTH` (0: all of the history) wins over the project's
+    // default, as on GitLab
+    let git_depth = vars
+        .iter()
+        .rev()
+        .find(|v| v.key == "GIT_DEPTH")
+        .and_then(|v| v.value.trim().parse::<i32>().ok())
+        .filter(|d| *d >= 0)
+        .unwrap_or(settings.default_git_depth);
     let cache_keys = payload::cache_keys(state, project.id, &pipeline.sha, &spec.job.cache).await;
     let body = payload::job_response(
         state,
@@ -437,7 +450,7 @@ async fn job_payload(state: &AppState, runner: &Runner, build: &Build, token: &s
             token,
             variables: vars,
             dependencies,
-            git_depth: settings.default_git_depth,
+            git_depth,
             cache_keys,
         },
     )?;
@@ -750,6 +763,7 @@ const ARTIFACT_TYPES: &[&str] = &[
     "annotations",
     "repository_xray",
     "cyclonedx",
+    crate::services::ai_review::REPORT,
 ];
 
 async fn upload_artifacts(

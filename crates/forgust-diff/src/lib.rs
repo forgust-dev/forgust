@@ -1,7 +1,10 @@
-//! Structured diffs: `git diff --numstat` for the file list, then a unified patch for
-//! the requested page of files, parsed into hunks and lines.
-
-use serde::Serialize;
+//! Diffs as Forgust shows and comments on them: `git diff` output parsed into
+//! files, hunks and numbered lines. Shared by the server's storage and the
+//! AI reviewer, so the line numbers a review comments on are the ones the
+//! server checks. `schema`: serializable, with OpenAPI schemas (the server).
+//!
+//! `git diff --numstat` for the file list, then a unified patch for the
+//! requested page of files, parsed into hunks and lines.
 
 #[derive(Debug, Clone)]
 pub struct DiffOptions {
@@ -21,7 +24,8 @@ impl Default for DiffOptions {
     }
 }
 
-#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "schema", derive(serde::Serialize, utoipa::ToSchema))]
 pub struct Diff {
     pub from: String,
     pub to: String,
@@ -34,7 +38,8 @@ pub struct Diff {
     pub summary: Vec<FileStat>,
 }
 
-#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "schema", derive(serde::Serialize, utoipa::ToSchema))]
 pub struct FileStat {
     pub old_path: String,
     pub new_path: String,
@@ -42,7 +47,8 @@ pub struct FileStat {
     pub deletions: Option<u64>,
 }
 
-#[derive(Debug, Clone, Serialize, Default, utoipa::ToSchema)]
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "schema", derive(serde::Serialize, utoipa::ToSchema))]
 pub struct DiffFile {
     pub old_path: String,
     pub new_path: String,
@@ -61,7 +67,8 @@ pub struct DiffFile {
     pub hunks: Vec<DiffHunk>,
 }
 
-#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "schema", derive(serde::Serialize, utoipa::ToSchema))]
 pub struct DiffHunk {
     pub header: String,
     pub old_start: u32,
@@ -71,8 +78,9 @@ pub struct DiffHunk {
     pub lines: Vec<DiffLine>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, utoipa::ToSchema)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "schema", derive(serde::Serialize, utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", serde(rename_all = "lowercase"))]
 pub enum DiffLineKind {
     Context,
     Add,
@@ -80,14 +88,15 @@ pub enum DiffLineKind {
     NoNewline,
 }
 
-#[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "schema", derive(serde::Serialize, utoipa::ToSchema))]
 pub struct DiffLine {
     pub kind: DiffLineKind,
     pub old: Option<u32>,
     pub new: Option<u32>,
     pub text: String,
     /// Highlighted HTML of the line, when the server highlighted the diff.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schema", serde(skip_serializing_if = "Option::is_none"))]
     pub html: Option<String>,
 }
 

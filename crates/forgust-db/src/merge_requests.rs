@@ -407,6 +407,8 @@ pub struct Note {
     pub start_new_line: Option<i32>,
     /// A review verdict that came with this comment: `requested_changes`.
     pub review: Option<String>,
+    /// Written by a bot (an AI review, Renovate, a token's bot), not a person.
+    pub author_bot: bool,
 }
 
 /// Make a comment the one a review verdict came with.
@@ -468,7 +470,8 @@ pub async fn notes(e: impl PgExecutor<'_>, mr_id: i64) -> Result<Vec<Note>> {
         r#"SELECT n.id, n.merge_request_id, n.author_id, u.username AS "author_username?", u.name AS "author_name?",
                   n.parent_id, n.body, n.system, n.diff_id, n.base_sha, n.start_sha, n.head_sha, n.old_path, n.new_path,
                   n.old_line, n.new_line, n.resolved_by, n.resolved_at, n.created_at, n.updated_at, n.imported_author,
-                  n.suggestion_applied_sha, n.start_old_line, n.start_new_line, n.review
+                  n.suggestion_applied_sha, n.start_old_line, n.start_new_line, n.review,
+                  coalesce(u.user_type <> 'human', false) AS "author_bot!"
            FROM notes n LEFT JOIN users u ON u.id = n.author_id
            WHERE n.merge_request_id = $1 ORDER BY n.id"#,
         mr_id
@@ -483,7 +486,8 @@ pub async fn note(e: impl PgExecutor<'_>, mr_id: i64, id: i64) -> Result<Option<
         r#"SELECT n.id, n.merge_request_id, n.author_id, u.username AS "author_username?", u.name AS "author_name?",
                   n.parent_id, n.body, n.system, n.diff_id, n.base_sha, n.start_sha, n.head_sha, n.old_path, n.new_path,
                   n.old_line, n.new_line, n.resolved_by, n.resolved_at, n.created_at, n.updated_at, n.imported_author,
-                  n.suggestion_applied_sha, n.start_old_line, n.start_new_line, n.review
+                  n.suggestion_applied_sha, n.start_old_line, n.start_new_line, n.review,
+                  coalesce(u.user_type <> 'human', false) AS "author_bot!"
            FROM notes n LEFT JOIN users u ON u.id = n.author_id
            WHERE n.merge_request_id = $1 AND n.id = $2"#,
         mr_id,

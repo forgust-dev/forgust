@@ -12,7 +12,7 @@ import { Popover, Segmented, Select, Switch } from "../../components/controls";
 import { ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight, Circle, CircleAlert, Clock3, FileDiff, Dot, GitBranch, GitCommitHorizontal, GitMerge, GitPullRequestClosed, MessageSquare, Milestone as MilestoneIcon, FileWarning, Tag, PanelRightClose, PanelRightOpen, Pencil, RotateCcw, X, XCircle } from "lucide-react";
 import { fetchers, keys, usePrefetch } from "../../prefetch";
 import { StatusIcon, duration, isActive, statusLabel } from "./ci/Status";
-import { usePipeline } from "./ci/Pipelines";
+import { isSystemPipeline, usePipeline } from "./ci/Pipelines";
 import { usePref } from "../../shell/theme";
 import { useAct, useToast } from "../../shell/toast";
 import { useConfirm } from "../../shell/dialog";
@@ -501,6 +501,7 @@ function MrAside({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
             {m.can_approve && <RequestChanges onSubmit={async (body) => void (await act(() => api.post(`${path}/request_changes`, { body }), "Changes requested"))} />}
           </div>
         </div>
+        <AiReviewFact ctx={ctx} m={m} />
         <div className="fact">
           <span className="fact-label">Assignees</span>
           <div className="fact-value column">
@@ -596,6 +597,59 @@ function MrAside({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
         )}
       </section>
     </aside>
+  );
+}
+
+const AI_REVIEW_STATE: Record<string, string> = {
+  pending: "Reviewing…",
+  outdated: "Reviewed an older version",
+  failed: "Failed",
+};
+
+/** AI review: the latest review of this merge request, and asking for one. */
+function AiReviewFact({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
+  const qc = useQueryClient();
+  const path = `/projects/${ctx.p.id}/merge_requests/${m.iid}/ai_review`;
+  const key = ["mr", ctx.p.id, m.iid, "ai_review"];
+  const q = useQuery({
+    queryKey: key,
+    queryFn: () => api.get<S["AiReviewStatus"]>(path),
+    // the run's end also comes as a merge request event; this covers a missed one
+    refetchInterval: (query) => (query.state.data?.latest?.state === "pending" ? 15_000 : false),
+  });
+  const act = useAct(() => qc.invalidateQueries({ queryKey: key }));
+  const s = q.data;
+  if (!s || (!s.available && !s.latest)) return null;
+  const r = s.latest;
+  const pending = r?.state === "pending";
+  // each line comment opens a thread (the summary is always posted)
+  const threads = (n: number) => (n > 0 ? `${n} thread${n === 1 ? "" : "s"}` : r?.incremental ? "No new threads" : "No threads, summary only");
+  const label = !r
+    ? "Not reviewed yet"
+    : r.state === "posted"
+      ? `${threads(r.comments_posted)}${r.current ? "" : " on an older version"}`
+      : (AI_REVIEW_STATE[r.state] ?? r.state);
+  return (
+    <div className="fact">
+      <span className="fact-label">AI review</span>
+      <div className="fact-value column">
+        <span className={r?.state === "failed" ? "small" : "small muted"}>
+          {r ? <Link to={`${ctx.web}/-/pipelines/${r.pipeline_iid}`}>{label}</Link> : label}
+          {r?.finished_at && ` · ${timeAgo(r.finished_at)}`}
+        </span>
+        {r?.state === "failed" && r.error && <span className="small faint">{r.error}</span>}
+        {s.can_request && (
+          <button
+            className="btn small"
+            disabled={pending}
+            title={s.endpoint ? `Sends the changes to ${s.endpoint}` : undefined}
+            onClick={() => act(() => api.post(path), "AI review requested")}
+          >
+            {!r || r.state === "failed" ? "Request AI review" : r.current ? "Review again" : "Review new changes"}
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -721,7 +775,8 @@ function Readiness({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
     <div className="readiness">
       <Q q={st}>
         {(s) => {
-          const p = pipelines.data?.[0];
+          // the merge request's CI: not an AI review or a scan run on the same commit
+          const p = pipelines.data?.find((x) => !isSystemPipeline(x));
           const pstatus = s.pipeline_status ?? p?.status;
           const canRebase = s.user_can_merge && !s.fast_forward && s.conflicts.length === 0;
           // which checks there are and how they stand: shared with the rings of "Your work"
@@ -1058,7 +1113,7 @@ function Thread({ ctx, m, root, replies, boxed }: { ctx: Ctx; m: S["MrDetail"]; 
                 <strong>
                   <AuthorLink x={n} name />
                 </strong>{" "}
-                <span className="faint">{timeAgo(n.created_at)}</span>
+                {n.author_bot && <Badge>bot</Badge>} <span className="faint">{timeAgo(n.created_at)}</span>
                 <ImportedMark x={n} />
                 {user?.id === n.author_id && (
                   <button

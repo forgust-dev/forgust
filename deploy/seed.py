@@ -125,6 +125,7 @@ def bootstrap():
     compose("exec", "-T", "-e", f"FORGUST_ADMIN_PASSWORD={PASSWORD}", "forgust", "forgust", "admin", "create-user",
             "--username", "root", "--email", "root@example.com", "--admin")
     root_s = Api.login("root", PASSWORD)
+    SESSIONS["root"] = root_s
     tok = root_s.post("/user/tokens", {"name": "seed", "scopes": ["api", "write_repository", "admin_mode"]})["token"]
     root = Api(tok)
     root.put("/admin/settings", {"signup_enabled": True, "allow_personal_projects": True, "default_branch_name": "main"})
@@ -138,9 +139,10 @@ def bootstrap():
     return apis, ids
 
 
-def register_runner(root):
+def register_runner():
     log("registering the compose runner (docker executor)")
-    r = root.post("/admin/runners", {"description": "compose docker runner", "run_untagged": True, "tags": ["docker"]})
+    # a runner is a credential: made from a browser session, not with a token
+    r = SESSIONS["root"].post("/admin/runners", {"description": "compose docker runner", "run_untagged": True, "tags": ["docker"]})
     compose("exec", "-T", "runner", "gitlab-runner", "register", "--non-interactive",
             "--url", BASE, "--token", r["token"], "--name", "compose-runner",
             "--executor", "docker", "--docker-image", "alpine:3.20", "--docker-pull-policy", "if-not-present")
@@ -987,7 +989,7 @@ def main():
     shutil.rmtree(WORK, ignore_errors=True)  # the instance is new: so are the keys
     WORK.mkdir(parents=True)
     root, alice = apis["root"], apis["alice"]
-    register_runner(root)
+    register_runner()
 
     log("groups: acme (+ acme/platform), partners, imported")
     acme = alice.post("/groups", {"name": "Acme", "path": "acme", "visibility": "public", "description": "Acme Corp, makers of the web shop."})["id"]

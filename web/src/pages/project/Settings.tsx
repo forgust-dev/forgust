@@ -85,7 +85,7 @@ function MergeRequestSettings({ ctx }: { ctx: Ctx }) {
 function AutomationSettings({ ctx }: { ctx: Ctx }) {
   return (
     <div className="stack settings-page">
-      <ListHead title="Automation settings" sub="Built-in security scanning and dependency updates." />
+      <ListHead title="Automation settings" sub="Built-in security scanning, dependency updates and AI review." />
       <Section
         id="security-scanning"
         title="Security scanning"
@@ -100,7 +100,68 @@ function AutomationSettings({ ctx }: { ctx: Ctx }) {
         <DependencyUpdates ctx={ctx} />
         <HostRules base={`/projects/${ctx.p.id}/renovate/host_rules`} empty="None. This instance's container registry needs none." />
       </Section>
+      <Section
+        id="ai-review"
+        title="AI review"
+        description="People who can push ask a model for a review of a merge request; its comments are posted by a bot of the project, which never approves."
+      >
+        <AiReview ctx={ctx} />
+      </Section>
     </div>
+  );
+}
+
+function AiReview({ ctx }: { ctx: Ctx }) {
+  const qc = useQueryClient();
+  const key = ["ai-review", ctx.p.id];
+  const q = useQuery({ queryKey: key, queryFn: () => api.get<S["AiReviewSettings"]>(`/projects/${ctx.p.id}/ai_review`) });
+  return <Q q={q}>{(s) => <AiReviewForm ctx={ctx} initial={s} onSaved={() => qc.invalidateQueries({ queryKey: key })} />}</Q>;
+}
+
+function AiReviewForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S["AiReviewSettings"]; onSaved: () => void }) {
+  const [enabled, setEnabled] = useState(initial.enabled);
+  const [error, setError] = useState<unknown>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const save = useMutation({
+    mutationFn: () => api.put(`/projects/${ctx.p.id}/ai_review`, { enabled }),
+    onSuccess: () => {
+      setError(null);
+      setMsg(enabled ? "AI review is on: merge requests show a Request AI review button." : "AI review is off.");
+      onSaved();
+    },
+    onError: setError,
+  });
+  if (!initial.available && !initial.enabled) return <div className="muted small">This instance does not offer AI review.</div>;
+  return (
+    <form
+      className="stack"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save.mutate();
+      }}
+    >
+      <ErrorBox error={error} />
+      {msg && <div className="alert ok">{msg}</div>}
+      <label className="check">
+        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Offer AI review on merge requests
+      </label>
+      <p className="small muted" style={{ margin: 0 }}>
+        A review sends the merge request&apos;s changes, title and description to{" "}
+        {initial.endpoint ? <strong>{initial.endpoint}</strong> : "the instance's model endpoint"}
+        {initial.model && (
+          <>
+            {" "}
+            (model <code>{initial.model}</code>)
+          </>
+        )}
+        . A <code>.forgust/review.md</code> on the target branch adds the project&apos;s own guidelines.
+      </p>
+      <div>
+        <button className="btn primary" disabled={save.isPending || enabled === initial.enabled}>
+          Save
+        </button>
+      </div>
+    </form>
   );
 }
 

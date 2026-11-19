@@ -1,0 +1,293 @@
+//! AI review of merge requests: the instance's endpoint settings, per-project
+//! settings, and one row per review run.
+
+use chrono::{DateTime, Utc};
+use sqlx::PgExecutor;
+
+use crate::Result;
+
+#[derive(Debug, Clone)]
+pub struct Settings {
+    pub project_id: i64,
+    pub enabled: bool,
+    pub bot_user_id: Option<i64>,
+    pub user_id: Option<i64>,
+}
+
+pub async fn get(e: impl PgExecutor<'_>, project_id: i64) -> Result<Option<Settings>> {
+    sqlx::query_as!(Settings, "SELECT project_id, enabled, bot_user_id, user_id FROM ai_review_settings WHERE project_id = $1", project_id)
+        .fetch_optional(e)
+        .await
+}
+
+/// Turn it on or off; `bot_user_id` and `user_id` are kept when None.
+pub async fn set(e: impl PgExecutor<'_>, project_id: i64, enabled: bool, bot_user_id: Option<i64>, user_id: Option<i64>) -> Result<()> {
+    sqlx::query!(
+        "INSERT INTO ai_review_settings (project_id, enabled, bot_user_id, user_id) VALUES ($1, $2, $3, $4)
+         ON CONFLICT (project_id) DO UPDATE SET enabled = $2,
+             bot_user_id = coalesce($3, ai_review_settings.bot_user_id),
+             user_id = coalesce($4, ai_review_settings.user_id), updated_at = now()",
+        project_id,
+        enabled,
+        bot_user_id,
+        user_id
+    )
+    .execute(e)
+    .await?;
+    Ok(())
+}
+
+/// Projects with AI review on.
+/// The project's bot was made again: its id, nothing else.
+pub async fn set_bot(e: impl PgExecutor<'_>, project_id: i64, bot_user_id: i64) -> Result<()> {
+    sqlx::query!("UPDATE ai_review_settings SET bot_user_id = $2, updated_at = now() WHERE project_id = $1", project_id, bot_user_id)
+        .execute(e)
+        .await?;
+    Ok(())
+}
+
+pub async fn enabled_count(e: impl PgExecutor<'_>) -> Result<i64> {
+    sqlx::query_scalar!(r#"SELECT count(*) AS "n!" FROM ai_review_settings WHERE enabled"#).fetch_one(e).await
+}
+
+// ------------------------------------------------------------ instance
+
+/// The administrator's changes over the config file.
+#[derive(Debug, Clone, Default)]
+pub struct Instance {
+    /// The fields set.
+    pub overrides: serde_json::Value,
+    pub api_key_enc: Option<String>,
+    /// A JSON map, sealed.
+    pub secret_options_enc: Option<String>,
+}
+
+pub async fn instance(e: impl PgExecutor<'_>) -> Result<Instance> {
+    Ok(sqlx::query_as!(Instance, "SELECT overrides, api_key_enc, secret_options_enc FROM ai_review_instance WHERE id")
+        .fetch_optional(e)
+        .await?
+        .unwrap_or(Instance { overrides: serde_json::json!({}), ..Default::default() }))
+}
+
+/// Save the overrides; `key` and `secrets` (sealed): None keeps what is
+/// stored, Some(None) clears it.
+pub async fn set_instance(
+    e: impl PgExecutor<'_>,
+    overrides: &serde_json::Value,
+    key: Option<Option<&str>>,
+    secrets: Option<Option<&str>>,
+) -> Result<()> {
+    sqlx::query!(
+        "INSERT INTO ai_review_instance (id, overrides, api_key_enc, secret_options_enc) VALUES (true, $1, $3, $5)
+         ON CONFLICT (id) DO UPDATE SET overrides = $1,
+             api_key_enc = CASE WHEN $2 THEN $3 ELSE ai_review_instance.api_key_enc END,
+             secret_options_enc = CASE WHEN $4 THEN $5 ELSE ai_review_instance.secret_options_enc END, updated_at = now()",
+        overrides,
+        key.is_some(),
+        key.flatten(),
+        secrets.is_some(),
+        secrets.flatten()
+    )
+    .execute(e)
+    .await?;
+    Ok(())
+}
+
+// ------------------------------------------------------------ runs
+
+#[derive(Debug, Clone)]
+pub struct Run {
+    pub pipeline_id: i64,
+    pub merge_request_id: i64,
+    pub base_sha: String,
+    pub head_sha: String,
+    pub requested_by: Option<i64>,
+    /// pending, posted, outdated or failed
+    pub state: String,
+    pub comments_posted: i32,
+    pub comments_dropped: i32,
+    pub error: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub finished_at: Option<DateTime<Utc>>,
+}
+
+pub async fn insert_run(
+    e: impl PgExecutor<'_>,
+    pipeline_id: i64,
+    merge_request_id: i64,
+    base_sha: &str,
+    head_sha: &str,
+    requested_by: i64,
+) -> Result<()> {
+    sqlx::query!(
+        "INSERT INTO ai_review_runs (pipeline_id, merge_request_id, base_sha, head_sha, requested_by) VALUES ($1, $2, $3, $4, $5)",
+        pipeline_id,
+        merge_request_id,
+        base_sha,
+        head_sha,
+        requested_by
+    )
+    .execute(e)
+    .await?;
+    Ok(())
+}
+
+pub async fn run(e: impl PgExecutor<'_>, pipeline_id: i64) -> Result<Option<Run>> {
+    sqlx::query_as!(
+        Run,
+        "SELECT pipeline_id, merge_request_id, base_sha, head_sha, requested_by, state, comments_posted, comments_dropped,
+                error, created_at, finished_at
+           FROM ai_review_runs WHERE pipeline_id = $1",
+        pipeline_id
+    )
+    .fetch_optional(e)
+    .await
+}
+
+/// A merge request's newest run.
+pub async fn latest(e: impl PgExecutor<'_>, merge_request_id: i64) -> Result<Option<Run>> {
+    sqlx::query_as!(
+        Run,
+        "SELECT pipeline_id, merge_request_id, base_sha, head_sha, requested_by, state, comments_posted, comments_dropped,
+                error, created_at, finished_at
+           FROM ai_review_runs WHERE merge_request_id = $1 ORDER BY created_at DESC, pipeline_id DESC LIMIT 1",
+        merge_request_id
+    )
+    .fetch_optional(e)
+    .await
+}
+
+/// Whether a run reviewed only what came since an earlier review: it starts
+/// from that review's head (a whole review starts from the merge request's base).
+pub async fn is_incremental(e: impl PgExecutor<'_>, merge_request_id: i64, pipeline_id: i64, base_sha: &str) -> Result<bool> {
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM ai_review_runs WHERE merge_request_id = $1 AND pipeline_id <> $2 AND head_sha = $3) AS "x!""#,
+        merge_request_id,
+        pipeline_id,
+        base_sha
+    )
+    .fetch_one(e)
+    .await
+}
+
+/// The head of a merge request's newest run whose comments were posted: a
+/// review asked again starts from there.
+pub async fn last_posted_head(e: impl PgExecutor<'_>, merge_request_id: i64) -> Result<Option<String>> {
+    sqlx::query_scalar!(
+        "SELECT head_sha FROM ai_review_runs WHERE merge_request_id = $1 AND state = 'posted'
+          ORDER BY created_at DESC, pipeline_id DESC LIMIT 1",
+        merge_request_id
+    )
+    .fetch_optional(e)
+    .await
+}
+
+/// Record how a run ended. With `build_id` (the job whose report says so):
+/// when that job is the pipeline's newest and did not settle the run already,
+/// so a report read twice posts once and a retried job settles it again.
+/// Without (no report): only a run still pending.
+pub async fn finish(e: impl PgExecutor<'_>, pipeline_id: i64, build_id: Option<i64>, state: &str, error: Option<&str>) -> Result<bool> {
+    Ok(sqlx::query!(
+        "UPDATE ai_review_runs SET state = $3, comments_posted = 0, comments_dropped = 0, error = $4, finished_at = now(),
+                build_id = coalesce($2, build_id)
+          WHERE pipeline_id = $1
+            AND CASE WHEN $2::bigint IS NULL THEN state = 'pending'
+                     ELSE build_id IS DISTINCT FROM $2 AND $2 = (SELECT max(id) FROM ci_builds WHERE pipeline_id = $1) END",
+        pipeline_id,
+        build_id,
+        state,
+        error
+    )
+    .execute(e)
+    .await?
+    .rows_affected()
+        > 0)
+}
+
+/// Give back a run's claim by `build_id` (its posting failed): the next read
+/// of that job's report claims it again.
+pub async fn unclaim(e: impl PgExecutor<'_>, pipeline_id: i64, build_id: i64) -> Result<()> {
+    sqlx::query!(
+        "UPDATE ai_review_runs SET state = 'pending', build_id = NULL, finished_at = NULL WHERE pipeline_id = $1 AND build_id = $2",
+        pipeline_id,
+        build_id
+    )
+    .execute(e)
+    .await?;
+    Ok(())
+}
+
+/// What a posted run posted.
+pub async fn set_counts(e: impl PgExecutor<'_>, pipeline_id: i64, posted: i32, dropped: i32) -> Result<()> {
+    sqlx::query!(
+        "UPDATE ai_review_runs SET comments_posted = $2, comments_dropped = $3 WHERE pipeline_id = $1",
+        pipeline_id,
+        posted,
+        dropped
+    )
+    .execute(e)
+    .await?;
+    Ok(())
+}
+
+/// Review pipelines not finished yet on the instance.
+pub async fn active(e: impl PgExecutor<'_>) -> Result<i64> {
+    sqlx::query_scalar!(
+        r#"SELECT count(*) AS "n!" FROM ci_pipelines WHERE source = 'ai_review' AND status = ANY($1)"#,
+        crate::ci::ACTIVE as &[&str]
+    )
+    .fetch_one(e)
+    .await
+}
+
+/// Review pipelines not finished yet: (of this merge request, of the instance).
+pub async fn active_counts(e: impl PgExecutor<'_>, merge_request_id: i64) -> Result<(i64, i64)> {
+    let r = sqlx::query!(
+        r#"SELECT count(*) FILTER (WHERE merge_request_id = $1) AS "mr!", count(*) AS "all!" FROM ci_pipelines
+            WHERE source = 'ai_review' AND status = ANY($2)"#,
+        merge_request_id,
+        crate::ci::ACTIVE as &[&str]
+    )
+    .fetch_one(e)
+    .await?;
+    Ok((r.mr, r.all))
+}
+
+/// A project's review pipelines not finished yet.
+pub async fn active_pipelines(e: impl PgExecutor<'_>, project_id: i64) -> Result<Vec<i64>> {
+    sqlx::query_scalar!(
+        "SELECT id FROM ci_pipelines WHERE source = 'ai_review' AND project_id = $1 AND status = ANY($2)",
+        project_id,
+        crate::ci::ACTIVE as &[&str]
+    )
+    .fetch_all(e)
+    .await
+}
+
+/// Review pipelines still unfinished after `secs` (no runner took them).
+pub async fn stale(e: impl PgExecutor<'_>, secs: f64) -> Result<Vec<i64>> {
+    sqlx::query_scalar!(
+        "SELECT id FROM ci_pipelines
+          WHERE source = 'ai_review' AND created_at < now() - make_interval(secs => $1) AND status = ANY($2)",
+        secs,
+        crate::ci::ACTIVE as &[&str]
+    )
+    .fetch_all(e)
+    .await
+}
+
+/// Pending runs whose pipeline ended without a report being read (canceled,
+/// failed before uploading): what to mark failed, as (pipeline, merge
+/// request, pipeline status).
+pub async fn ended_pending(e: impl PgExecutor<'_>) -> Result<Vec<(i64, i64, String)>> {
+    Ok(sqlx::query!(
+        "SELECT r.pipeline_id, r.merge_request_id, p.status FROM ai_review_runs r JOIN ci_pipelines p ON p.id = r.pipeline_id
+          WHERE r.state = 'pending' AND p.status <> ALL($1) AND p.finished_at < now() - interval '5 minutes'",
+        crate::ci::ACTIVE as &[&str]
+    )
+    .fetch_all(e)
+    .await?
+    .into_iter()
+    .map(|r| (r.pipeline_id, r.merge_request_id, r.status))
+    .collect())
+}

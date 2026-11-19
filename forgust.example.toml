@@ -104,6 +104,30 @@ timeout_secs = 3600
 # [renovate.extra_env]     # shown in the job's variables: no secrets
 # RENOVATE_PR_HOURLY_LIMIT = "4"
 
+[ai_review]
+# AI review of merge requests: a "Request AI review" button runs a job on these
+# runners, with the reviewer image (crates/forgust-reviewer, released with Forgust), that
+# sends the merge request's changes to base_url, and posts what the model says as
+# comments of a bot of the project. Off by default: THE CODE OF REVIEWED MERGE
+# REQUESTS IS SENT TO base_url. Also in Admin > AI review.
+enabled = false
+provider = "openai"       # openai: any OpenAI-compatible /chat/completions (OpenAI, Ollama, vLLM, llama.cpp)
+base_url = ""             # reached from the runners, e.g. "http://ollama:11434/v1"
+model = ""                # e.g. "qwen2.5-coder:32b"
+# api_key = "sk-..."      # masked in the job; none for a local model
+tags = []                 # runner tags for the job (instance runners only)
+max_concurrent = 2        # reviews at once on the instance
+timeout_secs = 900
+max_comments = 10         # line comments one review may post
+# image = "ghcr.io/forgust-dev/forgust-reviewer:<version>"   # the server's version; runs `forgust-review`
+# ca_pem = "-----BEGIN CERTIFICATE-----..."              # when the endpoint uses an in-house CA
+# The reviewer's own options, given to the job as AI_REVIEW_<NAME> (see its README):
+# [ai_review.options]      # shown in the job's variables: no secrets
+# MAX_DIFF_BYTES = "200000" # changes per model request: fit the model's context
+# TEMPERATURE = "0.2"
+# [ai_review.secret_options]   # masked in the job
+# AWS_SECRET_ACCESS_KEY = "..."
+
 [email]
 # smtps://user:pass@smtp.example.com:465 (TLS) or smtp://user:pass@smtp.example.com:587?tls=required
 # (STARTTLS). A bare smtp://host:port sends in plain text: only for a local relay or

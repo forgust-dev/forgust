@@ -24,7 +24,13 @@ export const SOURCE: Record<string, string> = {
   parent_pipeline: "parent pipeline",
   pipeline: "upstream pipeline",
   renovate: "dependency updates",
+  ai_review: "AI review",
 };
+
+/** Forgust's own pipelines (the server's `is_system_source`): they run on a
+ *  merge request's commit, but are not its CI. */
+const SYSTEM_SOURCES = new Set(["renovate", "security", "ai_review"]);
+export const isSystemPipeline = (p: { source: string }) => SYSTEM_SOURCES.has(p.source);
 
 /** Where a pipeline lives on this server (another project's for multi-project pipelines). */
 export function pipelineHref(ctx: Ctx, l: S["PipelineLink"]) {

@@ -189,6 +189,13 @@ jobs:
       - name: Real runner
         if: env.RUN == 'true'
         run: cargo test -p forgust-server --test m4_runner -- --nocapture
+      - name: A real AI review (the reviewer image, built here)
+        if: env.RUN == 'true'
+        env:
+          FORGUST_TEST_AI_REVIEW_IMAGE: forgust-reviewer:ci
+        run: |
+          docker build -q -f crates/forgust-reviewer/Dockerfile -t "$FORGUST_TEST_AI_REVIEW_IMAGE" .
+          cargo test -p forgust-server --test m20_ai_review a_stock_runner -- --nocapture
 
   real-tools:
     # the real Renovate (container), glab (binary), skopeo and the security
@@ -276,9 +283,9 @@ jobs:
       - run: npm run build
 
   image:
-    # a full release build (10 min): on main, and only when what the image is
-    # built from changed beyond the sources (Dockerfile, manifests, lockfiles);
-    # release.yml builds the image that ships
+    # a full release build (10 min): on main, and only when what the images are
+    # built from changed beyond the sources (Dockerfiles, manifests, lockfiles);
+    # release.yml builds the images that ship
     needs: changes
     if: ${{ !cancelled() && github.event_name == 'push' && needs.changes.outputs.image != 'false' }}
     runs-on: ubuntu-latest
@@ -288,6 +295,13 @@ jobs:
         run: docker build -t "forgust:ci-${GITHUB_RUN_NUMBER}" .
       - name: The image starts
         run: docker run --rm "forgust:ci-${GITHUB_RUN_NUMBER}" --help
+      - name: Build the reviewer image
+        run: docker build -f crates/forgust-reviewer/Dockerfile -t "forgust-reviewer:ci-${GITHUB_RUN_NUMBER}" .
+      - name: The reviewer image runs, as its user, with git
+        run: |
+          docker run --rm "forgust-reviewer:ci-${GITHUB_RUN_NUMBER}" forgust-review --version
+          test "$(docker run --rm "forgust-reviewer:ci-${GITHUB_RUN_NUMBER}" id -u)" = 10001
+          docker run --rm "forgust-reviewer:ci-${GITHUB_RUN_NUMBER}" git --version
 
   e2e-run:
     # browser tests against the server built in the job: one machine, with its

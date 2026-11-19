@@ -1,0 +1,31 @@
+[package]
+name = "forgust-reviewer"
+description = "The AI review job (forgust-review): asks a model to review a merge request, and leaves a report the server checks"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[features]
+# the job itself; without it, only the report (what the server reads)
+default = ["job"]
+job = ["dep:forgust-diff", "dep:anyhow", "dep:async-trait", "dep:serde_json", "dep:tokio", "dep:reqwest"]
+
+[[bin]]
+name = "forgust-review"
+path = "src/main.rs"
+required-features = ["job"]
+
+[dependencies]
+serde.workspace = true
+forgust-diff = { workspace = true, optional = true }
+anyhow = { workspace = true, optional = true }
+async-trait = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "json"], optional = true }
+
+[dev-dependencies]
+axum = "0.8"
+tempfile = "3"

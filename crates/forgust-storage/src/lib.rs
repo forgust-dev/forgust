@@ -7,11 +7,10 @@
 
 mod catfile;
 mod cli;
-mod diff;
 mod local;
 mod types;
 
-pub use diff::{Diff, DiffFile, DiffHunk, DiffLine, DiffLineKind, DiffOptions, FileStat, map_old_line_to_new, parse_unified_diff};
+pub use forgust_diff::{Diff, DiffFile, DiffHunk, DiffLine, DiffLineKind, DiffOptions, FileStat, map_old_line_to_new, parse_unified_diff};
 pub use local::{LocalStorage, LocalStorageConfig, REBASE_PREFIX, replay_rebases};
 pub use types::*;
 

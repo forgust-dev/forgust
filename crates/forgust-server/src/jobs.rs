@@ -610,6 +610,34 @@ impl TaskHandler for ReadSecurityReports {
     }
 }
 
+/// A review job ended: check its report and post what holds up.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ReadAiReview {
+    pub build_id: i64,
+}
+
+impl ReadAiReview {
+    pub fn request(self) -> JobRequest {
+        JobRequest {
+            task: Self::IDENTIFIER,
+            job_key: Some(format!("ai-review-read:{}", self.build_id)),
+            payload: serde_json::to_value(&self).unwrap_or_default(),
+            queue: None,
+            max_attempts: Some(3),
+        }
+    }
+}
+
+impl TaskHandler for ReadAiReview {
+    const IDENTIFIER: &'static str = "read_ai_review";
+
+    async fn run(self, ctx: WorkerContext) -> impl IntoTaskHandlerResult {
+        let state = ctx.get_ext::<AppState>().ok_or("no app state")?;
+        crate::services::ai_review::ingest(state, self.build_id).await.map_err(|e| format!("{e:#}"))?;
+        Ok::<(), String>(())
+    }
+}
+
 /// A pipeline ended: resolve what its complete default-branch scans no longer find.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ResolveSecurityFindings {
@@ -763,6 +791,7 @@ pub async fn start_worker(state: AppState, concurrency: usize) -> anyhow::Result
         .define_job::<ScanBlobs>()
         .define_job::<MeasureRepositories>()
         .define_job::<ReadSecurityReports>()
+        .define_job::<ReadAiReview>()
         .define_job::<ResolveSecurityFindings>()
         .define_job::<Backup>()
         .define_job::<Ping>()

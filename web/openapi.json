@@ -10,6 +10,53 @@
     "version": "0.4.0"
   },
   "paths": {
+    "/api/v1/admin/ai_review": {
+      "get": {
+        "tags": [
+          "ai_review"
+        ],
+        "summary": "AI review on this instance: the settings in effect (the config file, then changes made here).",
+        "operationId": "admin_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminAiReviewStatus"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "ai_review"
+        ],
+        "operationId": "admin_set",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminAiReview"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminAiReviewStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/admin/renovate": {
       "get": {
         "tags": [
@@ -1267,6 +1314,54 @@
         }
       }
     },
+    "/api/v1/projects/{id}/ai_review": {
+      "get": {
+        "tags": [
+          "ai_review"
+        ],
+        "summary": "AI review of the project's merge requests (Maintainers).",
+        "operationId": "get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiReviewSettings"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "ai_review"
+        ],
+        "summary": "Turn AI review on or off for the project.",
+        "operationId": "set",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiReviewSettingsBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiReviewSettings"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{id}/ci/settings": {
       "get": {
         "tags": [
@@ -2000,6 +2095,44 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MrDetail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/merge_requests/{iid}/ai_review": {
+      "get": {
+        "tags": [
+          "ai_review"
+        ],
+        "summary": "The merge request's latest AI review.",
+        "operationId": "mr_status",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiReviewStatus"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "ai_review"
+        ],
+        "summary": "Ask for an AI review of the merge request's latest version (who can push).",
+        "operationId": "mr_request",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiReviewStatus"
                 }
               }
             }
@@ -4824,6 +4957,117 @@
           }
         }
       },
+      "AdminAiReview": {
+        "type": "object",
+        "required": [
+          "enabled",
+          "provider",
+          "base_url",
+          "model",
+          "tags",
+          "max_concurrent",
+          "timeout_secs",
+          "max_comments"
+        ],
+        "properties": {
+          "api_key_set": {
+            "type": "boolean",
+            "description": "Read: whether a key is set. Never returned."
+          },
+          "base_url": {
+            "type": "string",
+            "description": "The API's base, reached from the runners (e.g. `http://ollama:11434/v1`)."
+          },
+          "ca_pem": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "PEM of an in-house CA the endpoint's certificate is signed by."
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "image": {
+            "type": "string",
+            "description": "The reviewer image set here; \"\" follows the default (`default_image`)."
+          },
+          "max_comments": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "max_concurrent": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "model": {
+            "type": "string"
+          },
+          "options": {
+            "type": "object",
+            "description": "The reviewer's options (`MAX_DIFF_BYTES`, `TEMPERATURE`...), given to\nthe job as `AI_REVIEW_<NAME>`. Not masked: no secrets.",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
+          },
+          "provider": {
+            "type": "string",
+            "description": "Which API (`openai`: any OpenAI-compatible endpoint); the reviewer\nimage says which it knows."
+          },
+          "secret_option_names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Read: the names of the secret options set. Their values are never returned."
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "timeout_secs": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "AdminAiReviewStatus": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/AdminAiReview"
+          },
+          {
+            "type": "object",
+            "required": [
+              "default_image",
+              "enabled_projects",
+              "active_runs"
+            ],
+            "properties": {
+              "active_runs": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "default_image": {
+                "type": "string",
+                "description": "The image when none is set here: the config file's, by default the\nreviewer released with this server (it moves with each upgrade)."
+              },
+              "enabled_projects": {
+                "type": "integer",
+                "format": "int64"
+              }
+            }
+          }
+        ]
+      },
       "AdminGroup": {
         "type": "object",
         "required": [
@@ -5125,6 +5369,146 @@
           },
           "username": {
             "type": "string"
+          }
+        }
+      },
+      "AiReviewRun": {
+        "type": "object",
+        "required": [
+          "pipeline_iid",
+          "pipeline_status",
+          "state",
+          "base_sha",
+          "head_sha",
+          "current",
+          "incremental",
+          "comments_posted",
+          "comments_dropped",
+          "created_at"
+        ],
+        "properties": {
+          "base_sha": {
+            "type": "string"
+          },
+          "comments_dropped": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "comments_posted": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Line comments posted: each opens a thread."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "current": {
+            "type": "boolean",
+            "description": "Reviewed the merge request's latest version."
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "finished_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "head_sha": {
+            "type": "string"
+          },
+          "incremental": {
+            "type": "boolean",
+            "description": "Reviewed only the changes since an earlier review (from its head)."
+          },
+          "pipeline_iid": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "pipeline_status": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string",
+            "description": "pending, posted, outdated or failed"
+          }
+        }
+      },
+      "AiReviewSettings": {
+        "type": "object",
+        "required": [
+          "available",
+          "enabled",
+          "model"
+        ],
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "description": "The instance has AI review on and set up."
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "endpoint": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Where the code of reviewed merge requests is sent (host of the endpoint)."
+          },
+          "model": {
+            "type": "string"
+          }
+        }
+      },
+      "AiReviewSettingsBody": {
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "AiReviewStatus": {
+        "type": "object",
+        "required": [
+          "available",
+          "can_request"
+        ],
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "description": "AI review is on for the project (and the instance)."
+          },
+          "can_request": {
+            "type": "boolean",
+            "description": "The viewer may ask for a review."
+          },
+          "endpoint": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Where a review sends the code (for who can push)."
+          },
+          "latest": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AiReviewRun"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       },
@@ -11079,9 +11463,14 @@
           "body",
           "system",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "author_bot"
         ],
         "properties": {
+          "author_bot": {
+            "type": "boolean",
+            "description": "Written by a bot (an AI review, Renovate, a token's bot), not a person."
+          },
           "author_id": {
             "type": [
               "integer",

@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, enc, qs, timeAgo, type S } from "../api/client";
 import { useProviders } from "../prefetch";
 import { useSession } from "../session";
-import { Avatar, Badge, Card, ErrorBox, Field, FilterTabs, NotFound, Q, SearchField, UserLink, useDebounced } from "../components/ui";
+import { Avatar, Badge, Card, ErrorBox, Field, FilterTabs, NotFound, Q, SearchField, UserLink, useDebounced, useFormRun } from "../components/ui";
 import { adminPage } from "./adminPages";
 import { Menu, type MenuItem } from "../components/controls";
 import { MoreHorizontal } from "lucide-react";
@@ -41,6 +41,7 @@ export function Admin() {
         <Route path="settings" element={<Settings />} />
         <Route path="dependency-updates" element={<DependencyUpdatesAdmin />} />
         <Route path="security-scanning" element={<SecurityScanningAdmin />} />
+        <Route path="ai-review" element={<AiReviewAdmin />} />
         <Route path="audit" element={<AdminAuditLog />} />
       </Routes>
     </div>
@@ -410,6 +411,21 @@ function AdminAuditLog() {
   return <AuditEvents path="/admin/audit" perPage={200} target />;
 }
 
+/** `NAME=value` lines, one a variable. */
+const envLines = (m: Record<string, string>) =>
+  Object.entries(m)
+    .map(([k, v]) => `${k}=${v}`)
+    .join("\n");
+
+const parseEnvLines = (text: string) => {
+  const out: Record<string, string> = {};
+  for (const line of text.split("\n").map((l) => l.trim()).filter(Boolean)) {
+    const i = line.indexOf("=");
+    if (i > 0) out[line.slice(0, i).trim()] = line.slice(i + 1);
+  }
+  return out;
+};
+
 function DependencyUpdatesAdmin() {
   const q = useQuery({ queryKey: ["admin-renovate"], queryFn: () => api.get<S["AdminRenovateStatus"]>("/admin/renovate") });
   return <Q q={q}>{(s) => <DependencyUpdatesForm initial={s} />}</Q>;
@@ -418,11 +434,7 @@ function DependencyUpdatesAdmin() {
 function DependencyUpdatesForm({ initial }: { initial: S["AdminRenovateStatus"] }) {
   const qc = useQueryClient();
   const [s, setS] = useState(initial);
-  const [env, setEnv] = useState(
-    Object.entries(initial.extra_env)
-      .map(([k, v]) => `${k}=${v}`)
-      .join("\n"),
-  );
+  const [env, setEnv] = useState(envLines(initial.extra_env));
   const [token, setToken] = useState("");
   const [pullPassword, setPullPassword] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
@@ -430,11 +442,7 @@ function DependencyUpdatesForm({ initial }: { initial: S["AdminRenovateStatus"] 
   const save = async (e: FormEvent, clearToken = false, clearPull = false) => {
     e.preventDefault();
     setError(null);
-    const extra_env: Record<string, string> = {};
-    for (const line of env.split("\n").map((l) => l.trim()).filter(Boolean)) {
-      const i = line.indexOf("=");
-      if (i > 0) extra_env[line.slice(0, i).trim()] = line.slice(i + 1);
-    }
+    const extra_env = parseEnvLines(env);
     try {
       const r = await api.put<S["AdminRenovateStatus"]>("/admin/renovate", {
         ...s,
@@ -517,6 +525,134 @@ function DependencyUpdatesForm({ initial }: { initial: S["AdminRenovateStatus"] 
       />
     </div>
     </>
+  );
+}
+
+function AiReviewAdmin() {
+  const q = useQuery({ queryKey: ["admin-ai-review"], queryFn: () => api.get<S["AdminAiReviewStatus"]>("/admin/ai_review") });
+  return <Q q={q}>{(s) => <AiReviewForm initial={s} />}</Q>;
+}
+
+/** Where AI reviews send the code, which model they ask, and their limits. */
+function AiReviewForm({ initial }: { initial: S["AdminAiReviewStatus"] }) {
+  const qc = useQueryClient();
+  const [s, setS] = useState(initial);
+  const [key, setKey] = useState("");
+  const [options, setOptions] = useState(envLines(initial.options ?? {}));
+  const secretNames = initial.secret_option_names ?? [];
+  const [secrets, setSecrets] = useState("");
+  const { run, msg, error } = useFormRun(() => qc.invalidateQueries({ queryKey: ["admin-ai-review"] }));
+  const save = (clearKey = false, clearSecrets = false) =>
+    run(async () => {
+      const r = await api.put<S["AdminAiReviewStatus"]>("/admin/ai_review", {
+        ...s,
+        options: parseEnvLines(options),
+        ca_pem: s.ca_pem || null,
+        api_key: clearKey ? "" : key || undefined,
+        // all of them: what is typed replaces what is stored
+        secret_options: clearSecrets ? {} : secrets.trim() ? parseEnvLines(secrets) : undefined,
+      });
+      setS(r);
+      setKey("");
+      setSecrets("");
+    }, "Saved.");
+  let host = "";
+  try {
+    host = s.base_url ? new URL(s.base_url).host : "";
+  } catch {
+    // not a URL yet
+  }
+  return (
+    <form className="stack" style={{ maxWidth: 640 }} onSubmit={save()}>
+      <p className="muted small">
+        Projects turn on AI review in their settings; then people who can push ask for a review on a merge request. Forgust runs the review on the instance runners
+        and posts the model&apos;s comments as a bot of the project; the bot never approves. {initial.enabled_projects} project(s) use it, {initial.active_runs}{" "}
+        review(s) going on. These settings apply over the config file&apos;s <code>[ai_review]</code>.
+      </p>
+      <div className="alert warn">
+        The changes of every reviewed merge request are sent to {host ? <strong>{host}</strong> : "the endpoint below"}. Use an endpoint you trust with this code.
+      </div>
+      <ErrorBox error={error} />
+      {msg && <div className="alert ok">{msg}</div>}
+      <label className="check">
+        <input type="checkbox" checked={s.enabled} onChange={(e) => setS({ ...s, enabled: e.target.checked })} /> Offer AI review to projects
+      </label>
+      <div className="grid2">
+        <Field label="Provider" hint="openai: any OpenAI-compatible API (OpenAI, Ollama, vLLM, llama.cpp); the reviewer image says which others it knows">
+          <input className="mono" value={s.provider} list="ai-providers" onChange={(e) => setS({ ...s, provider: e.target.value })} />
+          <datalist id="ai-providers">
+            <option value="openai" />
+          </datalist>
+        </Field>
+        <Field label="Endpoint" hint="The API's base, reached from the runners: https://api.openai.com/v1, http://vllm:8000/v1">
+          <input className="mono" value={s.base_url} placeholder="https://api.openai.com/v1" onChange={(e) => setS({ ...s, base_url: e.target.value })} />
+        </Field>
+        <Field label="Model">
+          <input className="mono" value={s.model} placeholder="qwen2.5-coder:32b" onChange={(e) => setS({ ...s, model: e.target.value })} />
+        </Field>
+      </div>
+      <Field label="API key" hint={initial.api_key_set ? "Set. Type a new one to replace it." : "Sent as a bearer token, masked in the job; none for a local model"}>
+        <input type="password" autoComplete="new-password" value={key} onChange={(e) => setKey(e.target.value)} />
+      </Field>
+      <div className="grid2">
+        <Field label="Comments per review">
+          <input type="number" min={1} max={50} value={s.max_comments} onChange={(e) => setS({ ...s, max_comments: Number(e.target.value) })} />
+        </Field>
+        <Field label="Reviews at once">
+          <input type="number" min={1} max={50} value={s.max_concurrent} onChange={(e) => setS({ ...s, max_concurrent: Number(e.target.value) })} />
+        </Field>
+        <Field label="Timeout (minutes)">
+          <input type="number" min={1} max={120} value={Math.round(s.timeout_secs / 60)} onChange={(e) => setS({ ...s, timeout_secs: Number(e.target.value) * 60 })} />
+        </Field>
+        <Field label="Reviewer image" hint="Empty: the one released with this server, which follows each upgrade. Or an image of your own that runs forgust-review with the same contract">
+          <input className="mono" value={s.image} placeholder={initial.default_image} onChange={(e) => setS({ ...s, image: e.target.value })} />
+        </Field>
+        <Field label="Runner tags" hint="Comma-separated; instance runners only">
+          <input value={s.tags.join(", ")} onChange={(e) => setS({ ...s, tags: e.target.value.split(",").map((t) => t.trim()) })} />
+        </Field>
+      </div>
+      <Field
+        label="Reviewer options"
+        hint={
+          <>
+            One NAME=value per line, given to the job as AI_REVIEW_NAME and shown in its variables: no secrets. For example MAX_DIFF_BYTES (changes per model
+            request: fit the model&apos;s context) or TEMPERATURE; the{" "}
+            <a href="https://github.com/forgust-dev/forgust/tree/main/crates/forgust-reviewer#variables" target="_blank" rel="noreferrer">
+              reviewer&apos;s README
+            </a>{" "}
+            lists them.
+          </>
+        }
+      >
+        <textarea className="mono" rows={3} value={options} placeholder="MAX_DIFF_BYTES=200000" onChange={(e) => setOptions(e.target.value)} />
+      </Field>
+      <Field
+        label="Secret options"
+        hint={
+          secretNames.length
+            ? `Set: ${secretNames.join(", ")}. Typing replaces all of them.`
+            : "Like the options, masked in the job: a second key, cloud credentials"
+        }
+      >
+        <textarea className="mono" rows={2} value={secrets} autoComplete="off" placeholder="NAME=value" onChange={(e) => setSecrets(e.target.value)} />
+      </Field>
+      <Field label="Certificate authority" hint="PEM, when the endpoint's certificate comes from an in-house CA">
+        <textarea className="mono" rows={3} value={s.ca_pem ?? ""} placeholder="-----BEGIN CERTIFICATE-----" onChange={(e) => setS({ ...s, ca_pem: e.target.value })} />
+      </Field>
+      <div className="row" style={{ gap: 8 }}>
+        <button className="btn primary">Save</button>
+        {initial.api_key_set && (
+          <button type="button" className="btn" onClick={save(true)}>
+            Remove the API key
+          </button>
+        )}
+        {secretNames.length > 0 && (
+          <button type="button" className="btn" onClick={save(false, true)}>
+            Remove the secret options
+          </button>
+        )}
+      </div>
+    </form>
   );
 }
 

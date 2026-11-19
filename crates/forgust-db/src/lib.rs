@@ -2,6 +2,7 @@
 //! with `sqlx::query!`; no SQL lives in HTTP handlers.
 
 pub mod admin;
+pub mod ai_review;
 pub mod audit;
 pub mod authz;
 pub mod awards;

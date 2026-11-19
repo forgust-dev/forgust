@@ -2423,6 +2423,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "forgust-diff"
+version = "0.4.0"
+dependencies = [
+ "serde",
+ "utoipa",
+]
+
+[[package]]
+name = "forgust-reviewer"
+version = "0.4.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "forgust-diff",
+ "reqwest 0.13.5",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+]
+
+[[package]]
 name = "forgust-server"
 version = "0.4.0"
 dependencies = [
@@ -2444,6 +2467,7 @@ dependencies = [
  "figment",
  "forgust-ci-config",
  "forgust-db",
+ "forgust-reviewer",
  "forgust-storage",
  "futures",
  "globset",
@@ -2512,6 +2536,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bytes",
+ "forgust-diff",
  "gix",
  "hex",
  "lru 0.19.0",

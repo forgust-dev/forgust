@@ -80,7 +80,7 @@ fn replace_lines(text: &str, first: usize, last: usize, with: &[String]) -> Opti
     Some(s)
 }
 
-fn lines_of(text: &str, first: usize, last: usize) -> Option<Vec<String>> {
+pub(crate) fn lines_of(text: &str, first: usize, last: usize) -> Option<Vec<String>> {
     let all: Vec<&str> = text.lines().collect();
     if first == 0 || last > all.len() || last < first {
         return None;

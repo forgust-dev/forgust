@@ -275,6 +275,9 @@ async fn sweep_locked(state: &AppState) {
     if let Err(e) = crate::services::scanning::run_due(state).await {
         tracing::warn!(error = %e, "security scans not started");
     }
+    if let Err(e) = crate::services::ai_review::sweep(state).await {
+        tracing::warn!(error = %e, "AI reviews not swept");
+    }
     // delayed jobs whose time came, environments to stop
     match forgust_db::ci::due_scheduled(&state.db).await {
         Ok(due) => {

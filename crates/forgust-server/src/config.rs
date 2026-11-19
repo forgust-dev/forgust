@@ -28,6 +28,7 @@ pub struct Config {
     pub renovate: RenovateConfig,
     pub pages: PagesConfig,
     pub security_scanning: SecurityScanningConfig,
+    pub ai_review: AiReviewConfig,
     pub oidc: BTreeMap<String, OidcProvider>,
 }
 
@@ -140,6 +141,66 @@ impl Default for RenovateConfig {
             onboarding_config: None,
             extra_env: BTreeMap::new(),
             github_com_token: None,
+        }
+    }
+}
+
+/// AI review of merge requests: on request, Forgust runs a job of its own on
+/// the instance's runners, with the reviewer image (`crates/forgust-reviewer`),
+/// that sends a merge request's changes to `base_url`, and posts what the
+/// model says as notes of a bot of the project. Off until an administrator
+/// turns it on: the code leaves for wherever `base_url` is.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AiReviewConfig {
+    pub enabled: bool,
+    /// Which API the reviewer talks to (`openai`: any OpenAI-compatible
+    /// `/chat/completions`); the reviewer image says which it knows.
+    pub provider: String,
+    /// The API's base, e.g. `https://api.openai.com/v1` or
+    /// `http://ollama:11434/v1`; reached from the runners, not the server.
+    pub base_url: String,
+    pub model: String,
+    /// Sent as `Authorization: Bearer` (masked in the job); none for a local
+    /// model.
+    pub api_key: Option<String>,
+    /// The reviewer image the job runs (`forgust-review`).
+    pub image: String,
+    /// Runner tags the job asks for. Only instance runners take review jobs.
+    pub tags: Vec<String>,
+    /// Reviews at once on the instance; more are refused until one ends.
+    pub max_concurrent: u32,
+    pub timeout_secs: u64,
+    /// Line comments one review may post.
+    pub max_comments: u32,
+    /// The reviewer's own options, given to the job as `AI_REVIEW_<NAME>`
+    /// (`MAX_DIFF_BYTES`, `TEMPERATURE`...: see the reviewer's README). Not
+    /// masked: no secrets.
+    pub options: BTreeMap<String, String>,
+    /// Options that are secrets (a second key, cloud credentials): masked.
+    pub secret_options: BTreeMap<String, String>,
+    /// PEM of the authorities the endpoint's certificate is signed by, when
+    /// it is an in-house CA (`security.ca_file` does not reach jobs).
+    pub ca_pem: Option<String>,
+}
+
+impl Default for AiReviewConfig {
+    fn default() -> Self {
+        AiReviewConfig {
+            enabled: false,
+            provider: "openai".into(),
+            base_url: String::new(),
+            model: String::new(),
+            api_key: None,
+            // released with the server, under the same version
+            image: format!("ghcr.io/forgust-dev/forgust-reviewer:{}", env!("CARGO_PKG_VERSION")),
+            tags: Vec::new(),
+            max_concurrent: 2,
+            timeout_secs: 900,
+            max_comments: 10,
+            options: BTreeMap::new(),
+            secret_options: BTreeMap::new(),
+            ca_pem: None,
         }
     }
 }

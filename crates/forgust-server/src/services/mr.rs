@@ -899,6 +899,10 @@ pub async fn may_edit(state: &AppState, principal: &Principal, p: &Project, mr: 
 pub async fn approve(state: &AppState, principal: &Principal, p: &Project, mr: &MergeRequest, approve: bool) -> ApiResult<()> {
     crate::auth::authz::writable(p)?;
     let user = principal.direct_user().ok_or(ApiError::Unauthorized)?;
+    // an AI review is advice, never an approval
+    if user.user_type == super::ai_review::BOT_TYPE {
+        return Err(ApiError::forbidden("the AI review bot cannot approve"));
+    }
     let role = project_role(state, principal, p).await?;
     if role.level < forgust_db::access::REPORTER {
         return Err(ApiError::forbidden("approving needs at least the Reporter role"));
@@ -1015,18 +1019,23 @@ pub async fn add_note(
     super::people::reviewed(state, mr, user.id, super::people::ReviewAction::Commented).await;
     let note = mrdb::note(&state.db, mr.id, id).await?.ok_or(ApiError::NotFound)?;
     state.events.publish(Event::MergeRequest { project_id: p.id, iid: mr.iid });
+    note_webhook(state, p, mr, &note, &user.username).await;
+    let mentioned = super::refs::on_write(state, p, &user, mr_target(mr), body, None).await;
+    done(state, user.id, p, mr).await;
+    super::notify::merge_request_note(state, p, mr, &user, &note, &mentioned).await;
+    Ok(note)
+}
+
+/// The `note` webhook of a merge request's comment.
+pub(crate) async fn note_webhook(state: &AppState, p: &Project, mr: &MergeRequest, note: &Note, author: &str) {
     super::webhooks::emit(
         state,
         p,
         "note",
         json!({ "object_kind": "note", "project": project_json(state, p), "merge_request": { "iid": mr.iid, "title": mr.title },
-                "note": { "id": note.id, "body": note.body, "author": user.username, "new_path": note.new_path, "new_line": note.new_line } }),
+                "note": { "id": note.id, "body": note.body, "author": author, "new_path": note.new_path, "new_line": note.new_line } }),
     )
     .await;
-    let mentioned = super::refs::on_write(state, p, &user, mr_target(mr), body, None).await;
-    done(state, user.id, p, mr).await;
-    super::notify::merge_request_note(state, p, mr, &user, &note, &mentioned).await;
-    Ok(note)
 }
 
 /// A note's position on another version of the MR.

@@ -1,0 +1,50 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT overrides, api_key_enc, secret_options_enc FROM ai_review_instance WHERE id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "overrides",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "ai_review_instance",
+            "name": "overrides"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "api_key_enc",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ai_review_instance",
+            "name": "api_key_enc"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "secret_options_enc",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ai_review_instance",
+            "name": "secret_options_enc"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "fc0f6bcfd0b11b93f1dfa1052841530903289e1000db826ba165c1c85a17b01c"
+}

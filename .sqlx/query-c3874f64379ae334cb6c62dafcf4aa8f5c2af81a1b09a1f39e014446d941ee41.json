@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE ai_review_runs SET comments_posted = $2, comments_dropped = $3 WHERE pipeline_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c3874f64379ae334cb6c62dafcf4aa8f5c2af81a1b09a1f39e014446d941ee41"
+}

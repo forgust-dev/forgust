@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT n.id, n.merge_request_id, n.author_id, u.username AS \"author_username?\", u.name AS \"author_name?\",\n                  n.parent_id, n.body, n.system, n.diff_id, n.base_sha, n.start_sha, n.head_sha, n.old_path, n.new_path,\n                  n.old_line, n.new_line, n.resolved_by, n.resolved_at, n.created_at, n.updated_at, n.imported_author,\n                  n.suggestion_applied_sha, n.start_old_line, n.start_new_line, n.review\n           FROM notes n LEFT JOIN users u ON u.id = n.author_id\n           WHERE n.merge_request_id = $1 AND n.id = $2",
+  "query": "SELECT n.id, n.merge_request_id, n.author_id, u.username AS \"author_username?\", u.name AS \"author_name?\",\n                  n.parent_id, n.body, n.system, n.diff_id, n.base_sha, n.start_sha, n.head_sha, n.old_path, n.new_path,\n                  n.old_line, n.new_line, n.resolved_by, n.resolved_at, n.created_at, n.updated_at, n.imported_author,\n                  n.suggestion_applied_sha, n.start_old_line, n.start_new_line, n.review,\n                  coalesce(u.user_type <> 'human', false) AS \"author_bot!\"\n           FROM notes n LEFT JOIN users u ON u.id = n.author_id\n           WHERE n.merge_request_id = $1 ORDER BY n.id",
   "describe": {
     "columns": [
       {
@@ -277,11 +277,16 @@
             "name": "review"
           }
         }
+      },
+      {
+        "ordinal": 25,
+        "name": "author_bot!",
+        "type_info": "Bool",
+        "origin": "Expression"
       }
     ],
     "parameters": {
       "Left": [
-        "Int8",
         "Int8"
       ]
     },
@@ -310,8 +315,9 @@
       true,
       true,
       true,
-      true
+      true,
+      null
     ]
   },
-  "hash": "735ece0b181fa3154ab0297a15768d59260314580e13336367060e916f91302a"
+  "hash": "8a698cc1dd59335f2db457735a21986f0283bcc3e157d583f2cb212597451d85"
 }

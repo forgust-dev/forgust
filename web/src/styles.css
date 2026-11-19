@@ -774,6 +774,11 @@ form.stack {
   background: var(--ok-soft);
   color: var(--ok);
 }
+.alert.warn {
+  border-color: var(--warn-border);
+  background: var(--warn-soft);
+  color: var(--warn);
+}
 
 .tabs {
   display: flex;
@@ -3267,6 +3272,10 @@ kbd {
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
+}
+/* a button under lines of text (AI review, code owners): the row's 8px */
+.fact-value.column > .btn {
+  margin-top: 6px;
 }
 .related-mrs {
   align-items: stretch;
