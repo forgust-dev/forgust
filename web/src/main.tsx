@@ -11,7 +11,7 @@ import { ApiError } from "./api/client";
 import { SessionProvider, useSession } from "./session";
 import { PageErrorBoundary, Spinner } from "./components/ui";
 import { ForgotPassword, Login, ResetPassword, Setup, VerifyEmail } from "./pages/Auth";
-import { Dashboard, Explore } from "./pages/Dashboard";
+import { Dashboard, ExploreRoute } from "./pages/Dashboard";
 import { SearchPage } from "./pages/Search";
 import { UnsubscribePage } from "./pages/Unsubscribe";
 import { Work } from "./pages/Work";
@@ -66,7 +66,8 @@ function App() {
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/" element={<RequireUser><Work /></RequireUser>} />
         <Route path="/dashboard/projects" element={<RequireUser><Dashboard /></RequireUser>} />
-        <Route path="/explore" element={<Explore />} />
+        <Route path="/dashboard/groups" element={<RequireUser><Dashboard tab="groups" /></RequireUser>} />
+        <Route path="/explore" element={<ExploreRoute />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/unsubscribe" element={<UnsubscribePage />} />
         <Route path="/new/group" element={<RequireUser><NewGroup /></RequireUser>} />

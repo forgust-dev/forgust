@@ -1518,6 +1518,7 @@ kbd {
   flex-direction: column;
   width: var(--side-w);
   padding: 10px 8px;
+  overflow-x: hidden;
   overflow-y: auto;
   background: var(--side-bg);
   clip-path: inset(0 0 0 0);
@@ -1527,6 +1528,45 @@ kbd {
 }
 .sidebar.collapsed {
   clip-path: inset(0 calc(var(--side-w) - var(--side-w-collapsed)) 0 0);
+}
+/* one level of the menu (the main menu, a group, a project): a new level slides in
+   from where it is, deeper from the right and back up from the left; a sibling fades */
+.side-level {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+}
+.side-level.in-deeper {
+  animation: side-in-deeper 200ms var(--ease-out);
+}
+.side-level.in-back {
+  animation: side-in-back 200ms var(--ease-out);
+}
+.side-level.in-across {
+  animation: side-in-across 160ms var(--ease-out);
+}
+@keyframes side-in-deeper {
+  from {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+}
+@keyframes side-in-back {
+  from {
+    opacity: 0;
+    transform: translateX(-14px);
+  }
+}
+@keyframes side-in-across {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .side-level.in-deeper,
+  .side-level.in-back {
+    animation-name: side-in-across;
+  }
 }
 /* the rail's edge: it moves with the fold */
 .app::before {
@@ -1749,6 +1789,45 @@ kbd {
   margin-top: 8px;
   font-size: 13px;
 }
+/* a titled run of entries under the main ones: recent projects, organizations */
+.side-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 14px;
+}
+.side-heading {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  color: var(--text-faint);
+  font-size: 12px;
+  font-weight: 600;
+}
+/* folded, the title gives way to a short rule above the tiles */
+.side-heading::before {
+  content: "";
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  width: 16px;
+  border-top: 1px solid var(--border-strong);
+  opacity: 0;
+  transition: opacity 120ms var(--ease-out);
+}
+.sidebar.collapsed .side-heading::before {
+  opacity: 1;
+  transition: opacity 180ms var(--ease-out) 60ms;
+}
+/* a project's or an organization's tile, the size of an icon */
+.side-link > .tile {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  font-size: 10px;
+}
 .tile {
   display: inline-flex;
   align-items: center;
@@ -1887,6 +1966,79 @@ kbd {
   font-family: var(--sans);
   font-size: 12px;
   font-weight: 500;
+  letter-spacing: 0;
+}
+/* the card opens the switcher (ContextSwitcher): a button, its chevron on the right */
+.side-context.switcher {
+  appearance: none;
+  cursor: pointer;
+  text-align: left;
+}
+.sidebar:not(.collapsed) .side-context.switcher:hover,
+.sidebar:not(.collapsed) .side-context.switcher[data-popup-open] {
+  border-color: var(--border-strong);
+}
+.side-context .side-context-text {
+  flex: 1;
+}
+.side-context-chevron {
+  flex: none;
+  color: var(--text-faint);
+  transition: color 120ms ease;
+}
+.side-context.switcher:hover .side-context-chevron,
+.side-context.switcher[data-popup-open] .side-context-chevron {
+  color: var(--text-muted);
+}
+/* the switcher's menu: the main menu, the groups above, recent projects, the search */
+.switcher-menu {
+  min-width: 240px;
+  max-width: 300px;
+  /* its lists whole on a laptop screen, the search last */
+  max-height: min(540px, var(--available-height, 540px));
+}
+.switcher-menu a.dropdown-item {
+  color: var(--text);
+  text-decoration: none;
+}
+.switcher-menu .dropdown-item > svg {
+  flex: none;
+  color: var(--text-muted);
+}
+.switcher-menu .tile {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  font-size: 10px;
+}
+.switcher-menu kbd {
+  margin-left: auto;
+}
+/* the admin area's and your settings' card: what you are in, not a switcher */
+.side-context.area {
+  cursor: default;
+}
+.side-context .area-tile {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.side-context .avatar {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  font-size: 14px;
+  transition: transform 240ms var(--ease-in-out);
+}
+.sidebar.collapsed .side-context .avatar {
+  transform: translateX(-8px);
+}
+/* what the card is (a project, an organization…): above its name */
+.side-context-kind {
+  margin-bottom: 1px;
+  color: var(--text-faint);
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 600;
   letter-spacing: 0;
 }
 /* what to do about the checks: its own card under them */
@@ -3898,6 +4050,175 @@ a.status-badge:hover {
 .work-page .work-section {
   margin-top: 10px;
 }
+/* what waits for you, your projects and your activity; beside them, the instance,
+   your contributions and your organizations */
+.work-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 28px;
+  align-items: start;
+}
+.work-main {
+  gap: 14px;
+  min-width: 0;
+}
+/* no right column (it holds the instance, for an administrator) */
+.work-layout.solo {
+  grid-template-columns: minmax(0, 1fr);
+}
+.work-side {
+  padding-top: 10px;
+}
+@media (max-width: 1000px) {
+  .work-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.section-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+/* nothing waits for you: one calm line in place of the empty lists */
+.all-clear {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+}
+.all-clear-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.all-clear-title {
+  font-weight: 650;
+}
+.all-clear-sub {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+@media (max-width: 600px) {
+  .all-clear {
+    flex-wrap: wrap;
+  }
+  .all-clear > .link-btn {
+    margin-left: 42px;
+  }
+}
+/* your projects, as cards */
+.project-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr));
+  gap: 12px;
+}
+.project-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px 16px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  transition: border-color 120ms ease;
+}
+.project-card:hover {
+  border-color: var(--border-strong);
+  text-decoration: none;
+}
+.project-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.project-card .tile {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  font-size: 15px;
+}
+.project-card-name,
+.project-card-ns {
+  display: block;
+}
+.project-card-name {
+  font-weight: 650;
+}
+.project-card:hover .project-card-name {
+  color: var(--accent);
+}
+.project-card-ns {
+  color: var(--text-faint);
+  font-size: 12.5px;
+}
+.project-card-desc {
+  display: -webkit-box;
+  min-height: calc(2 * 1.45em);
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.project-card-desc.none {
+  color: var(--text-faint);
+}
+.project-card-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+/* on a phone, two a row: a name and its age, without the description */
+@media (max-width: 600px) {
+  .project-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .project-card {
+    padding: 12px;
+  }
+  .project-card-desc {
+    display: none;
+  }
+  .project-card .tile {
+    width: 28px;
+    height: 28px;
+    font-size: 13px;
+  }
+}
+/* the instance card's health: its icon, toned */
+.instance-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.instance-status.ok {
+  color: var(--ok);
+}
+.instance-status.warn {
+  color: var(--warn);
+}
+.instance-status.bad {
+  color: var(--danger);
+}
 
 /* the admin overview: CI in the middle, the instance's numbers beside it, as the
    project page's right column */
@@ -3962,7 +4283,8 @@ a.status-badge:hover {
    (a project's page puts its pipeline card first) */
 @media (max-width: 900px) {
   .group-layout .repo-about,
-  .profile-page .repo-about {
+  .profile-page .repo-about,
+  .work-page .repo-about {
     order: 0;
   }
 }
@@ -5134,27 +5456,117 @@ a.row-title:hover,
 
 /* ================================================================ projects, organizations */
 
-.dash-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  gap: 32px;
-  align-items: start;
+/* the projects page: tabs to the organizations, then filters, sort and view on one line */
+.dash-tabs {
+  margin-bottom: 0;
 }
-.dash-side {
+.dash-tabs .tab-count {
+  margin-left: 6px;
+}
+.dash-toolbar {
+  row-gap: 8px;
+}
+/* which projects: pills, unlike the tabs above them */
+.scope-chips {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding-top: 8px;
+  flex-wrap: wrap;
+  gap: 6px;
 }
-.dash-side h2 {
-  margin: 0;
-  font-size: 15px;
+.scope-chips button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+.scope-chips button:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.scope-chips button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: var(--accent-soft);
+  color: var(--accent-ink);
   font-weight: 600;
 }
-@media (max-width: 1000px) {
-  .dash-layout {
-    grid-template-columns: minmax(0, 1fr);
+.chip-count {
+  font: 12px var(--mono);
+  opacity: 0.75;
+}
+.dash-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.dash-controls .select {
+  width: auto;
+  height: 32px;
+  font-size: 13px;
+}
+.list-toolbar .dash-controls .search-field {
+  width: 260px;
+  margin: 0;
+}
+/* on a phone, the sort and the view share a line, the filter takes the next */
+@media (max-width: 760px) {
+  .dash-controls {
+    width: 100%;
+    margin-left: 0;
   }
+  .list-toolbar .dash-controls .search-field {
+    flex: 1 1 100%;
+    width: auto;
+  }
+}
+/* by organization: each namespace a titled list */
+.dash-namespaces {
+  gap: 18px;
+}
+.dash-ns {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dash-ns-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.dash-ns-head .tile {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 11px;
+}
+.dash-ns-name {
+  color: var(--text);
+  font-weight: 650;
+}
+.dash-ns-name:hover {
+  color: var(--accent);
+  text-decoration: none;
+}
+.dash-ns-path {
+  overflow: hidden;
+  color: var(--text-faint);
+  font: 12px var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .project-row .tile,
 .group-row .tile {

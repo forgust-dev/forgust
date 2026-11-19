@@ -74,14 +74,14 @@ test("the stack map shows both layers and what merges next", async ({ page }) =>
 
 test("your work lists your merge requests; projects moved to their own page", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Your work" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Home", exact: true })).toBeVisible();
   const yours = page.locator("section", { has: page.getByRole("heading", { name: "Your merge requests" }) });
   await expect(yours.locator(".item", { hasText: "Checkout with discounts" })).toContainText("opened by you");
   await expect(yours.getByRole("link", { name: "Checkout with discounts" })).toBeVisible();
   await yours.getByRole("link", { name: "Checkout with discounts" }).click();
   await expect(page.getByRole("heading", { name: "Checkout with discounts" })).toBeVisible();
   await page.goto("/dashboard/projects");
-  await expect(page.getByRole("heading", { name: "Your projects" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Projects", exact: true })).toBeVisible();
 });
 
 test("your work keeps review requests you already reviewed apart from those waiting", async ({ page }) => {

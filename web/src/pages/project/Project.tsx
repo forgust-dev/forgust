@@ -7,7 +7,7 @@ import { api, bytes, qs, timeAgo, type S, encPath, refLink } from "../../api/cli
 import { StatusBadge } from "./ci/Status";
 import { fetchers, keys } from "../../prefetch";
 import { Badge, CopyField, NotFound, Q, Spinner, Tile } from "../../components/ui";
-import { useSetNav } from "../../shell/nav";
+import { KeepNav, useSetNav } from "../../shell/nav";
 import { Blame, Blob, Tree } from "./Code";
 import { Commit, Commits } from "./History";
 import { Branches, Compare, Tags } from "./Refs";
@@ -122,6 +122,7 @@ export function ProjectPage({ id, fullPath, rest }: { id: number; fullPath: stri
   const [gitRef, setRef] = useState<string | undefined>();
   return (
     <div className="page">
+      {q.isLoading && <KeepNav />}
       <Q q={q}>
         {(p) => {
           const ctx: Ctx = { p, base: `/projects/${id}/repository`, web: `/${fullPath}`, setRef };

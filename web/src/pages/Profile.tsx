@@ -1,29 +1,25 @@
 import { useState, type FormEvent } from "react";
-import { Route, Routes, useSearchParams } from "react-router-dom";
+import { Route, Routes, useLocation, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, enc, timeAgo, type S } from "../api/client";
 import { useSession } from "../session";
-import { Avatar, Badge, Card, CopyLabel, ErrorBox, Field, ListHead, NewSecret, Q, Tabs, Section, useCopy, useFormRun } from "../components/ui";
+import { Avatar, Badge, Card, CopyLabel, ErrorBox, Field, NewSecret, Q, Section, useCopy, useFormRun } from "../components/ui";
 import { ScopePicker, useCrudList } from "../components/Tokens";
 import { ResendLink } from "../components/ResendLink";
 import { AvatarUpload } from "../components/AvatarUpload";
 import { NotificationDefaults } from "../components/Notifications";
 import { cancelled, createCredential, webauthnSupported } from "../api/webauthn";
+import { profilePage } from "./profilePages";
 
 export function Profile() {
+  const loc = useLocation();
+  // the pages are in the sidebar while you are here (shell/Shell.tsx): here, which one this is
   return (
     <div className="page">
-      <ListHead title="Your settings" />
-      <Tabs
-        items={[
-          { to: "/profile", label: "Profile", end: true },
-          { to: "/profile/keys", label: "SSH keys" },
-          { to: "/profile/gpg_keys", label: "GPG keys" },
-          { to: "/profile/tokens", label: "Access tokens" },
-          { to: "/profile/security", label: "Password & 2FA" },
-          { to: "/profile/notifications", label: "Notifications" },
-        ]}
-      />
+      <div className="admin-head">
+        <p className="eyebrow">Your settings</p>
+        <h1>{profilePage(loc.pathname)?.label ?? "Your settings"}</h1>
+      </div>
       <Routes>
         <Route index element={<ProfileForm />} />
         <Route path="keys" element={<SshKeys />} />

@@ -1,25 +1,25 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, AtSign, CalendarDays, FolderGit2, GitMerge, Network, Users } from "lucide-react";
-import { fetchers } from "../prefetch";
+import { ArrowRight, AtSign, CalendarDays, FolderGit2, Network, Users } from "lucide-react";
+import { fetchers, keys } from "../prefetch";
 import { api, bytes, plural, timeAgo, type S } from "../api/client";
 import { Avatar, Badge, Section, Empty, ErrorBox, Field, LevelSelect, NotFound, Q, VISIBILITY_OPTIONS, VisibilitySelect, ListHead, SearchField, Tile, QuotaBar, UserLink, useFormRun } from "../components/ui";
-import { StatusIcon, statusLabel } from "./project/ci/Status";
 import { Select } from "../components/controls";
-import { useSetNav } from "../shell/nav";
+import { KeepNav, useSetNav } from "../shell/nav";
 import { VariablesPanel } from "./project/ci/Settings";
 import { RunnersPanel } from "./project/ci/Runners";
 import { Members } from "../components/Members";
 import { AccessTokens, DeployTokens } from "../components/Tokens";
 import { Webhooks } from "../components/Webhooks";
-import { GroupRow, ProjectRow, Visibility } from "./Dashboard";
+import { GroupRow, ProjectRow, ProjectStateBadges, Visibility } from "./Dashboard";
 import { AvatarUpload } from "../components/AvatarUpload";
 
 export function GroupPage({ id, rest }: { id: number; fullPath: string; rest: string }) {
-  const g = useQuery({ queryKey: ["group", id], queryFn: () => api.get<S["GroupDetail"]>(`/groups/${id}`) });
+  const g = useQuery({ queryKey: keys.group(id), queryFn: () => fetchers.group(id) });
   return (
     <div className="page">
+      {g.isLoading && <KeepNav />}
       <Q q={g}>
         {(group) => {
           const tab = rest.split("/")[0];
@@ -103,27 +103,7 @@ function useProjectStates(group: S["GroupDetail"]) {
     staleTime: 30_000,
   });
   const byId = new Map((q.data ?? []).map((s) => [s.project_id, s]));
-  return (p: S["ProjectDto"]) => {
-    const st = byId.get(p.id);
-    if (!st) return null;
-    const open = st.open_merge_requests;
-    const pipe = st.pipeline_iid != null && st.pipeline_status ? { iid: st.pipeline_iid, status: st.pipeline_status, ref: st.pipeline_ref ?? "" } : null;
-    if (!pipe && open === 0) return null;
-    return (
-      <span className="project-state">
-        {open > 0 && (
-          <Link to={`/${p.full_path}/-/merge_requests`} title={`${open} open merge request${open === 1 ? "" : "s"}`}>
-            <GitMerge size={13} aria-hidden /> {open}
-          </Link>
-        )}
-        {pipe && (
-          <Link className={`st-${pipe.status}`} to={`/${p.full_path}/-/pipelines/${pipe.iid}`} title={`Pipeline #${pipe.iid} on ${pipe.ref}: ${statusLabel(pipe.status)}`}>
-            <StatusIcon status={pipe.status} size={15} />
-          </Link>
-        )}
-      </span>
-    );
-  };
+  return (p: S["ProjectDto"]) => <ProjectStateBadges p={p} st={byId.get(p.id)} />;
 }
 
 /** The group's facts, as a project's right column: people, projects, age. */

@@ -8,7 +8,22 @@ import { api, qs, type S } from "./api/client";
 /** The groups the user can see (dashboard, pickers, the palette). */
 export const useGroups = (enabled = true) => useQuery({ queryKey: ["groups"], queryFn: () => api.get<S["GroupDto"][]>("/groups"), enabled, staleTime: 60_000 });
 
-/** "Your work": review requests, assignments, to-dos (the page and the sidebar badge). */
+/** The projects the user is a member of, the latest active first (the dashboard and its
+ *  filter, the palette, the sidebar's recent projects, your work's cards). */
+export const useMyProjects = (search = "", enabled = true) =>
+  useQuery({
+    queryKey: ["my-projects", search],
+    queryFn: () => api.get<S["MyProject"][]>(`/user/projects${qs({ search, per_page: 100 })}`),
+    enabled,
+    staleTime: 60_000,
+  });
+
+/** How your projects are doing (open merge requests, latest pipeline), one request for
+ *  the list (the server reports on the first, most active): the projects page, home's cards. */
+export const useMyProjectStates = () =>
+  useQuery({ queryKey: ["my-project-states"], queryFn: () => api.get<S["ProjectState"][]>("/user/project_states"), staleTime: 30_000, retry: false });
+
+/** Home: review requests, assignments, to-dos (the page and the sidebar badge). */
 export const useWork = (enabled = true) => useQuery({ queryKey: ["work"], queryFn: () => api.get<S["Work"]>("/user/work"), enabled, staleTime: 15_000 });
 
 /** Where each kind of notification goes (the settings tab, and the bell for what shows on screen). */
@@ -28,6 +43,7 @@ export const keys = {
   tree: (pid: number, commit: string, path: string) => ["tree", pid, commit, path] as const,
   blob: (pid: number, commit: string, path: string, ref: string) => ["blob", pid, commit, path, ref] as const,
   mr: (pid: number, iid: number) => ["mr", pid, iid] as const,
+  group: (id: number) => ["group", id] as const,
 };
 
 const base = (pid: number) => `/projects/${pid}/repository`;
@@ -39,6 +55,7 @@ export const fetchers = {
   mr: (pid: number, iid: number) => api.get<S["MrDetail"]>(`/projects/${pid}/merge_requests/${iid}`),
   project: (id: number) => api.get<S["ProjectDetail"]>(`/projects/${id}`),
   pathResolve: (path: string) => api.get<S["Resolved"]>(`/resolve${qs({ path })}`),
+  group: (id: number) => api.get<S["GroupDetail"]>(`/groups/${id}`),
 };
 
 const STALE = 30_000;
@@ -55,7 +72,7 @@ async function prefetchCode(qc: QueryClient, pid: number, kind: "tree" | "blob",
 export type PrefetchTarget =
   | { kind: "tree" | "blob"; pid: number; refAndPath: string }
   | { kind: "mr"; pid: number; iid: number }
-  | { kind: "project"; id: number; path: string };
+  | { kind: "project" | "group"; id: number; path: string };
 
 export function prefetch(qc: QueryClient, t: PrefetchTarget) {
   const run = () => {
@@ -69,6 +86,11 @@ export function prefetch(qc: QueryClient, t: PrefetchTarget) {
         return Promise.all([
           qc.prefetchQuery({ queryKey: keys.pathResolve(t.path), queryFn: () => fetchers.pathResolve(t.path), staleTime: STALE }),
           qc.prefetchQuery({ queryKey: keys.project(t.id), queryFn: () => fetchers.project(t.id), staleTime: STALE }),
+        ]);
+      case "group":
+        return Promise.all([
+          qc.prefetchQuery({ queryKey: keys.pathResolve(t.path), queryFn: () => fetchers.pathResolve(t.path), staleTime: STALE }),
+          qc.prefetchQuery({ queryKey: keys.group(t.id), queryFn: () => fetchers.group(t.id), staleTime: STALE }),
         ]);
     }
   };
