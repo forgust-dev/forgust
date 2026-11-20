@@ -124,6 +124,7 @@ async fn after_push(state: &AppState, principal: &Principal, project_id: i64, up
 /// Create `name` at `from` (a branch, tag or commit).
 pub async fn create_branch(state: &AppState, principal: &Principal, p: &Project, name: &str, from: &str) -> ApiResult<String> {
     require_project(state, principal, ProjectAction::Push, p).await?;
+    crate::services::repo_mirrors::writable(state, p.id).await?;
     let name = branch_name(name)?;
     if !validate_rev(from) {
         return Err(ApiError::bad("bad starting point"));
@@ -158,6 +159,7 @@ pub async fn create_branch(state: &AppState, principal: &Principal, p: &Project,
 /// Delete a branch (not the default one); protected branches refuse it as a push would.
 pub async fn delete_branch(state: &AppState, principal: &Principal, p: &Project, name: &str) -> ApiResult<()> {
     require_project(state, principal, ProjectAction::Push, p).await?;
+    crate::services::repo_mirrors::writable(state, p.id).await?;
     let name = branch_name(name)?;
     if p.default_branch.as_deref() == Some(name.as_str()) {
         return Err(ApiError::bad("the default branch cannot be deleted"));
@@ -212,6 +214,7 @@ pub(crate) async fn write_tag(
     from: &str,
     message: Option<&str>,
 ) -> ApiResult<CreatedTag> {
+    crate::services::repo_mirrors::writable(state, p.id).await?;
     let name = tag_name(name)?;
     if !validate_rev(from) {
         return Err(ApiError::bad("bad starting point"));
@@ -261,6 +264,7 @@ pub(crate) async fn write_tag(
 /// (as GitLab), when the push is processed.
 pub async fn delete_tag(state: &AppState, principal: &Principal, p: &Project, name: &str) -> ApiResult<()> {
     require_project(state, principal, ProjectAction::Push, p).await?;
+    crate::services::repo_mirrors::writable(state, p.id).await?;
     let name = tag_name(name)?;
     let refname = format!("refs/tags/{name}");
     // the ref's own value (the tag object when annotated), not the peeled commit
@@ -316,6 +320,7 @@ async fn exists(state: &AppState, project_id: i64, commit: &str, path: &str) -> 
 /// One commit of file changes on `branch` (created from `start_branch` when missing).
 pub async fn commit(state: &AppState, principal: &Principal, p: &Project, req: CommitRequest<'_>) -> ApiResult<Committed> {
     require_project(state, principal, ProjectAction::Push, p).await?;
+    crate::services::repo_mirrors::writable(state, p.id).await?;
     let user = principal.direct_user().ok_or(ApiError::Unauthorized)?.clone();
     let branch = branch_name(req.branch)?;
     let message = req.message.trim();

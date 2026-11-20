@@ -367,6 +367,7 @@ pub async fn after_merge(
 /// first conflict. Returns how many branches moved.
 pub async fn rebase(state: &AppState, principal: &Principal, p: &Project, m: &MergeRequest) -> ApiResult<usize> {
     require_project(state, principal, ProjectAction::Push, p).await?;
+    crate::services::repo_mirrors::writable(state, p.id).await?;
     let sid = m.stack_id.ok_or(ApiError::NotFound)?;
     crate::services::quotas::check_write(state, p.id, 0).await?;
     let _lock = state.repo_locks.get(p.id).read_owned().await;

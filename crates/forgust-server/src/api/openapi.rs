@@ -4,8 +4,8 @@ use axum::Json;
 use utoipa::OpenApi;
 
 use super::{
-    ai_review, auth, awards, ci, dto, environments, groups, imports, issues, milestones, mr, notifications, projects, registry, releases,
-    renovate, repo, review, search, security, tests, user,
+    ai_review, auth, awards, ci, dto, environments, groups, imports, issues, milestones, mirrors, mr, notifications, projects, registry,
+    releases, renovate, repo, review, search, security, tests, user,
 };
 
 #[derive(OpenApi)]
@@ -26,7 +26,7 @@ use super::{
         releases::list, releases::show, releases::create, releases::update, releases::delete, releases::add_link, releases::delete_link, releases::upload,
         issues::list, issues::create, issues::show, issues::update, issues::notes, issues::create_note, issues::edit_note,
         issues::delete_note, issues::labels, issues::create_label, issues::update_label, issues::delete_label,
-        imports::sources, imports::connect, imports::projects, imports::lookup, imports::create, imports::list, imports::show, imports::start, imports::cancel, imports::retry,
+        mirrors::list, mirrors::create, mirrors::update, mirrors::delete, mirrors::update_now, imports::sources, imports::connect, imports::projects, imports::lookup, imports::create, imports::list, imports::show, imports::start, imports::cancel, imports::retry,
         ci::instance_runners, ci::create_instance_runner, ci::group_runners, ci::create_group_runner, ci::project_runners,
         ci::create_project_runner, ci::show_runner, ci::update_runner, ci::delete_runner, ci::reset_runner_token,
         ci::list_pipelines, ci::run_pipeline, ci::show_pipeline, ci::cancel_pipeline, ci::retry_pipeline, ci::commit_statuses,
@@ -77,7 +77,7 @@ use super::{
         issues::IssueDto, issues::IssueList, issues::CreateIssueBody, issues::IssueDetail, issues::RelatedMr, issues::UpdateIssueBody, issues::IssueNoteDto,
         issues::NoteBody, issues::LabelBody, forgust_db::issues::Issue, forgust_db::issues::IssueNote, forgust_db::issues::Label,
         forgust_db::issues::LabelWithCounts, forgust_db::people::UserBrief, forgust_db::people::Reviewer,
-        imports::SourceInfo, imports::ConnectBody, imports::ProjectsBody, imports::LookupBody, imports::Connected, imports::ImportProjectBody, imports::CreateImportBody, imports::ImportDetail,
+        mirrors::MirrorDto, mirrors::NewMirrorBody, mirrors::MirrorChangeBody, forgust_db::project_mirrors::Mirror, imports::SourceInfo, imports::ConnectBody, imports::ProjectsBody, imports::LookupBody, imports::Connected, imports::ImportProjectBody, imports::CreateImportBody, imports::ImportDetail,
         imports::StartBody, imports::RetryBody, forgust_db::imports::Import, forgust_db::imports::ImportProject, forgust_db::imports::ImportUser,
         crate::import::model::SourceProject, crate::import::model::SourceNamespace, crate::import::model::Kind, crate::import::model::Report, crate::import::Options,
         crate::services::mr::MergeStatus, crate::services::mr::RuleStatus, crate::services::mr::MappedPosition,

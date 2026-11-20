@@ -231,6 +231,10 @@ pub async fn check_push(
     if project.as_ref().is_some_and(|p| p.archived()) {
         return Ok(HookResponse { allowed: false, message: crate::auth::authz::ARCHIVED.into() });
     }
+    // a pull mirror's branches and tags come from its source only
+    if let Some(url) = forgust_db::project_mirrors::pulled_from(&state.db, project_id).await? {
+        return Ok(HookResponse { allowed: false, message: crate::services::repo_mirrors::read_only(&url) });
+    }
     // storage quota: new objects must fit (a push that only moves or deletes refs
     // brings none and always passes)
     if let Some(q) = quarantine {

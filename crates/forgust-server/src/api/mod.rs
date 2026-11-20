@@ -12,6 +12,7 @@ pub mod groups;
 pub mod imports;
 pub mod issues;
 pub mod milestones;
+pub mod mirrors;
 pub mod mr;
 pub mod notifications;
 pub mod openapi;
@@ -155,6 +156,9 @@ pub fn router() -> Router<AppState> {
         .route("/projects/{id}/protected_branches/{pb_id}", delete(projects::unprotect_branch))
         .route("/projects/{id}/protected_tags", get(projects::protected_tags).post(projects::protect_tag))
         .route("/projects/{id}/storage", get(projects::storage))
+        .route("/projects/{id}/mirrors", get(mirrors::list).post(mirrors::create))
+        .route("/projects/{id}/mirrors/{mirror_id}", put(mirrors::update).delete(mirrors::delete))
+        .route("/projects/{id}/mirrors/{mirror_id}/update", post(mirrors::update_now))
         .route("/projects/{id}/pages", get(projects::pages).delete(projects::remove_pages))
         .route("/projects/{id}/security/findings", get(security::findings))
         .route("/projects/{id}/security/findings/{finding_id}", get(security::finding))
