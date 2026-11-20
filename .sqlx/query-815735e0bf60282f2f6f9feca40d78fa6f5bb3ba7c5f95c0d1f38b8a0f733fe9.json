@@ -1,0 +1,100 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, project_id, tag, sha, pipeline_id, cyclonedx_upload_id, spdx_upload_id FROM tag_sboms WHERE pipeline_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "tag_sboms",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "project_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "tag_sboms",
+            "name": "project_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "tag",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tag_sboms",
+            "name": "tag"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "sha",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tag_sboms",
+            "name": "sha"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "pipeline_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "tag_sboms",
+            "name": "pipeline_id"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "cyclonedx_upload_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "tag_sboms",
+            "name": "cyclonedx_upload_id"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "spdx_upload_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "tag_sboms",
+            "name": "spdx_upload_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "815735e0bf60282f2f6f9feca40d78fa6f5bb3ba7c5f95c0d1f38b8a0f733fe9"
+}

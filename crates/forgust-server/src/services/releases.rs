@@ -173,6 +173,10 @@ pub async fn create(state: &AppState, principal: &Principal, p: &Project, req: N
     for l in req.links {
         insert_link(state, p, id, l).await?;
     }
+    // an SBOM of the tag made before the release
+    if let Err(e) = super::sbom::attach(state, p, &tag).await {
+        tracing::warn!(project_id = p.id, tag, error = %e, "SBOM not attached to the release");
+    }
     let r = forgust_db::releases::find(&state.db, p.id, &tag).await?.ok_or(ApiError::NotFound)?;
     emit(state, p, &r, "create").await;
     super::audit(state, principal, "release_created", Some(("project", p.id)), json!({ "tag": tag }), None).await;

@@ -29,6 +29,7 @@ pub mod refs;
 pub mod releases;
 pub mod renovate;
 pub mod repos;
+pub mod sbom;
 pub mod scanning;
 pub mod security;
 pub mod signatures;

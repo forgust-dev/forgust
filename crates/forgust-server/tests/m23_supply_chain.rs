@@ -225,3 +225,150 @@ async fn air_gapped_installs_import_from_a_file(pool: sqlx::PgPool) {
     let flags = forgust_server::services::vulnerability_dbs::trivy_flags(&srv.state, &cfg).await.unwrap();
     assert_eq!(flags, Default::default());
 }
+
+// ------------------------------------------------------------------ SBOMs
+
+async fn try_request(srv: &TestServer, runner: &str) -> Option<Value> {
+    let r = reqwest::Client::new()
+        .post(format!("{}/api/v4/jobs/request", srv.base))
+        .json(&json!({ "token": runner, "system_id": "s_sbom", "info": { "version": "19.5.3", "executor": "docker" } }))
+        .send()
+        .await
+        .unwrap();
+    if r.status() == StatusCode::CREATED { Some(r.json().await.unwrap()) } else { None }
+}
+
+fn var(job: &Value, k: &str) -> Option<String> {
+    job["variables"].as_array().unwrap().iter().rev().find(|v| v["key"] == k).map(|v| v["value"].as_str().unwrap().to_string())
+}
+
+/// The next `sbom` job (others the runner gets pass with nothing).
+async fn sbom_job(srv: &TestServer, runner: &str) -> Option<Value> {
+    while let Some(j) = try_request(srv, runner).await {
+        if j["job_info"]["name"] == "sbom" {
+            return Some(j);
+        }
+        finish(srv, &j, None).await;
+    }
+    None
+}
+
+/// Upload `archive` (a zip) as the job's artifacts, and pass.
+async fn finish(srv: &TestServer, job: &Value, archive: Option<Vec<u8>>) {
+    let http = reqwest::Client::new();
+    if let Some(zip) = archive {
+        let form = reqwest::multipart::Form::new().part("file", reqwest::multipart::Part::bytes(zip).file_name("artifacts.zip"));
+        let r = http
+            .post(format!("{}/api/v4/jobs/{}/artifacts?artifact_format=zip&artifact_type=archive&expire_in=1+day", srv.base, job["id"]))
+            .header("JOB-TOKEN", job["token"].as_str().unwrap())
+            .multipart(form)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(r.status(), StatusCode::CREATED);
+    }
+    let r = http
+        .put(format!("{}/api/v4/jobs/{}", srv.base, job["id"]))
+        .json(&json!({ "token": job["token"], "state": "success", "exit_code": 0 }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(r.status(), StatusCode::OK);
+    wait_jobs(&srv.state).await;
+}
+
+/// What the SBOM job leaves: both files, as a zip (`git archive` writes it).
+async fn sbom_zip(dir: &std::path::Path, tag: &str) -> Vec<u8> {
+    must(git(dir, &["init", "-q", "-b", "main"]).await);
+    std::fs::write(dir.join("sbom.cdx.json"), format!(r#"{{"bomFormat":"CycloneDX","specVersion":"1.6","tag":"{tag}"}}"#)).unwrap();
+    std::fs::write(dir.join("sbom.spdx.json"), format!(r#"{{"spdxVersion":"SPDX-2.3","tag":"{tag}"}}"#)).unwrap();
+    must(git(dir, &["add", "."]).await);
+    must(git(dir, &["commit", "-q", "-m", "sbom"]).await);
+    let out =
+        tokio::process::Command::new("git").args(["-C", dir.to_str().unwrap(), "archive", "--format=zip", "HEAD"]).output().await.unwrap();
+    assert!(out.status.success());
+    out.stdout
+}
+
+fn sbom_links(release: &Value) -> Vec<(String, String)> {
+    release["links"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|l| l["name"].as_str().unwrap().starts_with("SBOM"))
+        .map(|l| (l["name"].as_str().unwrap().to_string(), l["href"].as_str().unwrap().to_string()))
+        .collect()
+}
+
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn tags_get_an_sbom_on_their_release(pool: sqlx::PgPool) {
+    if !has("git") {
+        return;
+    }
+    let srv = TestServer::start_with(pool, |c| c.ci.long_poll_secs = 1).await;
+    let admin = srv.user("root", true).await;
+    let owner = srv.user("olivia", false).await;
+    let (_org, _sub, p) = org_project(&owner).await;
+    let work = srv.work_dir("repo");
+    seed_repo(&work).await;
+    let url = srv.http_url("olivia", "acme/platform/api");
+    must(git(&work, &["push", "-q", &url, "main"]).await);
+    wait_jobs(&srv.state).await;
+    let runner = admin.ok_post("/api/v1/admin/runners", json!({ "description": "shared", "run_untagged": true })).await["token"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let scanning = format!("/api/v1/projects/{p}/security/scanning");
+
+    // off: a tag gets nothing
+    must(git(&work, &["tag", "v0.9"]).await);
+    must(git(&work, &["push", "-q", &url, "v0.9"]).await);
+    wait_jobs(&srv.state).await;
+    assert!(sbom_job(&srv, &runner).await.is_none());
+
+    let st = owner.ok_put(&scanning, json!({ "enabled": true, "scanners": ["sast"], "sbom_on_tags": true })).await;
+    assert_eq!(st["sbom_on_tags"], true, "{st}");
+    assert_eq!(srv.audit_events("sbom_on_tags_enabled").await.len(), 1);
+    // left out of a later change: as it was
+    let st = owner.ok_put(&scanning, json!({ "enabled": true, "scanners": ["sast"] })).await;
+    assert_eq!(st["sbom_on_tags"], true);
+
+    // a tag pushed before its release: the SBOM waits for the release
+    must(git(&work, &["tag", "-a", "v1.0", "-m", "one"]).await);
+    must(git(&work, &["push", "-q", &url, "v1.0"]).await);
+    wait_jobs(&srv.state).await;
+    let job = sbom_job(&srv, &runner).await.expect("an sbom job");
+    assert_eq!(var(&job, "CI_PIPELINE_SOURCE").as_deref(), Some("sbom"));
+    assert_eq!(var(&job, "CI_COMMIT_TAG").as_deref(), Some("v1.0"));
+    assert_eq!(var(&job, "GITLAB_USER_LOGIN"), Some(format!("security-bot-{p}")));
+    assert_eq!(job["image"]["name"], "aquasec/trivy:0.57.1");
+    let script = job["steps"][0]["script"].to_string();
+    assert!(script.contains("--format cyclonedx") && script.contains("--format spdx-json"), "{script}");
+    finish(&srv, &job, Some(sbom_zip(&srv.work_dir("z1"), "v1.0").await)).await;
+    let release = owner.ok_post(&format!("/api/v1/projects/{p}/releases"), json!({ "tag_name": "v1.0", "name": "One" })).await;
+    let links = sbom_links(&release);
+    assert_eq!(links.iter().map(|l| l.0.as_str()).collect::<Vec<_>>(), ["SBOM (CycloneDX)", "SBOM (SPDX)"], "{release}");
+    let (s, body) = owner.get_bytes(links[0].1.trim_start_matches(&srv.base)).await;
+    assert_eq!(s, 200);
+    assert!(String::from_utf8_lossy(&body).contains(r#""tag":"v1.0""#));
+
+    // a release made with its tag: the SBOM joins it once the job passed
+    owner.ok_post(&format!("/api/v1/projects/{p}/releases"), json!({ "tag_name": "v2.0", "ref": "main", "name": "Two" })).await;
+    wait_jobs(&srv.state).await;
+    let job = sbom_job(&srv, &runner).await.expect("an sbom job for the tag the release made");
+    assert_eq!(var(&job, "CI_COMMIT_TAG").as_deref(), Some("v2.0"));
+    finish(&srv, &job, Some(sbom_zip(&srv.work_dir("z2"), "v2.0").await)).await;
+    let release = owner.ok_get(&format!("/api/v1/projects/{p}/releases/v2.0")).await;
+    assert_eq!(sbom_links(&release).len(), 2, "{release}");
+
+    // the same tag again at the same commit (deleted and pushed back): no second run
+    must(git(&work, &["push", "-q", &url, ":refs/tags/v1.0"]).await);
+    wait_jobs(&srv.state).await;
+    must(git(&work, &["push", "-q", &url, "v1.0"]).await);
+    wait_jobs(&srv.state).await;
+    assert!(sbom_job(&srv, &runner).await.is_none());
+
+    // SBOM runs are not scans: the scan settings still say when the next one is due
+    let st = owner.ok_get(&scanning).await;
+    assert!(st["last_pipeline_iid"].is_null(), "{st}");
+}

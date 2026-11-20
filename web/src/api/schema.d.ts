@@ -5652,6 +5652,8 @@ export interface components {
             enabled: boolean;
             /** Format: int32 */
             interval_hours?: number;
+            /** @description Left out: as it was. */
+            sbom_on_tags?: boolean | null;
             scanners: string[];
         };
         ScanningStatus: {
@@ -5669,6 +5671,8 @@ export interface components {
             next_run_at?: string | null;
             /** @description The runs are this person's (they turned scanning on). */
             run_as?: string | null;
+            /** @description An SBOM (CycloneDX and SPDX) on each new tag, attached to its release. */
+            sbom_on_tags: boolean;
             scanners: string[];
         };
         Schedule: {

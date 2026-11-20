@@ -197,6 +197,8 @@ pub struct ScanningStatus {
     pub run_as: Option<String>,
     pub last_pipeline_iid: Option<i64>,
     pub last_status: Option<String>,
+    /// An SBOM (CycloneDX and SPDX) on each new tag, attached to its release.
+    pub sbom_on_tags: bool,
 }
 
 async fn scanning_status(state: &AppState, p: &Project) -> ApiResult<ScanningStatus> {
@@ -223,6 +225,7 @@ async fn scanning_status(state: &AppState, p: &Project) -> ApiResult<ScanningSta
         run_as,
         last_pipeline_iid: last.as_ref().map(|l| l.iid),
         last_status: last.map(|l| l.status),
+        sbom_on_tags: s.as_ref().is_some_and(|s| s.sbom_on_tags),
     })
 }
 
@@ -238,6 +241,9 @@ pub struct ScanningBody {
     pub scanners: Vec<String>,
     #[serde(default = "day")]
     pub interval_hours: i32,
+    /// Left out: as it was.
+    #[serde(default)]
+    pub sbom_on_tags: Option<bool>,
 }
 
 fn day() -> i32 {
@@ -256,7 +262,12 @@ pub async fn set_scanning(
         &state,
         &v,
         &p,
-        services::scanning::Change { enabled: b.enabled, scanners: b.scanners, interval_hours: b.interval_hours },
+        services::scanning::Change {
+            enabled: b.enabled,
+            scanners: b.scanners,
+            interval_hours: b.interval_hours,
+            sbom_on_tags: b.sbom_on_tags,
+        },
     )
     .await?;
     Ok(Json(scanning_status(&state, &p).await?))

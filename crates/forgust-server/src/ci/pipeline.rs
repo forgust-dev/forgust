@@ -54,7 +54,13 @@ pub struct Trigger<'a> {
 /// runners only, no project CI variables, never a ref's or commit's status (the
 /// database's `is_system_source` says the same).
 pub fn is_system(source: &str) -> bool {
-    matches!(source, crate::services::renovate::SOURCE | crate::services::scanning::SOURCE | crate::services::ai_review::SOURCE)
+    matches!(
+        source,
+        crate::services::renovate::SOURCE
+            | crate::services::scanning::SOURCE
+            | crate::services::ai_review::SOURCE
+            | crate::services::sbom::SOURCE
+    )
 }
 
 impl<'a> Trigger<'a> {
@@ -583,6 +589,7 @@ pub async fn process(state: &AppState, pipeline_id: i64) -> anyhow::Result<()> {
             tracing::warn!(pipeline_id, error = %e, "merge train not advanced");
         }
         crate::services::renovate::on_pipeline_finished(state, &pipeline, status).await;
+        crate::services::sbom::on_pipeline_finished(state, &pipeline, status).await;
         state.events.publish(Event::Pipeline { project_id: pipeline.project_id, pipeline_id, status: status.to_string() });
         crate::ci::hooks::pipeline(state, pipeline.project_id, pipeline_id).await;
         crate::ci::on_pipeline_status(state, &pipeline).await;

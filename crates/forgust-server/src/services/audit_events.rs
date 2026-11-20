@@ -316,6 +316,8 @@ pub const EVENTS: &[EventType] = &[
         &["enabled", "projects"],
         "A group turned security scanning on or off for its projects.",
     ),
+    e("sbom_on_tags_enabled", BUILTIN, P, &[], "SBOMs on new tags turned on for the project (with security scanning)."),
+    e("sbom_on_tags_disabled", BUILTIN, P, &[], "SBOMs on new tags turned off for the project."),
     e("security_finding_dismissed", BUILTIN, P, &["finding", "reason"], "A security finding was dismissed."),
     e("security_finding_reopened", BUILTIN, P, &["finding"], "A dismissed security finding was reopened."),
     e("ai_review_enabled", BUILTIN, P, &[], "AI review turned on for the project."),
