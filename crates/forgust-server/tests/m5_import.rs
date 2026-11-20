@@ -162,6 +162,8 @@ async fn import_a_gitlab_project(pool: sqlx::PgPool) {
         ("/api/v4/projects", json!([project])),
         ("/api/v4/projects/42", project.clone()),
         ("/api/v4/users/7", json!({ "id": 7, "username": "jane", "name": "Jane Doe", "public_email": "Jane@Example.com" })),
+        // no account here has this address (yet)
+        ("/api/v4/users/8", json!({ "id": 8, "username": "ghosty", "name": "Ghost Y", "public_email": "ghost@example.com" })),
         ("/api/v4/projects/42/labels", json!([{ "name": "bug", "color": "#D73A4A", "description": "Broken" }, { "name": "ui", "color": "#abc" }])),
         (
             "/api/v4/projects/42/milestones",
@@ -362,6 +364,30 @@ async fn import_a_gitlab_project(pool: sqlx::PgPool) {
         owner.post(&format!("/api/v1/projects/{pid}/merge_requests"), json!({ "source_branch": "topic", "title": "Again" })).await.0,
         409
     );
+
+    // what the source's ghosty wrote becomes the account that gets their
+    // address here, once confirmed: typing an address proves nothing
+    let gina = srv.user("gina", false).await;
+    let gina_id = gina.ok_get("/api/v1/user").await["id"].as_i64().unwrap();
+    let moved =
+        gina.ok_put("/api/v1/user", json!({ "name": "Gina", "email": "Ghost@Example.com", "current_password": password("gina") })).await;
+    assert_eq!(moved["unconfirmed_email"], "Ghost@Example.com", "{moved}");
+    let i5 = owner.ok_get(&format!("/api/v1/projects/{pid}/issues/5")).await;
+    assert!(i5["author_id"].is_null(), "an address not confirmed yet takes nothing: {i5}");
+    wait_jobs(&srv.state).await;
+    let mail = srv.state.mailer.sent().into_iter().rev().find(|m| m.to.iter().any(|t| t == "Ghost@Example.com")).expect("a link");
+    let at = mail.body.find("/verify-email?token=").expect("a confirmation link") + "/verify-email?token=".len();
+    let link: String = mail.body[at..].chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').collect();
+    gina.ok_post("/api/v1/auth/email/confirm", json!({ "token": link })).await;
+    let i5 = owner.ok_get(&format!("/api/v1/projects/{pid}/issues/5")).await;
+    assert_eq!((i5["author_username"].as_str(), i5["imported_author"].as_str()), (Some("gina"), None), "{i5}");
+    let notes = owner.ok_get(&format!("/api/v1/projects/{pid}/issues/3/notes")).await;
+    assert_eq!(notes[0]["author_username"], "gina", "their comments too: {notes}");
+    let mnotes = owner.ok_get(&format!("/api/v1/projects/{pid}/merge_requests/1/notes")).await;
+    let root = mnotes.as_array().unwrap().iter().find(|n| n["body"] == "Why two?").unwrap();
+    assert_eq!((root["author_id"].as_i64(), root["imported_author"].as_str()), (Some(gina_id), None), "{root}");
+    let left: i64 = sqlx::query_scalar("SELECT count(*) FROM import_authored").fetch_one(&srv.state.db).await.unwrap();
+    assert_eq!(left, 0, "nothing left to give");
 
     // owner-only parts: variables, protected branches, members by email
     let vars = owner.ok_get(&format!("/api/v1/projects/{pid}/variables")).await;

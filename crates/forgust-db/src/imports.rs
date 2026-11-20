@@ -313,6 +313,23 @@ pub async fn upsert_user(
     .await
 }
 
+/// `kind` `local_id` (an issue, an issue note, a merge request, who merged
+/// one, an MR note) was written for a source user with no account here: it
+/// becomes theirs when an account gets their address, confirmed (the
+/// `link_imported_authors` trigger).
+pub async fn authored(e: impl PgExecutor<'_>, import_id: i64, source_user_id: &str, kind: &str, local_id: i64) -> Result<()> {
+    sqlx::query!(
+        "INSERT INTO import_authored (import_id, source_user_id, kind, local_id) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING",
+        import_id,
+        source_user_id,
+        kind,
+        local_id
+    )
+    .execute(e)
+    .await?;
+    Ok(())
+}
+
 /// External ids of what is already imported, for one kind.
 pub async fn imported_ids(e: impl PgExecutor<'_>, project_id: i64, kind: &str) -> Result<std::collections::HashSet<String>> {
     let rows = sqlx::query_scalar!("SELECT external_id FROM imported_objects WHERE project_id = $1 AND kind = $2", project_id, kind)
