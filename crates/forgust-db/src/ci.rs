@@ -1175,7 +1175,9 @@ pub async fn read_trace(e: impl PgExecutor<'_>, build_id: i64, offset: i64, max:
     )
     .fetch_all(e)
     .await?;
-    let mut out = Vec::with_capacity(rows.iter().map(|r| r.data.len()).sum::<usize>().min((end - offset) as usize));
+    // sized by the bytes already fetched, never by `max`: a whole-log read passes
+    // i64::MAX, and the rows hold at most a chunk more on each side of the range
+    let mut out = Vec::with_capacity(rows.iter().map(|r| r.data.len()).sum());
     for r in rows {
         // the part of this row's bytes inside [offset, end)
         let len = r.data.len() as i64;

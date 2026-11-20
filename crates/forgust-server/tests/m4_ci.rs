@@ -1013,6 +1013,15 @@ async fn live_logs_of_running_jobs_survive_the_upgrade(pool: sqlx::PgPool) {
     }
     assert!(read_trace(&pool, b, log.len() as i64, 10).await.unwrap().is_empty());
     assert!(read_trace(&pool, b, 5, 0).await.unwrap().is_empty());
+
+    // a log of more than 1 MiB comes back whole, as archiving and the raw log read it
+    let more = vec![b'x'; 3 << 20];
+    let mut tx = pool.begin().await.unwrap();
+    let build = build_for_update(&mut tx, b).await.unwrap().unwrap();
+    let Append::Ok(_) = append_trace(&mut tx, &build, build.trace_size, &more).await.unwrap() else { panic!("range mismatch") };
+    tx.commit().await.unwrap();
+    log.extend_from_slice(&more);
+    assert_eq!(read_trace(&pool, b, 0, i64::MAX).await.unwrap().len(), log.len());
 }
 
 /// A finished job's log is stored zstd-compressed, in frames: the log page
