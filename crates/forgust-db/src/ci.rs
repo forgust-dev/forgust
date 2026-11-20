@@ -1163,8 +1163,10 @@ pub async fn append_trace(c: &mut PgConnection, build: &Build, offset: i64, data
 /// the rows that hold them are read. A row holds at most `TRACE_CHUNK` bytes,
 /// so the one `offset` falls in starts less than that before it.
 pub async fn read_trace(e: impl PgExecutor<'_>, build_id: i64, offset: i64, max: i64) -> Result<Vec<u8>> {
+    const MAX_TRACE_READ: i64 = 1 << 20; // 1 MiB hard cap per read
     let offset = offset.max(0);
-    let end = offset.saturating_add(max.max(0));
+    let max = max.max(0).min(MAX_TRACE_READ);
+    let end = offset.saturating_add(max);
     let rows = sqlx::query!(
         "SELECT byte_offset, data FROM ci_job_trace_chunks
           WHERE build_id = $1 AND byte_offset > $2 AND byte_offset < $3
@@ -1175,7 +1177,8 @@ pub async fn read_trace(e: impl PgExecutor<'_>, build_id: i64, offset: i64, max:
     )
     .fetch_all(e)
     .await?;
-    let mut out = Vec::with_capacity(rows.iter().map(|r| r.data.len()).sum::<usize>().min((end - offset) as usize));
+    let requested = (end - offset).max(0) as usize;
+    let mut out = Vec::with_capacity(rows.iter().map(|r| r.data.len()).sum::<usize>().min(requested));
     for r in rows {
         // the part of this row's bytes inside [offset, end)
         let len = r.data.len() as i64;
