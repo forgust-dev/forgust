@@ -3,6 +3,7 @@
 
 pub mod accounts;
 pub mod ai_review;
+pub mod audit_events;
 pub mod auto_merge;
 pub mod avatars;
 pub mod awards;
@@ -72,6 +73,7 @@ pub(crate) async fn check_note_change(
 
 /// Append to the audit log; failures are logged, never surfaced.
 pub async fn audit(state: &AppState, principal: &Principal, action: &str, target: Option<(&str, i64)>, details: Value, ip: Option<&str>) {
+    debug_assert!(audit_events::known(action), "`{action}` is not in the audit event catalogue");
     // done by an administrator signed in as the user: say so
     let details = match (principal.impersonator(), details) {
         (Some(admin), Value::Object(mut m)) => {
@@ -97,4 +99,71 @@ pub async fn audit(state: &AppState, principal: &Principal, action: &str, target
     if let Err(e) = r {
         tracing::warn!(error = %e, action, "failed to write audit event");
     }
+}
+
+/// Append what the server did on its own (a session running out) to the
+/// audit log, as principal `system`.
+pub async fn audit_system(state: &AppState, action: &str, target: Option<(&str, i64)>, details: Value, ip: Option<&str>) {
+    debug_assert!(audit_events::known(action), "`{action}` is not in the audit event catalogue");
+    let ev = forgust_db::audit::NewEvent {
+        principal_kind: "system",
+        principal_id: None,
+        action,
+        target_type: target.map(|t| t.0),
+        target_id: target.map(|t| t.1),
+        details,
+        ip,
+    };
+    if let Err(e) = forgust_db::audit::insert(&state.db, ev).await {
+        tracing::warn!(error = %e, action, "failed to write audit event");
+    }
+}
+
+/// A clone, fetch or archive download of a private or internal repository,
+/// when `audit.repository_reads` is on. CI jobs' fetches are left out (one
+/// per job), as are public repositories.
+pub async fn audit_repository_read(
+    state: &AppState,
+    principal: &Principal,
+    project: &forgust_db::projects::Project,
+    via: &str,
+    ip: Option<&str>,
+) {
+    if !state.cfg.audit.repository_reads
+        || project.visibility == forgust_db::visibility::PUBLIC
+        || matches!(principal, Principal::Job { .. } | Principal::Anonymous)
+    {
+        return;
+    }
+    audit_throttled(state, principal, "repository_read", Some(("project", project.id)), serde_json::json!({ "via": via }), ip).await;
+}
+
+/// An event that can come in floods (a refusal a client retries in a loop, a
+/// fetch git makes in several requests): at most one row per principal,
+/// action, target and `via` (the transport, when there are several) a
+/// minute, the next one counting those held back (`repeated`).
+pub async fn audit_throttled(
+    state: &AppState,
+    principal: &Principal,
+    action: &str,
+    target: Option<(&str, i64)>,
+    details: Value,
+    ip: Option<&str>,
+) {
+    let key = format!(
+        "{}:{}|{action}|{}|{}",
+        principal.kind(),
+        principal.id().unwrap_or_default(),
+        target.map(|(t, id)| format!("{t}:{id}")).unwrap_or_default(),
+        details.get("via").and_then(Value::as_str).unwrap_or_default(),
+    );
+    let Some(repeated) = state.audit_throttle.admit(&key) else { return };
+    let details = match details {
+        Value::Object(mut m) if repeated > 0 => {
+            m.insert("repeated".into(), Value::from(repeated));
+            Value::Object(m)
+        }
+        d => d,
+    };
+    audit(state, principal, action, target, details, ip).await;
 }

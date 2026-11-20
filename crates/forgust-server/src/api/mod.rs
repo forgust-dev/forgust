@@ -349,6 +349,7 @@ pub fn router() -> Router<AppState> {
         .route("/banner", get(admin::banner))
         .route("/admin/settings", get(admin::settings).put(admin::update_settings))
         .route("/admin/audit", get(admin::audit))
+        .route("/admin/audit/catalogue", get(admin::audit_catalogue))
         // misc
         .route("/resolve", get(resolve_path))
         .route("/highlight.css", get(highlight_css))

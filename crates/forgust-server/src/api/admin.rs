@@ -918,7 +918,10 @@ pub async fn update_user(
             return Err(ApiError::bad("bots cannot be administrators"));
         }
         forgust_db::users::set_admin(&state.db, id, admin).await?;
-        services::audit(&state, &p, if admin { "admin_granted" } else { "admin_revoked" }, Some(("user", id)), json!({}), None).await;
+        // the form sends every field: only a change is an event
+        if admin != u.is_admin {
+            services::audit(&state, &p, if admin { "admin_granted" } else { "admin_revoked" }, Some(("user", id)), json!({}), None).await;
+        }
     }
     if let Some(s) = req.state.as_deref() {
         if s != "active" && s != "blocked" {
@@ -931,8 +934,11 @@ pub async fn update_user(
         if s == "blocked" {
             forgust_db::sessions::delete_for_user(&state.db, id).await?;
         }
-        services::audit(&state, &p, if s == "blocked" { "user_blocked" } else { "user_unblocked" }, Some(("user", id)), json!({}), None)
-            .await;
+        if s != u.state {
+            let blocked = s == "blocked";
+            let action = if blocked { "user_blocked" } else { "user_unblocked" };
+            services::audit(&state, &p, action, Some(("user", id)), json!({ "previous_state": u.state }), None).await;
+        }
     }
     if let Some(ext) = req.is_external {
         if u.is_bot() {
@@ -942,8 +948,10 @@ pub async fn update_user(
             return Err(ApiError::bad("administrators cannot be external"));
         }
         forgust_db::admin::set_external(&state.db, id, ext).await?;
-        services::audit(&state, &p, if ext { "user_made_external" } else { "user_made_internal" }, Some(("user", id)), json!({}), None)
-            .await;
+        if ext != u.is_external {
+            let action = if ext { "user_made_external" } else { "user_made_internal" };
+            services::audit(&state, &p, action, Some(("user", id)), json!({}), None).await;
+        }
     }
     if let Some(email) = req.email.as_deref().map(str::trim) {
         if u.is_bot() {
@@ -1051,4 +1059,15 @@ pub struct AuditQuery {
 
 pub async fn audit(State(state): State<AppState>, Admin(..): Admin, Query(q): Query<AuditQuery>) -> ApiResult<Json<Vec<AuditEvent>>> {
     Ok(Json(forgust_db::audit::list(&state.db, q.target_type.as_deref(), q.target_id, 200, q.before).await?))
+}
+
+#[derive(Serialize)]
+pub struct AuditCatalogue {
+    version: u32,
+    events: &'static [services::audit_events::EventType],
+}
+
+/// Every event the audit log can hold, with its fields.
+pub async fn audit_catalogue(Admin(..): Admin) -> Json<AuditCatalogue> {
+    Json(AuditCatalogue { version: services::audit_events::VERSION, events: services::audit_events::EVENTS })
 }

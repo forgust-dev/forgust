@@ -55,6 +55,9 @@ pub struct Inner {
     pub login_ip_failures: RateLimiter,
     /// Blame, history and archives asked for by anonymous visitors, per client.
     pub anon_heavy_reads: RateLimiter,
+    /// Audit events that could come in floods (refusals, repository reads):
+    /// one row per key and minute.
+    pub audit_throttle: AuditThrottle,
     /// The key CI `id_tokens` are signed with, loaded on first use.
     pub oidc_key: tokio::sync::OnceCell<std::sync::Arc<crate::ci::oidc::SigningKey>>,
 }
@@ -92,6 +95,43 @@ impl RateLimiter {
 
     pub fn forget(&self, key: &str) {
         self.hits.lock().unwrap().remove(key);
+    }
+}
+
+/// At most one audit row per key (principal, action, target) and window: the
+/// first refusal is written, the ones after it in the window are counted and
+/// reported by the next row written for that key.
+pub struct AuditThrottle {
+    window: Duration,
+    seen: Mutex<HashMap<String, (std::time::Instant, u32)>>,
+}
+
+impl AuditThrottle {
+    pub fn new(window: Duration) -> Self {
+        AuditThrottle { window, seen: Mutex::new(HashMap::new()) }
+    }
+
+    /// `Some(repeats held back since the last row)` when a row is due, `None`
+    /// when this one is only counted.
+    pub fn admit(&self, key: &str) -> Option<u32> {
+        let mut seen = self.seen.lock().unwrap();
+        let now = std::time::Instant::now();
+        // past this many keys, old windows go, with whatever they held back:
+        // a flood of distinct keys must not grow the map without bound
+        if seen.len() > 100_000 {
+            seen.retain(|_, (t, _)| now.duration_since(*t) < self.window);
+        }
+        match seen.get_mut(key) {
+            Some((t, n)) if now.duration_since(*t) < self.window => {
+                *n += 1;
+                None
+            }
+            Some(e) => Some(std::mem::replace(e, (now, 0)).1),
+            None => {
+                seen.insert(key.to_string(), (now, 0));
+                Some(0)
+            }
+        }
     }
 }
 
@@ -195,4 +235,23 @@ pub fn spawn_cache_invalidator(state: AppState) {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use super::AuditThrottle;
+
+    #[test]
+    fn the_throttle_counts_what_it_holds_back() {
+        let t = AuditThrottle::new(Duration::from_millis(100));
+        assert_eq!(t.admit("a"), Some(0));
+        assert_eq!(t.admit("a"), None);
+        assert_eq!(t.admit("a"), None);
+        assert_eq!(t.admit("b"), Some(0), "keys are apart");
+        std::thread::sleep(Duration::from_millis(120));
+        assert_eq!(t.admit("a"), Some(2), "the next row says how many were held back");
+        assert_eq!(t.admit("a"), None);
+    }
 }

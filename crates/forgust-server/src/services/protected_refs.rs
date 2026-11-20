@@ -25,16 +25,32 @@ pub async fn protect_tag(state: &AppState, principal: &Principal, p: &Project, n
     if ![0, 30, 40].contains(&create) {
         return Err(ApiError::bad("the level must be no one, developer or maintainer"));
     }
+    let previous = previous_tag(state, p, |t| t.name == name).await?;
     forgust_db::protected_branches::upsert_tag(&state.db, p.id, name, create).await?;
-    super::audit(state, principal, "tag_protected", Some(("project", p.id)), json!({ "name": name, "create": create }), None).await;
+    let details = json!({ "name": name, "create": create, "previous_create": previous.map(|t| t.create_access_level) });
+    super::audit(state, principal, "tag_protected", Some(("project", p.id)), details, None).await;
     Ok(())
 }
 
 pub async fn unprotect_tag(state: &AppState, principal: &Principal, p: &Project, id: i64) -> ApiResult<()> {
     require_project(state, principal, ProjectAction::Admin, p).await?;
+    let previous = previous_tag(state, p, |t| t.id == id).await?;
     if !forgust_db::protected_branches::delete_tag(&state.db, p.id, id).await? {
         return Err(ApiError::NotFound);
     }
-    super::audit(state, principal, "tag_unprotected", Some(("project", p.id)), json!({ "id": id }), None).await;
+    let details = json!({
+        "id": id,
+        "name": previous.as_ref().map(|t| &t.name),
+        "previous_create": previous.as_ref().map(|t| t.create_access_level),
+    });
+    super::audit(state, principal, "tag_unprotected", Some(("project", p.id)), details, None).await;
     Ok(())
+}
+
+async fn previous_tag(
+    state: &AppState,
+    p: &Project,
+    which: impl Fn(&forgust_db::protected_branches::ProtectedTag) -> bool,
+) -> ApiResult<Option<forgust_db::protected_branches::ProtectedTag>> {
+    Ok(forgust_db::protected_branches::tags(&state.db, p.id).await?.into_iter().find(which))
 }

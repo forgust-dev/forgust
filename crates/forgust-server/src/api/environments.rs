@@ -152,9 +152,10 @@ pub async fn protect(
         "owner" => forgust_db::access::OWNER,
         _ => return Err(ApiError::bad("deploy_access_level is developer, maintainer or owner")),
     };
+    let previous = edb::protected(&state.db, p.id).await?.into_iter().find(|e| e.name == name).map(|e| e.deploy_access_level);
     edb::protect(&state.db, p.id, name, level).await?;
-    services::audit(&state, &principal, "environment_protected", Some(("project", p.id)), json!({ "name": name, "level": level }), None)
-        .await;
+    let details = json!({ "name": name, "level": level, "previous_level": previous });
+    services::audit(&state, &principal, "environment_protected", Some(("project", p.id)), details, None).await;
     Ok(Json(edb::protected(&state.db, p.id).await?))
 }
 
@@ -164,8 +165,15 @@ pub async fn unprotect(
     Path((id, pe_id)): Path<(String, i64)>,
 ) -> ApiResult<Json<Value>> {
     let p = project_for(&state, &principal, &id, ProjectAction::Admin).await?;
+    let previous = edb::protected(&state.db, p.id).await?.into_iter().find(|e| e.id == pe_id);
     if !edb::unprotect(&state.db, p.id, pe_id).await? {
         return Err(ApiError::NotFound);
     }
+    let details = json!({
+        "id": pe_id,
+        "name": previous.as_ref().map(|e| &e.name),
+        "previous_level": previous.as_ref().map(|e| e.deploy_access_level),
+    });
+    services::audit(&state, &principal, "environment_unprotected", Some(("project", p.id)), details, None).await;
     Ok(Json(json!({ "ok": true })))
 }

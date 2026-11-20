@@ -189,13 +189,25 @@ async fn handle_inner(state: AppState, full_path: String, route: GitRoute, req: 
             return Err(ApiError::Unauthorized);
         }
         if can_project(&state, &principal, ProjectAction::ReadCode, &project).await? {
-            return Err(ApiError::forbidden(if project.archived() {
-                crate::auth::authz::ARCHIVED
-            } else {
-                "You are not allowed to push code to this project."
-            }));
+            let reason =
+                if project.archived() { crate::auth::authz::ARCHIVED } else { "You are not allowed to push code to this project." };
+            let details = serde_json::json!({ "reason": reason, "via": "http" });
+            crate::services::audit_throttled(
+                &state,
+                &principal,
+                "push_rejected",
+                Some(("project", project.id)),
+                details,
+                ip.text().as_deref(),
+            )
+            .await;
+            return Err(ApiError::forbidden(reason));
         }
         return Err(ApiError::NotFound);
+    }
+    // a fetch is info/refs then one POST (or a few, protocol v2): the POSTs
+    if route == GitRoute::UploadPack {
+        crate::services::audit_repository_read(&state, &principal, &project, "http", ip.text().as_deref()).await;
     }
 
     let git_protocol = req.headers().get("git-protocol").and_then(|v| v.to_str().ok()).filter(|v| v.len() < 256).map(str::to_string);

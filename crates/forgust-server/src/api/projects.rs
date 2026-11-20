@@ -301,6 +301,8 @@ pub async fn protect_branch(
     {
         return Err(ApiError::bad("invalid branch name or pattern"));
     }
+    let previous =
+        forgust_db::protected_branches::list(&state.db, proj.id).await?.into_iter().find(|b| b.name == req.name).map(|b| branch_rule(&b));
     let pb = forgust_db::protected_branches::upsert(
         &state.db,
         proj.id,
@@ -317,7 +319,15 @@ pub async fn protect_branch(
         &p,
         "branch_protected",
         Some(("project", proj.id)),
-        json!({ "name": req.name, "push": req.push_access_level, "force_push": req.allow_force_push }),
+        json!({
+            "name": req.name,
+            "push": req.push_access_level,
+            "merge": req.merge_access_level,
+            "force_push": req.allow_force_push,
+            "deploy_keys": req.allow_deploy_keys,
+            "code_owner_approval": req.code_owner_approval_required,
+            "previous": previous,
+        }),
         None,
     )
     .await;
@@ -330,11 +340,24 @@ pub async fn unprotect_branch(
     Path((id, pb_id)): Path<(String, i64)>,
 ) -> ApiResult<Json<Value>> {
     let proj = project_for(&state, &p, &id, ProjectAction::Admin).await?;
+    let previous = forgust_db::protected_branches::list(&state.db, proj.id).await?.into_iter().find(|b| b.id == pb_id);
     if !forgust_db::protected_branches::delete(&state.db, proj.id, pb_id).await? {
         return Err(ApiError::NotFound);
     }
-    services::audit(&state, &p, "branch_unprotected", Some(("project", proj.id)), json!({ "id": pb_id }), None).await;
+    let details = json!({ "id": pb_id, "name": previous.as_ref().map(|b| &b.name), "previous": previous.as_ref().map(branch_rule) });
+    services::audit(&state, &p, "branch_unprotected", Some(("project", proj.id)), details, None).await;
     Ok(Json(json!({ "ok": true })))
+}
+
+/// What a branch rule allowed, for the audit log (levels as stored).
+fn branch_rule(b: &forgust_db::protected_branches::ProtectedBranch) -> Value {
+    json!({
+        "push": b.push_access_level,
+        "merge": b.merge_access_level,
+        "force_push": b.allow_force_push,
+        "deploy_keys": b.allow_deploy_keys,
+        "code_owner_approval": b.code_owner_approval_required,
+    })
 }
 
 // ------------------------------------------------------------------ deploy keys and tokens

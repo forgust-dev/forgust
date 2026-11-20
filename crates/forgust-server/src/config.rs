@@ -29,6 +29,7 @@ pub struct Config {
     pub pages: PagesConfig,
     pub security_scanning: SecurityScanningConfig,
     pub ai_review: AiReviewConfig,
+    pub audit: AuditConfig,
     pub oidc: BTreeMap<String, OidcProvider>,
 }
 
@@ -66,6 +67,17 @@ impl Default for SecurityScanningConfig {
             timeout_secs: 3600,
         }
     }
+}
+
+/// The audit log (`[audit]`).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AuditConfig {
+    /// Also record clones, fetches and archive downloads of private and
+    /// internal repositories, by people and their tokens and by deploy
+    /// tokens and keys (not by CI jobs). Off by default: busy instances write
+    /// a row per fetch.
+    pub repository_reads: bool,
 }
 
 /// Static sites from CI (`pages` jobs), served on their own domain: a wildcard

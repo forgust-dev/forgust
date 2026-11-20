@@ -84,13 +84,26 @@ pub async fn delete_for_user(e: impl PgExecutor<'_>, user_id: i64) -> Result<()>
     Ok(())
 }
 
-pub async fn delete_expired(pool: &sqlx::PgPool) -> Result<u64> {
-    let mut n = sqlx::query!("DELETE FROM sessions WHERE expires_at < now()").execute(pool).await?.rows_affected();
-    n += sqlx::query!("DELETE FROM login_challenges WHERE expires_at < now()").execute(pool).await?.rows_affected();
-    n += sqlx::query!("DELETE FROM oidc_states WHERE expires_at < now()").execute(pool).await?.rows_affected();
-    n += sqlx::query!("DELETE FROM webauthn_ceremonies WHERE expires_at < now()").execute(pool).await?.rows_affected();
-    n += sqlx::query!("DELETE FROM lfs_ssh_tokens WHERE expires_at < now()").execute(pool).await?.rows_affected();
-    Ok(n)
+/// A session that ran out (for the audit log).
+#[derive(Debug)]
+pub struct Expired {
+    pub id: i64,
+    pub user_id: i64,
+    pub ip: Option<String>,
+    pub impersonator_id: Option<i64>,
+}
+
+/// Drop what ran out: sessions (returned), sign-in challenges, OIDC states,
+/// WebAuthn ceremonies and LFS tokens for SSH.
+pub async fn delete_expired(pool: &sqlx::PgPool) -> Result<Vec<Expired>> {
+    let sessions = sqlx::query_as!(Expired, "DELETE FROM sessions WHERE expires_at < now() RETURNING id, user_id, ip, impersonator_id")
+        .fetch_all(pool)
+        .await?;
+    sqlx::query!("DELETE FROM login_challenges WHERE expires_at < now()").execute(pool).await?;
+    sqlx::query!("DELETE FROM oidc_states WHERE expires_at < now()").execute(pool).await?;
+    sqlx::query!("DELETE FROM webauthn_ceremonies WHERE expires_at < now()").execute(pool).await?;
+    sqlx::query!("DELETE FROM lfs_ssh_tokens WHERE expires_at < now()").execute(pool).await?;
+    Ok(sessions)
 }
 
 /// `provider_sync`: what the provider sign-in behind this challenge says about

@@ -136,6 +136,7 @@ pub async fn build_state(
         login_ip_failures: RateLimiter::new(100, Duration::from_secs(600)),
         oidc_key: tokio::sync::OnceCell::new(),
         anon_heavy_reads: RateLimiter::new(cfg.limits.anonymous_heavy_reads_per_minute.max(1), Duration::from_secs(60)),
+        audit_throttle: crate::state::AuditThrottle::new(Duration::from_secs(60)),
         cfg,
     })))
 }
