@@ -12,7 +12,6 @@ use serde_json::json;
 
 use super::mr::{committer, map_position};
 use crate::auth::Principal;
-use crate::auth::authz::{ProjectAction, require_project};
 use crate::error::{ApiError, ApiResult};
 use crate::events::Event;
 use crate::jobs::{PostReceive, RefUpdate};
@@ -93,8 +92,7 @@ pub async fn apply(state: &AppState, principal: &Principal, p: &Project, mr: &Me
     let user = principal.direct_user().ok_or(ApiError::Unauthorized)?.clone();
     // check_push below only applies the protected-branch rules: the right to
     // push at all (Developer+) is checked here, as git-receive-pack does
-    require_project(state, principal, ProjectAction::Push, p).await?;
-    crate::services::repo_mirrors::writable(state, p.id).await?;
+    crate::services::repo_mirrors::require_write(state, principal, p).await?;
     if mr.state != "opened" {
         return Err(ApiError::conflict("only open merge requests take suggestions"));
     }
@@ -183,12 +181,7 @@ pub async fn apply(state: &AppState, principal: &Principal, p: &Project, mr: &Me
         .jobs
         .enqueue(
             &mut tx,
-            PostReceive {
-                project_id: p.id,
-                updates: vec![RefUpdate { old: head, new: commit.clone(), name: branch }],
-                principal: Some(principal.encode()),
-            }
-            .request(),
+            PostReceive::pushed(p.id, vec![RefUpdate { old: head, new: commit.clone(), name: branch }], principal.encode()).request(),
         )
         .await?;
     tx.commit().await?;

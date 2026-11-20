@@ -114,6 +114,10 @@ pub struct PostReceive {
     /// Who pushed (`kind:id`, see `Principal::encode`); pipelines run as them.
     #[serde(default)]
     pub principal: Option<String>,
+    /// A pull mirror brought the changes: `principal` runs its pipelines but
+    /// did not push them (no push events or webhook author for them).
+    #[serde(default)]
+    pub from_mirror: bool,
 }
 
 /// Where a pushed ref's new commits start: its old commit, or for a new ref
@@ -165,6 +169,16 @@ async fn push_commits(
 }
 
 impl PostReceive {
+    /// Someone pushed (git, or a change made here): pipelines run as them.
+    pub fn pushed(project_id: i64, updates: Vec<RefUpdate>, principal: String) -> PostReceive {
+        PostReceive { project_id, updates, principal: Some(principal), from_mirror: false }
+    }
+
+    /// A pull mirror brought the changes; pipelines run as `runs_as`, if anyone.
+    pub fn mirrored(project_id: i64, updates: Vec<RefUpdate>, runs_as: Option<String>) -> PostReceive {
+        PostReceive { project_id, updates, principal: runs_as, from_mirror: true }
+    }
+
     pub fn request(self) -> JobRequest {
         JobRequest {
             task: Self::IDENTIFIER,
@@ -211,9 +225,10 @@ impl PostReceive {
                 .filter_map(|u| u.name.strip_prefix("refs/tags/").map(|t| (t.to_string(), u.new.clone())))
                 .collect();
             crate::services::sbom::on_tags_pushed(state, &p, &pushed_tags).await;
-            let who = pusher.as_ref().and_then(|p| p.user());
+            let author = pusher.as_ref().filter(|_| !self.from_mirror);
+            let who = author.and_then(|p| p.user());
             // the contributions calendar: a push event per branch or tag a person pushed
-            let person = pusher.as_ref().and_then(|p| p.direct_user());
+            let person = author.and_then(|p| p.direct_user());
             for u in &self.updates {
                 let from = if u.new == forgust_storage::ZERO_OID { None } else { push_base(state, &p, u).await };
                 let (commits, total) = push_commits(state, &p, u, from.as_deref()).await;

@@ -37,6 +37,7 @@ impl Mirror {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct NewMirror<'a> {
     pub project_id: i64,
     pub direction: &'a str,
@@ -91,7 +92,8 @@ pub async fn find(e: impl PgExecutor<'_>, id: i64) -> Result<Option<Mirror>> {
     .await
 }
 
-/// The address a project's repository is pulled from, when it is a pull mirror.
+/// The address a project's repository is pulled from, when it is a pull mirror
+/// (paused or not: it stays read-only until the mirror is removed).
 pub async fn pulled_from(e: impl PgExecutor<'_>, project_id: i64) -> Result<Option<String>> {
     sqlx::query_scalar!("SELECT url FROM project_mirrors WHERE project_id = $1 AND direction = 'pull'", project_id).fetch_optional(e).await
 }
@@ -104,17 +106,23 @@ pub async fn push_targets(e: impl PgExecutor<'_>, project_id: i64) -> Result<Vec
 }
 
 /// Enabled pull mirrors whose interval has passed since their last attempt
-/// (never-tried ones first).
-pub async fn due_pulls(e: impl PgExecutor<'_>, limit: i64) -> Result<Vec<i64>> {
-    sqlx::query_scalar!(
-        "SELECT id FROM project_mirrors
-         WHERE direction = 'pull' AND enabled
-           AND (last_update_at IS NULL OR last_update_at < now() - make_interval(mins => interval_minutes))
-         ORDER BY last_update_at NULLS FIRST LIMIT $1",
+/// (never-tried ones first), marked as attempted now: `(id, project_id)`.
+pub async fn take_due_pulls(e: impl PgExecutor<'_>, limit: i64) -> Result<Vec<(i64, i64)>> {
+    Ok(sqlx::query!(
+        "UPDATE project_mirrors SET last_update_at = now()
+         WHERE id IN (SELECT id FROM project_mirrors
+                      WHERE direction = 'pull' AND enabled
+                        AND (last_update_at IS NULL OR last_update_at < now() - make_interval(mins => interval_minutes))
+                      ORDER BY last_update_at NULLS FIRST LIMIT $1
+                      FOR UPDATE SKIP LOCKED)
+         RETURNING id, project_id",
         limit
     )
     .fetch_all(e)
-    .await
+    .await?
+    .into_iter()
+    .map(|r| (r.id, r.project_id))
+    .collect())
 }
 
 pub struct MirrorChange {
@@ -170,6 +178,7 @@ pub async fn set_result(e: impl PgExecutor<'_>, id: i64, error: Option<&str>) ->
     Ok(())
 }
 
-pub async fn delete(e: impl PgExecutor<'_>, id: i64, project_id: i64) -> Result<bool> {
-    Ok(sqlx::query!("DELETE FROM project_mirrors WHERE id = $1 AND project_id = $2", id, project_id).execute(e).await?.rows_affected() > 0)
+pub async fn delete(e: impl PgExecutor<'_>, id: i64) -> Result<()> {
+    sqlx::query!("DELETE FROM project_mirrors WHERE id = $1", id).execute(e).await?;
+    Ok(())
 }

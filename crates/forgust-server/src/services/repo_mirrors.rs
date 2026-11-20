@@ -8,13 +8,16 @@
 //! every run, and git is pinned to the checked addresses. A mirror's address
 //! never changes, so its stored token cannot be sent anywhere else.
 
-use forgust_db::project_mirrors::{self as mdb, Mirror};
+use std::collections::HashMap;
+
+use forgust_db::project_mirrors::{self as mdb, Mirror, NewMirror};
 use forgust_db::projects::Project;
-use forgust_storage::{StorageError, ZERO_OID};
+use forgust_storage::{RefChange, StorageError, ZERO_OID};
 use graphile_worker::{IntoTaskHandlerResult, TaskHandler, WorkerContext};
 use serde::{Deserialize, Serialize};
 
 use crate::auth::Principal;
+use crate::auth::authz::{ProjectAction, require_project};
 use crate::error::{ApiError, ApiResult};
 use crate::jobs::{JobRequest, PostReceive, RefUpdate};
 use crate::state::AppState;
@@ -28,13 +31,36 @@ pub fn read_only(url: &str) -> String {
     format!("this repository is a pull mirror of {url}: push there, or remove the mirror in Settings > Repository")
 }
 
-/// Refuse writes to a pull mirror's branches and tags (pushes, web commits,
-/// merges, rebases, suggestions, tags). Issues and comments stay open.
+/// Refuse changes to a pull mirror's branches and tags made here (web
+/// commits, branches and tags, rebases, suggestions) before any work: the
+/// pre-receive check (`hooks::check_push`) refuses them too, and pushes; the
+/// merge status blocks merges. Issues and comments stay open.
 pub async fn writable(state: &AppState, project_id: i64) -> ApiResult<()> {
     match mdb::pulled_from(&state.db, project_id).await? {
         Some(url) => Err(ApiError::forbidden(read_only(&url))),
         None => Ok(()),
     }
+}
+
+/// `Push` on the project, and a repository that is not a pull mirror.
+pub async fn require_write(state: &AppState, principal: &Principal, p: &Project) -> ApiResult<()> {
+    require_project(state, principal, ProjectAction::Push, p).await?;
+    writable(state, p.id).await
+}
+
+/// Add a mirror, audited as done by `principal`.
+pub async fn add(state: &AppState, principal: &Principal, m: NewMirror<'_>) -> ApiResult<i64> {
+    let id = mdb::insert(&state.db, m).await?;
+    crate::services::audit(
+        state,
+        principal,
+        "mirror_added",
+        Some(("project", m.project_id)),
+        serde_json::json!({ "mirror": id, "direction": m.direction, "url": m.url }),
+        None,
+    )
+    .await;
+    Ok(id)
 }
 
 /// The address after the SSRF check: http(s), no credentials in it.
@@ -43,24 +69,15 @@ pub async fn checked(state: &AppState, raw: &str) -> Result<url::Url, String> {
     Ok(url)
 }
 
-/// git's settings for talking to the mirror: its credentials, the checked
-/// addresses it is pinned to, and the instance's CA bundle.
+/// The mirror's address, checked again, and git's settings for it (its
+/// credentials, the pinned addresses, the CA bundle).
 async fn remote(state: &AppState, m: &Mirror) -> Result<(url::Url, Vec<(String, String)>), String> {
-    use base64::Engine;
-    let (url, addrs) =
-        crate::import::client::checked_url(&m.url, state.cfg.features.imports_allow_local).await.map_err(|e| e.to_string())?;
-    let mut cfg = crate::import::client::pin(&url, &addrs);
+    let mut auth = Vec::new();
     if let Some(sealed) = &m.token_enc {
-        let token = state.secrets.decrypt(sealed).map_err(|e| format!("token: {e}"))?;
-        let token = String::from_utf8(token).map_err(|_| "token: not UTF-8".to_string())?;
-        let user = if m.username.is_empty() { "oauth2" } else { m.username.as_str() };
-        let basic = base64::engine::general_purpose::STANDARD.encode(format!("{user}:{token}"));
-        cfg.push(("http.extraHeader".into(), format!("Authorization: Basic {basic}")));
+        let token = state.secrets.decrypt_str(sealed).map_err(|e| format!("token: {e}"))?;
+        auth.push(crate::import::client::basic_auth(if m.username.is_empty() { "oauth2" } else { &m.username }, &token));
     }
-    if let Some(bundle) = crate::tls::bundle_file().map_err(|e| e.to_string())? {
-        cfg.push(("http.sslCAInfo".into(), bundle.display().to_string()));
-    }
-    Ok((url, cfg))
+    crate::import::client::git_remote(&m.url, state.cfg.features.imports_allow_local, auth).await.map_err(|e| e.to_string())
 }
 
 /// What went wrong, in a line: git's complaint without its prefixes, or
@@ -83,64 +100,98 @@ fn git_error(e: StorageError) -> String {
     }
 }
 
-/// Bring the source's branches and tags over: new and moved ones are set
-/// (diverged ones too: the source wins), and those gone there are deleted.
-/// Returns what changed, and how it went: a failure part way keeps the
-/// changes already made, which still need their follow-up.
-pub async fn pull(state: &AppState, p: &Project, m: &Mirror) -> (Vec<RefUpdate>, Result<(), String>) {
-    let mut updates = Vec::new();
-    let r = pull_into(state, p, m, &mut updates).await;
-    (updates, r)
-}
-
-async fn pull_into(state: &AppState, p: &Project, m: &Mirror, updates: &mut Vec<RefUpdate>) -> Result<(), String> {
-    if let Some(r) = crate::services::quotas::room(state, p.id).await.map_err(|e| e.to_string())?
-        && r.full()
-    {
-        return Err(r.message());
-    }
+/// Bring the source's branches and tags over: those gone there are deleted,
+/// then new and moved ones set (diverged ones too: the source wins), each in
+/// one transaction.
+/// Returns what changed.
+pub async fn pull(state: &AppState, p: &Project, m: &Mirror) -> Result<Vec<RefUpdate>, String> {
+    let err = |e: StorageError| e.to_string();
+    crate::services::quotas::check_write(state, p.id, 0).await.map_err(|e| e.to_string())?;
     let (url, cfg) = remote(state, m).await?;
     let st = &state.storage;
+    // a writer like a push: maintenance (repack, prune) waits, or the fetched
+    // objects could go before the refs point at them
+    let _lock = state.repo_locks.get(p.id).read_owned().await;
+    let refs = |prefixes: &'static [&'static str]| async move {
+        Ok::<HashMap<String, String>, String>(st.ref_targets(p.id, prefixes).await.map_err(err)?.into_iter().collect())
+    };
+    let clear_staging = || async {
+        let stale: Vec<RefChange> = refs(&[STAGING]).await?.into_keys().map(|name| RefChange { name, new: None, old: None }).collect();
+        st.transact_refs(p.id, &stale).await.map_err(err)
+    };
     // a clean staging area: what a previous run left must not look like the source
-    for r in st.refs(p.id, STAGING).await.map_err(|e| e.to_string())? {
-        let _ = st.delete_ref(p.id, &r.name, None).await;
-    }
+    clear_staging().await?;
+    // what is here before the fetch: git may bring tags straight into
+    // refs/tags (auto-following), and those are changes too
+    let before = refs(&["refs/heads/", "refs/tags/"]).await?;
     let refspecs = vec![format!("+refs/heads/*:{STAGING}heads/*"), format!("+refs/tags/*:{STAGING}tags/*")];
     st.fetch(p.id, url.as_str(), &refspecs, &cfg).await.map_err(git_error)?;
     let result = async {
-        let staged = st.refs(p.id, STAGING).await.map_err(|e| e.to_string())?;
-        let local_heads = st.refs(p.id, "refs/heads/").await.map_err(|e| e.to_string())?;
+        let staged: HashMap<String, String> =
+            refs(&[STAGING]).await?.into_iter().map(|(name, target)| (format!("refs/{}", &name[STAGING.len()..]), target)).collect();
         // a source without branches is more likely broken than emptied: keep ours
-        if !staged.iter().any(|r| r.name.starts_with(&format!("{STAGING}heads/"))) && !local_heads.is_empty() {
+        if !staged.keys().any(|n| n.starts_with("refs/heads/")) && before.keys().any(|n| n.starts_with("refs/heads/")) {
             return Err("the source has no branches: nothing was changed here".to_string());
         }
-        let mut local = local_heads;
-        local.extend(st.refs(p.id, "refs/tags/").await.map_err(|e| e.to_string())?);
-        let local: std::collections::HashMap<String, String> = local.into_iter().map(|r| (r.name, r.target)).collect();
-        let mut seen = std::collections::HashSet::new();
-        for r in &staged {
-            let name = format!("refs/{}", &r.name[STAGING.len()..]);
-            seen.insert(name.clone());
-            let old = local.get(&name).cloned();
-            if old.as_deref() == Some(r.target.as_str()) {
-                continue;
+        let now = refs(&["refs/heads/", "refs/tags/"]).await?;
+        let mut changes: Vec<RefChange> = now
+            .iter()
+            .filter(|(name, _)| !staged.contains_key(*name))
+            .map(|(name, current)| RefChange { name: name.clone(), new: None, old: Some(current.clone()) })
+            .collect();
+        changes.extend(staged.iter().filter(|(name, target)| now.get(*name) != Some(target)).map(|(name, target)| RefChange {
+            name: name.clone(),
+            new: Some(target.clone()),
+            old: Some(now.get(name).cloned().unwrap_or_else(|| ZERO_OID.to_string())),
+        }));
+        if !changes.is_empty() {
+            // what came must fit: past the quota, nothing is applied (the
+            // fetched objects go with the next maintenance)
+            crate::jobs::refresh_repository_size(state, p.id).await;
+            if let Some(r) = crate::services::quotas::room(state, p.id).await.map_err(|e| e.to_string())?
+                && r.used > r.quota
+            {
+                return Err(format!("the source does not fit in the storage quota ({}): nothing was changed here", r.message()));
             }
-            st.update_ref(p.id, &name, &r.target, Some(old.as_deref().unwrap_or(ZERO_OID))).await.map_err(|e| e.to_string())?;
-            updates.push(RefUpdate { old: old.unwrap_or_else(|| ZERO_OID.to_string()), new: r.target.clone(), name });
+            // deletions first, on their own: git cannot remove `foo` and create
+            // `foo/bar` in one transaction
+            let (deletes, sets): (Vec<RefChange>, Vec<RefChange>) = changes.into_iter().partition(|c| c.new.is_none());
+            st.transact_refs(p.id, &deletes).await.map_err(err)?;
+            st.transact_refs(p.id, &sets).await.map_err(err)?;
+            follow_default_branch(state, p, &url, &cfg).await.map_err(|e| e.to_string())?;
         }
-        for (name, old) in &local {
-            if !seen.contains(name) {
-                st.delete_ref(p.id, name, Some(old)).await.map_err(|e| e.to_string())?;
-                updates.push(RefUpdate { old: old.clone(), new: ZERO_OID.to_string(), name: name.clone() });
-            }
-        }
-        Ok(())
+        // what changed since before the fetch, auto-followed tags included
+        let gone = before.iter().filter(|(name, _)| !staged.contains_key(*name)).map(|(name, old)| (name, old.as_str(), ZERO_OID));
+        let set = staged.iter().map(|(name, new)| (name, before.get(name).map(String::as_str).unwrap_or(ZERO_OID), new.as_str()));
+        Ok(gone
+            .chain(set)
+            .filter(|(_, old, new)| old != new)
+            .map(|(name, old, new)| RefUpdate { name: name.clone(), old: old.to_string(), new: new.to_string() })
+            .collect())
     }
     .await;
-    for r in st.refs(p.id, STAGING).await.unwrap_or_default() {
-        let _ = st.delete_ref(p.id, &r.name, None).await;
-    }
+    let _ = clear_staging().await;
     result
+}
+
+/// When the default branch went away (renamed upstream, or the project had
+/// its own), the source's default takes its place; else `main`, `master`, or
+/// the first branch.
+async fn follow_default_branch(state: &AppState, p: &Project, url: &url::Url, cfg: &[(String, String)]) -> anyhow::Result<()> {
+    let st = &state.storage;
+    let current = p.default_branch.as_deref().unwrap_or_default();
+    if !current.is_empty() && st.resolve(p.id, &format!("refs/heads/{current}")).await?.is_some() {
+        return Ok(());
+    }
+    let mut names: Vec<String> =
+        st.ref_targets(p.id, &["refs/heads/"]).await?.into_iter().map(|(name, _)| name["refs/heads/".len()..].to_string()).collect();
+    names.sort();
+    let source_default = st.remote_head(p.id, url.as_str(), cfg).await.ok().flatten();
+    let pick = source_default.as_deref().into_iter().chain(["main", "master"]).find(|n| names.iter().any(|b| b == n)).map(str::to_string);
+    match pick.or(names.into_iter().next()) {
+        Some(b) => crate::services::repos::adopt_default_branch(state, p.id, &b).await,
+        None => Ok(()),
+    }
 }
 
 /// Send this repository's branches and tags to the mirror: every branch
@@ -151,10 +202,9 @@ pub async fn push(state: &AppState, p: &Project, m: &Mirror) -> Result<(), Strin
     let mut refspecs = vec!["+refs/tags/*:refs/tags/*".to_string()];
     if m.only_protected {
         let rules = forgust_db::protected_branches::list(&state.db, p.id).await.map_err(|e| e.to_string())?;
-        for r in state.storage.refs(p.id, "refs/heads/").await.map_err(|e| e.to_string())? {
-            let branch = &r.name["refs/heads/".len()..];
-            if rules.iter().any(|rule| rule.matches(branch)) {
-                refspecs.push(format!("+{0}:{0}", r.name));
+        for (name, _) in state.storage.ref_targets(p.id, &["refs/heads/"]).await.map_err(|e| e.to_string())? {
+            if rules.iter().any(|rule| rule.matches(&name["refs/heads/".len()..])) {
+                refspecs.push(format!("+{name}:{name}"));
             }
         }
     } else {
@@ -170,11 +220,8 @@ async fn pipelines_as(state: &AppState, p: &Project, m: &Mirror) -> Option<Princ
     if !m.trigger_pipelines {
         return None;
     }
-    let user = forgust_db::users::find(&state.db, m.created_by?).await.ok()??;
-    if user.state != "active" {
-        return None;
-    }
-    // `Push` is refused on a pull mirror's repository: the role is what counts
+    let user = forgust_db::users::find(&state.db, m.created_by?).await.ok().flatten().filter(|u| u.is_active())?;
+    // the role, not `Push`: an administrator's bypass does not count here
     let level = forgust_db::authz::project_level(&state.db, user.id, p.id).await.ok().flatten().unwrap_or(0);
     (level >= forgust_db::access::DEVELOPER).then_some(Principal::User { user, scopes: None })
 }
@@ -223,13 +270,15 @@ pub async fn update(state: &AppState, mirror_id: i64) -> anyhow::Result<()> {
     }
     mdb::mark_attempt(&state.db, m.id).await?;
     let outcome = if m.direction == "pull" {
-        let (updates, outcome) = pull(state, &p, &m).await;
-        if !updates.is_empty() {
-            let principal = pipelines_as(state, &p, &m).await.map(|p| p.encode());
-            let mut conn = state.db.acquire().await?;
-            state.jobs.enqueue(&mut conn, PostReceive { project_id: p.id, updates, principal }.request()).await?;
+        match pull(state, &p, &m).await {
+            Ok(updates) if !updates.is_empty() => {
+                let runs_as = pipelines_as(state, &p, &m).await.map(|p| p.encode());
+                let mut conn = state.db.acquire().await?;
+                state.jobs.enqueue(&mut conn, PostReceive::mirrored(p.id, updates, runs_as).request()).await?;
+                Ok(())
+            }
+            r => r.map(|_| ()),
         }
-        outcome
     } else {
         push(state, &p, &m).await
     };
@@ -270,13 +319,11 @@ impl TaskHandler for MirrorSweep {
 }
 
 pub async fn sweep(state: &AppState) -> anyhow::Result<()> {
-    let due = mdb::due_pulls(&state.db, 200).await?;
+    // picked once: the next sweep waits for their interval again
+    let due = mdb::take_due_pulls(&state.db, 200).await?;
     let mut conn = state.db.acquire().await?;
-    for id in due {
-        let Some(m) = mdb::find(&mut *conn, id).await? else { continue };
-        // picked once: the next sweep waits for its interval again
-        mdb::mark_attempt(&mut *conn, id).await?;
-        state.jobs.enqueue(&mut conn, MirrorUpdate::request(m.project_id, id)).await?;
+    for (id, project_id) in due {
+        state.jobs.enqueue(&mut conn, MirrorUpdate::request(project_id, id)).await?;
     }
     Ok(())
 }

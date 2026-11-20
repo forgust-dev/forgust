@@ -392,7 +392,7 @@ async fn post_receive(State(state): State<AppState>, headers: HeaderMap, Json(re
     check_secret(&state, &headers)?;
     let updates = req.updates.into_iter().map(|u| RefUpdate { old: u.old, new: u.new, name: u.name }).collect();
     let mut tx = state.db.begin().await?;
-    state.jobs.enqueue(&mut tx, PostReceive { project_id: req.project_id, updates, principal: Some(req.principal) }.request()).await?;
+    state.jobs.enqueue(&mut tx, PostReceive::pushed(req.project_id, updates, req.principal).request()).await?;
     tx.commit().await?;
     Ok(Json(HookResponse { allowed: true, message: String::new() }))
 }
