@@ -714,7 +714,7 @@ function SecurityScanningAdminForm({ initial, onSaved }: { initial: S["AdminScan
         Copied from the sources below every 6 hours (Admin &gt; Jobs runs it now), or imported from files with{" "}
         <code>forgust admin import-vulnerability-db</code> where the server cannot reach them. Scans then need no access to ghcr.io.
       </p>
-      <Field label="Vulnerability database source" hint="host/repository:tag; empty: not copied">
+      <Field label="Vulnerability database source">
         <input value={s.trivy_db_source} disabled={!s.mirror_vulnerability_dbs} onChange={(e) => setS({ ...s, trivy_db_source: e.target.value })} />
       </Field>
       <Field label="Java index source">
