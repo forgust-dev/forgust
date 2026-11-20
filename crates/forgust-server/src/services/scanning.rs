@@ -152,7 +152,14 @@ impl super::builtin::Builtin for Scanning {
 
 /// The pipeline Forgust writes: one job per scanner, each uploading a report
 /// slice 1 reads. `history`: the secrets scanner looks at every commit.
-pub fn job_config(cfg: &SecurityScanningConfig, scanners: &[String], history: bool, images: &[String]) -> String {
+/// `mirror`: where Trivy reads its databases, when this server holds them.
+pub fn job_config(
+    cfg: &SecurityScanningConfig,
+    scanners: &[String],
+    history: bool,
+    images: &[String],
+    mirror: &super::vulnerability_dbs::TrivyFlags,
+) -> String {
     let base = |image: Value| {
         json!({
             "image": image,
@@ -204,7 +211,7 @@ pub fn job_config(cfg: &SecurityScanningConfig, scanners: &[String], history: bo
                 json!({
                     "variables": { "TRIVY_CACHE_DIR": ".trivycache", "TRIVY_NO_PROGRESS": "true" },
                     "cache": trivy_cache,
-                    "script": ["trivy fs --config /dev/null --scanners vuln --format sarif --output trivy-dependencies.sarif --exit-code 0 ."],
+                    "script": [format!("trivy fs --config /dev/null --scanners vuln --format sarif --output trivy-dependencies.sarif --exit-code 0{} .", mirror.vuln())],
                     "artifacts": { "reports": { "dependency_scanning": "trivy-dependencies.sarif" } },
                 }),
             ),
@@ -218,7 +225,7 @@ pub fn job_config(cfg: &SecurityScanningConfig, scanners: &[String], history: bo
                 json!({
                     "variables": { "TRIVY_CACHE_DIR": ".trivycache", "TRIVY_NO_PROGRESS": "true" },
                     "cache": trivy_cache,
-                    "script": ["trivy config --config /dev/null --format sarif --output trivy-iac.sarif --exit-code 0 ."],
+                    "script": [format!("trivy config --config /dev/null --format sarif --output trivy-iac.sarif --exit-code 0{} .", mirror.checks())],
                     "artifacts": { "reports": { "sast": "trivy-iac.sarif" } },
                 }),
             ),
@@ -230,7 +237,8 @@ pub fn job_config(cfg: &SecurityScanningConfig, scanners: &[String], history: bo
             .enumerate()
             .map(|(i, img)| {
                 format!(
-                    "trivy image --config /dev/null --format sarif --output trivy-container-{i}.sarif --exit-code 0 '{}'",
+                    "trivy image --config /dev/null --format sarif --output trivy-container-{i}.sarif --exit-code 0{} '{}'",
+                    mirror.vuln(),
                     img.replace('\'', "")
                 )
             })
@@ -308,7 +316,8 @@ async fn start(
     } else {
         vec![]
     };
-    let config_text = job_config(&cfg, &s.scanners, !s.history_scanned && merge_request_id.is_none(), &images);
+    let mirror = super::vulnerability_dbs::trivy_flags(state, &cfg).await.map_err(ApiError::Internal)?;
+    let config_text = job_config(&cfg, &s.scanners, !s.history_scanned && merge_request_id.is_none(), &images, &mirror);
     if config_text == "{}" {
         return Ok(None);
     }
@@ -389,10 +398,18 @@ mod tests {
     fn the_pipeline_parses() {
         let cfg = SecurityScanningConfig::default();
         let all: Vec<String> = SCANNERS.iter().map(|s| s.to_string()).collect();
-        let text = job_config(&cfg, &all, true, &["registry.example.com/acme/shop:1.0".into()]);
+        let mirror = super::super::vulnerability_dbs::TrivyFlags {
+            db: Some("git.example.com/admin/mirrors/trivy-db:2".into()),
+            java_db: None,
+            checks: Some("git.example.com/admin/mirrors/trivy-checks:1".into()),
+            insecure: false,
+        };
+        let text = job_config(&cfg, &all, true, &["registry.example.com/acme/shop:1.0".into()], &mirror);
         let parsed = forgust_ci_config::parse(&text).unwrap_or_else(|e| panic!("{e}\n{text}"));
         let mut names: Vec<&String> = parsed.jobs.keys().collect();
         names.sort();
         assert_eq!(names, ["code", "containers", "dependencies", "infrastructure", "secrets"]);
+        assert!(text.contains("--db-repository 'git.example.com/admin/mirrors/trivy-db:2' ."), "{text}");
+        assert!(text.contains("--checks-bundle-repository 'git.example.com/admin/mirrors/trivy-checks:1' ."), "{text}");
     }
 }

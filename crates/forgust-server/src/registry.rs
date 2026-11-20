@@ -345,7 +345,7 @@ fn parse(rest: &str) -> Option<(String, Route)> {
     None
 }
 
-fn valid_digest(d: &str) -> bool {
+pub(crate) fn valid_digest(d: &str) -> bool {
     d.strip_prefix("sha256:").is_some_and(|h| h.len() == 64 && h.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()))
 }
 
@@ -410,6 +410,13 @@ async fn dispatch(
             (&Method::DELETE, Route::Manifest(_) | Route::Blob(_)) => "delete",
             _ => "push",
         };
+        // Trivy's databases, mirrored: anyone pulls them, nobody pushes
+        if let Some(k) = crate::services::vulnerability_dbs::served_at(&name) {
+            if action != "pull" {
+                return Err(RegError::new(StatusCode::FORBIDDEN, "DENIED", "the vulnerability database mirror is read-only"));
+            }
+            return mirrored(&state, k, route, method == Method::HEAD).await;
+        }
         let t = authorize(&state, &headers, &name, action).await?;
         let head = method == Method::HEAD;
         match (method, route) {
@@ -432,6 +439,44 @@ async fn dispatch(
     match result {
         Ok(r) => with_api_version(r),
         Err(e) => error_response(&state, e),
+    }
+}
+
+/// A mirrored vulnerability database: its manifest (by tag or digest) and
+/// the blobs it names, or those of the copy before (pulls in flight).
+async fn mirrored(state: &AppState, k: crate::services::vulnerability_dbs::Kind, route: Route, head: bool) -> RegResult<Response> {
+    let m = forgust_db::mirrors::get(&state.db, k.name).await?;
+    match route {
+        Route::Manifest(r) => {
+            let m = m.filter(|m| r == m.tag || r == m.digest).ok_or_else(RegError::manifest_unknown)?;
+            let len = m.manifest.len();
+            let mut resp = Response::new(if head { Body::empty() } else { Body::from(m.manifest) });
+            let h = resp.headers_mut();
+            h.insert(header::CONTENT_TYPE, HeaderValue::from_str(&m.media_type).unwrap_or(HeaderValue::from_static("application/json")));
+            h.insert(header::CONTENT_LENGTH, HeaderValue::from(len));
+            h.insert("Docker-Content-Digest", HeaderValue::from_str(&m.digest).expect("hex"));
+            Ok(resp)
+        }
+        Route::Blob(d) => {
+            let named = m.is_some_and(|m| m.blob_digests.contains(&d) || m.previous_blob_digests.contains(&d));
+            if !named || !valid_digest(&d) {
+                return Err(RegError::blob_unknown());
+            }
+            let key = crate::services::vulnerability_dbs::blob_key(&d);
+            let (size, body) = if head {
+                (state.blobs.size(&key).await?.ok_or_else(RegError::blob_unknown)?, Body::empty())
+            } else {
+                let (size, stream) = state.blobs.get(&key).await?.ok_or_else(RegError::blob_unknown)?;
+                (size, Body::from_stream(stream))
+            };
+            let mut resp = Response::new(body);
+            let h = resp.headers_mut();
+            h.insert(header::CONTENT_TYPE, HeaderValue::from_static("application/octet-stream"));
+            h.insert(header::CONTENT_LENGTH, HeaderValue::from(size));
+            h.insert("Docker-Content-Digest", HeaderValue::from_str(&d).expect("hex"));
+            Ok(resp)
+        }
+        _ => Err(RegError::new(StatusCode::FORBIDDEN, "DENIED", "the vulnerability database mirror is read-only")),
     }
 }
 

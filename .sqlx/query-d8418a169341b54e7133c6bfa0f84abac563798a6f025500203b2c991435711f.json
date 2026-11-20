@@ -1,0 +1,86 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT name, tag, digest, size, origin, stored_at FROM vulnerability_db_mirrors ORDER BY name",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "vulnerability_db_mirrors",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "tag",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "vulnerability_db_mirrors",
+            "name": "tag"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "digest",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "vulnerability_db_mirrors",
+            "name": "digest"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "size",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "vulnerability_db_mirrors",
+            "name": "size"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "origin",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "vulnerability_db_mirrors",
+            "name": "origin"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "stored_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "vulnerability_db_mirrors",
+            "name": "stored_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d8418a169341b54e7133c6bfa0f84abac563798a6f025500203b2c991435711f"
+}

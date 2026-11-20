@@ -775,6 +775,57 @@ impl TaskHandler for UpdateCheck {
     }
 }
 
+/// Copy Trivy's databases into the mirror (every 6 hours, when mirroring is
+/// turned on, or from Admin > Jobs; nothing while it is off).
+#[derive(Debug, Serialize)]
+pub struct MirrorVulnerabilityDbs {
+    /// Fail when a copy does (as [`UpdateCheck`]: scheduled runs log it).
+    pub report: bool,
+}
+
+impl<'de> Deserialize<'de> for MirrorVulnerabilityDbs {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let payload = serde_json::Value::deserialize(d)?;
+        Ok(MirrorVulnerabilityDbs { report: payload.get("report").and_then(|r| r.as_bool()).unwrap_or(true) })
+    }
+}
+
+impl MirrorVulnerabilityDbs {
+    /// Soon, once: a copy still waiting stands for this one.
+    pub fn request(self) -> JobRequest {
+        JobRequest {
+            task: Self::IDENTIFIER,
+            payload: serde_json::to_value(&self).unwrap_or_default(),
+            job_key: Some(Self::IDENTIFIER.into()),
+            max_attempts: Some(1),
+            ..Default::default()
+        }
+    }
+}
+
+impl TaskHandler for MirrorVulnerabilityDbs {
+    const IDENTIFIER: &'static str = "mirror_vulnerability_dbs";
+
+    async fn run(self, ctx: WorkerContext) -> impl IntoTaskHandlerResult {
+        let state = ctx.get_ext::<AppState>().ok_or("no app state")?;
+        // one copy at a time, whichever worker runs it
+        let mut lock = state.db.acquire().await.map_err(|e| e.to_string())?;
+        let got: bool = sqlx::query_scalar("SELECT pg_try_advisory_lock(hashtextextended('mirror_vulnerability_dbs', 0))")
+            .fetch_one(&mut *lock)
+            .await
+            .map_err(|e| e.to_string())?;
+        if !got {
+            return Ok(());
+        }
+        let r = crate::services::vulnerability_dbs::sync(state).await;
+        let _ = sqlx::query("SELECT pg_advisory_unlock(hashtextextended('mirror_vulnerability_dbs', 0))").execute(&mut *lock).await;
+        match r {
+            Err(e) if self.report => Err(format!("{e:#}")),
+            _ => Ok(()),
+        }
+    }
+}
+
 /// Start the worker (role `worker`). Also installs the graphile schema.
 #[allow(deprecated)]
 pub async fn start_worker(state: AppState, concurrency: usize) -> anyhow::Result<tokio::task::JoinHandle<()>> {
@@ -802,9 +853,10 @@ pub async fn start_worker(state: AppState, concurrency: usize) -> anyhow::Result
         .define_job::<SendEmail>()
         .define_job::<CiSweep>()
         .define_job::<UpdateCheck>()
+        .define_job::<MirrorVulnerabilityDbs>()
         .define_job::<crate::services::auto_merge::AutoMergeCheck>()
         .define_job::<crate::import::ImportJob>()
-        .with_crontab("*/5 * * * * cleanup\n17 * * * * maintenance_sweep\n* * * * * ci_sweep\n43 */6 * * * update_check {report:false}")?
+        .with_crontab("*/5 * * * * cleanup\n17 * * * * maintenance_sweep\n* * * * * ci_sweep\n43 */6 * * * update_check {report:false}\n29 */6 * * * mirror_vulnerability_dbs {report:false}")?
         .listen_os_shutdown_signals(false)
         // a worker that stops answering (a restart, a crash) gives its jobs back
         // within minutes: else they stay locked to it for hours, and so does

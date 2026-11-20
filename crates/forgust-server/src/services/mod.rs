@@ -37,6 +37,7 @@ pub mod suggestions;
 pub mod updates;
 pub mod uploads;
 pub mod users;
+pub mod vulnerability_dbs;
 pub mod webhooks;
 
 use serde_json::Value;
