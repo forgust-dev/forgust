@@ -717,14 +717,12 @@ function SecurityScanningAdminForm({ initial, onSaved }: { initial: S["AdminScan
       <Field label="Vulnerability database source" hint="host/repository:tag; empty: not copied">
         <input value={s.trivy_db_source} disabled={!s.mirror_vulnerability_dbs} onChange={(e) => setS({ ...s, trivy_db_source: e.target.value })} />
       </Field>
-      <div className="grid2">
-        <Field label="Java index source">
-          <input value={s.trivy_java_db_source} disabled={!s.mirror_vulnerability_dbs} onChange={(e) => setS({ ...s, trivy_java_db_source: e.target.value })} />
-        </Field>
-        <Field label="Infrastructure checks source">
-          <input value={s.trivy_checks_source} disabled={!s.mirror_vulnerability_dbs} onChange={(e) => setS({ ...s, trivy_checks_source: e.target.value })} />
-        </Field>
-      </div>
+      <Field label="Java index source">
+        <input value={s.trivy_java_db_source} disabled={!s.mirror_vulnerability_dbs} onChange={(e) => setS({ ...s, trivy_java_db_source: e.target.value })} />
+      </Field>
+      <Field label="Infrastructure checks source">
+        <input value={s.trivy_checks_source} disabled={!s.mirror_vulnerability_dbs} onChange={(e) => setS({ ...s, trivy_checks_source: e.target.value })} />
+      </Field>
       <div>
         <button className="btn primary">Save</button>
       </div>
