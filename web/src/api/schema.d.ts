@@ -4967,6 +4967,12 @@ export interface components {
             members: boolean;
             /** @default true */
             merge_requests: boolean;
+            /**
+             * @description Keep the repository in sync afterwards: a pull mirror of the source,
+             *     which keeps the token (off by default).
+             * @default false
+             */
+            mirror: boolean;
             /** @default true */
             protected_branches: boolean;
             /**
@@ -5221,7 +5227,17 @@ export interface components {
             can_own: boolean;
             can_push: boolean;
             can_read_code: boolean;
+            /**
+             * @description May change the repository's branches, tags and files here: `can_push`,
+             *     unless the repository is a pull mirror.
+             */
+            can_write_repository: boolean;
             empty_repo: boolean;
+            /**
+             * @description The repository is a pull mirror of this address: its branches and tags
+             *     come from there, and are read-only here.
+             */
+            pull_mirror?: string | null;
             /** @description Older paths that still redirect here. */
             redirects: string[];
             storage_warning?: components["schemas"]["Warning"] | null;

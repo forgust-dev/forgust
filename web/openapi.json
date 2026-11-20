@@ -12036,6 +12036,11 @@
             "type": "boolean",
             "default": true
           },
+          "mirror": {
+            "type": "boolean",
+            "description": "Keep the repository in sync afterwards: a pull mirror of the source,\nwhich keeps the token (off by default).",
+            "default": false
+          },
           "protected_branches": {
             "type": "boolean",
             "default": true
@@ -12788,6 +12793,7 @@
               "access_level",
               "can_read_code",
               "can_push",
+              "can_write_repository",
               "can_admin",
               "can_own",
               "empty_repo",
@@ -12815,8 +12821,19 @@
               "can_read_code": {
                 "type": "boolean"
               },
+              "can_write_repository": {
+                "type": "boolean",
+                "description": "May change the repository's branches, tags and files here: `can_push`,\nunless the repository is a pull mirror."
+              },
               "empty_repo": {
                 "type": "boolean"
+              },
+              "pull_mirror": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "The repository is a pull mirror of this address: its branches and tags\ncome from there, and are read-only here."
               },
               "redirects": {
                 "type": "array",

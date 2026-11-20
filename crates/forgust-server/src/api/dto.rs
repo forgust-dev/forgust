@@ -189,6 +189,9 @@ pub struct ProjectDetail {
     pub access_level: String,
     pub can_read_code: bool,
     pub can_push: bool,
+    /// May change the repository's branches, tags and files here: `can_push`,
+    /// unless the repository is a pull mirror.
+    pub can_write_repository: bool,
     pub can_admin: bool,
     pub can_own: bool,
     pub empty_repo: bool,
@@ -197,6 +200,9 @@ pub struct ProjectDetail {
     /// Its storage quota, or its namespace's, is 80 % or 100 % full (for those
     /// who can push).
     pub storage_warning: Option<forgust_db::quotas::Warning>,
+    /// The repository is a pull mirror of this address: its branches and tags
+    /// come from there, and are read-only here.
+    pub pull_mirror: Option<String>,
 }
 
 /// A quota and what it holds.

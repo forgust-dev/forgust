@@ -64,7 +64,7 @@ metrics_token = ""
 ci_job_token_git_http = true
 webhooks_allow_local = false   # true lets webhooks reach private/loopback addresses (SSRF risk)
 image_proxy_allow_local = false # true lets any Markdown image reach them through the proxy (tests only)
-imports_allow_local = false    # true lets imports reach a forge on a private address (an in-house GitLab)
+imports_allow_local = false    # true lets imports and mirrors reach a forge on a private address (an in-house GitLab)
 
 [storage]
 max_git_processes = 0      # git processes at once (clones, archives, blame...); 0: 4 per core, at least 16

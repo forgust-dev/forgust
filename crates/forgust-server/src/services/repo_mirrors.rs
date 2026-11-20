@@ -63,9 +63,19 @@ async fn remote(state: &AppState, m: &Mirror) -> Result<(url::Url, Vec<(String, 
     Ok((url, cfg))
 }
 
+/// What went wrong, in a line: git's complaint without its prefixes, or
+/// plainly when the remote turned the credentials down.
 fn git_error(e: StorageError) -> String {
-    let text = e.to_string();
-    let text = text.trim();
+    let text = match e {
+        StorageError::Git(m) => m,
+        e => e.to_string(),
+    };
+    let refused =
+        ["could not read Username", "Authentication failed", "terminal prompts disabled", "returned error: 401", "returned error: 403"];
+    if refused.iter().any(|r| text.contains(r)) {
+        return "the remote refused the credentials (or the repository is not there)".into();
+    }
+    let text = text.trim().trim_start_matches("fatal: ").trim_start_matches("error: ");
     // the end of git's complaint says what went wrong
     match text.char_indices().rev().nth(600) {
         Some((i, _)) => format!("…{}", &text[i..]),
@@ -75,8 +85,15 @@ fn git_error(e: StorageError) -> String {
 
 /// Bring the source's branches and tags over: new and moved ones are set
 /// (diverged ones too: the source wins), and those gone there are deleted.
-/// Returns what changed.
-pub async fn pull(state: &AppState, p: &Project, m: &Mirror) -> Result<Vec<RefUpdate>, String> {
+/// Returns what changed, and how it went: a failure part way keeps the
+/// changes already made, which still need their follow-up.
+pub async fn pull(state: &AppState, p: &Project, m: &Mirror) -> (Vec<RefUpdate>, Result<(), String>) {
+    let mut updates = Vec::new();
+    let r = pull_into(state, p, m, &mut updates).await;
+    (updates, r)
+}
+
+async fn pull_into(state: &AppState, p: &Project, m: &Mirror, updates: &mut Vec<RefUpdate>) -> Result<(), String> {
     if let Some(r) = crate::services::quotas::room(state, p.id).await.map_err(|e| e.to_string())?
         && r.full()
     {
@@ -90,7 +107,6 @@ pub async fn pull(state: &AppState, p: &Project, m: &Mirror) -> Result<Vec<RefUp
     }
     let refspecs = vec![format!("+refs/heads/*:{STAGING}heads/*"), format!("+refs/tags/*:{STAGING}tags/*")];
     st.fetch(p.id, url.as_str(), &refspecs, &cfg).await.map_err(git_error)?;
-    let mut updates = Vec::new();
     let result = async {
         let staged = st.refs(p.id, STAGING).await.map_err(|e| e.to_string())?;
         let local_heads = st.refs(p.id, "refs/heads/").await.map_err(|e| e.to_string())?;
@@ -124,7 +140,7 @@ pub async fn pull(state: &AppState, p: &Project, m: &Mirror) -> Result<Vec<RefUp
     for r in st.refs(p.id, STAGING).await.unwrap_or_default() {
         let _ = st.delete_ref(p.id, &r.name, None).await;
     }
-    result.map(|()| updates)
+    result
 }
 
 /// Send this repository's branches and tags to the mirror: every branch
@@ -147,8 +163,9 @@ pub async fn push(state: &AppState, p: &Project, m: &Mirror) -> Result<(), Strin
     state.storage.push(p.id, url.as_str(), &refspecs, &cfg, !m.only_protected).await.map_err(git_error)
 }
 
-/// Who a pull's pipelines run as: the mirror's creator, while they are active
-/// and may still push to the project. Nobody (no pipelines) otherwise.
+/// Who a pull's pipelines run as: whoever added the mirror or turned its
+/// pipelines on, while they are active and a Developer or more here. Nobody
+/// (no pipelines) otherwise; an administrator without a role here neither.
 async fn pipelines_as(state: &AppState, p: &Project, m: &Mirror) -> Option<Principal> {
     if !m.trigger_pipelines {
         return None;
@@ -159,7 +176,7 @@ async fn pipelines_as(state: &AppState, p: &Project, m: &Mirror) -> Option<Princ
     }
     // `Push` is refused on a pull mirror's repository: the role is what counts
     let level = forgust_db::authz::project_level(&state.db, user.id, p.id).await.ok().flatten().unwrap_or(0);
-    (level >= forgust_db::access::DEVELOPER || user.is_admin).then_some(Principal::User { user, scopes: None })
+    (level >= forgust_db::access::DEVELOPER).then_some(Principal::User { user, scopes: None })
 }
 
 // ------------------------------------------------------------------ jobs
@@ -206,15 +223,13 @@ pub async fn update(state: &AppState, mirror_id: i64) -> anyhow::Result<()> {
     }
     mdb::mark_attempt(&state.db, m.id).await?;
     let outcome = if m.direction == "pull" {
-        match pull(state, &p, &m).await {
-            Ok(updates) if !updates.is_empty() => {
-                let principal = pipelines_as(state, &p, &m).await.map(|p| p.encode());
-                let mut conn = state.db.acquire().await?;
-                state.jobs.enqueue(&mut conn, PostReceive { project_id: p.id, updates, principal }.request()).await?;
-                Ok(())
-            }
-            r => r.map(|_| ()),
+        let (updates, outcome) = pull(state, &p, &m).await;
+        if !updates.is_empty() {
+            let principal = pipelines_as(state, &p, &m).await.map(|p| p.encode());
+            let mut conn = state.db.acquire().await?;
+            state.jobs.enqueue(&mut conn, PostReceive { project_id: p.id, updates, principal }.request()).await?;
         }
+        outcome
     } else {
         push(state, &p, &m).await
     };

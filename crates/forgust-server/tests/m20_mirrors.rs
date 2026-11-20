@@ -67,6 +67,12 @@ async fn a_pull_mirror_follows_its_source_and_is_read_only(pool: sqlx::PgPool) {
 
     let m = mirror(&owner, copy).await;
     assert!(m["last_error"].is_null() && m["last_success_at"].is_string(), "{m}");
+    // pipelines run as whoever turns them on, not as the mirror's creator
+    let max = srv.user("max", false).await;
+    owner.ok_post(&format!("{base}/members"), json!({ "username": "max", "access_level": "maintainer" })).await;
+    let on = max.ok_put(&format!("{base}/mirrors/{}", m["id"]), json!({ "trigger_pipelines": true })).await;
+    assert_eq!((on[0]["trigger_pipelines"].as_bool(), on[0]["created_by"].as_i64()), (Some(true), Some(srv.user_id("max").await)), "{on}");
+    owner.ok_put(&format!("{base}/mirrors/{}", m["id"]), json!({ "trigger_pipelines": false })).await;
     assert_eq!(branches(&owner.ok_get(&format!("{base}/repository/branches")).await), ["main", "topic"], "the source's, not `local`");
     assert_eq!(owner.ok_get(&format!("{base}/repository/tags")).await[0]["name"], "v1");
     assert!(srv.state.storage.refs(copy, "refs/mirror/").await.unwrap().is_empty(), "nothing left in staging");
