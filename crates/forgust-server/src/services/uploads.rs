@@ -130,6 +130,12 @@ pub async fn store(state: &AppState, principal: &Principal, p: &Project, mut mul
 pub async fn serve(state: &AppState, principal: &Principal, p: &Project, secret: &str, name: &str) -> ApiResult<Response> {
     require_project(state, principal, ProjectAction::Read, p).await?;
     let u = forgust_db::releases::upload(&state.db, p.id, secret).await?.filter(|u| u.filename == name).ok_or(ApiError::NotFound)?;
+    // an SBOM of a tag is made from the code: for those who read it
+    if forgust_db::security::is_sbom_upload(&state.db, p.id, u.id).await?
+        && !crate::auth::authz::can_project(state, principal, ProjectAction::ReadCode, p).await?
+    {
+        return Err(ApiError::NotFound);
+    }
     if let Some(r) = presigned(state, &u).await? {
         return Ok(r);
     }

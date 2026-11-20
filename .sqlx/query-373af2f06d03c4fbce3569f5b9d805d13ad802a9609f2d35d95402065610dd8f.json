@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT u.secret FROM uploads u\n          WHERE u.project_id = $1\n            AND EXISTS (SELECT 1 FROM tag_sboms s WHERE s.project_id = $1 AND u.id IN (s.cyclonedx_upload_id, s.spdx_upload_id))",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "secret",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "uploads",
+            "name": "secret"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "373af2f06d03c4fbce3569f5b9d805d13ad802a9609f2d35d95402065610dd8f"
+}
