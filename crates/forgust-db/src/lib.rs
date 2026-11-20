@@ -27,6 +27,7 @@ pub mod notifications;
 pub mod oauth;
 pub mod pages;
 pub mod people;
+pub mod project_mirrors;
 pub mod projects;
 pub mod protected_branches;
 pub mod push_rules;

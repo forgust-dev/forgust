@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id FROM project_mirrors\n         WHERE direction = 'pull' AND enabled\n           AND (last_update_at IS NULL OR last_update_at < now() - make_interval(mins => interval_minutes))\n         ORDER BY last_update_at NULLS FIRST LIMIT $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "project_mirrors",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4b1238ff1730a226847d936b61daea9dad919823f241432b46eee6f9fcbeba48"
+}

@@ -129,6 +129,13 @@ pub trait Storage: Send + Sync + 'static {
     /// passed as `GIT_CONFIG_*` environment variables (credentials, pinned
     /// addresses), never on the command line.
     async fn fetch(&self, repo: i64, url: &str, refspecs: &[String], config: &[(String, String)]) -> Result<()>;
+    /// Push `refspecs` to another server over http(s) (push mirrors), with
+    /// `config` as for [`Storage::fetch`]. `prune` deletes the remote refs the
+    /// refspecs cover that are gone here.
+    async fn push(&self, repo: i64, url: &str, refspecs: &[String], config: &[(String, String)], prune: bool) -> Result<()>;
+    /// The branch another server's HEAD names (its default branch), with
+    /// `config` as for [`Storage::fetch`]; None when it does not say.
+    async fn remote_head(&self, repo: i64, url: &str, config: &[(String, String)]) -> Result<Option<String>>;
     /// Blob ids and sizes of small blobs reachable from any ref (LFS pointer scan):
     /// at most `max_size` bytes each.
     async fn small_blobs(&self, repo: i64, max_size: u64) -> Result<Vec<String>>;

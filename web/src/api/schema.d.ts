@@ -1465,6 +1465,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/mirrors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list"];
+        put?: never;
+        /**
+         * Add a mirror; its first update starts at once. A pull mirror makes the
+         *     repository read-only and replaces its branches and tags with the source's.
+         */
+        post: operations["create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/mirrors/{mirror_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["update"];
+        post?: never;
+        /** Remove a mirror; a pull mirror's repository becomes writable again. */
+        delete: operations["delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/mirrors/{mirror_id}/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Update the mirror now instead of at its next turn. */
+        post: operations["update_now"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/notification_settings": {
         parameters: {
             query?: never;
@@ -4681,6 +4735,49 @@ export interface components {
             state_event?: string | null;
             title?: string | null;
         };
+        Mirror: {
+            /** Format: date-time */
+            created_at: string;
+            /** Format: int64 */
+            created_by?: number | null;
+            /** @description `pull` or `push`. */
+            direction: string;
+            enabled: boolean;
+            /** Format: int64 */
+            id: number;
+            /**
+             * Format: int32
+             * @description Pull: minutes between updates.
+             */
+            interval_minutes: number;
+            last_error?: string | null;
+            /** Format: date-time */
+            last_success_at?: string | null;
+            /** Format: date-time */
+            last_update_at?: string | null;
+            /** @description Push: only protected branches, nothing deleted on the remote. */
+            only_protected: boolean;
+            /** Format: int64 */
+            project_id: number;
+            /** @description Pull: run pipelines for what arrives. */
+            trigger_pipelines: boolean;
+            url: string;
+            username: string;
+        };
+        MirrorChangeBody: {
+            enabled?: boolean | null;
+            /** Format: int32 */
+            interval_minutes?: number | null;
+            only_protected?: boolean | null;
+            token?: string | null;
+            trigger_pipelines?: boolean | null;
+            /** @description New credentials (the address never changes); an empty token removes them. */
+            username?: string | null;
+        };
+        MirrorDto: components["schemas"]["Mirror"] & {
+            /** @description Credentials are stored (never shown). */
+            has_token: boolean;
+        };
         MrCount: {
             /** Format: int64 */
             closed: number;
@@ -4795,6 +4892,28 @@ export interface components {
             name: string;
             /** @description `http(s)://` or `ftp://`, or a file uploaded to this project. */
             url: string;
+        };
+        NewMirrorBody: {
+            /** @description `pull` (this repository follows the address) or `push`. */
+            direction: string;
+            /**
+             * Format: int32
+             * @description Pull: minutes between updates (15 to 10080, default 60).
+             */
+            interval_minutes?: number | null;
+            /** @description Push: only protected branches, nothing deleted on the remote. */
+            only_protected?: boolean;
+            /** @description A token or password; none for a public repository (pull). */
+            token?: string;
+            /** @description Pull: run pipelines for what arrives (as you). */
+            trigger_pipelines?: boolean;
+            /** @description The other repository's http(s) address, without credentials. */
+            url: string;
+            /**
+             * @description Sent with the token (`oauth2` when empty: GitLab, GitHub, Gitea and
+             *     Forgejo take a token as the password whatever the name).
+             */
+            username?: string;
         };
         NewPath: {
             path: string;
@@ -8998,6 +9117,109 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MirrorDto"][];
+                };
+            };
+        };
+    };
+    create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewMirrorBody"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MirrorDto"][];
+                };
+            };
+        };
+    };
+    update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MirrorChangeBody"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MirrorDto"][];
+                };
+            };
+        };
+    };
+    delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MirrorDto"][];
+                };
+            };
+        };
+    };
+    update_now: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MirrorDto"][];
+                };
             };
         };
     };

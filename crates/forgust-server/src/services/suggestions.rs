@@ -94,6 +94,7 @@ pub async fn apply(state: &AppState, principal: &Principal, p: &Project, mr: &Me
     // check_push below only applies the protected-branch rules: the right to
     // push at all (Developer+) is checked here, as git-receive-pack does
     require_project(state, principal, ProjectAction::Push, p).await?;
+    crate::services::repo_mirrors::writable(state, p.id).await?;
     if mr.state != "opened" {
         return Err(ApiError::conflict("only open merge requests take suggestions"));
     }

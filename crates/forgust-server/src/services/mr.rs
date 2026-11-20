@@ -506,6 +506,9 @@ pub async fn merge_status(state: &AppState, principal: &Principal, p: &Project, 
     if p.archived() {
         blockers.push("the project is archived (read-only)".into());
     }
+    if let Some(url) = forgust_db::project_mirrors::pulled_from(&state.db, p.id).await? {
+        blockers.push(format!("the repository is a pull mirror of {url} (read-only)"));
+    }
     // a merge writes a commit (and a rebase, every commit of the source again)
     if let Some(r) = crate::services::quotas::room(state, p.id).await?.filter(|r| r.full()) {
         blockers.push(format!(
@@ -782,6 +785,7 @@ pub(crate) async fn may_rewrite(state: &AppState, principal: &Principal, p: &Pro
 /// Rebase the source branch onto the target without merging.
 pub async fn rebase_source(state: &AppState, principal: &Principal, p: &Project, mr: &MergeRequest) -> ApiResult<String> {
     require_project(state, principal, ProjectAction::Push, p).await?;
+    crate::services::repo_mirrors::writable(state, p.id).await?;
     if mr.state != "opened" {
         return Err(ApiError::conflict("only open merge requests can be rebased"));
     }

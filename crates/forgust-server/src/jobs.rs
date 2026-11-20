@@ -212,6 +212,10 @@ impl PostReceive {
                 crate::code_search::indexer::queue(state, self.project_id).await;
             }
         }
+        // push mirrors follow (a pull mirror's updates come through here too)
+        if let Err(e) = crate::services::repo_mirrors::after_push(state, self.project_id, &self.updates).await {
+            tracing::warn!(project_id = self.project_id, error = %e, "push mirrors not queued");
+        }
         refresh_repository_size(state, self.project_id).await;
         let pushes = forgust_db::maintenance::record_push(&state.db, self.project_id).await?;
         if pushes >= PUSHES_PER_MAINTENANCE {
@@ -803,7 +807,11 @@ pub async fn start_worker(state: AppState, concurrency: usize) -> anyhow::Result
         .define_job::<UpdateCheck>()
         .define_job::<crate::services::auto_merge::AutoMergeCheck>()
         .define_job::<crate::import::ImportJob>()
-        .with_crontab("*/5 * * * * cleanup\n17 * * * * maintenance_sweep\n* * * * * ci_sweep\n43 */6 * * * update_check {report:false}")?
+        .define_job::<crate::services::repo_mirrors::MirrorUpdate>()
+        .define_job::<crate::services::repo_mirrors::MirrorSweep>()
+        .with_crontab(
+            "*/5 * * * * cleanup\n17 * * * * maintenance_sweep\n* * * * * ci_sweep\n43 */6 * * * update_check {report:false}\n*/5 * * * * mirror_sweep",
+        )?
         .listen_os_shutdown_signals(false)
         // a worker that stops answering (a restart, a crash) gives its jobs back
         // within minutes: else they stay locked to it for hours, and so does

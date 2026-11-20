@@ -137,8 +137,9 @@ async fn leave(state: &AppState, p: &Project, car: &Car, user_id: Option<i64>, w
 /// those still built on the right base and head keep their pipeline, the
 /// others get a new train commit and pipeline. Then merge what is ready.
 pub async fn refresh(state: &AppState, p: &Project, target: &str) -> anyhow::Result<()> {
-    // an archived project's trains stand still (nothing merges)
-    if p.archived() {
+    // an archived project's trains stand still (nothing merges), and a pull
+    // mirror's (its branches come from the source)
+    if p.archived() || forgust_db::project_mirrors::pulled_from(&state.db, p.id).await?.is_some() {
         return Ok(());
     }
     let mut to_leave: Vec<(Car, String)> = Vec::new();
