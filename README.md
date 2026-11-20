@@ -35,7 +35,7 @@ workflow on your own servers.
 <table>
   <tr>
     <td align="center"><a href=".github/images/job-dark.webp"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/job-dark.webp"/><img src=".github/images/job-light.webp" alt="Job log"/></picture></a><br/><sub>Job log</sub></td>
-    <td align="center"><a href=".github/images/dashboard-dark.webp"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/dashboard-dark.webp"/><img src=".github/images/dashboard-light.webp" alt="Your work"/></picture></a><br/><sub>Your work</sub></td>
+    <td align="center"><a href=".github/images/dashboard-dark.webp"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/dashboard-dark.webp"/><img src=".github/images/dashboard-light.webp" alt="Home"/></picture></a><br/><sub>Home</sub></td>
     <td align="center"><a href=".github/images/file-dark.webp"><picture><source media="(prefers-color-scheme: dark)" srcset=".github/images/file-dark.webp"/><img src=".github/images/file-light.webp" alt="Source file"/></picture></a><br/><sub>Source file</sub></td>
   </tr>
   <tr>
@@ -157,7 +157,8 @@ volumes: { forgust-data: {}, db-data: {} }
 - Issues with labels, milestones, due dates, assignees and templates
 - Confidential issues (only Reporters and up, the author and the assignees see them)
   and internal comments on issues and merge requests (only Reporters and up)
-- Mentions, `#12` and `!45` references, to-dos and a "Your work" inbox
+- Mentions, `#12` and `!45` references, to-dos and a Home page of what is waiting
+  for you
 - Emoji reactions, watching projects, per-project notification levels
 - A live notification inbox in the app, with a switch per kind of notification for
   the app and for email
@@ -190,8 +191,9 @@ volumes: { forgust-data: {}, db-data: {} }
 - Import from GitLab and GitHub: repositories, merge requests, issues (confidential
   ones stay confidential, internal notes internal), labels, members; a dry run first,
   resumable
-- Webhooks, also formatted for Slack, Discord, Matrix, Mattermost and Teams; confidential
-  issues and internal comments only go to hooks that ask for their own events
+- Webhooks, also formatted for Slack, Discord, Matrix, Mattermost and Teams;
+  confidential issues and internal comments only go to hooks that ask for their own
+  events
 - A GitLab-compatible `/api/v4` subset, so Renovate and `glab` work
 - An MCP server for AI assistants, with OAuth sign-in
 
