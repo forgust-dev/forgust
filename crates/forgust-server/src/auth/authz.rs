@@ -257,6 +257,7 @@ pub async fn require_group(state: &AppState, principal: &Principal, action: Grou
 }
 
 async fn audit_bypass(state: &AppState, principal: &Principal, target_type: &str, target_id: i64, action: &str) {
+    debug_assert!(crate::services::audit_events::mismatch("admin_bypass", Some(target_type), &json!({ "action": action })).is_none());
     let r = forgust_db::audit::insert(
         &state.db,
         forgust_db::audit::NewEvent {

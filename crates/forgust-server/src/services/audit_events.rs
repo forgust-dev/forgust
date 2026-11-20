@@ -14,9 +14,10 @@
 //! - `repeated` is on throttled events (at most one row a minute per
 //!   principal, action and target): how many were held back since the last
 //!   row;
-//! - new events reference people by id, never by name or address, so that
-//!   erasing a person later leaves no personal data in `details`. Older
-//!   fields that do (`username`, `email`) are flagged as such below.
+//! - people are referenced by id, never by name or address, so that erasing
+//!   a person leaves nothing of them in `details` (the API looks names up
+//!   when the log is read: `target_name`, and `user_name` for `user_id`, the
+//!   other person an event is about).
 
 use serde::Serialize;
 
@@ -31,7 +32,8 @@ pub struct EventType {
     /// `target_type`s it is written with (`project`, `namespace`, `user`);
     /// empty: none (instance-wide).
     pub targets: &'static [&'static str],
-    /// Keys of `details` (besides the conventional ones).
+    /// Keys of `details` (besides the conventional ones); `["*"]`: the
+    /// whole of some settings object, whatever its keys.
     pub fields: &'static [&'static str],
     pub description: &'static str,
 }
@@ -94,7 +96,7 @@ pub const EVENTS: &[EventType] = &[
         &["credential"],
         "A security key's signature counter went backwards: it may have been cloned.",
     ),
-    e("impersonation_started", SIGN_IN, U, &["username"], "An administrator signed in as the user. `username` is personal data."),
+    e("impersonation_started", SIGN_IN, U, &[], "An administrator signed in as the user."),
     e("impersonation_stopped", SIGN_IN, U, &[], "The administrator went back to their own account."),
     e("impersonated_request", SIGN_IN, NONE, &["method", "path"], "A change made while an administrator was signed in as someone."),
     e(
@@ -109,14 +111,14 @@ pub const EVENTS: &[EventType] = &[
     e("password_changed", ACCOUNT, U, &[], "The user changed their password."),
     e("password_reset_requested", ACCOUNT, U, &[], "A password reset email was asked for."),
     e("password_reset", ACCOUNT, U, &[], "The password was reset, by email link or by an administrator."),
-    e("email_changed", ACCOUNT, U, &["from", "email", "confirmed"], "The account's address changed. `from` and `email` are personal data."),
     e(
-        "email_confirmed",
+        "email_changed",
         ACCOUNT,
         U,
-        &["email", "by"],
-        "An address was confirmed (`by`: admin when an administrator vouched for it). `email` is personal data.",
+        &["confirmed"],
+        "The account's address changed (`confirmed`: an administrator vouched for the new one).",
     ),
+    e("email_confirmed", ACCOUNT, U, &["by"], "An address was confirmed (`by`: administrator when one vouched for it)."),
     e("confirmation_resent", ACCOUNT, U, &[], "An administrator sent the confirmation email again."),
     e("profile_updated", ACCOUNT, U, &[], "The user changed their profile."),
     e(
@@ -143,14 +145,8 @@ pub const EVENTS: &[EventType] = &[
     e("token_revoked", ACCOUNT, U, &["token_id"], "A personal access token was revoked."),
     e("tokens_revoked", ACCOUNT, U, &["count"], "An administrator revoked all of the user's personal access tokens."),
     // administration
-    e("user_created", ADMIN, U, &["username", "admin"], "An administrator created an account. `username` is personal data."),
-    e(
-        "user_deleted",
-        ADMIN,
-        U,
-        &["username", "email", "projects_deleted"],
-        "An administrator deleted an account. `username` and `email` are personal data.",
-    ),
+    e("user_created", ADMIN, U, &["admin"], "An administrator created an account."),
+    e("user_deleted", ADMIN, U, &["projects_deleted"], "An administrator deleted an account (who it was is not kept: erasure)."),
     e("user_blocked", ADMIN, U, &["previous_state"], "An administrator blocked the account."),
     e("user_unblocked", ADMIN, U, &["previous_state"], "An administrator unblocked the account."),
     e("user_made_external", ADMIN, U, &[], "The user became external (sees internal projects no more)."),
@@ -158,7 +154,7 @@ pub const EVENTS: &[EventType] = &[
     e("admin_granted", ADMIN, U, &["provider"], "The user became an administrator (`provider`: when a sign-in provider's groups said so)."),
     e("admin_revoked", ADMIN, U, &["provider"], "The user is no longer an administrator."),
     e("admin_bypass", ADMIN, PN, &["action"], "An administrator did something their own role would not allow (principal `admin`)."),
-    e("instance_settings_updated", ADMIN, NONE, &[], "Instance settings changed; `details` holds every setting after the change."),
+    e("instance_settings_updated", ADMIN, NONE, &["*"], "Instance settings changed; `details` holds every setting after the change."),
     e("banner_set", ADMIN, NONE, &["text", "until"], "The instance banner changed."),
     e(
         "storage_quota_changed",
@@ -174,18 +170,24 @@ pub const EVENTS: &[EventType] = &[
     e("task_run", ADMIN, NONE, &["task"], "An administrator ran a background task now."),
     e("job_retried", ADMIN, NONE, &["job"], "An administrator retried a failed background job."),
     e("job_dropped", ADMIN, NONE, &["job"], "An administrator dropped a failed background job."),
-    e("test_email_sent", ADMIN, NONE, &["to"], "An administrator sent a test email. `to` is personal data."),
+    e("test_email_sent", ADMIN, NONE, &[], "An administrator sent a test email."),
     e(
         "ai_review_instance_updated",
         ADMIN,
         NONE,
-        &["set"],
-        "AI review settings changed (secret values never logged; `set`: which options were set).",
+        &["*"],
+        "AI review settings changed; `details` holds them, with `api_key` and `secret_options` as kept, removed or changed (the names set), never their values.",
     ),
-    e("renovate_instance_updated", ADMIN, NONE, &[], "Renovate settings changed; `details` holds them (no secrets)."),
-    e("renovate_host_rule_added", ADMIN, NONE, &["host"], "A Renovate host rule (credentials for a registry) was added."),
-    e("renovate_host_rule_removed", ADMIN, NONE, &["id"], "A Renovate host rule was removed."),
-    e("security_scanning_settings", ADMIN, NONE, &["by"], "Security scanning settings changed. `by` (a username) is personal data."),
+    e("renovate_instance_updated", ADMIN, NONE, &["*"], "Renovate settings changed; `details` holds them (no secrets)."),
+    e(
+        "renovate_host_rule_added",
+        ADMIN,
+        P,
+        &["host"],
+        "A Renovate host rule (credentials for a registry) was added, for a project or (no target) the instance.",
+    ),
+    e("renovate_host_rule_removed", ADMIN, P, &["id"], "A Renovate host rule was removed, from a project or (no target) the instance."),
+    e("security_scanning_settings", ADMIN, NONE, &[], "Security scanning settings changed."),
     // groups and projects
     e("group_created", SPACES, N, &["path"], "A group was created."),
     e("group_updated", SPACES, N, &["visibility", "previous_visibility"], "A group's name, description or visibility changed."),
@@ -219,8 +221,8 @@ pub const EVENTS: &[EventType] = &[
         "member_set",
         ACCESS,
         PN,
-        &["user", "user_id", "level", "previous_level"],
-        "A member was added or their role changed (`previous_level` null: new member). `user` (a username) is personal data.",
+        &["user_id", "level", "previous_level"],
+        "A member was added or their role changed (`previous_level` null: new member).",
     ),
     e("member_removed", ACCESS, PN, &["user_id", "previous_level"], "A member was removed."),
     e("shared_with_group", ACCESS, PN, &["group", "group_id", "max", "previous_max"], "Shared with a group, or the share's role changed."),
@@ -236,7 +238,7 @@ pub const EVENTS: &[EventType] = &[
         ACCESS,
         P,
         &["name", "push", "merge", "force_push", "deploy_keys", "code_owner_approval", "previous"],
-        "A branch rule was added or changed (`previous`: the rule it replaced).",
+        "A branch rule was added or changed (`previous`: the rule it replaced). Levels as stored: 0 no one, 30 developer, 40 maintainer.",
     ),
     e("branch_unprotected", ACCESS, P, &["id", "name", "previous"], "A branch rule was removed."),
     e("tag_protected", ACCESS, P, &["name", "create", "previous_create"], "A tag rule was added or changed."),
@@ -251,7 +253,7 @@ pub const EVENTS: &[EventType] = &[
         "A merge request approval rule was added or changed.",
     ),
     e("approval_rule_removed", ACCESS, P, &["id", "name", "previous"], "An approval rule was removed."),
-    e("push_rules_changed", ACCESS, P, &[], "Push rules changed; `details` holds them."),
+    e("push_rules_changed", ACCESS, P, &["*"], "Push rules changed; `details` holds them."),
     e("webhook_added", ACCESS, PN, &["url", "events", "format"], "A webhook was added."),
     // repositories and code
     e(
@@ -274,7 +276,7 @@ pub const EVENTS: &[EventType] = &[
     e("tag_deleted", CODE, P, &["tag"], "A tag was deleted from the web or the API."),
     e("web_commit", CODE, P, &["branch", "sha", "files"], "A commit made in the browser or through the API."),
     e("suggestion_applied", CODE, P, &["iid", "note", "sha"], "A review suggestion was applied as a commit."),
-    e("lfs_lock_removed", CODE, P, &["path", "owner"], "Someone else's LFS lock was removed."),
+    e("lfs_lock_removed", CODE, P, &["path", "user_id"], "Someone else's LFS lock was removed (`user_id`: its owner)."),
     e("merge_request_opened", CODE, P, &["iid"], "A merge request was opened."),
     e("merge_request_merged", CODE, P, &["iid", "method", "sha"], "A merge request was merged."),
     e("merge_train_added", CODE, P, &["iid"], "A merge request joined the merge train."),
@@ -286,7 +288,7 @@ pub const EVENTS: &[EventType] = &[
     e("environment_stopped", BUILTIN, P, &["environment"], "An environment was stopped."),
     e("registry_tag_deleted", BUILTIN, P, &["repository", "tag"], "A container image tag was deleted."),
     e("registry_repository_deleted", BUILTIN, P, &["repository"], "A container image repository was deleted."),
-    e("registry_cleanup_policy_changed", BUILTIN, P, &[], "The registry cleanup policy changed; `details` holds it."),
+    e("registry_cleanup_policy_changed", BUILTIN, P, &["*"], "The registry cleanup policy changed; `details` holds it."),
     e("renovate_enabled", BUILTIN, P, &[], "Built-in Renovate turned on for the project."),
     e("renovate_disabled", BUILTIN, P, &[], "Built-in Renovate turned off for the project."),
     e("renovate_group_default", BUILTIN, N, &["enabled", "projects"], "A group turned Renovate on or off for its projects."),
@@ -322,6 +324,33 @@ pub fn known(action: &str) -> bool {
     EVENTS.iter().any(|e| e.name == action)
 }
 
+/// Keys every event may carry, see the module docs.
+const CONVENTIONAL: &[&str] = &["impersonated_by", "repeated"];
+
+/// What is wrong with an event about to be written, against its entry: not
+/// catalogued, a target type it does not list, a `details` key it does not
+/// list. Checked on every write in debug builds (so by the test suite).
+pub fn mismatch(action: &str, target: Option<&str>, details: &serde_json::Value) -> Option<String> {
+    let Some(e) = EVENTS.iter().find(|e| e.name == action) else {
+        return Some(format!("`{action}` is not in the audit event catalogue"));
+    };
+    if let Some(t) = target
+        && !e.targets.contains(&t)
+    {
+        return Some(format!("`{action}` is written about a `{t}`, the catalogue says {:?}", e.targets));
+    }
+    if e.fields == ["*"] {
+        return None;
+    }
+    let unlisted: Vec<_> = details
+        .as_object()
+        .into_iter()
+        .flat_map(|m| m.keys())
+        .filter(|k| !e.fields.contains(&k.as_str()) && !CONVENTIONAL.contains(&k.as_str()))
+        .collect();
+    (!unlisted.is_empty()).then(|| format!("`{action}` details {unlisted:?} are not in the catalogue"))
+}
+
 /// The catalogue as Markdown, for the docs (`forgust audit-events`).
 pub fn markdown() -> String {
     let mut out = format!("# Audit events\n\nCatalogue version {VERSION}.\n");
@@ -332,7 +361,11 @@ pub fn markdown() -> String {
             out.push_str(&format!("\n## {area}\n\n| Event | Target | Details | |\n|---|---|---|---|\n"));
         }
         let targets = if e.targets.is_empty() { "—".to_string() } else { e.targets.join(", ") };
-        let fields = e.fields.iter().map(|f| format!("`{f}`")).collect::<Vec<_>>().join(", ");
+        let fields = if e.fields == ["*"] {
+            "(the settings)".to_string()
+        } else {
+            e.fields.iter().map(|f| format!("`{f}`")).collect::<Vec<_>>().join(", ")
+        };
         out.push_str(&format!("| `{}` | {targets} | {fields} | {} |\n", e.name, e.description));
     }
     out
@@ -458,6 +491,17 @@ mod tests {
         let all: String = sources().into_iter().filter(|(p, _)| !p.ends_with("audit_events.rs")).map(|(_, s)| s).collect();
         let stale: Vec<_> = EVENTS.iter().filter(|e| !all.contains(&format!("\"{}\"", e.name))).map(|e| e.name).collect();
         assert!(stale.is_empty(), "in the catalogue but never written: {stale:?}");
+    }
+
+    #[test]
+    fn writes_are_checked_against_their_entry() {
+        use serde_json::json;
+        assert_eq!(mismatch("logout", Some("user"), &json!({})), None);
+        assert_eq!(mismatch("logout", Some("user"), &json!({ "impersonated_by": 1 })), None, "conventional keys");
+        assert!(mismatch("nope", None, &json!({})).is_some());
+        assert!(mismatch("logout", Some("project"), &json!({})).is_some(), "a target it does not list");
+        assert!(mismatch("logout", Some("user"), &json!({ "why": 1 })).is_some(), "a field it does not list");
+        assert_eq!(mismatch("push_rules_changed", Some("project"), &json!({ "anything": true })), None, "a settings object");
     }
 
     #[test]

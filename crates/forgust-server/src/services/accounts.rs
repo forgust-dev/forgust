@@ -69,15 +69,7 @@ pub async fn set_email(state: &AppState, by: &Principal, user: &User, email: &st
     udb::delete_tokens(&mut *tx, user.id, "email").await?;
     udb::delete_tokens(&mut *tx, user.id, "password_reset").await?;
     tx.commit().await?;
-    super::audit(
-        state,
-        by,
-        "email_changed",
-        Some(("user", user.id)),
-        json!({ "from": user.email, "email": email, "confirmed": vouched }),
-        None,
-    )
-    .await;
+    super::audit(state, by, "email_changed", Some(("user", user.id)), json!({ "confirmed": vouched }), None).await;
     Ok(())
 }
 
@@ -164,14 +156,7 @@ pub async fn confirm(state: &AppState, token: &str, signed_in: Option<i64>) -> A
         return Err(ApiError::bad("this link is for an address the account no longer uses"));
     }
     tx.commit().await?;
-    super::audit(
-        state,
-        &Principal::User { user: user.clone(), scopes: None },
-        "email_confirmed",
-        Some(("user", user.id)),
-        json!({ "email": email }),
-        None,
-    )
-    .await;
+    super::audit(state, &Principal::User { user: user.clone(), scopes: None }, "email_confirmed", Some(("user", user.id)), json!({}), None)
+        .await;
     Ok(udb::find(&state.db, user.id).await?.unwrap_or(user))
 }

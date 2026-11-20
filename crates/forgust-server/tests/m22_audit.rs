@@ -154,7 +154,8 @@ async fn role_changes_record_what_they_replaced(pool: sqlx::PgPool) {
     let list = owner.ok_post(&rules, json!({ "name": "release/*", "push_access_level": "developer" })).await;
     let protected = events(&srv, "branch_protected").await;
     let release: Vec<_> = protected.iter().filter(|(_, _, d)| d["name"] == "release/*").collect();
-    assert_eq!(release[0].2["previous"], Value::Null);
+    assert_eq!((release[0].2["push"].as_i64(), &release[0].2["previous"]), (Some(40), &Value::Null), "levels as stored");
+    assert_eq!(release[1].2["push"], 30);
     assert_eq!(release[1].2["previous"]["push"], 40);
     let id = list.as_array().unwrap().iter().find(|r| r["name"] == "release/*").unwrap()["id"].as_i64().unwrap();
     let (status, _) = owner.delete(&format!("{rules}/{id}")).await;
@@ -217,4 +218,63 @@ async fn repository_reads_are_off_by_default(pool: sqlx::PgPool) {
     let dir = srv.work_dir("clone");
     must(git(&dir, &["clone", "-q", &srv.http_url("olivia", "acme/platform/api"), "."]).await);
     assert!(events(&srv, "repository_read").await.is_empty());
+}
+
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn names_are_looked_up_not_stored(pool: sqlx::PgPool) {
+    let srv = TestServer::start(pool).await;
+    let admin = srv.user("root", true).await;
+    let owner = srv.user("olivia", false).await;
+    srv.user("dave", false).await;
+    let dave = user_id(&srv, "dave").await;
+    let (_org, _sub, project) = org_project(&owner).await;
+    owner.ok_post(&format!("/api/v1/projects/{project}/members"), json!({ "user_id": dave, "access_level": "developer" })).await;
+
+    let log = owner.ok_get(&format!("/api/v1/projects/{project}/audit")).await;
+    let set = log.as_array().unwrap().iter().find(|e| e["action"] == "member_set" && e["details"]["user_id"] == dave).unwrap();
+    assert!(!set["details"].to_string().contains("dave"), "{set}");
+    assert_eq!((set["user_name"].as_str(), set["target_name"].as_str()), (Some("dave"), Some("acme/platform/api")));
+    let all = admin.ok_get(&format!("/api/v1/admin/audit?target_type=user&target_id={dave}")).await;
+    assert!(all.as_array().unwrap().iter().all(|e| e["target_name"] == "dave"), "{all}");
+}
+
+/// The migration that took names and addresses out of rows written before.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn older_rows_lose_names_and_addresses(pool: sqlx::PgPool) {
+    let srv = TestServer::start(pool).await;
+    srv.user("dave", false).await;
+    let dave = user_id(&srv, "dave").await;
+    for (action, details) in [
+        ("member_set", json!({ "user": "dave", "level": 30 })),
+        ("member_set", json!({ "user": "gone", "level": 30 })),
+        ("lfs_lock_removed", json!({ "path": "a.bin", "owner": "dave" })),
+        ("user_deleted", json!({ "username": "gone", "email": "gone@example.com", "projects_deleted": 2 })),
+        ("email_changed", json!({ "from": "a@example.com", "email": "b@example.com", "confirmed": false })),
+        ("test_email_sent", json!({ "to": "root@example.com" })),
+        ("security_scanning_settings", json!({ "by": "root" })),
+    ] {
+        sqlx::query("INSERT INTO audit_events (principal_kind, action, details) VALUES ('user', $1, $2)")
+            .bind(action)
+            .bind(details)
+            .execute(&srv.state.db)
+            .await
+            .unwrap();
+    }
+    sqlx::raw_sql(include_str!("../../forgust-db/migrations/20261120140000_audit_ids.sql")).execute(&srv.state.db).await.unwrap();
+    let rows: Vec<Value> = sqlx::query_scalar("SELECT details FROM audit_events WHERE principal_id IS NULL ORDER BY id")
+        .fetch_all(&srv.state.db)
+        .await
+        .unwrap();
+    assert_eq!(
+        rows,
+        [
+            json!({ "user_id": dave, "level": 30 }),
+            json!({ "level": 30 }),
+            json!({ "path": "a.bin", "user_id": dave }),
+            json!({ "projects_deleted": 2 }),
+            json!({ "confirmed": false }),
+            json!({}),
+            json!({}),
+        ]
+    );
 }

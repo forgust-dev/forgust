@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT a.id, a.created_at, a.principal_kind, a.principal_id,\n                  CASE WHEN a.principal_kind IN ('user', 'admin') THEN u.username END AS principal_name,\n                  a.action, a.target_type, a.target_id, a.details, a.ip\n           FROM audit_events a LEFT JOIN users u ON u.id = a.principal_id\n           WHERE ($1::text IS NULL OR a.target_type = $1) AND ($2::bigint IS NULL OR a.target_id = $2)\n             AND ($4::bigint IS NULL OR a.id < $4)\n           ORDER BY a.id DESC LIMIT $3",
+  "query": "SELECT a.id, a.created_at, a.principal_kind, a.principal_id,\n                  CASE WHEN a.principal_kind IN ('user', 'admin', 'bot') THEN u.username END AS principal_name,\n                  a.action, a.target_type, a.target_id,\n                  CASE WHEN a.target_type = 'user' THEN tu.username ELSE r.path END AS target_name,\n                  a.details, du.username AS \"user_name?\", a.ip\n           FROM audit_events a LEFT JOIN users u ON u.id = a.principal_id\n           LEFT JOIN users tu ON a.target_type = 'user' AND tu.id = a.target_id\n           LEFT JOIN routes r ON r.source_type = a.target_type AND r.source_id = a.target_id\n           LEFT JOIN users du ON jsonb_typeof(a.details -> 'user_id') = 'number' AND du.id = (a.details ->> 'user_id')::bigint\n           WHERE ($1::text IS NULL OR a.target_type = $1) AND ($2::bigint IS NULL OR a.target_id = $2)\n             AND ($4::bigint IS NULL OR a.id < $4)\n           ORDER BY a.id DESC LIMIT $3",
   "describe": {
     "columns": [
       {
@@ -88,6 +88,12 @@
       },
       {
         "ordinal": 8,
+        "name": "target_name",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 9,
         "name": "details",
         "type_info": "Jsonb",
         "origin": {
@@ -98,7 +104,18 @@
         }
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
+        "name": "user_name?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "username"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
         "name": "ip",
         "type_info": "Text",
         "origin": {
@@ -126,9 +143,11 @@
       false,
       true,
       true,
+      null,
+      false,
       false,
       true
     ]
   },
-  "hash": "c5840a8c720415e21d8c32e24c628207d2299b5d25da3c22dc9c7be56b6b2f07"
+  "hash": "87a550224ad05bc8cdc1367afadf40a0814d9ec8947f80601f1c1ba13ffa2ffc"
 }

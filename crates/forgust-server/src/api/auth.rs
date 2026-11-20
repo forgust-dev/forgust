@@ -543,7 +543,7 @@ pub async fn impersonate(
     if let Some(c) = session_cookie(&state.cfg, &jar) {
         session::destroy(&state, c).await?;
     }
-    services::audit(&state, &p, "impersonation_started", Some(("user", u.id)), json!({ "username": u.username }), ip_text.as_deref()).await;
+    services::audit(&state, &p, "impersonation_started", Some(("user", u.id)), json!({}), ip_text.as_deref()).await;
     Ok((jar.add(s.cookie), Json(json!({ "impersonating": u.username }))))
 }
 

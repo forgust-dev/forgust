@@ -426,7 +426,7 @@ pub async fn test_email(
         ..Default::default()
     };
     state.mailer.send(&email).await.map_err(|e| ApiError::bad(format!("not sent: {}", forgust_db::admin::redact_error(&e.to_string()))))?;
-    services::audit(&state, &p, "test_email_sent", None, json!({ "to": to }), None).await;
+    services::audit(&state, &p, "test_email_sent", None, json!({}), None).await;
     Ok(Json(json!({ "sent": to })))
 }
 
@@ -707,15 +707,7 @@ pub async fn delete_user(
     {
         tracing::warn!(user = u.id, error = %e, "avatar not deleted");
     }
-    services::audit(
-        &state,
-        &p,
-        "user_deleted",
-        Some(("user", u.id)),
-        json!({ "username": u.username, "email": u.email, "projects_deleted": projects.len() }),
-        None,
-    )
-    .await;
+    services::audit(&state, &p, "user_deleted", Some(("user", u.id)), json!({ "projects_deleted": projects.len() }), None).await;
     Ok(Json(json!({ "deleted": u.username, "projects_deleted": projects.len() })))
 }
 
@@ -856,7 +848,7 @@ pub async fn confirm_email(
         forgust_db::users::delete_tokens(&mut *tx, u.id, "email").await?;
     }
     tx.commit().await?;
-    services::audit(&state, &p, "email_confirmed", Some(("user", u.id)), json!({ "email": u.email, "by": "administrator" }), None).await;
+    services::audit(&state, &p, "email_confirmed", Some(("user", u.id)), json!({ "by": "administrator" }), None).await;
     Ok(Json(json!({ "ok": true })))
 }
 
@@ -886,7 +878,7 @@ pub async fn create_user(State(state): State<AppState>, Admin(_, p): Admin, Json
     )
     .await?;
     tx.commit().await?;
-    services::audit(&state, &p, "user_created", Some(("user", u.id)), json!({ "username": u.username, "admin": u.is_admin }), None).await;
+    services::audit(&state, &p, "user_created", Some(("user", u.id)), json!({ "admin": u.is_admin }), None).await;
     Ok(Json(UserDto::from(&u, true)))
 }
 

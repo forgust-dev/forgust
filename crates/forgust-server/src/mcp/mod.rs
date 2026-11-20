@@ -88,6 +88,8 @@ async fn caller(state: &AppState, path: &str, headers: &HeaderMap) -> Result<Cal
     };
     let user = user.clone();
     if !(principal.has_scope("api") || principal.has_scope("read_api") || principal.has_scope("mcp")) {
+        let details = json!({ "method": "POST", "path": path });
+        crate::services::audit_throttled(state, &principal, "token_scope_refused", Some(("user", user.id)), details, None).await;
         return Err((
             StatusCode::FORBIDDEN,
             Json(json!({ "error": "insufficient_scope", "error_description": "the token needs the mcp, read_api or api scope" })),

@@ -73,7 +73,11 @@ pub(crate) async fn check_note_change(
 
 /// Append to the audit log; failures are logged, never surfaced.
 pub async fn audit(state: &AppState, principal: &Principal, action: &str, target: Option<(&str, i64)>, details: Value, ip: Option<&str>) {
-    debug_assert!(audit_events::known(action), "`{action}` is not in the audit event catalogue");
+    if cfg!(debug_assertions)
+        && let Some(e) = audit_events::mismatch(action, target.map(|t| t.0), &details)
+    {
+        panic!("{e}");
+    }
     // done by an administrator signed in as the user: say so
     let details = match (principal.impersonator(), details) {
         (Some(admin), Value::Object(mut m)) => {
@@ -104,7 +108,11 @@ pub async fn audit(state: &AppState, principal: &Principal, action: &str, target
 /// Append what the server did on its own (a session running out) to the
 /// audit log, as principal `system`.
 pub async fn audit_system(state: &AppState, action: &str, target: Option<(&str, i64)>, details: Value, ip: Option<&str>) {
-    debug_assert!(audit_events::known(action), "`{action}` is not in the audit event catalogue");
+    if cfg!(debug_assertions)
+        && let Some(e) = audit_events::mismatch(action, target.map(|t| t.0), &details)
+    {
+        panic!("{e}");
+    }
     let ev = forgust_db::audit::NewEvent {
         principal_kind: "system",
         principal_id: None,

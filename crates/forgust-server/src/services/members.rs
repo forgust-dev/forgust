@@ -61,7 +61,7 @@ pub async fn add(
     if !authz::may_grant(mine, level) {
         return Err(ApiError::forbidden("you cannot grant a role higher than your own"));
     }
-    let target = forgust_db::users::find(&state.db, user_id).await?.ok_or(ApiError::NotFound)?;
+    forgust_db::users::find(&state.db, user_id).await?.ok_or(ApiError::NotFound)?;
     let (st, sid) = source.key();
     let previous = forgust_db::members::level_of(&state.db, st, sid, user_id).await?;
     if let Some(existing) = previous {
@@ -76,15 +76,8 @@ pub async fn add(
     forgust_db::members::upsert(&mut *tx, st, sid, user_id, level, expires_at, principal.id()).await?;
     forgust_db::members::refresh_authorizations(&mut tx, &[user_id]).await?;
     tx.commit().await?;
-    audit(
-        state,
-        principal,
-        "member_set",
-        Some((st, sid)),
-        json!({ "user": target.username, "user_id": user_id, "level": level, "previous_level": previous }),
-        None,
-    )
-    .await;
+    audit(state, principal, "member_set", Some((st, sid)), json!({ "user_id": user_id, "level": level, "previous_level": previous }), None)
+        .await;
     Ok(())
 }
 

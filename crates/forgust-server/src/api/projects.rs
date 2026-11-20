@@ -321,8 +321,8 @@ pub async fn protect_branch(
         Some(("project", proj.id)),
         json!({
             "name": req.name,
-            "push": req.push_access_level,
-            "merge": req.merge_access_level,
+            "push": push_level(&req.push_access_level)?,
+            "merge": push_level(&req.merge_access_level)?,
             "force_push": req.allow_force_push,
             "deploy_keys": req.allow_deploy_keys,
             "code_owner_approval": req.code_owner_approval_required,

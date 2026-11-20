@@ -14,8 +14,14 @@ pub struct AuditEvent {
     pub action: String,
     pub target_type: Option<String>,
     pub target_id: Option<i64>,
+    /// The target's name today: a username, or a project's or group's path
+    /// (None once it is gone). Rows hold ids only, names are looked up.
+    pub target_name: Option<String>,
     #[schema(value_type = Object)]
     pub details: serde_json::Value,
+    /// The username of `details.user_id` (the other person an event is
+    /// about: a member, a lock's owner), while the account exists.
+    pub user_name: Option<String>,
     pub ip: Option<String>,
 }
 
@@ -56,9 +62,14 @@ pub async fn list(
     sqlx::query_as!(
         AuditEvent,
         r#"SELECT a.id, a.created_at, a.principal_kind, a.principal_id,
-                  CASE WHEN a.principal_kind IN ('user', 'admin') THEN u.username END AS principal_name,
-                  a.action, a.target_type, a.target_id, a.details, a.ip
+                  CASE WHEN a.principal_kind IN ('user', 'admin', 'bot') THEN u.username END AS principal_name,
+                  a.action, a.target_type, a.target_id,
+                  CASE WHEN a.target_type = 'user' THEN tu.username ELSE r.path END AS target_name,
+                  a.details, du.username AS "user_name?", a.ip
            FROM audit_events a LEFT JOIN users u ON u.id = a.principal_id
+           LEFT JOIN users tu ON a.target_type = 'user' AND tu.id = a.target_id
+           LEFT JOIN routes r ON r.source_type = a.target_type AND r.source_id = a.target_id
+           LEFT JOIN users du ON jsonb_typeof(a.details -> 'user_id') = 'number' AND du.id = (a.details ->> 'user_id')::bigint
            WHERE ($1::text IS NULL OR a.target_type = $1) AND ($2::bigint IS NULL OR a.target_id = $2)
              AND ($4::bigint IS NULL OR a.id < $4)
            ORDER BY a.id DESC LIMIT $3"#,

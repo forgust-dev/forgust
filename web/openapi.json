@@ -5764,11 +5764,25 @@
             ],
             "format": "int64"
           },
+          "target_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The target's name today: a username, or a project's or group's path\n(None once it is gone). Rows hold ids only, names are looked up."
+          },
           "target_type": {
             "type": [
               "string",
               "null"
             ]
+          },
+          "user_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The username of `details.user_id` (the other person an event is\nabout: a member, a lock's owner), while the account exists."
           }
         }
       },
