@@ -816,9 +816,10 @@ impl TaskHandler for MirrorVulnerabilityDbs {
 
     async fn run(self, ctx: WorkerContext) -> impl IntoTaskHandlerResult {
         let state = ctx.get_ext::<AppState>().ok_or("no app state")?;
-        // one copy at a time, whichever worker runs it
-        let mut lock = state.db.acquire().await.map_err(|e| e.to_string())?;
-        let got: bool = sqlx::query_scalar("SELECT pg_try_advisory_lock(hashtextextended('mirror_vulnerability_dbs', 0))")
+        // one copy at a time, whichever worker runs it: the lock ends with
+        // its transaction, however the copy ends
+        let mut lock = state.db.begin().await.map_err(|e| e.to_string())?;
+        let got: bool = sqlx::query_scalar("SELECT pg_try_advisory_xact_lock(hashtextextended('mirror_vulnerability_dbs', 0))")
             .fetch_one(&mut *lock)
             .await
             .map_err(|e| e.to_string())?;
@@ -826,7 +827,7 @@ impl TaskHandler for MirrorVulnerabilityDbs {
             return Ok(());
         }
         let r = crate::services::vulnerability_dbs::sync(state).await;
-        let _ = sqlx::query("SELECT pg_advisory_unlock(hashtextextended('mirror_vulnerability_dbs', 0))").execute(&mut *lock).await;
+        drop(lock);
         match r {
             Err(e) if self.report => Err(format!("{e:#}")),
             _ => Ok(()),

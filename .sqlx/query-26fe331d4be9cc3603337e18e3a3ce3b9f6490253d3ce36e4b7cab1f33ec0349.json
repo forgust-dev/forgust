@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, project_id, tag, sha, pipeline_id, cyclonedx_upload_id, spdx_upload_id FROM tag_sboms\n          WHERE project_id = $1 AND tag = $2 AND cyclonedx_upload_id IS NOT NULL AND spdx_upload_id IS NOT NULL\n          ORDER BY id DESC LIMIT 1",
+  "query": "SELECT id, project_id, tag, sha, pipeline_id, cyclonedx_upload_id, spdx_upload_id FROM tag_sboms\n          WHERE project_id = $1 AND tag = $2 AND sha = $3 AND cyclonedx_upload_id IS NOT NULL AND spdx_upload_id IS NOT NULL",
   "describe": {
     "columns": [
       {
@@ -84,6 +84,7 @@
     "parameters": {
       "Left": [
         "Int8",
+        "Text",
         "Text"
       ]
     },
@@ -97,5 +98,5 @@
       true
     ]
   },
-  "hash": "fe8c016df32aea78bd52e8776979a2e2145ea023f144ad014a35543994e28caf"
+  "hash": "26fe331d4be9cc3603337e18e3a3ce3b9f6490253d3ce36e4b7cab1f33ec0349"
 }

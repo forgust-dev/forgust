@@ -368,6 +368,24 @@ async fn tags_get_an_sbom_on_their_release(pool: sqlx::PgPool) {
     wait_jobs(&srv.state).await;
     assert!(sbom_job(&srv, &runner).await.is_none());
 
+    // moved to another commit: the release made while its run is going gets
+    // no SBOM of the old commit, then the new one once the run passed
+    must(git(&work, &["push", "-q", &url, ":refs/tags/v1.0"]).await);
+    wait_jobs(&srv.state).await;
+    commit_file(&work, "CHANGELOG.md", "1.0 again\n", "changelog").await;
+    must(git(&work, &["tag", "-f", "-a", "v1.0", "-m", "one, again"]).await);
+    must(git(&work, &["push", "-q", &url, "main", "v1.0"]).await);
+    wait_jobs(&srv.state).await;
+    let release = owner.ok_post(&format!("/api/v1/projects/{p}/releases"), json!({ "tag_name": "v1.0", "name": "One again" })).await;
+    assert!(sbom_links(&release).is_empty(), "not the old commit's SBOM: {release}");
+    let job = sbom_job(&srv, &runner).await.expect("an sbom job for the moved tag");
+    finish(&srv, &job, Some(sbom_zip(&srv.work_dir("z3"), "v1.0 again").await)).await;
+    let release = owner.ok_get(&format!("/api/v1/projects/{p}/releases/v1.0")).await;
+    let links = sbom_links(&release);
+    assert_eq!(links.len(), 2, "{release}");
+    let (_, body) = owner.get_bytes(links[0].1.trim_start_matches(&srv.base)).await;
+    assert!(String::from_utf8_lossy(&body).contains("v1.0 again"));
+
     // SBOM runs are not scans: the scan settings still say when the next one is due
     let st = owner.ok_get(&scanning).await;
     assert!(st["last_pipeline_iid"].is_null(), "{st}");

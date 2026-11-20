@@ -63,7 +63,14 @@ pub async fn on_tags_created(state: &AppState, project: &Project, tags: &[(Strin
         for (tag, sha) in tags.iter().take(MAX_TAGS_PER_PUSH) {
             let Some(id) = sdb::claim_sbom(&state.db, project.id, tag, sha).await? else { continue };
             match start(state, project, &s, &cfg, tag, sha).await {
-                Ok(Some(pipeline_id)) => sdb::sbom_started(&state.db, id, pipeline_id).await?,
+                Ok(Some(pipeline_id)) => {
+                    // unrecorded, the run's files could never be kept: free
+                    // the tag for another run
+                    if let Err(e) = sdb::sbom_started(&state.db, id, pipeline_id).await {
+                        tracing::warn!(project_id = project.id, tag, pipeline_id, error = %e, "SBOM run not recorded");
+                        sdb::unclaim_sbom(&state.db, id).await?;
+                    }
+                }
                 Ok(None) => sdb::unclaim_sbom(&state.db, id).await?,
                 Err(e) => {
                     sdb::unclaim_sbom(&state.db, id).await?;
@@ -179,44 +186,107 @@ async fn store(state: &AppState, pipeline_id: i64) -> anyhow::Result<()> {
             tracing::info!(project_id = p.id, error = %e, "SBOM not kept: the storage quota is reached");
             return Ok(());
         }
-        let mut ids = Vec::new();
-        for (e, (file, ..)) in found.iter().zip(FILES) {
+        // both files stored, then both rows at once: a retry after a failure
+        // leaves nothing behind
+        let mut stored = Vec::new();
+        for e in &found {
             let secret = hex::encode(rand::random::<[u8; 16]>());
             let key = format!("uploads/{}/{secret}", p.id);
-            let stream = crate::ci::archive::open(state, &archive.blob_key, e).await?;
-            let size = state.blobs.put_stream(&key, stream).await?;
-            let tag: String =
-                row.tag.chars().map(|c| if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') { c } else { '-' }).collect();
-            let filename = format!("{tag}-{file}");
-            let u = forgust_db::releases::add_upload(
-                &state.db,
-                forgust_db::releases::NewUpload {
-                    project_id: p.id,
-                    secret: &secret,
-                    filename: &filename,
-                    size: size as i64,
-                    content_type: "application/json",
-                    blob_key: &key,
-                    uploaded_by: None,
-                },
-            )
-            .await?;
-            ids.push(u.id);
+            let put = match crate::ci::archive::open(state, &archive.blob_key, e).await {
+                Ok(stream) => state.blobs.put_stream(&key, stream).await,
+                Err(e) => Err(e),
+            };
+            match put {
+                Ok(size) => stored.push((secret, key, size)),
+                Err(e) => {
+                    forget(state, &stored).await;
+                    let _ = state.blobs.delete(&key).await;
+                    return Err(e);
+                }
+            }
         }
-        sdb::sbom_files(&state.db, row.id, ids[0], ids[1]).await?;
+        if let Err(e) = keep(state, &p, &row, &stored).await {
+            forget(state, &stored).await;
+            return Err(e);
+        }
     }
     attach(state, &p, &row.tag).await
 }
 
-/// Link the tag's newest SBOM files from its release, those not linked yet
-/// (a link of the same name or path the release has already stays).
+/// The uploads of a run's files, and the run's record of them, together.
+async fn keep(state: &AppState, p: &Project, row: &sdb::TagSbom, stored: &[(String, String, u64)]) -> anyhow::Result<()> {
+    let tag: String = row.tag.chars().map(|c| if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') { c } else { '-' }).collect();
+    let mut tx = state.db.begin().await?;
+    let mut ids = Vec::new();
+    for ((secret, key, size), (file, ..)) in stored.iter().zip(FILES) {
+        let filename = format!("{tag}-{file}");
+        let u = forgust_db::releases::add_upload(
+            &mut *tx,
+            forgust_db::releases::NewUpload {
+                project_id: p.id,
+                secret,
+                filename: &filename,
+                size: *size as i64,
+                content_type: "application/json",
+                blob_key: key,
+                uploaded_by: None,
+            },
+        )
+        .await?;
+        ids.push(u.id);
+    }
+    sdb::sbom_files(&mut *tx, row.id, ids[0], ids[1]).await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+async fn forget(state: &AppState, stored: &[(String, String, u64)]) {
+    for (_, key, _) in stored {
+        let _ = state.blobs.delete(key).await;
+    }
+}
+
+/// Link the SBOM of the commit the tag points to now from its release, in
+/// place of an older one of the tag Forgust linked (a link of the same name
+/// or path someone else made stays; a release at its limit gets none).
 pub async fn attach(state: &AppState, p: &Project, tag: &str) -> anyhow::Result<()> {
     let Some(release) = forgust_db::releases::find(&state.db, p.id, tag).await? else { return Ok(()) };
-    let Some(row) = sdb::sbom_of_tag(&state.db, p.id, tag).await? else { return Ok(()) };
+    // the ref's own value (the tag object when annotated), as the push gave it
+    let refname = format!("refs/tags/{tag}");
+    let Some(sha) = state.storage.refs(p.id, &refname).await?.into_iter().find(|r| r.name == refname).map(|r| r.target) else {
+        return Ok(());
+    };
+    let Some(row) = sdb::sbom_of_tag(&state.db, p.id, tag, &sha).await? else { return Ok(()) };
+    let mut wanted = Vec::new();
     for (upload_id, (_, name, path)) in [row.cyclonedx_upload_id, row.spdx_upload_id].into_iter().zip(FILES) {
         let Some(u) = forgust_db::releases::upload_by_id(&state.db, p.id, upload_id.unwrap_or_default()).await? else { continue };
-        let url = super::uploads::full_path(&u);
-        let _ = forgust_db::releases::add_link(&state.db, release.id, name, &url, Some(path), "other").await?;
+        wanted.push((name, path, super::uploads::full_path(&u)));
+    }
+    // links to an older SBOM of the tag (it moved since) go
+    let ours: Vec<String> = {
+        let mut urls = Vec::new();
+        for id in sdb::sbom_uploads_of_tag(&state.db, p.id, tag).await? {
+            if let Some(u) = forgust_db::releases::upload_by_id(&state.db, p.id, id).await? {
+                urls.push(super::uploads::full_path(&u));
+            }
+        }
+        urls
+    };
+    let mut links = forgust_db::releases::links(&state.db, &[release.id]).await?;
+    for l in links.extract_if(.., |l| ours.contains(&l.url) && !wanted.iter().any(|(_, _, url)| *url == l.url)) {
+        forgust_db::releases::delete_link(&state.db, release.id, l.id).await?;
+    }
+    for (name, path, url) in wanted {
+        if links.iter().any(|l| l.url == url) {
+            continue;
+        }
+        if links.len() >= super::releases::MAX_LINKS {
+            tracing::info!(project_id = p.id, tag, "the release has as many links as it may: no SBOM link");
+            break;
+        }
+        if let Some(l) = forgust_db::releases::add_link(&state.db, release.id, name, &url, Some(path), "other").await? {
+            links.push(l);
+        }
     }
     Ok(())
 }

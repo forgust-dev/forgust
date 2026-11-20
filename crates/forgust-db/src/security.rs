@@ -762,16 +762,28 @@ pub async fn sbom_files(e: impl PgExecutor<'_>, id: i64, cyclonedx_upload_id: i6
     Ok(())
 }
 
-/// The newest SBOM made for `tag` (at whatever commit it pointed to then).
-pub async fn sbom_of_tag(e: impl PgExecutor<'_>, project_id: i64, tag: &str) -> Result<Option<TagSbom>> {
+/// The SBOM of `tag` at `sha` (the tag's value now), once its files are kept.
+pub async fn sbom_of_tag(e: impl PgExecutor<'_>, project_id: i64, tag: &str, sha: &str) -> Result<Option<TagSbom>> {
     sqlx::query_as!(
         TagSbom,
         "SELECT id, project_id, tag, sha, pipeline_id, cyclonedx_upload_id, spdx_upload_id FROM tag_sboms
-          WHERE project_id = $1 AND tag = $2 AND cyclonedx_upload_id IS NOT NULL AND spdx_upload_id IS NOT NULL
-          ORDER BY id DESC LIMIT 1",
+          WHERE project_id = $1 AND tag = $2 AND sha = $3 AND cyclonedx_upload_id IS NOT NULL AND spdx_upload_id IS NOT NULL",
+        project_id,
+        tag,
+        sha
+    )
+    .fetch_optional(e)
+    .await
+}
+
+/// Every upload an SBOM of `tag` was kept in (at any commit).
+pub async fn sbom_uploads_of_tag(e: impl PgExecutor<'_>, project_id: i64, tag: &str) -> Result<Vec<i64>> {
+    sqlx::query_scalar!(
+        r#"SELECT u AS "u!" FROM tag_sboms, unnest(ARRAY[cyclonedx_upload_id, spdx_upload_id]) AS u
+            WHERE project_id = $1 AND tag = $2 AND u IS NOT NULL"#,
         project_id,
         tag
     )
-    .fetch_optional(e)
+    .fetch_all(e)
     .await
 }
