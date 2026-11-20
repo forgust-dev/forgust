@@ -375,6 +375,7 @@ const RUNNABLE: &[(&str, &str)] = &[
     ("measure_repositories", "Repository sizes for Storage"),
     ("reindex_code", "Code search: index every project again from its repository"),
     ("update_check", "Ask GitHub for the latest Forgust release (unless turned off in Settings)"),
+    ("mirror_vulnerability_dbs", "Copy Trivy's vulnerability databases into this server (when mirroring is on in Security scanning)"),
 ];
 
 #[derive(Serialize, ToSchema)]

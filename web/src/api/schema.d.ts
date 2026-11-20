@@ -2866,6 +2866,8 @@ export interface components {
         AdminScanning: {
             /** @description Projects with open critical or high findings, most first. */
             exposed: components["schemas"]["ExposedProject"][];
+            /** @description Trivy's databases this server holds (`mirror_vulnerability_dbs`). */
+            mirrors: components["schemas"]["MirrorStatus"][];
             /**
              * Format: int64
              * @description Projects with scanning on.
@@ -4608,6 +4610,18 @@ export interface components {
             state_event?: string | null;
             title?: string | null;
         };
+        /** @description What admins see of a mirrored database. */
+        MirrorStatus: {
+            digest: string;
+            name: string;
+            /** @description The upstream reference it came from, or `file`. */
+            origin: string;
+            /** Format: int64 */
+            size: number;
+            /** Format: date-time */
+            stored_at: string;
+            tag: string;
+        };
         MrCount: {
             /** Format: int64 */
             closed: number;
@@ -5773,6 +5787,14 @@ export interface components {
              */
             max_concurrent: number;
             /**
+             * @description Keep Trivy's databases on this server (copied from the sources below
+             *     every 6 hours, or imported from files with `forgust admin
+             *     import-vulnerability-db`), and have the scans read them from here: for
+             *     installs that cannot or should not reach ghcr.io.
+             * @default false
+             */
+            mirror_vulnerability_dbs: boolean;
+            /**
              * @description Code: GitLab's Semgrep-based analyzer (MIT, GitLab's rules).
              * @default registry.gitlab.com/security-products/semgrep:5
              */
@@ -5793,11 +5815,21 @@ export interface components {
              * @default 3600
              */
             timeout_secs: number;
+            /** @default ghcr.io/aquasecurity/trivy-checks:1 */
+            trivy_checks_source: string;
+            /**
+             * @description Where the copies come from: `host/repository:tag`, as Trivy's own
+             *     `--db-repository` (`http://` in front for a registry without TLS).
+             * @default ghcr.io/aquasecurity/trivy-db:2
+             */
+            trivy_db_source: string;
             /**
              * @description Dependencies, containers, infrastructure as code: Trivy (Apache-2.0).
              * @default aquasec/trivy:0.57.1
              */
             trivy_image: string;
+            /** @default ghcr.io/aquasecurity/trivy-java-db:1 */
+            trivy_java_db_source: string;
         };
         SessionInfo: {
             /** @description Send back as `X-CSRF-Token` on POST/PUT/DELETE. */

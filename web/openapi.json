@@ -5299,7 +5299,8 @@
           "settings",
           "projects",
           "running",
-          "exposed"
+          "exposed",
+          "mirrors"
         ],
         "properties": {
           "exposed": {
@@ -5308,6 +5309,13 @@
               "$ref": "#/components/schemas/ExposedProject"
             },
             "description": "Projects with open critical or high findings, most first."
+          },
+          "mirrors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MirrorStatus"
+            },
+            "description": "Trivy's databases this server holds (`mirror_vulnerability_dbs`)."
           },
           "projects": {
             "type": "integer",
@@ -10972,6 +10980,41 @@
           }
         }
       },
+      "MirrorStatus": {
+        "type": "object",
+        "description": "What admins see of a mirrored database.",
+        "required": [
+          "name",
+          "tag",
+          "digest",
+          "size",
+          "origin",
+          "stored_at"
+        ],
+        "properties": {
+          "digest": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "origin": {
+            "type": "string",
+            "description": "The upstream reference it came from, or `file`."
+          },
+          "size": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "stored_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "tag": {
+            "type": "string"
+          }
+        }
+      },
       "MrCount": {
         "type": "object",
         "required": [
@@ -14612,6 +14655,11 @@
             "default": 2,
             "minimum": 0
           },
+          "mirror_vulnerability_dbs": {
+            "type": "boolean",
+            "description": "Keep Trivy's databases on this server (copied from the sources below\nevery 6 hours, or imported from files with `forgust admin\nimport-vulnerability-db`), and have the scans read them from here: for\ninstalls that cannot or should not reach ghcr.io.",
+            "default": false
+          },
           "sast_image": {
             "type": "string",
             "description": "Code: GitLab's Semgrep-based analyzer (MIT, GitLab's rules).",
@@ -14636,10 +14684,23 @@
             "default": 3600,
             "minimum": 0
           },
+          "trivy_checks_source": {
+            "type": "string",
+            "default": "ghcr.io/aquasecurity/trivy-checks:1"
+          },
+          "trivy_db_source": {
+            "type": "string",
+            "description": "Where the copies come from: `host/repository:tag`, as Trivy's own\n`--db-repository` (`http://` in front for a registry without TLS).",
+            "default": "ghcr.io/aquasecurity/trivy-db:2"
+          },
           "trivy_image": {
             "type": "string",
             "description": "Dependencies, containers, infrastructure as code: Trivy (Apache-2.0).",
             "default": "aquasec/trivy:0.57.1"
+          },
+          "trivy_java_db_source": {
+            "type": "string",
+            "default": "ghcr.io/aquasecurity/trivy-java-db:1"
           }
         }
       },
