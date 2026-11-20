@@ -1,6 +1,7 @@
 //! HTTP for importers: JSON over a pinned connection to the source, `Link`
 //! pagination, and patience with rate limits.
 
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -26,6 +27,8 @@ pub struct Http {
     pub addrs: Vec<SocketAddr>,
     /// When a rate-limit wait ends (epoch seconds), 0 when not waiting.
     pub waiting: Arc<tokio::sync::watch::Sender<i64>>,
+    /// The page-size query parameter: `per_page` (GitLab, GitHub) or `limit` (Gitea).
+    page_param: &'static str,
 }
 
 /// The source's URL after the SSRF check: http(s), no credentials, and the
@@ -55,7 +58,13 @@ impl Http {
             .default_headers(headers)
             .build()
             .map_err(|e| SourceError::Other(e.to_string()))?;
-        Ok(Http { client, api, addrs, waiting: Arc::new(tokio::sync::watch::Sender::new(0)) })
+        Ok(Http { client, api, addrs, waiting: Arc::new(tokio::sync::watch::Sender::new(0)), page_param: "per_page" })
+    }
+
+    /// Ask for pages with `name` instead of `per_page`.
+    pub fn page_param(mut self, name: &'static str) -> Http {
+        self.page_param = name;
+        self
     }
 
     pub fn header(name: &'static str, value: &str) -> Result<HeaderMap> {
@@ -160,11 +169,12 @@ impl Http {
         }
     }
 
-    /// Every page of a list, following `Link: <…>; rel="next"`.
+    /// Every page of a list, following `Link: <…>; rel="next"` (a server may
+    /// serve fewer per page than asked: the links say where the rest is).
     pub async fn all<T: DeserializeOwned>(&self, path: &str, query: &[(&str, &str)]) -> Result<Vec<T>> {
         let mut url = self.url(path)?;
         let per = PER_PAGE.to_string();
-        url.query_pairs_mut().extend_pairs(query).append_pair("per_page", &per);
+        url.query_pairs_mut().extend_pairs(query).append_pair(self.page_param, &per);
         let mut out = Vec::new();
         for _ in 0..MAX_PAGES {
             let resp = self.send(Method::GET, url.clone()).await?;
@@ -180,17 +190,18 @@ impl Http {
         Ok(out)
     }
 
-    /// How many items a list has, from one small page: `X-Total` (GitLab) or the
-    /// `last` page of a one-per-page list (GitHub).
+    /// How many items a list has, from one small page: `X-Total` (GitLab),
+    /// `X-Total-Count` (Gitea) or the `last` page of a one-per-page list (GitHub).
     pub async fn count(&self, path: &str, query: &[(&str, &str)]) -> Result<Option<i64>> {
         let mut url = self.url(path)?;
-        url.query_pairs_mut().extend_pairs(query).append_pair("per_page", "1");
+        url.query_pairs_mut().extend_pairs(query).append_pair(self.page_param, "1");
         let resp = match self.send(Method::GET, url).await {
             Ok(r) => r,
             Err(SourceError::NotFound(_) | SourceError::Refused(_)) => return Ok(None),
             Err(e) => return Err(e),
         };
-        if let Some(t) = resp.headers().get("x-total").and_then(|v| v.to_str().ok()).and_then(|v| v.parse().ok()) {
+        let total = ["x-total", "x-total-count"].iter().find_map(|k| resp.headers().get(*k)?.to_str().ok()?.parse().ok());
+        if let Some(t) = total {
             return Ok(Some(t));
         }
         if let Some(last) = link(resp.headers(), "last") {
@@ -233,9 +244,98 @@ fn next_link(h: &HeaderMap) -> Option<Url> {
     link(h, "next")
 }
 
+/// git's setting sending `user:token` as Basic auth (GitLab, GitHub, Gitea and
+/// Forgejo take a token as the password whatever the user name).
+pub fn basic_auth(user: &str, token: &str) -> (String, String) {
+    use base64::Engine;
+    let basic = base64::engine::general_purpose::STANDARD.encode(format!("{user}:{token}"));
+    ("http.extraHeader".to_string(), format!("Authorization: Basic {basic}"))
+}
+
+/// A repository for git to fetch from or push to: its address after the SSRF
+/// check, and git's settings for it (`auth`, the checked addresses it is pinned
+/// to, the instance's CA bundle).
+pub async fn git_remote(raw: &str, allow_local: bool, auth: Vec<(String, String)>) -> Result<(Url, Vec<(String, String)>)> {
+    let (url, addrs) = checked_url(raw, allow_local).await?;
+    let mut cfg = auth;
+    cfg.extend(pin(&url, &addrs));
+    if let Some(bundle) = crate::tls::bundle_file().map_err(|e| SourceError::Other(e.to_string()))? {
+        cfg.push(("http.sslCAInfo".into(), bundle.display().to_string()));
+    }
+    Ok((url, cfg))
+}
+
+/// A repository-wide list grouped by the issue or pull request it belongs to.
+pub type ByNumber<T> = Arc<HashMap<i64, Vec<T>>>;
+
+/// The number at the end of an issue or pull request URL.
+pub fn number_of(url: Option<&str>) -> Option<i64> {
+    url?.trim_end_matches('/').rsplit('/').next()?.parse().ok()
+}
+
+/// A repository-wide list (every comment), oldest first, grouped by the item
+/// it belongs to; read once, page by page, instead of a request per item
+/// (callers wait for the first read).
+pub async fn by_number<T: DeserializeOwned>(
+    http: &Http,
+    cache: &tokio::sync::Mutex<HashMap<String, ByNumber<T>>>,
+    path: String,
+    query: &[(&str, &str)],
+    number: impl Fn(&T) -> Option<i64>,
+) -> Result<ByNumber<T>> {
+    let mut cache = cache.lock().await;
+    if let Some(hit) = cache.get(&path) {
+        return Ok(hit.clone());
+    }
+    let mut by: HashMap<i64, Vec<T>> = HashMap::new();
+    for item in http.all::<T>(&path, query).await? {
+        if let Some(n) = number(&item) {
+            by.entry(n).or_default().push(item);
+        }
+    }
+    let by = Arc::new(by);
+    cache.insert(path, by.clone());
+    Ok(by)
+}
+
+/// A path segment as it goes in an API URL (`group%2Fproject` on GitLab).
+pub fn urlencode(s: &str) -> String {
+    percent_encoding::utf8_percent_encode(s, percent_encoding::NON_ALPHANUMERIC).to_string()
+}
+
+/// The `http.curloptResolve` entry pinning git to the checked addresses: one
+/// entry listing them all (curl keeps only the last entry per host and port),
+/// IPv4 first.
+pub fn pin(web: &Url, addrs: &[SocketAddr]) -> Vec<(String, String)> {
+    let (Some(host), Some(port)) = (web.host_str(), web.port_or_known_default()) else { return Vec::new() };
+    if addrs.is_empty() {
+        return Vec::new();
+    }
+    let mut ips: Vec<std::net::IpAddr> = addrs.iter().map(|a| a.ip()).collect();
+    ips.sort_by_key(|ip| ip.is_ipv6());
+    ips.dedup();
+    let list: Vec<String> = ips
+        .iter()
+        .map(|ip| match ip {
+            std::net::IpAddr::V6(v6) => format!("[{v6}]"),
+            ip => ip.to_string(),
+        })
+        .collect();
+    vec![("http.curloptResolve".to_string(), format!("{host}:{port}:{}", list.join(",")))]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pins() {
+        let u = url::Url::parse("https://gitlab.example.com/").unwrap();
+        // one entry (curl keeps the last per host:port), IPv4 first
+        let p = pin(&u, &["[2001:db8::1]:443".parse().unwrap(), "10.0.0.5:443".parse().unwrap()]);
+        assert_eq!(p.len(), 1);
+        assert_eq!(p[0].1, "gitlab.example.com:443:10.0.0.5,[2001:db8::1]");
+    }
 
     #[test]
     fn parses_link_headers() {

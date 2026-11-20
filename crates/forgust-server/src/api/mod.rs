@@ -114,7 +114,9 @@ pub fn router() -> Router<AppState> {
         )
         // imports from GitLab and GitHub
         .route("/imports", get(imports::list).post(imports::create))
+        .route("/imports/sources", get(imports::sources))
         .route("/imports/connect", post(imports::connect))
+        .route("/imports/projects", post(imports::projects))
         .route("/imports/lookup", post(imports::lookup))
         .route("/imports/{id}", get(imports::show))
         .route("/imports/{id}/start", post(imports::start))

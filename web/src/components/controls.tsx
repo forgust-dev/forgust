@@ -1,5 +1,5 @@
 // Form controls on Base UI primitives (keyboard, focus and ARIA handled there),
-// styled by `styles.css` (`.select`, `.switch`, `.segmented`, `.dropdown`).
+// styled by `styles.css` (`.select`, `.switch`, `.segmented`, `.choices`, `.dropdown`).
 import type { CSSProperties, ReactElement, ReactNode } from "react";
 import { Combobox as BCombobox } from "@base-ui/react/combobox";
 import { Menu as BMenu } from "@base-ui/react/menu";
@@ -165,6 +165,20 @@ export function Segmented<T extends string>({ value, onChange, options, label }:
       {options.map((o) => (
         <Radio.Root key={o.value} value={o.value} className="segment" disabled={o.disabled} title={typeof o.hint === "string" ? o.hint : undefined}>
           {o.label}
+        </Radio.Root>
+      ))}
+    </RadioGroup>
+  );
+}
+
+/** Radio cards: a few options, each with a line of detail under its name. */
+export function Choices<T extends string>({ value, onChange, options, label }: { value: T; onChange: (v: T) => void; options: (Option & { value: T })[]; label: string }) {
+  return (
+    <RadioGroup className="choices" aria-label={label} value={value} onValueChange={(v) => onChange(v as T)}>
+      {options.map((o) => (
+        <Radio.Root key={o.value} value={o.value} className="choice" disabled={o.disabled}>
+          <span className="choice-label">{o.label}</span>
+          {o.hint && <span className="choice-hint">{o.hint}</span>}
         </Radio.Root>
       ))}
     </RadioGroup>
