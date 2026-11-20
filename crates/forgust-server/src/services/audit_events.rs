@@ -221,7 +221,7 @@ pub const EVENTS: &[EventType] = &[
     e("project_archived", SPACES, P, &[], "A project was archived."),
     e("project_unarchived", SPACES, P, &[], "A project was unarchived."),
     e("project_deleted", SPACES, P, &["path"], "A project was deleted."),
-    e("import_started", SPACES, N, &["import", "source", "url", "projects"], "An import from GitLab or GitHub started."),
+    e("import_started", SPACES, N, &["import", "source", "url", "projects"], "An import from GitLab, GitHub, Gitea or Forgejo started."),
     e("pages_removed", SPACES, P, &[], "A project's Pages site was removed."),
     // access and protections
     e(
