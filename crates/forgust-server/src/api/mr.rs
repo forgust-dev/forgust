@@ -666,17 +666,28 @@ pub async fn upsert_rule(
     if !(1..=20).contains(&req.approvals_required) || req.name.trim().is_empty() {
         return Err(ApiError::bad("a name and 1-20 required approvals are needed"));
     }
+    let previous = mrdb::rules(&state.db, p.id).await?.into_iter().find(|r| r.name == req.name.trim());
     mrdb::upsert_rule(&state.db, p.id, req.name.trim(), req.approvals_required, level).await?;
     crate::services::audit(
         &state,
         &p0,
         "approval_rule_set",
         Some(("project", p.id)),
-        json!({ "name": req.name, "required": req.approvals_required }),
+        json!({
+            "name": req.name,
+            "required": req.approvals_required,
+            "min_access_level": level,
+            "previous": previous.as_ref().map(rule_json),
+        }),
         None,
     )
     .await;
     Ok(Json(mrdb::rules(&state.db, p.id).await?))
+}
+
+/// What an approval rule asked, for the audit log.
+fn rule_json(r: &ApprovalRule) -> Value {
+    json!({ "required": r.approvals_required, "min_access_level": r.min_access_level })
 }
 
 pub async fn delete_rule(
@@ -685,10 +696,16 @@ pub async fn delete_rule(
     Path((id, rule_id)): Path<(String, i64)>,
 ) -> ApiResult<Json<Value>> {
     let p = project_for(&state, &p0, &id, ProjectAction::Admin).await?;
+    let previous = mrdb::rules(&state.db, p.id).await?.into_iter().find(|r| r.id == rule_id);
     if !mrdb::delete_rule(&state.db, p.id, rule_id).await? {
         return Err(ApiError::NotFound);
     }
-    crate::services::audit(&state, &p0, "approval_rule_removed", Some(("project", p.id)), json!({ "id": rule_id }), None).await;
+    let details = json!({
+        "id": rule_id,
+        "name": previous.as_ref().map(|r| &r.name),
+        "previous": previous.as_ref().map(rule_json),
+    });
+    crate::services::audit(&state, &p0, "approval_rule_removed", Some(("project", p.id)), details, None).await;
     Ok(Json(json!({ "ok": true })))
 }
 

@@ -84,8 +84,20 @@ pub async fn delete_for_user(e: impl PgExecutor<'_>, user_id: i64) -> Result<()>
     Ok(())
 }
 
+/// Drop what ran out: sessions, each with a `session_expired` audit row (by
+/// `system`, the session's address) in the same statement, sign-in
+/// challenges, OIDC states, WebAuthn ceremonies and LFS tokens for SSH.
 pub async fn delete_expired(pool: &sqlx::PgPool) -> Result<u64> {
-    let mut n = sqlx::query!("DELETE FROM sessions WHERE expires_at < now()").execute(pool).await?.rows_affected();
+    let mut n = sqlx::query!(
+        "WITH gone AS (DELETE FROM sessions WHERE expires_at < now() RETURNING id, user_id, ip, impersonator_id)
+         INSERT INTO audit_events (principal_kind, action, target_type, target_id, details, ip)
+         SELECT 'system', 'session_expired', 'user', user_id,
+                jsonb_strip_nulls(jsonb_build_object('session_id', id, 'impersonated_by', impersonator_id)), ip
+           FROM gone"
+    )
+    .execute(pool)
+    .await?
+    .rows_affected();
     n += sqlx::query!("DELETE FROM login_challenges WHERE expires_at < now()").execute(pool).await?.rows_affected();
     n += sqlx::query!("DELETE FROM oidc_states WHERE expires_at < now()").execute(pool).await?.rows_affected();
     n += sqlx::query!("DELETE FROM webauthn_ceremonies WHERE expires_at < now()").execute(pool).await?.rows_affected();

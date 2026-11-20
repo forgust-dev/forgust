@@ -136,6 +136,7 @@ pub async fn build_state(
         login_ip_failures: RateLimiter::new(100, Duration::from_secs(600)),
         oidc_key: tokio::sync::OnceCell::new(),
         anon_heavy_reads: RateLimiter::new(cfg.limits.anonymous_heavy_reads_per_minute.max(1), Duration::from_secs(60)),
+        audit_throttle: crate::state::AuditThrottle::new(Duration::from_secs(60)),
         cfg,
     })))
 }
@@ -268,6 +269,15 @@ pub async fn start(state: AppState) -> anyhow::Result<Running> {
     if state.cfg.has_role("worker") {
         crate::jobs::start_worker(state.clone(), 8).await?;
     }
+    // throttled audit events: the counts of bursts that stopped
+    let s = state.clone();
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(Duration::from_secs(30));
+        loop {
+            tick.tick().await;
+            crate::services::flush_held_audit(&s).await;
+        }
+    });
     // internal API for git hooks (Unix socket)
     let sock = state.hooks.socket.clone();
     let _ = std::fs::remove_file(&sock);

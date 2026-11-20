@@ -41,6 +41,12 @@ image_proxy = true
 # what runs outside the server (CI jobs, Renovate)
 ca_file = ""            # e.g. "/etc/forgust/ca.pem"
 
+[audit]
+# also record clones, fetches and archive downloads of private and internal
+# repositories (people, their tokens, deploy tokens and keys; not CI jobs):
+# a row per fetch
+repository_reads = false
+
 [telemetry]
 log_format = "text"        # or "json"
 otlp_endpoint = ""         # e.g. "http://otel-collector:4317"

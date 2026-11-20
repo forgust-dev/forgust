@@ -256,23 +256,10 @@ pub async fn require_group(state: &AppState, principal: &Principal, action: Grou
     Err(ApiError::NotFound)
 }
 
+/// As principal `admin`: what their own role would not have allowed.
 async fn audit_bypass(state: &AppState, principal: &Principal, target_type: &str, target_id: i64, action: &str) {
-    let r = forgust_db::audit::insert(
-        &state.db,
-        forgust_db::audit::NewEvent {
-            principal_kind: "admin",
-            principal_id: principal.id(),
-            action: "admin_bypass",
-            target_type: Some(target_type),
-            target_id: Some(target_id),
-            details: json!({ "action": action }),
-            ip: None,
-        },
-    )
-    .await;
-    if let Err(e) = r {
-        tracing::warn!(error = %e, "failed to audit admin bypass");
-    }
+    let details = json!({ "action": action });
+    crate::services::write_audit(state, "admin", principal.id(), "admin_bypass", Some((target_type, target_id)), details, None).await;
 }
 
 /// Members may grant at most their own level; only owners grant Owner.

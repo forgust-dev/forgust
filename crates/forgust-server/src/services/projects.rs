@@ -117,7 +117,15 @@ pub async fn update(
         crate::code_search::indexer::queue(state, p.id).await;
     }
     forgust_db::projects::update_details(&state.db, p.id, name, description, visibility).await?;
-    audit(state, principal, "project_updated", Some(("project", p.id)), json!({ "visibility": visibility }), None).await;
+    audit(
+        state,
+        principal,
+        "project_updated",
+        Some(("project", p.id)),
+        json!({ "visibility": visibility, "previous_visibility": p.visibility }),
+        None,
+    )
+    .await;
     Ok(())
 }
 

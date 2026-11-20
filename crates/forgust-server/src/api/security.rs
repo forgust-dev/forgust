@@ -329,6 +329,6 @@ pub async fn set_admin_scanning(
         return Err(ApiError::bad("1 to 50 scans at once, a timeout of 1 minute to a day"));
     }
     sdb::set_scanning_overrides(&state.db, &serde_json::to_value(&b).map_err(|e| ApiError::Internal(e.into()))?).await?;
-    services::audit(&state, &p, "security_scanning_settings", None, json!({ "by": me.username }), None).await;
+    services::audit(&state, &p, "security_scanning_settings", None, json!({}), None).await;
     admin_scanning(State(state), crate::auth::Admin(me, p)).await
 }

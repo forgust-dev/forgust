@@ -489,6 +489,7 @@ pub async fn archive(
         git_ref.chars().map(|c| if c.is_ascii_alphanumeric() || c == '.' || c == '_' || c == '-' { c } else { '-' }).collect();
     let prefix = format!("{}-{}", p.path, safe_ref);
     let mut proc = state.storage.archive(p.id, &commit, format, &prefix).await?;
+    crate::services::audit_repository_read(&state, &v, &p, "archive", ip.text().as_deref()).await;
     let stdout = std::mem::replace(&mut proc.stdout, Box::pin(tokio::io::empty()));
     tokio::spawn(async move {
         let _ = proc.wait().await;

@@ -61,9 +61,10 @@ pub async fn add(
     if !authz::may_grant(mine, level) {
         return Err(ApiError::forbidden("you cannot grant a role higher than your own"));
     }
-    let target = forgust_db::users::find(&state.db, user_id).await?.ok_or(ApiError::NotFound)?;
+    forgust_db::users::find(&state.db, user_id).await?.ok_or(ApiError::NotFound)?;
     let (st, sid) = source.key();
-    if let Some(existing) = forgust_db::members::level_of(&state.db, st, sid, user_id).await? {
+    let previous = forgust_db::members::level_of(&state.db, st, sid, user_id).await?;
+    if let Some(existing) = previous {
         if existing == OWNER && level < OWNER && st == "namespace" && forgust_db::members::count_owners(&state.db, st, sid).await? <= 1 {
             return Err(ApiError::conflict("a group needs at least one owner"));
         }
@@ -75,7 +76,8 @@ pub async fn add(
     forgust_db::members::upsert(&mut *tx, st, sid, user_id, level, expires_at, principal.id()).await?;
     forgust_db::members::refresh_authorizations(&mut tx, &[user_id]).await?;
     tx.commit().await?;
-    audit(state, principal, "member_set", Some((st, sid)), json!({ "user": target.username, "level": level }), None).await;
+    audit(state, principal, "member_set", Some((st, sid)), json!({ "user_id": user_id, "level": level, "previous_level": previous }), None)
+        .await;
     Ok(())
 }
 
@@ -96,7 +98,7 @@ pub async fn remove(state: &AppState, principal: &Principal, source: Source<'_>,
     forgust_db::members::remove(&mut *tx, st, sid, user_id).await?;
     forgust_db::members::refresh_authorizations(&mut tx, &[user_id]).await?;
     tx.commit().await?;
-    audit(state, principal, "member_removed", Some((st, sid)), json!({ "user_id": user_id }), None).await;
+    audit(state, principal, "member_removed", Some((st, sid)), json!({ "user_id": user_id, "previous_level": existing }), None).await;
     Ok(())
 }
 
@@ -120,6 +122,7 @@ pub async fn share(
         return Err(ApiError::forbidden("you cannot share with a role higher than your own"));
     }
     require_group(state, principal, GroupAction::Read, with_group).await?;
+    let previous = share_max(state, source, with_group.id).await?;
     let mut tx = state.db.begin().await?;
     match source {
         Source::Project(p) => forgust_db::links::share_project(&mut *tx, p.id, with_group.id, max, expires_at).await?,
@@ -134,12 +137,21 @@ pub async fn share(
     forgust_db::members::refresh_authorizations(&mut tx, &users).await?;
     tx.commit().await?;
     let (st, sid) = source.key();
-    audit(state, principal, "shared_with_group", Some((st, sid)), json!({ "group": with_group.full_path, "max": max }), None).await;
+    audit(
+        state,
+        principal,
+        "shared_with_group",
+        Some((st, sid)),
+        json!({ "group": with_group.full_path, "group_id": with_group.id, "max": max, "previous_max": previous }),
+        None,
+    )
+    .await;
     Ok(())
 }
 
 pub async fn unshare(state: &AppState, principal: &Principal, source: Source<'_>, with_group: &Namespace) -> ApiResult<()> {
     granter_level(state, principal, source).await?;
+    let previous = share_max(state, source, with_group.id).await?;
     let mut tx = state.db.begin().await?;
     let removed = match source {
         Source::Project(p) => forgust_db::links::unshare_project(&mut *tx, p.id, with_group.id).await?,
@@ -152,6 +164,23 @@ pub async fn unshare(state: &AppState, principal: &Principal, source: Source<'_>
     forgust_db::members::refresh_authorizations(&mut tx, &users).await?;
     tx.commit().await?;
     let (st, sid) = source.key();
-    audit(state, principal, "unshared_with_group", Some((st, sid)), json!({ "group": with_group.full_path }), None).await;
+    audit(
+        state,
+        principal,
+        "unshared_with_group",
+        Some((st, sid)),
+        json!({ "group": with_group.full_path, "group_id": with_group.id, "previous_max": previous }),
+        None,
+    )
+    .await;
     Ok(())
+}
+
+/// The role a share gives `with_group` today, if it is shared with it.
+async fn share_max(state: &AppState, source: Source<'_>, with_group: i64) -> ApiResult<Option<i16>> {
+    let links = match source {
+        Source::Project(p) => forgust_db::links::project_shares(&state.db, p.id).await?,
+        Source::Group(ns) => forgust_db::links::group_shares(&state.db, ns.id).await?,
+    };
+    Ok(links.into_iter().find(|l| l.group_id == with_group).map(|l| l.max_access_level))
 }

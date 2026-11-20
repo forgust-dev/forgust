@@ -432,7 +432,7 @@ async fn impersonation(pool: sqlx::PgPool) {
     let audit = other_admin.ok_get("/api/v1/admin/audit").await;
     assert!(
         audit.as_array().unwrap().iter().any(|e| e["action"] == "impersonated_request"
-            && e["details"]["path"] == format!("/api/v1/projects/{project}/issues")
+            && e["details"]["path"] == "/api/v1/projects/{id}/issues"
             && e["details"]["method"] == "POST"),
         "{audit}"
     );

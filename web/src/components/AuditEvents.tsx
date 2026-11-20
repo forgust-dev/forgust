@@ -31,11 +31,12 @@ export function AuditEvents({ path, perPage, target = false }: { path: string; p
               {events.map((e) => (
                 <div className="item small" key={e.id}>
                   <code>{e.action}</code>
-                  {target && (
+                  {target && e.target_type && (
                     <span className="muted">
-                      {e.target_type} {e.target_id}
+                      {e.target_type} {e.target_name ?? e.target_id}
                     </span>
                   )}
+                  {e.user_name && <span>{e.user_name}</span>}
                   <span className="grow muted ellipsis">{JSON.stringify(e.details)}</span>
                   <span>{e.principal_name ?? e.principal_kind}</span>
                   <span className="faint">{timeAgo(e.created_at)}</span>

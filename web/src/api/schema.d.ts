@@ -3022,7 +3022,17 @@ export interface components {
             principal_name?: string | null;
             /** Format: int64 */
             target_id?: number | null;
+            /**
+             * @description The target's name today: a username, or a project's or group's path
+             *     (None once it is gone). Rows hold ids only, names are looked up.
+             */
+            target_name?: string | null;
             target_type?: string | null;
+            /**
+             * @description The username of `details.user_id` (the other person an event is
+             *     about: a member, a lock's owner), while the account exists.
+             */
+            user_name?: string | null;
         };
         AuthorizeDecision: components["schemas"]["AuthorizeRequest"] & {
             /** @description The person allowed the client in (false: denied). */

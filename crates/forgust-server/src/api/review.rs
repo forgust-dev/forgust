@@ -174,7 +174,7 @@ pub async fn unlock(
         &principal,
         "lfs_lock_removed",
         Some(("project", p.id)),
-        json!({ "path": lock.path, "owner": lock.owner_username }),
+        json!({ "path": lock.path, "user_id": lock.owner_id }),
         None,
     )
     .await;

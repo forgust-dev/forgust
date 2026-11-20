@@ -141,7 +141,15 @@ pub async fn update(
         return Err(ApiError::bad("a subgroup or project is more visible than this; restrict it first"));
     }
     forgust_db::namespaces::update_details(&state.db, ns.id, name, description, visibility).await?;
-    audit(state, principal, "group_updated", Some(("namespace", ns.id)), json!({ "visibility": visibility }), None).await;
+    audit(
+        state,
+        principal,
+        "group_updated",
+        Some(("namespace", ns.id)),
+        json!({ "visibility": visibility, "previous_visibility": ns.visibility }),
+        None,
+    )
+    .await;
     Ok(())
 }
 
@@ -183,7 +191,18 @@ pub async fn set_policy(state: &AppState, principal: &Principal, ns: &Namespace,
         principal,
         "org_policy_updated",
         Some(("namespace", ns.id)),
-        json!({ "max_visibility": p.max_visibility, "require_two_factor": p.require_two_factor }),
+        json!({
+            "max_visibility": p.max_visibility,
+            "require_two_factor": p.require_two_factor,
+            "project_creation_level": p.project_creation_level,
+            "subgroup_creation_level": p.subgroup_creation_level,
+            "previous": {
+                "max_visibility": ns.max_visibility,
+                "require_two_factor": ns.require_two_factor,
+                "project_creation_level": ns.project_creation_level,
+                "subgroup_creation_level": ns.subgroup_creation_level,
+            },
+        }),
         None,
     )
     .await;

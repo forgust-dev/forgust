@@ -170,6 +170,7 @@ impl Conn {
                 return Ok(());
             }
         };
+        let ip = self.peer.map(|p| p.ip().to_string());
         let action = if service == GitService::ReceivePack { ProjectAction::Push } else { ProjectAction::ReadCode };
         let allowed = match can_project(&self.state, &principal, action, &project).await {
             Ok(a) => a,
@@ -188,8 +189,14 @@ impl Conn {
             } else {
                 "The project you were looking for could not be found or you don't have permission to view it."
             };
+            if visible {
+                crate::services::audit_push_refused(&self.state, &principal, project.id, msg, "ssh", ip.as_deref()).await;
+            }
             self.send_error(&handle, channel, msg).await;
             return Ok(());
+        }
+        if service != GitService::ReceivePack {
+            crate::services::audit_repository_read(&self.state, &principal, &project, "ssh", ip.as_deref()).await;
         }
         if let Some(new) = &moved {
             let _ =

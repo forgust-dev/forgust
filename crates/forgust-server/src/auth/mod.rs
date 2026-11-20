@@ -216,6 +216,7 @@ impl FromRequestParts<AppState> for Viewer {
             let p = principal_from_token(state, token.trim()).await?.ok_or(ApiError::Unauthorized)?;
             let ok = if read_only { p.has_scope("read_api") || p.has_scope("api") } else { p.has_scope("api") };
             if !ok || matches!(p, Principal::DeployToken { .. } | Principal::Job { .. }) {
+                refused(state, parts, &p, "token_scope_refused", None).await;
                 return Err(ApiError::forbidden("token scope does not allow this request"));
             }
             return Ok(Viewer(p));
@@ -245,8 +246,7 @@ impl FromRequestParts<AppState> for Viewer {
                     None,
                     serde_json::json!({
                         "method": parts.method.as_str(),
-                        // the full path (nested routers see theirs only)
-                        "path": parts.extensions.get::<axum::extract::OriginalUri>().map_or(parts.uri.path(), |u| u.0.path()),
+                        "path": route_of(parts),
                     }),
                     None,
                 )
@@ -300,16 +300,36 @@ impl FromRequestParts<AppState> for Admin {
     async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
         let SignedIn(u, p) = SignedIn::from_request_parts(parts, state).await?;
         if !u.is_admin {
+            refused(state, parts, &p, "admin_access_refused", Some("not_admin")).await;
             return Err(ApiError::forbidden("administrator access required"));
         }
         // as GitLab's admin mode: an administrator's token reaches the admin
         // API only when made for it (an `api` token given to some application,
         // an MCP client say, must not be able to create administrators)
         if matches!(&p, Principal::User { scopes: Some(_), .. }) && !p.has_scope("admin_mode") {
+            refused(state, parts, &p, "admin_access_refused", Some("token_scope")).await;
             return Err(ApiError::forbidden("the admin API needs a token with the admin_mode scope (or a signed-in session)"));
         }
         Ok(Admin(u, p))
     }
+}
+
+/// The route a request matched (`/api/v1/users/{username}`), for the audit
+/// log: never the path itself, which can name people.
+fn route_of(parts: &Parts) -> &str {
+    parts.extensions.get::<axum::extract::MatchedPath>().map_or("(no route)", |m| m.as_str())
+}
+
+/// A request refused for who made it, in the audit log (throttled): the
+/// method and the route, and why when there is more than one reason.
+async fn refused(state: &AppState, parts: &Parts, p: &Principal, action: &str, reason: Option<&str>) {
+    let mut details = serde_json::json!({ "method": parts.method.as_str(), "path": route_of(parts) });
+    if let Some(r) = reason {
+        details["reason"] = r.into();
+    }
+    let ip = ClientIp::of(state, &parts.headers, &parts.extensions).text();
+    let target = p.direct_user().map(|u| ("user", u.id));
+    crate::services::audit_throttled(state, p, action, target, details, ip.as_deref()).await;
 }
 
 /// The client's address (rate limits, audit, sessions): the TCP peer or, when

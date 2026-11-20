@@ -426,7 +426,7 @@ pub async fn test_email(
         ..Default::default()
     };
     state.mailer.send(&email).await.map_err(|e| ApiError::bad(format!("not sent: {}", forgust_db::admin::redact_error(&e.to_string()))))?;
-    services::audit(&state, &p, "test_email_sent", None, json!({ "to": to }), None).await;
+    services::audit(&state, &p, "test_email_sent", None, json!({}), None).await;
     Ok(Json(json!({ "sent": to })))
 }
 
@@ -707,15 +707,7 @@ pub async fn delete_user(
     {
         tracing::warn!(user = u.id, error = %e, "avatar not deleted");
     }
-    services::audit(
-        &state,
-        &p,
-        "user_deleted",
-        Some(("user", u.id)),
-        json!({ "username": u.username, "email": u.email, "projects_deleted": projects.len() }),
-        None,
-    )
-    .await;
+    services::audit(&state, &p, "user_deleted", Some(("user", u.id)), json!({ "projects_deleted": projects.len() }), None).await;
     Ok(Json(json!({ "deleted": u.username, "projects_deleted": projects.len() })))
 }
 
@@ -856,7 +848,7 @@ pub async fn confirm_email(
         forgust_db::users::delete_tokens(&mut *tx, u.id, "email").await?;
     }
     tx.commit().await?;
-    services::audit(&state, &p, "email_confirmed", Some(("user", u.id)), json!({ "email": u.email, "by": "administrator" }), None).await;
+    services::audit(&state, &p, "email_confirmed", Some(("user", u.id)), json!({ "by": "administrator" }), None).await;
     Ok(Json(json!({ "ok": true })))
 }
 
@@ -886,7 +878,7 @@ pub async fn create_user(State(state): State<AppState>, Admin(_, p): Admin, Json
     )
     .await?;
     tx.commit().await?;
-    services::audit(&state, &p, "user_created", Some(("user", u.id)), json!({ "username": u.username, "admin": u.is_admin }), None).await;
+    services::audit(&state, &p, "user_created", Some(("user", u.id)), json!({ "admin": u.is_admin }), None).await;
     Ok(Json(UserDto::from(&u, true)))
 }
 
@@ -907,9 +899,22 @@ pub async fn update_user(
     State(state): State<AppState>,
     Admin(me, p): Admin,
     Path(id): Path<i64>,
-    Json(req): Json<UpdateUser>,
+    Json(mut req): Json<UpdateUser>,
 ) -> ApiResult<Json<UserDto>> {
     let u = forgust_db::users::find(&state.db, id).await?.ok_or(ApiError::NotFound)?;
+    // the form sends every field: what it leaves as it is is no change (no
+    // write, no event)
+    req.is_admin = req.is_admin.filter(|a| *a != u.is_admin);
+    req.state = req.state.filter(|s| *s != u.state);
+    req.is_external = req.is_external.filter(|e| *e != u.is_external);
+    req.email = req.email.filter(|e| !e.trim().eq_ignore_ascii_case(&u.email));
+    // as the request leaves the account, before changing any of it
+    if req.is_admin.unwrap_or(u.is_admin)
+        && req.is_external.unwrap_or(u.is_external)
+        && (req.is_admin.is_some() || req.is_external.is_some())
+    {
+        return Err(ApiError::bad("administrators cannot be external"));
+    }
     if let Some(admin) = req.is_admin {
         if u.id == me.id && !admin {
             return Err(ApiError::bad("you cannot remove your own admin rights"));
@@ -931,19 +936,16 @@ pub async fn update_user(
         if s == "blocked" {
             forgust_db::sessions::delete_for_user(&state.db, id).await?;
         }
-        services::audit(&state, &p, if s == "blocked" { "user_blocked" } else { "user_unblocked" }, Some(("user", id)), json!({}), None)
-            .await;
+        let action = if s == "blocked" { "user_blocked" } else { "user_unblocked" };
+        services::audit(&state, &p, action, Some(("user", id)), json!({ "previous_state": u.state }), None).await;
     }
     if let Some(ext) = req.is_external {
         if u.is_bot() {
             return Err(ApiError::bad("bots cannot be external"));
         }
-        if ext && u.is_admin {
-            return Err(ApiError::bad("administrators cannot be external"));
-        }
         forgust_db::admin::set_external(&state.db, id, ext).await?;
-        services::audit(&state, &p, if ext { "user_made_external" } else { "user_made_internal" }, Some(("user", id)), json!({}), None)
-            .await;
+        let action = if ext { "user_made_external" } else { "user_made_internal" };
+        services::audit(&state, &p, action, Some(("user", id)), json!({}), None).await;
     }
     if let Some(email) = req.email.as_deref().map(str::trim) {
         if u.is_bot() {
@@ -951,19 +953,17 @@ pub async fn update_user(
         }
         services::paths::validate_email(email)?;
         services::accounts::set_email(&state, &p, &u, email, true).await?;
-        if !email.eq_ignore_ascii_case(&u.email) {
-            // the old inbox hears of it (nothing is sent without email)
-            services::notify::send_to(
-                &state,
-                &u.email,
-                "Your email address was changed",
-                &format!(
-                    "Hello {},\n\nAn administrator moved your Forgust account to {email}. Emails go there from now on.\n\nIf you did not expect this, ask an administrator.\n",
-                    u.username
-                ),
-            )
-            .await;
-        }
+        // the old inbox hears of it (nothing is sent without email)
+        services::notify::send_to(
+            &state,
+            &u.email,
+            "Your email address was changed",
+            &format!(
+                "Hello {},\n\nAn administrator moved your Forgust account to {email}. Emails go there from now on.\n\nIf you did not expect this, ask an administrator.\n",
+                u.username
+            ),
+        )
+        .await;
     }
     if let Some(pw) = req.password.as_deref() {
         users::validate_password(pw)?;
@@ -1051,4 +1051,15 @@ pub struct AuditQuery {
 
 pub async fn audit(State(state): State<AppState>, Admin(..): Admin, Query(q): Query<AuditQuery>) -> ApiResult<Json<Vec<AuditEvent>>> {
     Ok(Json(forgust_db::audit::list(&state.db, q.target_type.as_deref(), q.target_id, 200, q.before).await?))
+}
+
+#[derive(Serialize)]
+pub struct AuditCatalogue {
+    version: u32,
+    events: &'static [services::audit_events::EventType],
+}
+
+/// Every event the audit log can hold, with its fields.
+pub async fn audit_catalogue(Admin(..): Admin) -> Json<AuditCatalogue> {
+    Json(AuditCatalogue { version: services::audit_events::VERSION, events: services::audit_events::EVENTS })
 }

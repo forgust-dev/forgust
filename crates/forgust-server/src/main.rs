@@ -38,6 +38,8 @@ enum Command {
     },
     /// Print the OpenAPI document (used to generate the frontend's types).
     Openapi,
+    /// Print the audit event catalogue (Markdown, for the docs).
+    AuditEvents,
     /// Print the effective configuration.
     Config,
     /// Exit 0 when the local server answers /health (container health checks).
@@ -69,6 +71,10 @@ fn main() -> anyhow::Result<()> {
     }
     if let Command::Openapi = &cli.command {
         println!("{}", serde_json::to_string_pretty(&forgust_server::api::openapi::document())?);
+        return Ok(());
+    }
+    if let Command::AuditEvents = &cli.command {
+        print!("{}", services::audit_events::markdown());
         return Ok(());
     }
     let cfg = Config::load(cli.config.as_deref())?;
@@ -141,7 +147,7 @@ async fn run(command: Command, cfg: Config) -> anyhow::Result<()> {
             let resp = reqwest::get(format!("http://127.0.0.1:{port}/health")).await?;
             anyhow::ensure!(resp.status().is_success(), "unhealthy: {}", resp.status());
         }
-        Command::Hook { .. } | Command::Openapi => unreachable!(),
+        Command::Hook { .. } | Command::Openapi | Command::AuditEvents => unreachable!(),
     }
     Ok(())
 }
