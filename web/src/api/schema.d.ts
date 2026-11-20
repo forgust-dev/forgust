@@ -545,7 +545,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Check a token and list the projects it can import. */
+        /** Check the address and token, and say where projects can be listed from. */
         post: operations["connect"];
         delete?: never;
         options?: never;
@@ -562,8 +562,45 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** One project by path or URL, for public projects the token is not a member of. */
+        /**
+         * One project by path or URL (single imports, and public projects the token
+         *     is not a member of).
+         */
         post: operations["lookup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The projects of a user, group or organization on the source (bulk imports). */
+        post: operations["projects"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The forges projects can be imported from, and the versions they need. */
+        get: operations["sources"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3450,11 +3487,7 @@ export interface components {
             email: string;
         };
         ConnectBody: {
-            /** @description Only projects under this group (GitLab) or owner (GitHub). */
-            scope?: string;
-            search?: string;
-            /** @description `gitlab` (or `github`). */
-            source: string;
+            source: components["schemas"]["ImportSource"];
             /** @description Optional for public projects. */
             token?: string;
             /** @description The forge's address, e.g. https://gitlab.example.com. */
@@ -3462,9 +3495,15 @@ export interface components {
         };
         Connected: {
             name: string;
-            projects: components["schemas"]["SourceProject"][];
-            /** @description The token's user on the source. */
+            /**
+             * @description Where the token's user has projects: their own, then their groups or
+             *     organizations (none without a token).
+             */
+            namespaces: components["schemas"]["SourceNamespace"][];
+            /** @description The token's user on the source (empty without a token). */
             username: string;
+            /** @description What the server says it runs (`Forgejo 9.0.1`), when it says. */
+            version?: string | null;
         };
         Contributions: {
             /** @description Newest first. */
@@ -3511,7 +3550,7 @@ export interface components {
         CreateImportBody: {
             options?: components["schemas"]["Options"] | null;
             projects: components["schemas"]["ImportProjectBody"][];
-            source: string;
+            source: components["schemas"]["ImportSource"];
             /** Format: int64 */
             target_namespace_id: number;
             /** @description Optional for public projects. */
@@ -4092,6 +4131,11 @@ export interface components {
             /** @description Path under the target group; `sub/project` creates the subgroup. */
             target_path: string;
         };
+        /**
+         * @description The forges Forgust imports from.
+         * @enum {string}
+         */
+        ImportSource: "gitlab" | "github" | "gitea" | "forgejo";
         ImportUser: {
             email?: string | null;
             local_username?: string | null;
@@ -4481,7 +4525,7 @@ export interface components {
         LookupBody: {
             /** @description `group/project`, `owner/repo`, or the project's URL. */
             path: string;
-            source: string;
+            source: components["schemas"]["ImportSource"];
             token?: string;
             url: string;
         };
@@ -5250,6 +5294,14 @@ export interface components {
             /** Format: int64 */
             total_bytes: number;
         };
+        ProjectsBody: {
+            /** @description A user, group or organization; empty: every project the token can read. */
+            owner?: string;
+            search?: string;
+            source: components["schemas"]["ImportSource"];
+            token?: string;
+            url: string;
+        };
         ProtectBranch: {
             allow_deploy_keys?: boolean;
             allow_force_push?: boolean;
@@ -5890,7 +5942,28 @@ export interface components {
             format: string;
             url: string;
         };
-        /** @description A project (GitLab) or repository (GitHub) on the source. */
+        SourceInfo: {
+            /** @description The public instance the form starts with. */
+            default_url: string;
+            id: components["schemas"]["ImportSource"];
+            /** @description The oldest self-hosted version imports work with (`17.0`). */
+            minimum_version: string;
+            name: string;
+            /** @description What the access token needs. */
+            token_scopes: string;
+        };
+        /**
+         * @description Where projects live on the source: a user's own, or a group (GitLab) or
+         *     organization's.
+         */
+        SourceNamespace: {
+            /** @description `user` or `group`. */
+            kind: string;
+            name: string;
+            /** @description The path to list it by: a username, `group/sub`, or an organization. */
+            path: string;
+        };
+        /** @description A project (GitLab) or repository (GitHub, Gitea, Forgejo) on the source. */
         SourceProject: {
             archived: boolean;
             default_branch?: string | null;
@@ -7471,6 +7544,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SourceProject"];
+                };
+            };
+        };
+    };
+    projects: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectsBody"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceProject"][];
+                };
+            };
+        };
+    };
+    sources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceInfo"][];
                 };
             };
         };

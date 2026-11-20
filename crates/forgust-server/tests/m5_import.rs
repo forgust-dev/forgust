@@ -159,7 +159,10 @@ async fn import_a_gitlab_project(pool: sqlx::PgPool) {
     let (mr1, mr2) = (mr(1, "Topic", "opened", "topic", &v1), mr(2, "Gone", "closed", "gone", &v2));
     let routes: HashMap<String, Value> = [
         ("/api/v4/user", json!({ "id": 1, "username": "importer", "name": "Importer" })),
+        ("/api/v4/version", json!({ "version": "17.5.1-ee", "revision": "abc" })),
+        ("/api/v4/groups", json!([{ "id": 5, "full_path": "team", "full_name": "Team" }])),
         ("/api/v4/projects", json!([project])),
+        ("/api/v4/groups/team/projects", json!([project])),
         ("/api/v4/projects/42", project.clone()),
         ("/api/v4/users/7", json!({ "id": 7, "username": "jane", "name": "Jane Doe", "public_email": "Jane@Example.com" })),
         ("/api/v4/projects/42/labels", json!([{ "name": "bug", "color": "#D73A4A", "description": "Broken" }, { "name": "ui", "color": "#abc" }])),
@@ -241,9 +244,16 @@ async fn import_a_gitlab_project(pool: sqlx::PgPool) {
     // a wrong token is refused up front; the right one lists the project
     let bad = owner.post("/api/v1/imports/connect", json!({ "source": "gitlab", "url": gitlab, "token": "nope" })).await;
     assert_eq!(bad.0, 400, "{}", bad.1);
-    let listed = owner.ok_post("/api/v1/imports/connect", json!({ "source": "gitlab", "url": gitlab, "token": token })).await;
-    assert_eq!(listed["username"], "importer");
-    assert_eq!(listed["projects"][0]["full_path"], "team/origin");
+    let connected = owner.ok_post("/api/v1/imports/connect", json!({ "source": "gitlab", "url": gitlab, "token": token })).await;
+    assert_eq!(connected["username"], "importer");
+    assert_eq!(connected["version"], "GitLab 17.5.1-ee");
+    let owners: Vec<&str> = connected["namespaces"].as_array().unwrap().iter().map(|n| n["path"].as_str().unwrap()).collect();
+    assert_eq!(owners, ["importer", "team"], "the token user, then their groups");
+    for from in ["", "team"] {
+        let listed =
+            owner.ok_post("/api/v1/imports/projects", json!({ "source": "gitlab", "url": gitlab, "token": token, "owner": from })).await;
+        assert_eq!(listed[0]["full_path"], "team/origin", "{from:?}: {listed}");
+    }
 
     // dry run
     let started = owner
@@ -547,6 +557,9 @@ async fn import_a_github_repository(pool: sqlx::PgPool) {
     });
     let routes: HashMap<String, Value> = [
         ("/api/v3/user", json!({ "id": 1, "login": "importer" })),
+        ("/api/v3/meta", json!({ "installed_version": "3.14.2" })),
+        ("/api/v3/user/orgs", json!([{ "login": "octo" }])),
+        ("/api/v3/orgs/octo/repos", json!([repo])),
         ("/api/v3/user/repos", json!([repo])),
         ("/api/v3/repos/octo/app", repo.clone()),
         ("/api/v3/users/jane", json!({ "id": 7, "login": "jane", "name": "Jane Doe", "email": "jane@example.com" })),
@@ -610,8 +623,13 @@ async fn import_a_github_repository(pool: sqlx::PgPool) {
     let (github, hits) = mock_github(routes, false).await;
     let target = owner.ok_post("/api/v1/groups", json!({ "name": "Imported", "path": "imported" })).await;
 
-    let listed = owner.ok_post("/api/v1/imports/connect", json!({ "source": "github", "url": github, "token": token })).await;
-    assert_eq!(listed["projects"][0]["full_path"], "octo/app");
+    let connected = owner.ok_post("/api/v1/imports/connect", json!({ "source": "github", "url": github, "token": token })).await;
+    assert_eq!(connected["version"], "GitHub 3.14.2", "{connected}");
+    let owners: Vec<&str> = connected["namespaces"].as_array().unwrap().iter().map(|n| n["path"].as_str().unwrap()).collect();
+    assert_eq!(owners, ["importer", "octo"]);
+    let listed =
+        owner.ok_post("/api/v1/imports/projects", json!({ "source": "github", "url": github, "token": token, "owner": "octo" })).await;
+    assert_eq!(listed[0]["full_path"], "octo/app", "{listed}");
     let started = owner
         .ok_post(
             "/api/v1/imports",
@@ -1134,11 +1152,13 @@ async fn import_a_public_project_without_a_token(pool: sqlx::PgPool) {
     let (gitlab, hits, _) = mock_gitlab_counted(routes, 0, true).await;
 
     // no token: nothing to list without a group, but a project can be added by its URL
-    let listed = owner.ok_post("/api/v1/imports/connect", json!({ "source": "gitlab", "url": gitlab })).await;
-    assert_eq!(listed["projects"], json!([]));
+    let connected = owner.ok_post("/api/v1/imports/connect", json!({ "source": "gitlab", "url": gitlab })).await;
+    assert_eq!((connected["namespaces"].clone(), connected["version"].clone()), (json!([]), Value::Null), "{connected}");
+    let everything = owner.post("/api/v1/imports/projects", json!({ "source": "gitlab", "url": gitlab })).await;
+    assert_eq!(everything.0, 400, "without a token, a user or group is named");
     // a group's public projects, without those only shared with it
-    let listed = owner.ok_post("/api/v1/imports/connect", json!({ "source": "gitlab", "url": gitlab, "scope": "someone" })).await;
-    let paths: Vec<&str> = listed["projects"].as_array().unwrap().iter().map(|p| p["full_path"].as_str().unwrap()).collect();
+    let listed = owner.ok_post("/api/v1/imports/projects", json!({ "source": "gitlab", "url": gitlab, "owner": "someone" })).await;
+    let paths: Vec<&str> = listed.as_array().unwrap().iter().map(|p| p["full_path"].as_str().unwrap()).collect();
     assert_eq!(paths, ["someone/pub"]);
     let found = owner
         .ok_post(
@@ -1184,4 +1204,227 @@ async fn import_a_public_project_without_a_token(pool: sqlx::PgPool) {
     assert!(notes <= 32, "asked for comments {notes} times after they were refused");
     assert_eq!(hits_on(&hits, |p| p.ends_with("/discussions")), 0);
     assert_eq!(hits_on(&hits, |p| p.starts_with("/api/v4/users/")), 1, "people looked up until the first rate limit");
+}
+
+/// A fake Gitea or Forgejo `/api/v1`: JSON per path, `?page=N` pages chained
+/// with `Link` headers and counted in `X-Total-Count`; `token …` required.
+async fn mock_gitea(routes: HashMap<String, Value>) -> String {
+    let routes = Arc::new(routes);
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let app = axum::Router::new().fallback(move |req: axum::extract::Request| {
+        let routes = routes.clone();
+        async move {
+            let path = req.uri().path().to_string();
+            let auth = req.headers().get("authorization").and_then(|v| v.to_str().ok());
+            // the version is public, the rest wants the token
+            if !path.ends_with("/version") && !auth.is_some_and(|v| v.starts_with("token ") && v != "token nope") {
+                return (StatusCode::UNAUTHORIZED, r#"{"message":"token is required"}"#).into_response();
+            }
+            let query = req.uri().query().unwrap_or("").to_string();
+            let page: usize = query.split('&').find_map(|kv| kv.strip_prefix("page=")).and_then(|v| v.parse().ok()).unwrap_or(1);
+            let key = if page > 1 { format!("{path}?page={page}") } else { path.clone() };
+            let Some(v) = routes.get(&key) else { return (StatusCode::NOT_FOUND, r#"{"message":"not found"}"#).into_response() };
+            if let Some(raw) = v.as_str() {
+                return raw.to_string().into_response();
+            }
+            let mut total = v.as_array().map(|a| a.len()).unwrap_or(1);
+            let mut n = page + 1;
+            while let Some(more) = routes.get(&format!("{path}?page={n}")) {
+                total += more.as_array().map(|a| a.len()).unwrap_or(0);
+                n += 1;
+            }
+            let mut r =
+                ([("content-type", "application/json".to_string()), ("x-total-count", total.to_string())], v.to_string()).into_response();
+            if routes.contains_key(&format!("{path}?page={}", page + 1)) {
+                let link = format!("<http://{addr}{path}?page={}&limit=50>; rel=\"next\"", page + 1);
+                r.headers_mut().insert("link", link.parse().unwrap());
+            }
+            r
+        }
+    });
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    format!("http://{addr}")
+}
+
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn import_a_forgejo_repository(pool: sqlx::PgPool) {
+    let srv = TestServer::start_with(pool, |c| c.features.imports_allow_local = true).await;
+    let owner = srv.user("olivia", false).await;
+    srv.user("jane", false).await;
+
+    // the "Forgejo" repository, with a pull request head kept under refs/pull/
+    let org = owner.ok_post("/api/v1/groups", json!({ "name": "Acme", "path": "acme" })).await;
+    let origin = owner.ok_post("/api/v1/projects", json!({ "name": "Origin", "path": "origin", "namespace_id": org["id"] })).await;
+    let work = srv.work_dir("fj-origin");
+    seed_repo(&work).await;
+    let remote = srv.http_url("olivia", "acme/origin");
+    must(git(&work, &["push", "-q", &remote, "main"]).await);
+    must(git(&work, &["checkout", "-q", "-b", "topic"]).await);
+    commit_file(&work, "a.txt", "one\ntwo\n", "add a").await;
+    must(git(&work, &["push", "-q", &remote, "topic"]).await);
+    let topic = must(git(&work, &["rev-parse", "HEAD"]).await).trim().to_string();
+    wait_jobs(&srv.state).await;
+    srv.state.storage.update_ref(origin["id"].as_i64().unwrap(), "refs/pull/2/head", &topic, None).await.unwrap();
+    let token = owner.ok_post("/api/v1/user/tokens", json!({ "name": "import", "scopes": ["read_repository"] })).await["token"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let octo = json!({ "id": 9, "login": "octo-admin", "full_name": "" });
+    let jane = json!({ "id": 7, "login": "jane", "full_name": "Jane Doe", "email": "jane@noreply.localhost" });
+    let repo = json!({
+        "full_name": "octo/app", "name": "app", "description": "An app", "private": true, "internal": false, "default_branch": "main",
+        "clone_url": format!("{}/acme/origin.git", srv.base), "html_url": "https://codeberg.example/octo/app", "archived": false,
+        "fork": false, "mirror": false, "empty": false, "size": 12, "has_issues": true, "has_pull_requests": true, "has_wiki": false
+    });
+    let review_comment = |id: i64, body: &str, who: &Value, at: &str, resolver: Value| {
+        json!({ "id": id, "body": body, "user": who, "resolver": resolver, "created_at": at, "path": "a.txt",
+                "commit_id": topic, "original_commit_id": topic, "position": 2, "original_position": 0 })
+    };
+    let routes: HashMap<String, Value> = [
+        ("/api/forgejo/v1/version", json!({ "version": "9.0.1+gitea-1.22.0" })),
+        ("/api/v1/version", json!({ "version": "9.0.1+gitea-1.22.0" })),
+        ("/api/v1/user", json!({ "id": 1, "login": "importer", "full_name": "Importer" })),
+        ("/api/v1/user/orgs", json!([{ "id": 3, "name": "octo", "full_name": "Octo Inc." }])),
+        ("/api/v1/orgs/octo/repos", json!([repo])),
+        ("/api/v1/repos/octo/app", repo.clone()),
+        ("/api/v1/users/jane", json!({ "id": 7, "login": "jane", "full_name": "Jane Doe", "email": "jane@example.com" })),
+        ("/api/v1/users/octo-admin", json!({ "id": 9, "login": "octo-admin", "email": "" })),
+        ("/api/v1/repos/octo/app/labels", json!([{ "name": "bug", "color": "d73a4a", "description": "Broken" }])),
+        ("/api/v1/repos/octo/app/milestones", json!([{ "title": "Launch", "state": "open", "due_on": "2024-03-01T08:00:00Z" }])),
+        // newest first, over two pages
+        (
+            "/api/v1/repos/octo/app/issues",
+            json!([{ "id": 103, "number": 3, "title": "Old", "body": "", "user": octo, "state": "closed", "labels": [],
+                     "created_at": "2024-01-04T00:00:00Z", "updated_at": "2024-01-05T00:00:00Z", "closed_at": "2024-01-05T00:00:00Z" }]),
+        ),
+        (
+            "/api/v1/repos/octo/app/issues?page=2",
+            json!([{ "id": 101, "number": 1, "title": "Crash", "body": "It crashes", "user": jane, "state": "open", "labels": [{ "name": "bug" }],
+                     "milestone": { "title": "Launch", "state": "open" }, "due_date": "2024-02-01T00:00:00Z",
+                     "created_at": "2024-01-01T00:00:00Z", "updated_at": "2024-01-02T00:00:00Z" }]),
+        ),
+        (
+            "/api/v1/repos/octo/app/issues/comments",
+            json!([
+                { "id": 201, "issue_url": "https://codeberg.example/octo/app/issues/1", "pull_request_url": "", "body": "Same here", "user": octo,
+                  "created_at": "2024-01-01T05:00:00Z" },
+                { "id": 401, "issue_url": "", "pull_request_url": "https://codeberg.example/octo/app/pulls/2", "body": "Thanks!", "user": octo,
+                  "created_at": "2024-01-03T02:00:00Z" }
+            ]),
+        ),
+        (
+            "/api/v1/repos/octo/app/pulls",
+            json!([{ "id": 302, "number": 2, "title": "WIP: Topic", "body": "Adds a", "user": jane, "state": "open", "merged": false,
+                     "labels": [{ "name": "bug" }], "created_at": "2024-01-03T00:00:00Z", "updated_at": "2024-01-03T01:00:00Z",
+                     "head": { "ref": "topic", "sha": topic, "repo": { "full_name": "octo/app" } }, "base": { "ref": "main", "sha": "x" } }]),
+        ),
+        (
+            "/api/v1/repos/octo/app/pulls/2/reviews",
+            json!([
+                { "id": 501, "body": "", "state": "COMMENT", "user": octo, "submitted_at": "2024-01-03T01:30:00Z", "comments_count": 1 },
+                { "id": 502, "body": "Fine now", "state": "APPROVED", "user": jane, "submitted_at": "2024-01-03T03:00:00Z", "comments_count": 1 },
+                { "id": 503, "body": "draft", "state": "PENDING", "user": jane, "comments_count": 1 }
+            ]),
+        ),
+        ("/api/v1/repos/octo/app/pulls/2/reviews/501/comments", json!([review_comment(601, "Why two lines?", &octo, "2024-01-03T01:30:00Z", Value::Null)])),
+        ("/api/v1/repos/octo/app/pulls/2/reviews/502/comments", json!([review_comment(602, "Because.", &jane, "2024-01-03T02:30:00Z", jane.clone())])),
+        ("/api/v1/repos/octo/app/actions/variables", json!([{ "name": "REGION", "data": "eu", "description": "where" }])),
+        ("/api/v1/repos/octo/app/branch_protections", json!([{ "rule_name": "main", "enable_push": true, "enable_push_whitelist": true }])),
+        ("/api/v1/repos/octo/app/collaborators", json!([jane])),
+        ("/api/v1/repos/octo/app/collaborators/jane/permission", json!({ "permission": "write" })),
+        ("/api/v1/repos/octo/app/contents/.forgejo/workflows", json!([{ "name": "ci.yml" }])),
+    ]
+    .into_iter()
+    .map(|(k, v)| (k.to_string(), v))
+    .collect();
+    let forgejo = mock_gitea(routes).await;
+    let conn = |extra: Value| {
+        let mut body = json!({ "source": "forgejo", "url": forgejo, "token": token });
+        body.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        body
+    };
+
+    let connected = owner.ok_post("/api/v1/imports/connect", conn(json!({}))).await;
+    assert_eq!(connected["version"], "Forgejo 9.0.1+gitea-1.22.0");
+    let owners: Vec<&str> = connected["namespaces"].as_array().unwrap().iter().map(|n| n["path"].as_str().unwrap()).collect();
+    assert_eq!(owners, ["importer", "octo"]);
+    assert_eq!(connected["namespaces"][1]["name"], "Octo Inc.");
+    let listed = owner.ok_post("/api/v1/imports/projects", conn(json!({ "owner": "octo" }))).await;
+    assert_eq!(listed[0]["full_path"], "octo/app");
+    assert_eq!(listed[0]["visibility"], "private");
+    let found = owner.ok_post("/api/v1/imports/lookup", conn(json!({ "path": format!("{forgejo}/octo/app/src/branch/main") }))).await;
+    assert_eq!(found["id"], "octo/app");
+
+    let target = owner.ok_post("/api/v1/groups", json!({ "name": "Imported", "path": "imported" })).await;
+    let started = owner
+        .ok_post(
+            "/api/v1/imports",
+            conn(json!({ "target_namespace_id": target["id"], "projects": [{ "source_id": "octo/app", "source_path": "octo/app", "target_path": "app" }] })),
+        )
+        .await;
+    let id = started["id"].as_i64().unwrap();
+    wait_jobs(&srv.state).await;
+    let planned = owner.ok_get(&format!("/api/v1/imports/{id}")).await;
+    assert_eq!(planned["status"], "planned", "{planned}");
+    let report = &planned["projects"][0]["report"];
+    assert_eq!((report["issues"].as_i64(), report["variables"].as_i64()), (Some(2), Some(1)), "{report}");
+    assert!(report["warnings"].as_array().unwrap().iter().any(|w| w.as_str().unwrap().contains("Actions workflow")), "{report}");
+    owner.ok_post(&format!("/api/v1/imports/{id}/start"), json!({})).await;
+    wait_jobs(&srv.state).await;
+    let done = owner.ok_get(&format!("/api/v1/imports/{id}")).await;
+    assert_eq!(done["projects"][0]["status"], "finished", "{done}");
+    let pid = done["projects"][0]["project_id"].as_i64().unwrap();
+
+    // issues from both pages; people matched by the email they show
+    let i1 = owner.ok_get(&format!("/api/v1/projects/{pid}/issues/1")).await;
+    assert_eq!((i1["author_username"].as_str(), i1["milestone_title"].as_str()), (Some("jane"), Some("Launch")), "{i1}");
+    assert_eq!(i1["labels"][0]["color"], "#d73a4a");
+    assert_eq!(owner.ok_get(&format!("/api/v1/projects/{pid}/issues/3")).await["state"], "closed");
+    // issues and pull requests share their numbers there too
+    assert_eq!(owner.ok_post(&format!("/api/v1/projects/{pid}/issues"), json!({ "title": "New" })).await["iid"], 4);
+
+    // the pull request: a draft by its title, its review conversation resolved
+    let p2 = owner.ok_get(&format!("/api/v1/projects/{pid}/merge_requests/2")).await;
+    assert_eq!((p2["state"].as_str(), p2["draft"].as_bool()), (Some("opened"), Some(true)), "{p2}");
+    assert_eq!(p2["versions"][0]["head_sha"], topic);
+    let notes = owner.ok_get(&format!("/api/v1/projects/{pid}/merge_requests/2/notes")).await;
+    let notes = notes.as_array().unwrap();
+    let bodies: Vec<&str> = notes.iter().map(|n| n["body"].as_str().unwrap()).collect();
+    assert!(bodies.contains(&"Thanks!") && bodies.contains(&"**Approved:** Fine now"), "{bodies:?}");
+    assert!(!bodies.contains(&"draft"), "a pending review is its author's only");
+    let root = notes.iter().find(|n| n["body"] == "Why two lines?").unwrap();
+    assert_eq!(root["position"]["new_line"], 2, "{root}");
+    assert!(!root["resolved_at"].is_null(), "{root}");
+    let reply = notes.iter().find(|n| n["body"] == "Because.").unwrap();
+    assert_eq!(reply["parent_id"], root["id"]);
+
+    // Actions variables, branch protection and collaborators
+    let vars = owner.ok_get(&format!("/api/v1/projects/{pid}/variables")).await;
+    assert_eq!(vars[0]["key"], "REGION", "{vars}");
+    let pbs = owner.ok_get(&format!("/api/v1/projects/{pid}/protected_branches")).await;
+    assert_eq!(pbs[0]["push_access_level"], "maintainer", "{pbs}");
+    let members = owner.ok_get(&format!("/api/v1/projects/{pid}/members")).await;
+    assert!(members.as_array().unwrap().iter().any(|m| m["username"] == "jane" && m["access_level"] == "developer"), "{members}");
+}
+
+/// A server older than the importer supports is refused when it says its version.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn import_refuses_too_old_a_server(pool: sqlx::PgPool) {
+    let srv = TestServer::start_with(pool, |c| c.features.imports_allow_local = true).await;
+    let owner = srv.user("olivia", false).await;
+    let routes: HashMap<String, Value> =
+        [("/api/v1/version", json!({ "version": "1.21.11" })), ("/api/v1/user", json!({ "id": 1, "login": "importer" }))]
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v))
+            .collect();
+    let gitea = mock_gitea(routes).await;
+    let r = owner.post("/api/v1/imports/connect", json!({ "source": "gitea", "url": gitea, "token": "t" })).await;
+    assert_eq!(r.0, 400, "{}", r.1);
+    assert!(r.1["message"].as_str().unwrap().contains("Gitea 1.21.11 is too old: Forgust imports from Gitea 1.22 or later"), "{}", r.1);
+    let sources = owner.ok_get("/api/v1/imports/sources").await;
+    let names: Vec<&str> = sources.as_array().unwrap().iter().map(|s| s["id"].as_str().unwrap()).collect();
+    assert_eq!(names, ["gitlab", "github", "gitea", "forgejo"]);
+    assert!(sources.as_array().unwrap().iter().all(|s| !s["minimum_version"].as_str().unwrap().is_empty()));
 }

@@ -1,12 +1,104 @@
-//! What a source forge looks like to the importer: one model for GitLab and
-//! GitHub, so the import job does not care where things come from.
+//! What a source forge looks like to the importer: one model for GitLab,
+//! GitHub, Gitea and Forgejo, so the import job does not care where things
+//! come from.
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-/// A project (GitLab) or repository (GitHub) on the source.
+/// The forges Forgust imports from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "lowercase")]
+#[schema(as = ImportSource)]
+pub enum Kind {
+    Gitlab,
+    Github,
+    Gitea,
+    Forgejo,
+}
+
+impl Kind {
+    pub const ALL: [Kind; 4] = [Kind::Gitlab, Kind::Github, Kind::Gitea, Kind::Forgejo];
+
+    pub fn parse(s: &str) -> Option<Kind> {
+        Kind::ALL.into_iter().find(|k| k.as_str() == s)
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Kind::Gitlab => "gitlab",
+            Kind::Github => "github",
+            Kind::Gitea => "gitea",
+            Kind::Forgejo => "forgejo",
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Kind::Gitlab => "GitLab",
+            Kind::Github => "GitHub",
+            Kind::Gitea => "Gitea",
+            Kind::Forgejo => "Forgejo",
+        }
+    }
+
+    /// The public instance the form starts with.
+    pub fn default_url(self) -> &'static str {
+        match self {
+            Kind::Gitlab => "https://gitlab.com",
+            Kind::Github => "https://github.com",
+            Kind::Gitea => "https://gitea.com",
+            Kind::Forgejo => "https://codeberg.org",
+        }
+    }
+
+    /// The oldest self-hosted version with every API the importer reads
+    /// (GitHub: Enterprise Server). Older servers are refused when they say
+    /// their version; github.com and gitlab.com always run the latest. Fields
+    /// that came later have fallbacks (GitLab: `draft` 14.0, `merge_user`
+    /// 14.7, `internal` 15.3, variables' `raw` 15.6 and `description` 16.2).
+    pub fn minimum(self) -> semver::Version {
+        match self {
+            // `read_api` tokens
+            Kind::Gitlab => semver::Version::new(12, 10, 0),
+            // `X-GitHub-Api-Version: 2022-11-28`
+            Kind::Github => semver::Version::new(3, 9, 0),
+            // Actions variables and draft pull requests
+            Kind::Gitea => semver::Version::new(1, 22, 0),
+            // Actions variables
+            Kind::Forgejo => semver::Version::new(8, 0, 0),
+        }
+    }
+
+    /// Projects nest in groups and subgroups (GitLab); elsewhere a project is
+    /// `owner/repo`.
+    pub fn nested(self) -> bool {
+        self == Kind::Gitlab
+    }
+}
+
+/// A server's version, from the text it gives (`17.5.1-ee`, `3.14.2`,
+/// `1.22.3+dev-12`, Forgejo's `9.0.1+gitea-1.22.0`): its leading numbers.
+pub fn parse_version(raw: &str) -> Option<semver::Version> {
+    let core = raw.trim().trim_start_matches('v');
+    let core = core.split(['-', '+', ' ']).next()?;
+    let mut nums = core.split('.').map(|n| n.parse::<u64>());
+    let major = nums.next()?.ok()?;
+    let minor = nums.next().unwrap_or(Ok(0)).ok()?;
+    let patch = nums.next().unwrap_or(Ok(0)).unwrap_or(0);
+    Some(semver::Version::new(major, minor, patch))
+}
+
+/// What a source says about itself: which forge it is and its version.
+#[derive(Debug, Clone)]
+pub struct ServerVersion {
+    /// Gitea and Forgejo share an API: the version tells them apart.
+    pub kind: Kind,
+    pub raw: String,
+}
+
+/// A project (GitLab) or repository (GitHub, Gitea, Forgejo) on the source.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct SourceProject {
     /// GitLab project id, or GitHub `owner/repo`.
@@ -26,6 +118,17 @@ pub struct SourceProject {
     pub empty: bool,
     /// The source says this project's issues are turned on.
     pub issues_enabled: bool,
+}
+
+/// Where projects live on the source: a user's own, or a group (GitLab) or
+/// organization's.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct SourceNamespace {
+    /// `user` or `group`.
+    pub kind: String,
+    /// The path to list it by: a username, `group/sub`, or an organization.
+    pub path: String,
+    pub name: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -169,6 +272,30 @@ pub struct SourceThread {
     pub resolved: bool,
 }
 
+impl SourceThread {
+    /// One comment not on a line, with no replies.
+    pub fn single(id: String, author: Option<SourceUser>, body: String, created_at: DateTime<Utc>) -> SourceThread {
+        SourceThread { notes: vec![SourceNote { id, author, body, created_at, position: None, internal: false }], resolved: false }
+    }
+}
+
+/// A review's summary as a comment: its verdict in bold, then its text; None
+/// for a plain review without text.
+pub fn review_summary(state: &str, body: &str) -> Option<String> {
+    let lead = match state {
+        "APPROVED" => "Approved",
+        // GitHub, then Gitea and Forgejo
+        "CHANGES_REQUESTED" | "REQUEST_CHANGES" => "Requested changes",
+        _ => "",
+    };
+    match (lead.is_empty(), body.trim().is_empty()) {
+        (true, true) => None,
+        (false, true) => Some(format!("**{lead}**")),
+        (false, false) => Some(format!("**{lead}:** {body}")),
+        (true, false) => Some(body.to_string()),
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SourceVariable {
     pub key: String,
@@ -214,6 +341,23 @@ pub struct Report {
     pub warnings: Vec<String>,
 }
 
+/// A label color as `#rrggbb`: sources give `#rrggbb`, `rrggbb` (GitHub,
+/// Gitea), `#rgb` or a CSS name; what does not fit gets the default.
+pub fn label_color(c: &str) -> String {
+    let hex = c.trim().trim_start_matches('#');
+    if !hex.chars().all(|ch| ch.is_ascii_hexdigit()) {
+        return "#6366f1".into();
+    }
+    match hex.len() {
+        6 => format!("#{}", hex.to_ascii_lowercase()),
+        3 => hex.chars().flat_map(|d| [d, d]).fold(String::from("#"), |mut s, d| {
+            s.push(d.to_ascii_lowercase());
+            s
+        }),
+        _ => "#6366f1".into(),
+    }
+}
+
 pub type Result<T> = std::result::Result<T, SourceError>;
 
 #[derive(Debug, thiserror::Error)]
@@ -240,9 +384,16 @@ impl SourceError {
 pub trait Source: Send + Sync {
     /// The signed-in user on the source (checks the token).
     async fn whoami(&self) -> Result<SourceUser>;
-    /// Projects the token can import from, optionally under a group/owner or
-    /// matching a search.
-    async fn list_projects(&self, scope: &str, search: &str) -> Result<Vec<SourceProject>>;
+    /// What the server says it is, when it says (best effort: none on
+    /// github.com, or when the version needs a token that was not given).
+    async fn version(&self) -> Option<ServerVersion> {
+        None
+    }
+    /// The groups or organizations the token user belongs to.
+    async fn groups(&self) -> Result<Vec<SourceNamespace>>;
+    /// Projects under `owner` (a user, group or organization), or every one
+    /// the token can read when it is empty; optionally matching a search.
+    async fn list_projects(&self, owner: &str, search: &str) -> Result<Vec<SourceProject>>;
     async fn project(&self, id: &str) -> Result<SourceProject>;
     /// git configuration (as `GIT_CONFIG_*` pairs) that authenticates a fetch.
     fn git_auth(&self) -> Vec<(String, String)>;
@@ -298,5 +449,38 @@ pub trait Source: Send + Sync {
     /// written on the source still names.
     fn shared_numbers(&self) -> bool {
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn label_colors() {
+        assert_eq!(super::label_color("#FF0000"), "#ff0000");
+        assert_eq!(super::label_color("00aabb"), "#00aabb");
+        assert_eq!(super::label_color("#abc"), "#aabbcc");
+        assert_eq!(super::label_color("red"), "#6366f1");
+        assert_eq!(super::label_color(""), "#6366f1");
+    }
+
+    #[test]
+    fn review_summaries() {
+        assert_eq!(super::review_summary("APPROVED", "").as_deref(), Some("**Approved**"));
+        assert_eq!(super::review_summary("REQUEST_CHANGES", "fix it").as_deref(), Some("**Requested changes:** fix it"));
+        assert_eq!(super::review_summary("COMMENTED", "note").as_deref(), Some("note"));
+        assert_eq!(super::review_summary("COMMENTED", " "), None);
+    }
+
+    #[test]
+    fn versions() {
+        let v = |s: &str| super::parse_version(s).map(|v| (v.major, v.minor, v.patch));
+        assert_eq!(v("17.5.1-ee"), Some((17, 5, 1)));
+        assert_eq!(v("3.14"), Some((3, 14, 0)));
+        assert_eq!(v("v1.22.3+dev-12-gabc"), Some((1, 22, 3)));
+        assert_eq!(v("9.0.1+gitea-1.22.0"), Some((9, 0, 1)));
+        assert_eq!(v("28.4.0"), Some((28, 4, 0)));
+        assert_eq!(v("development"), None);
+        assert!(super::parse_version("1.21.11").unwrap() < super::Kind::Gitea.minimum());
+        assert!(super::parse_version("28.0.0").unwrap() >= super::Kind::Gitea.minimum(), "Gitea dropped its `1.` prefix");
     }
 }
