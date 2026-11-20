@@ -93,7 +93,6 @@ pub async fn login(
     ip: ClientIp,
     Json(req): Json<LoginRequest>,
 ) -> ApiResult<(CookieJar, Json<LoginResponse>)> {
-    let ip_text = ip.text().unwrap_or_default();
     if !login_allowed(&state, ip, &req.login) {
         return Err(ApiError::forbidden("too many attempts, try again later"));
     }
@@ -107,14 +106,13 @@ pub async fn login(
     }
     if !crypto::check_password(&req.password, Some(hash)).await {
         login_checked(&state, ip, &req.login, Some(id), false);
-        services::audit(&state, &Principal::Anonymous, "login_failed", Some(("user", id)), json!({ "reason": "password" }), Some(&ip_text))
-            .await;
+        login_failed(&state, id, json!({ "reason": "password" }), ip).await;
         return Err(ApiError::Unauthorized);
     }
     login_checked(&state, ip, &req.login, Some(id), true);
     let user = forgust_db::users::find(&state.db, id).await?.ok_or(ApiError::Unauthorized)?;
     if !user.is_active() {
-        blocked_sign_in(&state, &user, "password", &ip_text).await;
+        blocked_sign_in(&state, &user, "password", ip).await;
         return Err(ApiError::forbidden("this account is blocked"));
     }
     if user.two_factor() {
@@ -227,8 +225,7 @@ async fn second_factor(
         // a wrong answer changes nothing but what it used up
         tx.commit().await?;
         state.totp_failures.allow(&acct);
-        let details = json!({ "reason": "second_factor", "method": factor.method() });
-        services::audit(&state, &Principal::Anonymous, "login_failed", Some(("user", user.id)), details, ip.text().as_deref()).await;
+        login_failed(&state, user.id, json!({ "reason": "second_factor", "method": factor.method() }), ip).await;
         return Err(ApiError::Unauthorized);
     }
     let codes_left = match factor {
@@ -495,7 +492,7 @@ pub async fn passkey_finish(
         }
     };
     if !user.is_active() || user.is_bot() {
-        blocked_sign_in(&state, &user, "passkey", &ip.text().unwrap_or_default()).await;
+        blocked_sign_in(&state, &user, "passkey", ip).await;
         return Err(ApiError::forbidden("this account is blocked"));
     }
     let moved = passkey.update_credential(&result);
@@ -504,19 +501,21 @@ pub async fn passkey_finish(
     start_session(&state, jar, &headers, ip, &user, "passkey").await
 }
 
+/// A refused sign-in to this account, in the audit log.
+async fn login_failed(state: &AppState, user_id: i64, details: serde_json::Value, ip: ClientIp) {
+    services::audit(state, &Principal::Anonymous, "login_failed", Some(("user", user_id)), details, ip.text().as_deref()).await;
+}
+
 /// A passkey that did not sign in (wrong account, not verified, refused).
 async fn passkey_refused(state: &AppState, user_id: i64, credential: i64, ip: ClientIp) {
-    let details = json!({ "reason": "passkey", "credential": credential });
-    services::audit(state, &Principal::Anonymous, "login_failed", Some(("user", user_id)), details, ip.text().as_deref()).await;
+    login_failed(state, user_id, json!({ "reason": "passkey", "credential": credential }), ip).await;
 }
 
 /// Someone got past the first step for a blocked account, or a bot's (bots
 /// do not sign in).
-async fn blocked_sign_in(state: &AppState, user: &forgust_db::users::User, method: &str, ip: &str) {
+async fn blocked_sign_in(state: &AppState, user: &forgust_db::users::User, method: &str, ip: ClientIp) {
     let reason = if user.is_bot() { "bot" } else { "blocked" };
-    let details = json!({ "reason": reason, "method": method });
-    let ip = Some(ip).filter(|i| !i.is_empty());
-    services::audit(state, &Principal::Anonymous, "login_failed", Some(("user", user.id)), details, ip).await;
+    login_failed(state, user.id, json!({ "reason": reason, "method": method }), ip).await;
 }
 
 /// A provider sign-in waiting for its second factor (`login_challenges.provider_sync`).
@@ -910,7 +909,7 @@ async fn finish_sign_in(
         }
     };
     if !user.is_active() {
-        blocked_sign_in(&state, &user, "oidc", &ip.text().unwrap_or_default()).await;
+        blocked_sign_in(&state, &user, "oidc", ip).await;
         return Err(ApiError::forbidden("this account is blocked"));
     }
     // the account's second factor still applies: the provider's sign-in

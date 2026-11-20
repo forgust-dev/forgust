@@ -1,7 +1,8 @@
 //! The audit event catalogue: every action the audit log holds, what it is
 //! about (`target_type`) and the fields of its `details`. `forgust
-//! audit-events` prints it for the docs, the admin API serves it, and a test
-//! checks it against the code, so an event can't be added without it.
+//! audit-events` prints it for the docs, the admin API serves it, and every
+//! write is checked against it in debug builds ([`mismatch`]), so the test
+//! suite fails on an event, a target or a field it does not list.
 //!
 //! [`VERSION`] goes up when an event is renamed or removed, or a field
 //! changes meaning or goes away; new events and new fields keep it.
@@ -331,11 +332,6 @@ pub const EVENTS: &[EventType] = &[
     ),
 ];
 
-/// In the catalogue.
-pub fn known(action: &str) -> bool {
-    EVENTS.iter().any(|e| e.name == action)
-}
-
 /// Keys every event may carry, see the module docs.
 const CONVENTIONAL: &[&str] = &["impersonated_by", "repeated"];
 
@@ -385,91 +381,21 @@ pub fn markdown() -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{BTreeSet, HashSet};
+    use std::collections::HashSet;
     use std::path::Path;
 
     use super::*;
 
-    /// Every `.rs` file under `src/`, with its path.
-    fn sources() -> Vec<(String, String)> {
-        fn walk(dir: &Path, out: &mut Vec<(String, String)>) {
-            for entry in std::fs::read_dir(dir).unwrap() {
-                let path = entry.unwrap().path();
-                if path.is_dir() {
-                    walk(&path, out);
-                } else if path.extension().is_some_and(|x| x == "rs") {
-                    out.push((path.display().to_string(), std::fs::read_to_string(&path).unwrap()));
-                }
+    /// The text of every `.rs` file under `dir`.
+    fn sources(dir: &Path, out: &mut String) {
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                sources(&path, out);
+            } else if path.extension().is_some_and(|x| x == "rs") && !path.ends_with("audit_events.rs") {
+                out.push_str(&std::fs::read_to_string(&path).unwrap());
             }
         }
-        let mut out = Vec::new();
-        walk(&Path::new(env!("CARGO_MANIFEST_DIR")).join("src"), &mut out);
-        out
-    }
-
-    /// The string literals in the action argument of each audit call: the
-    /// third argument of `audit(..)`, `audit_throttled(..)`, `refused(..)`
-    /// (the fourth) and the second of `audit_system(..)`; when it is a name
-    /// (`action`), the literals of the `let` that set it just before.
-    fn actions_in(src: &str) -> Vec<String> {
-        let mut found = Vec::new();
-        for (call, arg) in [("audit(", 2), ("audit_throttled(", 2), ("audit_system(", 1), ("refused(", 3)] {
-            let mut from = 0;
-            while let Some(i) = src[from..].find(call) {
-                let start = from + i;
-                from = start + call.len();
-                let before = &src[..start];
-                if before.ends_with("fn ") || before.ends_with(|c: char| c.is_alphanumeric() || c == '_') {
-                    continue;
-                }
-                let Some(args) = split_args(&src[from..]) else { continue };
-                let Some(a) = args.get(arg) else { continue };
-                let mut lits = literals(a);
-                if lits.is_empty() {
-                    let name = a.trim();
-                    if let Some(l) = before.rfind(&format!("let {name} =")) {
-                        let end = before[l..].find(';').map_or(before.len(), |e| l + e);
-                        lits = literals(&before[l..end]);
-                    }
-                }
-                found.extend(lits);
-            }
-        }
-        found
-    }
-
-    /// Top-level arguments of a call, from just after its `(`.
-    fn split_args(s: &str) -> Option<Vec<String>> {
-        let (mut depth, mut cur, mut out, mut in_str) = (0, String::new(), Vec::new(), false);
-        for c in s.chars() {
-            match c {
-                '"' => in_str = !in_str,
-                '(' | '[' | '{' if !in_str => depth += 1,
-                ')' | ']' | '}' if !in_str => {
-                    if depth == 0 {
-                        out.push(cur);
-                        return Some(out);
-                    }
-                    depth -= 1;
-                }
-                ',' if !in_str && depth == 0 => {
-                    out.push(std::mem::take(&mut cur));
-                    continue;
-                }
-                _ => {}
-            }
-            cur.push(c);
-        }
-        None
-    }
-
-    fn literals(s: &str) -> Vec<String> {
-        s.split('"')
-            .skip(1)
-            .step_by(2)
-            .filter(|l| !l.is_empty() && l.chars().all(|c| c.is_ascii_lowercase() || c == '_'))
-            .map(String::from)
-            .collect()
     }
 
     #[test]
@@ -482,26 +408,19 @@ mod tests {
         }
     }
 
-    #[test]
-    fn every_audited_action_is_in_the_catalogue() {
-        let mut missing = BTreeSet::new();
-        for (path, src) in sources() {
-            if path.ends_with("audit_events.rs") {
-                continue;
-            }
-            for a in actions_in(&src) {
-                if !known(&a) {
-                    missing.insert(format!("{a} ({path})"));
-                }
-            }
-        }
-        assert!(missing.is_empty(), "audited but not in the catalogue: {missing:#?}");
-    }
-
+    /// The other way round from [`mismatch`]: no entry is left that nothing
+    /// writes (in this crate or, for SQL that writes rows, `forgust-db`).
     #[test]
     fn every_catalogued_action_is_written_somewhere() {
-        let all: String = sources().into_iter().filter(|(p, _)| !p.ends_with("audit_events.rs")).map(|(_, s)| s).collect();
-        let stale: Vec<_> = EVENTS.iter().filter(|e| !all.contains(&format!("\"{}\"", e.name))).map(|e| e.name).collect();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let mut all = String::new();
+        sources(&root.join("src"), &mut all);
+        sources(&root.join("../forgust-db/src"), &mut all);
+        let stale: Vec<_> = EVENTS
+            .iter()
+            .filter(|e| !all.contains(&format!("\"{}\"", e.name)) && !all.contains(&format!("'{}'", e.name)))
+            .map(|e| e.name)
+            .collect();
         assert!(stale.is_empty(), "in the catalogue but never written: {stale:?}");
     }
 

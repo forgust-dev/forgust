@@ -6,40 +6,25 @@ mod common;
 use common::*;
 use serde_json::{Value, json};
 
-/// `(principal_kind, target_id, details)` of every `action` row, oldest first.
-async fn events(srv: &TestServer, action: &str) -> Vec<(String, Option<i64>, Value)> {
-    sqlx::query_as::<_, (String, Option<i64>, Value)>(
-        "SELECT principal_kind, target_id, details FROM audit_events WHERE action = $1 ORDER BY id",
-    )
-    .bind(action)
-    .fetch_all(&srv.state.db)
-    .await
-    .unwrap()
-}
-
-async fn user_id(srv: &TestServer, username: &str) -> i64 {
-    sqlx::query_scalar("SELECT id FROM users WHERE username = $1").bind(username).fetch_one(&srv.state.db).await.unwrap()
-}
-
 #[sqlx::test(migrator = "forgust_db::MIGRATOR")]
 async fn sign_ins_sign_outs_and_sessions(pool: sqlx::PgPool) {
     let srv = TestServer::start(pool).await;
     let admin = srv.user("root", true).await;
     let ann = srv.user("ann", false).await;
-    let ann_id = user_id(&srv, "ann").await;
-    assert!(events(&srv, "login").await.iter().any(|(_, t, d)| *t == Some(ann_id) && d["method"] == "password"));
+    let ann_id = srv.user_id("ann").await;
+    assert!(srv.audit_events("login").await.iter().any(|(_, t, d)| *t == Some(ann_id) && d["method"] == "password"));
 
     // a wrong password
     let (status, _) = Client::new(&srv.base).post("/api/v1/auth/login", json!({ "login": "ann", "password": "wrong" })).await;
     assert_eq!(status, 401);
-    let failed = events(&srv, "login_failed").await;
+    let failed = srv.audit_events("login_failed").await;
     assert_eq!(failed.len(), 1);
     assert_eq!((failed[0].1, failed[0].2["reason"].as_str()), (Some(ann_id), Some("password")));
 
     // signing out
     let (status, _) = ann.post("/api/v1/auth/logout", json!({})).await;
     assert_eq!(status, 200);
-    assert_eq!(events(&srv, "logout").await.iter().filter(|(_, t, _)| *t == Some(ann_id)).count(), 1);
+    assert_eq!(srv.audit_events("logout").await.iter().filter(|(_, t, _)| *t == Some(ann_id)).count(), 1);
 
     // a session that runs out is recorded by the sweep, as the system
     let mut again = Client::new(&srv.base);
@@ -51,7 +36,7 @@ async fn sign_ins_sign_outs_and_sessions(pool: sqlx::PgPool) {
         .unwrap();
     admin.ok_post("/api/v1/admin/tasks/cleanup", json!({})).await;
     wait_jobs(&srv.state).await;
-    let expired = events(&srv, "session_expired").await;
+    let expired = srv.audit_events("session_expired").await;
     assert_eq!(expired.len(), 1, "{expired:?}");
     assert_eq!((expired[0].0.as_str(), expired[0].1), ("system", Some(ann_id)));
     assert!(expired[0].2["session_id"].is_i64());
@@ -60,15 +45,15 @@ async fn sign_ins_sign_outs_and_sessions(pool: sqlx::PgPool) {
     let path = format!("/api/v1/admin/users/{ann_id}");
     admin.ok_put(&path, json!({ "state": "blocked", "is_admin": false })).await;
     admin.ok_put(&path, json!({ "state": "blocked", "is_admin": false })).await;
-    let blocked = events(&srv, "user_blocked").await;
+    let blocked = srv.audit_events("user_blocked").await;
     assert_eq!(blocked.len(), 1);
     assert_eq!(blocked[0].2["previous_state"], "active");
-    assert!(events(&srv, "admin_revoked").await.is_empty(), "not an administrator before either");
+    assert!(srv.audit_events("admin_revoked").await.is_empty(), "not an administrator before either");
 
     // a blocked account's right password is a refused sign-in too
     let (status, _) = Client::new(&srv.base).post("/api/v1/auth/login", json!({ "login": "ann", "password": password("ann") })).await;
     assert_eq!(status, 403);
-    let failed = events(&srv, "login_failed").await;
+    let failed = srv.audit_events("login_failed").await;
     assert_eq!(failed.last().unwrap().2["reason"], "blocked");
 }
 
@@ -83,7 +68,7 @@ async fn wrong_second_factors_are_recorded(pool: sqlx::PgPool) {
     let challenge = challenge(&srv, "bob").await;
     let (status, _) = Client::new(&srv.base).post("/api/v1/auth/login/totp", json!({ "challenge": challenge, "code": "000000" })).await;
     assert_eq!(status, 401);
-    let failed = events(&srv, "login_failed").await;
+    let failed = srv.audit_events("login_failed").await;
     assert_eq!(failed.len(), 1, "{failed:?}");
     assert_eq!((failed[0].2["reason"].as_str(), failed[0].2["method"].as_str()), (Some("second_factor"), Some("totp")));
 }
@@ -93,7 +78,7 @@ async fn refusals_are_recorded_once_a_minute(pool: sqlx::PgPool) {
     let srv = TestServer::start(pool).await;
     let admin = srv.user("root", true).await;
     let carl = srv.user("carl", false).await;
-    let carl_id = user_id(&srv, "carl").await;
+    let carl_id = srv.user_id("carl").await;
 
     // a read-only token used to write, three times in a row: one row
     let token =
@@ -103,7 +88,7 @@ async fn refusals_are_recorded_once_a_minute(pool: sqlx::PgPool) {
         let (status, _) = ro.post("/api/v1/projects", json!({ "name": "X", "path": "x" })).await;
         assert_eq!(status, 403);
     }
-    let refused = events(&srv, "token_scope_refused").await;
+    let refused = srv.audit_events("token_scope_refused").await;
     assert_eq!(refused.len(), 1, "{refused:?}");
     assert_eq!(
         (refused[0].1, refused[0].2["method"].as_str(), refused[0].2["path"].as_str()),
@@ -113,7 +98,7 @@ async fn refusals_are_recorded_once_a_minute(pool: sqlx::PgPool) {
     // another route is another row, written as the route (no ids, no names)
     let (status, _) = ro.post("/api/v1/projects/123/issues", json!({ "title": "x" })).await;
     assert_eq!(status, 403);
-    let refused = events(&srv, "token_scope_refused").await;
+    let refused = srv.audit_events("token_scope_refused").await;
     assert_eq!(refused.len(), 2, "{refused:?}");
     assert_eq!(refused[1].2["path"], "/api/v1/projects/{id}/issues", "the route, not the id");
 
@@ -126,7 +111,7 @@ async fn refusals_are_recorded_once_a_minute(pool: sqlx::PgPool) {
     let (status, _) = Client::with_token(&srv.base, &api).get("/api/v1/admin/users").await;
     assert_eq!(status, 403);
     let reasons: Vec<_> =
-        events(&srv, "admin_access_refused").await.into_iter().map(|(_, _, d)| d["reason"].as_str().unwrap().to_string()).collect();
+        srv.audit_events("admin_access_refused").await.into_iter().map(|(_, _, d)| d["reason"].as_str().unwrap().to_string()).collect();
     assert_eq!(reasons, ["not_admin", "token_scope"]);
 
     // what the catalogue says is served to administrators
@@ -140,7 +125,7 @@ async fn role_changes_record_what_they_replaced(pool: sqlx::PgPool) {
     let srv = TestServer::start(pool).await;
     let owner = srv.user("olivia", false).await;
     srv.user("dave", false).await;
-    let dave = user_id(&srv, "dave").await;
+    let dave = srv.user_id("dave").await;
     let (org, _sub, project) = org_project(&owner).await;
 
     let members = format!("/api/v1/groups/{org}/members");
@@ -148,18 +133,18 @@ async fn role_changes_record_what_they_replaced(pool: sqlx::PgPool) {
     owner.ok_post(&members, json!({ "user_id": dave, "access_level": "maintainer" })).await;
     let (status, _) = owner.delete(&format!("{members}/{dave}")).await;
     assert!(status < 300, "{status}");
-    let set = events(&srv, "member_set").await;
+    let set = srv.audit_events("member_set").await;
     let for_dave: Vec<_> =
         set.iter().filter(|(_, _, d)| d["user_id"] == dave).map(|(_, _, d)| (d["previous_level"].clone(), d["level"].clone())).collect();
     assert_eq!(for_dave, [(Value::Null, json!(30)), (json!(30), json!(40))]);
-    let removed = events(&srv, "member_removed").await;
+    let removed = srv.audit_events("member_removed").await;
     assert_eq!(removed.last().unwrap().2, json!({ "user_id": dave, "previous_level": 40 }));
 
     // a branch rule changed, then removed: each time what it was
     let rules = format!("/api/v1/projects/{project}/protected_branches");
     owner.ok_post(&rules, json!({ "name": "release/*", "push_access_level": "maintainer" })).await;
     let list = owner.ok_post(&rules, json!({ "name": "release/*", "push_access_level": "developer" })).await;
-    let protected = events(&srv, "branch_protected").await;
+    let protected = srv.audit_events("branch_protected").await;
     let release: Vec<_> = protected.iter().filter(|(_, _, d)| d["name"] == "release/*").collect();
     assert_eq!((release[0].2["push"].as_i64(), &release[0].2["previous"]), (Some(40), &Value::Null), "levels as stored");
     assert_eq!(release[1].2["push"], 30);
@@ -167,7 +152,7 @@ async fn role_changes_record_what_they_replaced(pool: sqlx::PgPool) {
     let id = list.as_array().unwrap().iter().find(|r| r["name"] == "release/*").unwrap()["id"].as_i64().unwrap();
     let (status, _) = owner.delete(&format!("{rules}/{id}")).await;
     assert_eq!(status, 200);
-    let gone = events(&srv, "branch_unprotected").await;
+    let gone = srv.audit_events("branch_unprotected").await;
     assert_eq!((gone[0].2["name"].as_str(), gone[0].2["previous"]["push"].as_i64()), (Some("release/*"), Some(30)));
 
     // visibility
@@ -175,7 +160,7 @@ async fn role_changes_record_what_they_replaced(pool: sqlx::PgPool) {
     let mine =
         owner.ok_post("/api/v1/projects", json!({ "name": "Notes", "path": "notes", "namespace_id": ns, "visibility": "private" })).await;
     owner.ok_put(&format!("/api/v1/projects/{}", mine["id"]), json!({ "name": "Notes", "visibility": "internal" })).await;
-    let updated = events(&srv, "project_updated").await;
+    let updated = srv.audit_events("project_updated").await;
     assert_eq!((updated[0].2["previous_visibility"].as_i64(), updated[0].2["visibility"].as_i64()), (Some(0), Some(10)));
 }
 
@@ -190,7 +175,7 @@ async fn repository_reads_only_when_asked(pool: sqlx::PgPool) {
     let work = srv.work_dir("seed");
     seed_repo(&work).await;
     must(git(&work, &["push", "-q", &srv.http_url("olivia", "acme/platform/api"), "main"]).await);
-    assert!(events(&srv, "repository_read").await.is_empty(), "a push is no read");
+    assert!(srv.audit_events("repository_read").await.is_empty(), "a push is no read");
 
     // two clones in a row: one row, the second held back
     for n in 0..2 {
@@ -199,7 +184,7 @@ async fn repository_reads_only_when_asked(pool: sqlx::PgPool) {
     }
     let (status, _) = owner.get_bytes(&format!("/api/v1/projects/{project}/repository/archive")).await;
     assert_eq!(status, 200);
-    let reads = events(&srv, "repository_read").await;
+    let reads = srv.audit_events("repository_read").await;
     let via: Vec<_> = reads.iter().map(|(_, t, d)| (*t, d["via"].as_str().unwrap().to_string())).collect();
     assert_eq!(via, [(Some(project), "http".to_string()), (Some(project), "archive".to_string())]);
 
@@ -208,7 +193,7 @@ async fn repository_reads_only_when_asked(pool: sqlx::PgPool) {
     must(git(&work, &["push", "-q", &srv.http_url("olivia", "olivia/site"), "main"]).await);
     let dir = srv.work_dir("public");
     must(git(&dir, &["clone", "-q", &srv.http_url("olivia", "olivia/site"), "."]).await);
-    assert_eq!(events(&srv, "repository_read").await.len(), 2);
+    assert_eq!(srv.audit_events("repository_read").await.len(), 2);
 }
 
 #[sqlx::test(migrator = "forgust_db::MIGRATOR")]
@@ -224,7 +209,7 @@ async fn repository_reads_are_off_by_default(pool: sqlx::PgPool) {
     must(git(&work, &["push", "-q", &srv.http_url("olivia", "acme/platform/api"), "main"]).await);
     let dir = srv.work_dir("clone");
     must(git(&dir, &["clone", "-q", &srv.http_url("olivia", "acme/platform/api"), "."]).await);
-    assert!(events(&srv, "repository_read").await.is_empty());
+    assert!(srv.audit_events("repository_read").await.is_empty());
 }
 
 #[sqlx::test(migrator = "forgust_db::MIGRATOR")]
@@ -233,7 +218,7 @@ async fn names_are_looked_up_not_stored(pool: sqlx::PgPool) {
     let admin = srv.user("root", true).await;
     let owner = srv.user("olivia", false).await;
     srv.user("dave", false).await;
-    let dave = user_id(&srv, "dave").await;
+    let dave = srv.user_id("dave").await;
     let (_org, _sub, project) = org_project(&owner).await;
     owner.ok_post(&format!("/api/v1/projects/{project}/members"), json!({ "user_id": dave, "access_level": "developer" })).await;
 

@@ -63,7 +63,7 @@ fn unauthorized(state: &AppState, path: &str, message: &str) -> Response {
 }
 
 #[allow(clippy::result_large_err)] // the error is the answer, built once
-async fn caller(state: &AppState, path: &str, headers: &HeaderMap) -> Result<Caller, Response> {
+async fn caller(state: &AppState, path: &str, headers: &HeaderMap, ip: crate::auth::ClientIp) -> Result<Caller, Response> {
     let token = headers
         .get(header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
@@ -89,7 +89,8 @@ async fn caller(state: &AppState, path: &str, headers: &HeaderMap) -> Result<Cal
     let user = user.clone();
     if !(principal.has_scope("api") || principal.has_scope("read_api") || principal.has_scope("mcp")) {
         let details = json!({ "method": "POST", "path": path });
-        crate::services::audit_throttled(state, &principal, "token_scope_refused", Some(("user", user.id)), details, None).await;
+        crate::services::audit_throttled(state, &principal, "token_scope_refused", Some(("user", user.id)), details, ip.text().as_deref())
+            .await;
         return Err((
             StatusCode::FORBIDDEN,
             Json(json!({ "error": "insufficient_scope", "error_description": "the token needs the mcp, read_api or api scope" })),
@@ -111,7 +112,13 @@ async fn caller(state: &AppState, path: &str, headers: &HeaderMap) -> Result<Cal
 }
 
 /// `POST /api/v4/mcp`: one JSON-RPC message (or a batch), one answer.
-pub async fn post(State(state): State<AppState>, OriginalUri(uri): OriginalUri, headers: HeaderMap, body: Bytes) -> Response {
+pub async fn post(
+    State(state): State<AppState>,
+    OriginalUri(uri): OriginalUri,
+    ip: crate::auth::ClientIp,
+    headers: HeaderMap,
+    body: Bytes,
+) -> Response {
     // a database error answers "off", not "on"
     if !forgust_db::settings::mcp_enabled(&state.db).await.unwrap_or(false) {
         return (
@@ -120,7 +127,7 @@ pub async fn post(State(state): State<AppState>, OriginalUri(uri): OriginalUri, 
         )
             .into_response();
     }
-    let c = match caller(&state, uri.path(), &headers).await {
+    let c = match caller(&state, uri.path(), &headers, ip).await {
         Ok(c) => c,
         Err(r) => return r,
     };

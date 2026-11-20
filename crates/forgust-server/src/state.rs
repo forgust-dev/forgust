@@ -115,7 +115,13 @@ pub struct HeldEvent {
 /// window ends ([`AuditThrottle::overdue`]) or with the next row for the key.
 pub struct AuditThrottle {
     window: Duration,
-    seen: Mutex<HashMap<String, (std::time::Instant, u32, HeldEvent)>>,
+    seen: Mutex<HashMap<String, Window>>,
+}
+
+struct Window {
+    started: std::time::Instant,
+    held_back: u32,
+    first: HeldEvent,
 }
 
 impl AuditThrottle {
@@ -123,37 +129,47 @@ impl AuditThrottle {
         AuditThrottle { window, seen: Mutex::new(HashMap::new()) }
     }
 
-    /// `Some(repeats held back and not yet written)` when `event` is to be
-    /// written now, `None` when it is only counted.
-    pub fn admit(&self, key: &str, event: HeldEvent) -> Option<u32> {
+    /// `Some(repeats held back and not yet written)` when the event is to be
+    /// written now, `None` when it is only counted. `event` is called only
+    /// when a window starts.
+    pub fn admit(&self, key: String, event: impl FnOnce() -> HeldEvent) -> Option<u32> {
         let mut seen = self.seen.lock().unwrap();
         let now = std::time::Instant::now();
         // a flood of distinct keys must not grow the map without bound: past
         // this many, old windows go with whatever they held back
         if seen.len() > 100_000 {
-            seen.retain(|_, (t, _, _)| now.duration_since(*t) < self.window);
+            seen.retain(|_, w| now.duration_since(w.started) < self.window);
         }
-        match seen.get_mut(key) {
-            Some((t, n, _)) if now.duration_since(*t) < self.window => {
-                *n += 1;
-                None
+        match seen.entry(key) {
+            std::collections::hash_map::Entry::Occupied(mut o) => {
+                let w = o.get_mut();
+                if now.duration_since(w.started) < self.window {
+                    w.held_back += 1;
+                    return None;
+                }
+                Some(std::mem::replace(w, Window { started: now, held_back: 0, first: event() }).held_back)
             }
-            Some(e) => Some(std::mem::replace(e, (now, 0, event)).1),
-            None => {
-                seen.insert(key.to_string(), (now, 0, event));
+            std::collections::hash_map::Entry::Vacant(v) => {
+                v.insert(Window { started: now, held_back: 0, first: event() });
                 Some(0)
             }
         }
     }
 
-    /// Windows that ended: forgotten, and those that held events back
-    /// returned with their count, for a row saying so.
+    /// Windows that ended with events held back, with their count, for a row
+    /// saying so: they start again from now (a burst still going stays at a
+    /// row a minute). Windows that ended with nothing held back go.
     pub fn overdue(&self) -> Vec<(HeldEvent, u32)> {
         let now = std::time::Instant::now();
         let mut seen = self.seen.lock().unwrap();
-        let ended: Vec<String> =
-            seen.iter().filter(|(_, (t, _, _))| now.duration_since(*t) >= self.window).map(|(k, _)| k.clone()).collect();
-        ended.into_iter().filter_map(|k| seen.remove(&k)).filter(|(_, n, _)| *n > 0).map(|(_, n, e)| (e, n)).collect()
+        seen.retain(|_, w| w.held_back > 0 || now.duration_since(w.started) < self.window);
+        seen.values_mut()
+            .filter(|w| now.duration_since(w.started) >= self.window)
+            .map(|w| {
+                w.started = now;
+                (w.first.clone(), std::mem::take(&mut w.held_back))
+            })
+            .collect()
     }
 }
 
@@ -279,26 +295,31 @@ mod tests {
     #[test]
     fn the_throttle_counts_what_it_holds_back() {
         let t = AuditThrottle::new(Duration::from_millis(100));
-        assert_eq!(t.admit("a", event()), Some(0));
-        assert_eq!(t.admit("a", event()), None);
-        assert_eq!(t.admit("a", event()), None);
-        assert_eq!(t.admit("b", event()), Some(0), "keys are apart");
+        assert_eq!(t.admit("a".into(), event), Some(0));
+        assert_eq!(t.admit("a".into(), event), None);
+        assert_eq!(t.admit("a".into(), event), None);
+        assert_eq!(t.admit("b".into(), event), Some(0), "keys are apart");
         assert!(t.overdue().is_empty(), "windows still open");
         std::thread::sleep(Duration::from_millis(120));
-        assert_eq!(t.admit("a", event()), Some(2), "the next row says how many were held back");
-        assert_eq!(t.admit("a", event()), None);
+        assert_eq!(t.admit("a".into(), event), Some(2), "the next row says how many were held back");
+        assert_eq!(t.admit("a".into(), event), None);
     }
 
     #[test]
     fn a_burst_that_stops_is_still_counted() {
         let t = AuditThrottle::new(Duration::from_millis(50));
-        t.admit("a", event());
-        t.admit("a", event());
-        t.admit("b", event());
+        t.admit("a".into(), event);
+        t.admit("a".into(), event);
+        t.admit("b".into(), event);
         std::thread::sleep(Duration::from_millis(70));
         let overdue = t.overdue();
         assert_eq!(overdue.iter().map(|(_, n)| *n).collect::<Vec<_>>(), [1], "b held nothing back");
         assert!(t.overdue().is_empty(), "written once");
-        assert_eq!(t.admit("a", event()), Some(0), "a fresh window");
+        assert_eq!(t.admit("a".into(), event), None, "a burst still going: counted in the window that started again");
+        std::thread::sleep(Duration::from_millis(70));
+        assert_eq!(t.overdue().iter().map(|(_, n)| *n).collect::<Vec<_>>(), [1]);
+        std::thread::sleep(Duration::from_millis(70));
+        assert!(t.overdue().is_empty());
+        assert_eq!(t.admit("a".into(), event), Some(0), "quiet for a window: a fresh one");
     }
 }

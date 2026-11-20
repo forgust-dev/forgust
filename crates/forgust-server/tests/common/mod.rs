@@ -98,6 +98,19 @@ impl TestServer {
         format!("http://oauth2:{token}@{}/{path}.git", self.host())
     }
 
+    pub async fn user_id(&self, username: &str) -> i64 {
+        sqlx::query_scalar("SELECT id FROM users WHERE username = $1").bind(username).fetch_one(&self.state.db).await.unwrap()
+    }
+
+    /// `(principal_kind, target_id, details)` of every `action` audit row, oldest first.
+    pub async fn audit_events(&self, action: &str) -> Vec<(String, Option<i64>, Value)> {
+        sqlx::query_as("SELECT principal_kind, target_id, details FROM audit_events WHERE action = $1 ORDER BY id")
+            .bind(action)
+            .fetch_all(&self.state.db)
+            .await
+            .unwrap()
+    }
+
     pub fn work_dir(&self, name: &str) -> PathBuf {
         let d = self.tmp.path().join("work").join(name);
         std::fs::create_dir_all(&d).unwrap();

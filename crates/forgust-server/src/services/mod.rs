@@ -73,49 +73,30 @@ pub(crate) async fn check_note_change(
 
 /// Append to the audit log; failures are logged, never surfaced.
 pub async fn audit(state: &AppState, principal: &Principal, action: &str, target: Option<(&str, i64)>, details: Value, ip: Option<&str>) {
-    if cfg!(debug_assertions)
-        && let Some(e) = audit_events::mismatch(action, target.map(|t| t.0), &details)
-    {
-        panic!("{e}");
-    }
     // done by an administrator signed in as the user: say so
-    let details = match (principal.impersonator(), details) {
-        (Some(admin), Value::Object(mut m)) => {
-            m.insert("impersonated_by".into(), Value::from(admin));
-            Value::Object(m)
-        }
-        (Some(admin), other) => serde_json::json!({ "details": other, "impersonated_by": admin }),
-        (None, d) => d,
-    };
-    let r = forgust_db::audit::insert(
-        &state.db,
-        forgust_db::audit::NewEvent {
-            principal_kind: principal.kind(),
-            principal_id: principal.id(),
-            action,
-            target_type: target.map(|t| t.0),
-            target_id: target.map(|t| t.1),
-            details,
-            ip,
-        },
-    )
-    .await;
-    if let Err(e) = r {
-        tracing::warn!(error = %e, action, "failed to write audit event");
-    }
+    let details = with_field(details, "impersonated_by", principal.impersonator());
+    write_audit(state, principal.kind(), principal.id(), action, target, details, ip).await;
 }
 
-/// Append what the server did on its own (a session running out) to the
-/// audit log, as principal `system`.
-pub async fn audit_system(state: &AppState, action: &str, target: Option<(&str, i64)>, details: Value, ip: Option<&str>) {
+/// The one way an audit row is written: checked against the catalogue (in
+/// debug builds, so by the tests), inserted, a failure logged.
+pub(crate) async fn write_audit(
+    state: &AppState,
+    principal_kind: &str,
+    principal_id: Option<i64>,
+    action: &str,
+    target: Option<(&str, i64)>,
+    details: Value,
+    ip: Option<&str>,
+) {
     if cfg!(debug_assertions)
         && let Some(e) = audit_events::mismatch(action, target.map(|t| t.0), &details)
     {
         panic!("{e}");
     }
     let ev = forgust_db::audit::NewEvent {
-        principal_kind: "system",
-        principal_id: None,
+        principal_kind,
+        principal_id,
         action,
         target_type: target.map(|t| t.0),
         target_id: target.map(|t| t.1),
@@ -124,6 +105,19 @@ pub async fn audit_system(state: &AppState, action: &str, target: Option<(&str, 
     };
     if let Err(e) = forgust_db::audit::insert(&state.db, ev).await {
         tracing::warn!(error = %e, action, "failed to write audit event");
+    }
+}
+
+/// `details` with `key` set, when there is a value (details that are no
+/// object are wrapped: `{"details": .., key: ..}`).
+fn with_field(details: Value, key: &str, value: Option<impl Into<Value>>) -> Value {
+    let Some(v) = value else { return details };
+    match details {
+        Value::Object(mut m) => {
+            m.insert(key.into(), v.into());
+            Value::Object(m)
+        }
+        other => serde_json::json!({ "details": other, key: v.into() }),
     }
 }
 
@@ -146,11 +140,18 @@ pub async fn audit_repository_read(
     audit_throttled(state, principal, "repository_read", Some(("project", project.id)), serde_json::json!({ "via": via }), ip).await;
 }
 
+/// A push refused for who made it (their role, an archived project), over
+/// HTTP or SSH; the hook's refusals of single refs are written by the hook.
+pub async fn audit_push_refused(state: &AppState, principal: &Principal, project_id: i64, reason: &str, via: &str, ip: Option<&str>) {
+    let details = serde_json::json!({ "reason": reason, "via": via });
+    audit_throttled(state, principal, "push_rejected", Some(("project", project_id)), details, ip).await;
+}
+
 /// An event that can come in floods (a refusal a client retries in a loop, a
-/// fetch git makes in several requests): at most one row a minute per
-/// principal, action, target and `details` (route, method, transport...), the
-/// count of those held back (`repeated`) written with the next row or when
-/// the minute ends ([`flush_held_audit`]).
+/// fetch made of several requests): at most one row a minute per principal,
+/// action, target and `details` (route, method, transport...), the count of
+/// those held back (`repeated`) written with the next row or when the minute
+/// ends ([`flush_held_audit`]).
 pub async fn audit_throttled(
     state: &AppState,
     principal: &Principal,
@@ -159,36 +160,20 @@ pub async fn audit_throttled(
     details: Value,
     ip: Option<&str>,
 ) {
-    let key = format!(
-        "{}:{}|{action}|{}|{details}",
-        principal.kind(),
-        principal.id().unwrap_or_default(),
-        target.map(|(t, id)| format!("{t}:{id}")).unwrap_or_default(),
-    );
-    let mut held = details.clone();
-    if let (Some(admin), Value::Object(m)) = (principal.impersonator(), &mut held) {
-        m.insert("impersonated_by".into(), Value::from(admin));
-    }
-    let event = crate::state::HeldEvent {
-        principal_kind: principal.kind(),
-        principal_id: principal.id(),
+    let details = with_field(details, "impersonated_by", principal.impersonator());
+    let (kind, id) = (principal.kind(), principal.id());
+    let key =
+        format!("{kind}:{}|{action}|{}|{details}", id.unwrap_or_default(), target.map(|(t, id)| format!("{t}:{id}")).unwrap_or_default());
+    let held = || crate::state::HeldEvent {
+        principal_kind: kind,
+        principal_id: id,
         action: action.to_string(),
         target: target.map(|(t, id)| (t.to_string(), id)),
-        details: held,
+        details: details.clone(),
         ip: ip.map(str::to_string),
     };
-    let Some(repeated) = state.audit_throttle.admit(&key, event) else { return };
-    audit(state, principal, action, target, with_repeated(details, repeated), ip).await;
-}
-
-fn with_repeated(details: Value, repeated: u32) -> Value {
-    match details {
-        Value::Object(mut m) if repeated > 0 => {
-            m.insert("repeated".into(), Value::from(repeated));
-            Value::Object(m)
-        }
-        d => d,
-    }
+    let Some(repeated) = state.audit_throttle.admit(key, held) else { return };
+    write_audit(state, kind, id, action, target, with_field(details, "repeated", (repeated > 0).then_some(repeated)), ip).await;
 }
 
 /// Write what throttled bursts held back once their minute is over: a copy
@@ -196,17 +181,8 @@ fn with_repeated(details: Value, repeated: u32) -> Value {
 /// counted too. Runs every 30 seconds in every server process.
 pub async fn flush_held_audit(state: &AppState) {
     for (e, repeated) in state.audit_throttle.overdue() {
-        let ev = forgust_db::audit::NewEvent {
-            principal_kind: e.principal_kind,
-            principal_id: e.principal_id,
-            action: &e.action,
-            target_type: e.target.as_ref().map(|t| t.0.as_str()),
-            target_id: e.target.as_ref().map(|t| t.1),
-            details: with_repeated(e.details, repeated),
-            ip: e.ip.as_deref(),
-        };
-        if let Err(err) = forgust_db::audit::insert(&state.db, ev).await {
-            tracing::warn!(error = %err, action = e.action, "failed to write audit event");
-        }
+        let target = e.target.as_ref().map(|(t, id)| (t.as_str(), *id));
+        let details = with_field(e.details, "repeated", Some(repeated));
+        write_audit(state, e.principal_kind, e.principal_id, &e.action, target, details, e.ip.as_deref()).await;
     }
 }

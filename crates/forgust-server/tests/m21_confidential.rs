@@ -9,10 +9,6 @@ use serde_json::{Value, json};
 
 const REPO: &str = "open/site";
 
-async fn user_id(srv: &TestServer, username: &str) -> i64 {
-    sqlx::query_scalar("SELECT id FROM users WHERE username = $1").bind(username).fetch_one(&srv.state.db).await.unwrap()
-}
-
 fn bodies(notes: &Value) -> Vec<String> {
     notes.as_array().unwrap().iter().map(|n| n["body"].as_str().unwrap().to_string()).collect()
 }
@@ -80,7 +76,7 @@ async fn confidential_issues_and_internal_notes(pool: sqlx::PgPool) {
         )
         .await;
     assert_eq!((i2["iid"].as_i64(), i2["confidential"].as_bool()), (Some(2), Some(true)), "{i2}");
-    let adam_id = user_id(&srv, "adam").await;
+    let adam_id = srv.user_id("adam").await;
     // assignees need Reporter: Adam is one when assigned, then a Guest again
     owner.ok_post(&format!("{base}/members"), json!({ "username": "adam", "access_level": "reporter" })).await;
     owner.ok_put(&format!("{base}/issues/2"), json!({ "labels": ["bug"], "milestone_id": v1["id"], "assignee_ids": [adam_id] })).await;
@@ -376,7 +372,7 @@ async fn internal_notes_after_a_demotion(pool: sqlx::PgPool) {
     assert_eq!(rita.ok_get("/api/v1/user/work").await["todos_pending"], 1);
 
     // demoted to Guest: neither the text nor that it was written
-    let rita_id = user_id(&srv, "rita").await;
+    let rita_id = srv.user_id("rita").await;
     owner.delete(&format!("{base}/members/{rita_id}")).await;
     owner.ok_post(&format!("{base}/members"), json!({ "username": "rita", "access_level": "guest" })).await;
     let todos = rita.ok_get("/api/v1/user/todos").await;

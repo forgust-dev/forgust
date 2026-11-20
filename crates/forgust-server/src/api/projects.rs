@@ -301,18 +301,12 @@ pub async fn protect_branch(
     {
         return Err(ApiError::bad("invalid branch name or pattern"));
     }
+    let (push, merge) = (push_level(&req.push_access_level)?, push_level(&req.merge_access_level)?);
     let previous =
         forgust_db::protected_branches::list(&state.db, proj.id).await?.into_iter().find(|b| b.name == req.name).map(|b| branch_rule(&b));
-    let pb = forgust_db::protected_branches::upsert(
-        &state.db,
-        proj.id,
-        &req.name,
-        push_level(&req.push_access_level)?,
-        push_level(&req.merge_access_level)?,
-        req.allow_force_push,
-        req.allow_deploy_keys,
-    )
-    .await?;
+    let pb =
+        forgust_db::protected_branches::upsert(&state.db, proj.id, &req.name, push, merge, req.allow_force_push, req.allow_deploy_keys)
+            .await?;
     forgust_db::protected_branches::set_code_owner_approval(&state.db, pb, req.code_owner_approval_required).await?;
     services::audit(
         &state,
@@ -321,8 +315,8 @@ pub async fn protect_branch(
         Some(("project", proj.id)),
         json!({
             "name": req.name,
-            "push": push_level(&req.push_access_level)?,
-            "merge": push_level(&req.merge_access_level)?,
+            "push": push,
+            "merge": merge,
             "force_push": req.allow_force_push,
             "deploy_keys": req.allow_deploy_keys,
             "code_owner_approval": req.code_owner_approval_required,

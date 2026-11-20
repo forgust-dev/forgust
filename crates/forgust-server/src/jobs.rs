@@ -475,20 +475,7 @@ impl TaskHandler for Cleanup {
 
     async fn run(self, ctx: WorkerContext) -> impl IntoTaskHandlerResult {
         let state = ctx.get_ext::<AppState>().ok_or("no app state")?;
-        let expired = forgust_db::sessions::delete_expired(&state.db).await.map_err(|e| e.to_string())?;
-        for s in expired {
-            crate::services::audit_system(
-                state,
-                "session_expired",
-                Some(("user", s.user_id)),
-                match s.impersonator_id {
-                    Some(admin) => serde_json::json!({ "session_id": s.id, "impersonated_by": admin }),
-                    None => serde_json::json!({ "session_id": s.id }),
-                },
-                s.ip.as_deref(),
-            )
-            .await;
-        }
+        forgust_db::sessions::delete_expired(&state.db).await.map_err(|e| e.to_string())?;
         // memberships and shares that expired: their access ends now
         let mut conn = state.db.acquire().await.map_err(|e| e.to_string())?;
         let ended = forgust_db::members::expire(&mut conn).await.map_err(|e| e.to_string())?;

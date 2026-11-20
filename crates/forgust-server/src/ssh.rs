@@ -190,16 +190,7 @@ impl Conn {
                 "The project you were looking for could not be found or you don't have permission to view it."
             };
             if visible {
-                let details = serde_json::json!({ "reason": msg, "via": "ssh" });
-                crate::services::audit_throttled(
-                    &self.state,
-                    &principal,
-                    "push_rejected",
-                    Some(("project", project.id)),
-                    details,
-                    ip.as_deref(),
-                )
-                .await;
+                crate::services::audit_push_refused(&self.state, &principal, project.id, msg, "ssh", ip.as_deref()).await;
             }
             self.send_error(&handle, channel, msg).await;
             return Ok(());

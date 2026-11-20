@@ -899,9 +899,15 @@ pub async fn update_user(
     State(state): State<AppState>,
     Admin(me, p): Admin,
     Path(id): Path<i64>,
-    Json(req): Json<UpdateUser>,
+    Json(mut req): Json<UpdateUser>,
 ) -> ApiResult<Json<UserDto>> {
     let u = forgust_db::users::find(&state.db, id).await?.ok_or(ApiError::NotFound)?;
+    // the form sends every field: what it leaves as it is is no change (no
+    // write, no event)
+    req.is_admin = req.is_admin.filter(|a| *a != u.is_admin);
+    req.state = req.state.filter(|s| *s != u.state);
+    req.is_external = req.is_external.filter(|e| *e != u.is_external);
+    req.email = req.email.filter(|e| !e.trim().eq_ignore_ascii_case(&u.email));
     // as the request leaves the account, before changing any of it
     if req.is_admin.unwrap_or(u.is_admin)
         && req.is_external.unwrap_or(u.is_external)
@@ -917,10 +923,7 @@ pub async fn update_user(
             return Err(ApiError::bad("bots cannot be administrators"));
         }
         forgust_db::users::set_admin(&state.db, id, admin).await?;
-        // the form sends every field: only a change is an event
-        if admin != u.is_admin {
-            services::audit(&state, &p, if admin { "admin_granted" } else { "admin_revoked" }, Some(("user", id)), json!({}), None).await;
-        }
+        services::audit(&state, &p, if admin { "admin_granted" } else { "admin_revoked" }, Some(("user", id)), json!({}), None).await;
     }
     if let Some(s) = req.state.as_deref() {
         if s != "active" && s != "blocked" {
@@ -933,42 +936,34 @@ pub async fn update_user(
         if s == "blocked" {
             forgust_db::sessions::delete_for_user(&state.db, id).await?;
         }
-        if s != u.state {
-            let blocked = s == "blocked";
-            let action = if blocked { "user_blocked" } else { "user_unblocked" };
-            services::audit(&state, &p, action, Some(("user", id)), json!({ "previous_state": u.state }), None).await;
-        }
+        let action = if s == "blocked" { "user_blocked" } else { "user_unblocked" };
+        services::audit(&state, &p, action, Some(("user", id)), json!({ "previous_state": u.state }), None).await;
     }
     if let Some(ext) = req.is_external {
         if u.is_bot() {
             return Err(ApiError::bad("bots cannot be external"));
         }
         forgust_db::admin::set_external(&state.db, id, ext).await?;
-        if ext != u.is_external {
-            let action = if ext { "user_made_external" } else { "user_made_internal" };
-            services::audit(&state, &p, action, Some(("user", id)), json!({}), None).await;
-        }
+        let action = if ext { "user_made_external" } else { "user_made_internal" };
+        services::audit(&state, &p, action, Some(("user", id)), json!({}), None).await;
     }
     if let Some(email) = req.email.as_deref().map(str::trim) {
         if u.is_bot() {
             return Err(ApiError::bad("bots have no address of their own"));
         }
         services::paths::validate_email(email)?;
-        // the form sends every field: the same address changes nothing
-        if !email.eq_ignore_ascii_case(&u.email) {
-            services::accounts::set_email(&state, &p, &u, email, true).await?;
-            // the old inbox hears of it (nothing is sent without email)
-            services::notify::send_to(
-                &state,
-                &u.email,
-                "Your email address was changed",
-                &format!(
-                    "Hello {},\n\nAn administrator moved your Forgust account to {email}. Emails go there from now on.\n\nIf you did not expect this, ask an administrator.\n",
-                    u.username
-                ),
-            )
-            .await;
-        }
+        services::accounts::set_email(&state, &p, &u, email, true).await?;
+        // the old inbox hears of it (nothing is sent without email)
+        services::notify::send_to(
+            &state,
+            &u.email,
+            "Your email address was changed",
+            &format!(
+                "Hello {},\n\nAn administrator moved your Forgust account to {email}. Emails go there from now on.\n\nIf you did not expect this, ask an administrator.\n",
+                u.username
+            ),
+        )
+        .await;
     }
     if let Some(pw) = req.password.as_deref() {
         users::validate_password(pw)?;

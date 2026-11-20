@@ -677,12 +677,17 @@ pub async fn upsert_rule(
             "name": req.name,
             "required": req.approvals_required,
             "min_access_level": level,
-            "previous": previous.map(|r| json!({ "required": r.approvals_required, "min_access_level": r.min_access_level })),
+            "previous": previous.as_ref().map(rule_json),
         }),
         None,
     )
     .await;
     Ok(Json(mrdb::rules(&state.db, p.id).await?))
+}
+
+/// What an approval rule asked, for the audit log.
+fn rule_json(r: &ApprovalRule) -> Value {
+    json!({ "required": r.approvals_required, "min_access_level": r.min_access_level })
 }
 
 pub async fn delete_rule(
@@ -698,7 +703,7 @@ pub async fn delete_rule(
     let details = json!({
         "id": rule_id,
         "name": previous.as_ref().map(|r| &r.name),
-        "previous": previous.as_ref().map(|r| json!({ "required": r.approvals_required, "min_access_level": r.min_access_level })),
+        "previous": previous.as_ref().map(rule_json),
     });
     crate::services::audit(&state, &p0, "approval_rule_removed", Some(("project", p.id)), details, None).await;
     Ok(Json(json!({ "ok": true })))
