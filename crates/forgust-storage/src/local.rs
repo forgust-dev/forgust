@@ -13,7 +13,7 @@ use sha2::{Digest, Sha256};
 
 use crate::catfile::{CatFilePool, parse_raw_tree};
 use crate::types::*;
-use crate::{Result, Storage, StorageError, cli};
+use crate::{RefChange, Result, Storage, StorageError, cli};
 use forgust_diff::{Diff, DiffOptions, parse_numstat_z, parse_unified_diff};
 
 const SHORT: Duration = Duration::from_secs(30);
@@ -1088,6 +1088,39 @@ impl Storage for LocalStorage {
             return Err(StorageError::Git(String::from_utf8_lossy(&out.stderr).into_owned()));
         }
         Ok(())
+    }
+
+    async fn transact_refs(&self, repo: i64, changes: &[RefChange]) -> Result<()> {
+        if changes.is_empty() {
+            return Ok(());
+        }
+        self.ensure(repo).await?;
+        let mut input = String::new();
+        for ch in changes {
+            check_ref_name(&ch.name)?;
+            if ch.new.iter().chain(&ch.old).any(|o| !is_valid_oid(o)) {
+                return Err(StorageError::Invalid("bad object id".into()));
+            }
+            let old = ch.old.as_deref().map(|o| format!(" {o}")).unwrap_or_default();
+            match &ch.new {
+                Some(new) => input.push_str(&format!("update {} {new}{old}\n", ch.name)),
+                None => input.push_str(&format!("delete {}{old}\n", ch.name)),
+            }
+        }
+        let mut c = self.git(repo);
+        c.args(["update-ref", "-m", "forgust", "--stdin"]);
+        cli::run_input(c, input.into_bytes(), 64 * 1024, LONG).await.map(|_| ())
+    }
+
+    async fn ref_targets(&self, repo: i64, prefixes: &[&str]) -> Result<Vec<(String, String)>> {
+        self.ensure(repo).await?;
+        let mut c = self.git(repo);
+        c.args(["for-each-ref", "--format=%(objectname) %(refname)", "--"]).args(prefixes);
+        let out = cli::run(c, 512 * 1024 * 1024, LONG).await?;
+        Ok(String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .filter_map(|l| l.split_once(' ').map(|(oid, name)| (name.to_string(), oid.to_string())))
+            .collect())
     }
 
     async fn delete_ref(&self, repo: i64, name: &str, expected_old: Option<&str>) -> Result<()> {

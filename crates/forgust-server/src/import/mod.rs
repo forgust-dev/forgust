@@ -633,39 +633,22 @@ impl<'a> Runner<'a> {
             return Ok(());
         }
         let url = services::repo_mirrors::checked(self.state, &sp.http_url).await.map_err(SourceError::Refused)?;
-        // the import's token, still sealed; an empty one is no token
-        let sealed = match idb::token(&self.state.db, self.import.id).await.map_err(other)? {
-            Some(s) if !self.state.secrets.decrypt(&s).map(|t| t.is_empty()).unwrap_or(true) => Some(s),
-            _ => None,
+        // the import's token, still sealed (none for a public project)
+        let sealed = if self.src.anonymous() { None } else { idb::token(&self.state.db, self.import.id).await.map_err(other)? };
+        let new = mdb::NewMirror {
+            project_id: p.id,
+            direction: "pull",
+            url: url.as_str(),
+            username: "",
+            token_enc: sealed.as_deref(),
+            only_protected: false,
+            trigger_pipelines: false,
+            interval_minutes: 60,
+            created_by: Some(self.import.user_id),
         };
-        let id = mdb::insert(
-            &self.state.db,
-            mdb::NewMirror {
-                project_id: p.id,
-                direction: "pull",
-                url: url.as_str(),
-                username: "",
-                token_enc: sealed.as_deref(),
-                only_protected: false,
-                trigger_pipelines: false,
-                interval_minutes: 60,
-                created_by: Some(self.import.user_id),
-            },
-        )
-        .await
-        .map_err(other)?;
+        let id = services::repo_mirrors::add(self.state, &self.principal, new).await.map_err(api)?;
         // just fetched: the next update comes at its turn
-        mdb::set_result(&self.state.db, id, None).await.map_err(other)?;
-        services::audit(
-            self.state,
-            &self.principal,
-            "mirror_added",
-            Some(("project", p.id)),
-            json!({ "mirror": id, "direction": "pull", "url": url.as_str() }),
-            None,
-        )
-        .await;
-        Ok(())
+        mdb::set_result(&self.state.db, id, None).await.map_err(other)
     }
 
     // -------------------------------------------------------------- repository

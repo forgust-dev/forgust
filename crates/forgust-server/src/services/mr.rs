@@ -686,7 +686,7 @@ pub async fn merge(
         // version, its pipeline), or the merge request would show the old commits
         if let Some(u) = source_rewrite {
             let mut conn = state.db.acquire().await?;
-            let job = PostReceive { project_id: p.id, updates: vec![u], principal: Some(principal.encode()) };
+            let job = PostReceive::pushed(p.id, vec![u], principal.encode());
             state.jobs.enqueue(&mut conn, job.request()).await?;
         }
         return Err(conflict_error(e));
@@ -736,7 +736,7 @@ pub async fn merge(
         }
     }
     // same follow-up a push gets (events, default branch, maintenance, webhooks)
-    state.jobs.enqueue(&mut tx, PostReceive { project_id: p.id, updates, principal: Some(principal.encode()) }.request()).await?;
+    state.jobs.enqueue(&mut tx, PostReceive::pushed(p.id, updates, principal.encode()).request()).await?;
     tx.commit().await?;
 
     let merged = mrdb::find(&state.db, p.id, mr.iid).await?.ok_or(ApiError::NotFound)?;
@@ -784,8 +784,7 @@ pub(crate) async fn may_rewrite(state: &AppState, principal: &Principal, p: &Pro
 
 /// Rebase the source branch onto the target without merging.
 pub async fn rebase_source(state: &AppState, principal: &Principal, p: &Project, mr: &MergeRequest) -> ApiResult<String> {
-    require_project(state, principal, ProjectAction::Push, p).await?;
-    crate::services::repo_mirrors::writable(state, p.id).await?;
+    crate::services::repo_mirrors::require_write(state, principal, p).await?;
     if mr.state != "opened" {
         return Err(ApiError::conflict("only open merge requests can be rebased"));
     }
@@ -806,12 +805,7 @@ pub async fn rebase_source(state: &AppState, principal: &Principal, p: &Project,
         .jobs
         .enqueue(
             &mut tx,
-            PostReceive {
-                project_id: p.id,
-                updates: vec![RefUpdate { old: head, new: rebased.clone(), name: source_ref }],
-                principal: Some(principal.encode()),
-            }
-            .request(),
+            PostReceive::pushed(p.id, vec![RefUpdate { old: head, new: rebased.clone(), name: source_ref }], principal.encode()).request(),
         )
         .await?;
     tx.commit().await?;

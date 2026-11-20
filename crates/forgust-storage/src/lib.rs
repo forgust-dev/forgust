@@ -44,6 +44,16 @@ pub enum StorageError {
 }
 
 /// The storage boundary. All methods are keyed by repo ID (ADR-0009).
+/// One change of a [`Storage::transact_refs`] transaction.
+#[derive(Debug, Clone)]
+pub struct RefChange {
+    pub name: String,
+    /// The new target; None deletes the ref.
+    pub new: Option<String>,
+    /// What it must point at first (`ZERO_OID`: must not exist); None: anything.
+    pub old: Option<String>,
+}
+
 #[async_trait]
 pub trait Storage: Send + Sync + 'static {
     async fn create_repo(&self, repo: i64, opts: CreateRepoOptions) -> Result<()>;
@@ -100,6 +110,12 @@ pub trait Storage: Send + Sync + 'static {
     async fn delete_ref(&self, repo: i64, name: &str, expected_old: Option<&str>) -> Result<()>;
     /// Set many refs in one transaction (no compare-and-swap): imports.
     async fn update_refs(&self, repo: i64, updates: &[(String, String)]) -> Result<()>;
+    /// Several ref changes in one transaction: all of them happen, or none.
+    /// (Deleting `foo` and creating `foo/bar` take two.)
+    async fn transact_refs(&self, repo: i64, changes: &[RefChange]) -> Result<()>;
+    /// Names and targets of the refs under `prefixes`, without reading their
+    /// objects (unlike [`Storage::refs`]).
+    async fn ref_targets(&self, repo: i64, prefixes: &[&str]) -> Result<Vec<(String, String)>>;
     /// In-memory merge of `theirs` into `ours` (no working copy).
     async fn merge_tree(&self, repo: i64, ours: &str, theirs: &str, merge_base: Option<&str>) -> Result<MergeTreeResult>;
     /// Write an annotated tag object `name` pointing at commit `target`; returns its id

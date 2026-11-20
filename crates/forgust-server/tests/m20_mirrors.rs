@@ -77,16 +77,33 @@ async fn a_pull_mirror_follows_its_source_and_is_read_only(pool: sqlx::PgPool) {
     assert_eq!(owner.ok_get(&format!("{base}/repository/tags")).await[0]["name"], "v1");
     assert!(srv.state.storage.refs(copy, "refs/mirror/").await.unwrap().is_empty(), "nothing left in staging");
 
-    // the source moves on: a new commit, a branch gone
+    // the default branch was `local`, which the source does not have: it follows;
+    // the page offers no way to change the repository
+    let shown = owner.ok_get(&base).await;
+    assert_eq!((shown["default_branch"].as_str(), shown["can_write_repository"].as_bool()), (Some("main"), Some(false)), "{shown}");
+    // a new tag alone upstream is a change here too (for webhooks and push mirrors)
+    must(git(&work, &["tag", "v1.1"]).await);
+    must(git(&work, &["push", "-q", &up, "v1.1"]).await);
+    wait_jobs(&srv.state).await;
+    let project = forgust_db::projects::find(&srv.state.db, copy).await.unwrap().unwrap();
+    let row = forgust_db::project_mirrors::find(&srv.state.db, m["id"].as_i64().unwrap()).await.unwrap().unwrap();
+    let updates = forgust_server::services::repo_mirrors::pull(&srv.state, &project, &row).await.unwrap();
+    let names: Vec<&str> = updates.iter().map(|u| u.name.as_str()).collect();
+    assert_eq!(names, ["refs/tags/v1.1"]);
+
+    // the source moves on: a new commit, a branch gone and one named like it (`topic/v2`)
     commit_file(&work, "n.txt", "n\n", "next").await;
     let head = must(git(&work, &["rev-parse", "HEAD"]).await).trim().to_string();
     must(git(&work, &["push", "-q", &up, "main", ":topic"]).await);
+    must(git(&work, &["push", "-q", &up, "main:refs/heads/topic/v2"]).await);
     wait_jobs(&srv.state).await;
     owner.ok_post(&format!("{base}/mirrors/{}/update", m["id"]), json!({})).await;
     wait_jobs(&srv.state).await;
     let after = owner.ok_get(&format!("{base}/repository/branches")).await;
-    assert_eq!(branches(&after), ["main"]);
-    assert_eq!(after[0]["commit"]["id"].as_str().or(after[0]["sha"].as_str()), Some(head.as_str()), "{after}");
+    assert_eq!(branches(&after), ["main", "topic/v2"]);
+    assert!(mirror(&owner, copy).await["last_error"].is_null());
+    let main = after.as_array().unwrap().iter().find(|b| b["name"] == "main").unwrap();
+    assert_eq!(main["commit"]["id"].as_str().or(main["sha"].as_str()), Some(head.as_str()), "{main}");
 
     // every write to its branches and tags: refused, whoever tries
     let writes: Vec<(&Client, String, Value)> = vec![

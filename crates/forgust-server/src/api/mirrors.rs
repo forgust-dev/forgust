@@ -24,8 +24,10 @@ pub struct MirrorDto {
     pub has_token: bool,
 }
 
-fn dto(list: Vec<Mirror>) -> Vec<MirrorDto> {
-    list.into_iter().map(|m| MirrorDto { has_token: m.has_token(), mirror: m }).collect()
+/// The project's mirrors, as every handler answers.
+async fn listed(state: &AppState, p: &Project) -> ApiResult<Json<Vec<MirrorDto>>> {
+    let list = mdb::list(&state.db, p.id).await?;
+    Ok(Json(list.into_iter().map(|m| MirrorDto { has_token: m.has_token(), mirror: m }).collect()))
 }
 
 async fn admin(state: &AppState, p0: &Principal, id: &str) -> ApiResult<Project> {
@@ -47,7 +49,7 @@ fn interval(minutes: Option<i32>) -> ApiResult<i32> {
 #[utoipa::path(get, path = "/api/v1/projects/{id}/mirrors", responses((status = 200, body = [MirrorDto])), tag = "projects")]
 pub async fn list(State(state): State<AppState>, SignedIn(_, p0): SignedIn, Path(id): Path<String>) -> ApiResult<Json<Vec<MirrorDto>>> {
     let p = admin(&state, &p0, &id).await?;
-    Ok(Json(dto(mdb::list(&state.db, p.id).await?)))
+    listed(&state, &p).await
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -102,9 +104,9 @@ pub async fn create(
         "" => None,
         t => Some(state.secrets.encrypt(t.as_bytes()).map_err(ApiError::Internal)?),
     };
-    let mut tx = state.db.begin().await?;
-    let mirror_id = mdb::insert(
-        &mut *tx,
+    let mirror_id = repo_mirrors::add(
+        &state,
+        &p0,
         NewMirror {
             project_id: p.id,
             direction: &req.direction,
@@ -118,18 +120,9 @@ pub async fn create(
         },
     )
     .await?;
-    state.jobs.enqueue(&mut tx, MirrorUpdate::request(p.id, mirror_id)).await.map_err(ApiError::Internal)?;
-    tx.commit().await?;
-    crate::services::audit(
-        &state,
-        &p0,
-        "mirror_added",
-        Some(("project", p.id)),
-        json!({ "mirror": mirror_id, "direction": req.direction, "url": url.as_str() }),
-        None,
-    )
-    .await;
-    Ok(Json(dto(mdb::list(&state.db, p.id).await?)))
+    let mut conn = state.db.acquire().await?;
+    state.jobs.enqueue(&mut conn, MirrorUpdate::request(p.id, mirror_id)).await.map_err(ApiError::Internal)?;
+    listed(&state, &p).await
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -195,7 +188,7 @@ pub async fn update(
         None,
     )
     .await;
-    Ok(Json(dto(mdb::list(&state.db, p.id).await?)))
+    listed(&state, &p).await
 }
 
 /// Remove a mirror; a pull mirror's repository becomes writable again.
@@ -207,7 +200,7 @@ pub async fn delete(
 ) -> ApiResult<Json<Vec<MirrorDto>>> {
     let p = admin(&state, &p0, &id).await?;
     let m = mine(&state, &p, mirror_id).await?;
-    mdb::delete(&state.db, m.id, p.id).await?;
+    mdb::delete(&state.db, m.id).await?;
     crate::services::audit(
         &state,
         &p0,
@@ -217,7 +210,7 @@ pub async fn delete(
         None,
     )
     .await;
-    Ok(Json(dto(mdb::list(&state.db, p.id).await?)))
+    listed(&state, &p).await
 }
 
 /// Update the mirror now instead of at its next turn.
@@ -234,5 +227,5 @@ pub async fn update_now(
     }
     let mut conn = state.db.acquire().await?;
     state.jobs.enqueue(&mut conn, MirrorUpdate::request(p.id, m.id)).await.map_err(ApiError::Internal)?;
-    Ok(Json(dto(mdb::list(&state.db, p.id).await?)))
+    listed(&state, &p).await
 }
