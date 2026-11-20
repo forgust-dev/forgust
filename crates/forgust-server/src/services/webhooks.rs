@@ -153,6 +153,11 @@ pub async fn safe_get(state: &AppState, raw: &str, max_bytes: usize) -> Result<S
     if !resp.status().is_success() {
         return Err(format!("HTTP {}", resp.status().as_u16()));
     }
+    String::from_utf8(read_capped(resp, max_bytes).await?).map_err(|_| "not UTF-8".to_string())
+}
+
+/// `resp`'s body, refused past `max_bytes` without reading the rest.
+pub async fn read_capped(resp: reqwest::Response, max_bytes: usize) -> Result<Vec<u8>, String> {
     let mut body = Vec::new();
     let mut stream = resp.bytes_stream();
     use futures::StreamExt;
@@ -163,7 +168,7 @@ pub async fn safe_get(state: &AppState, raw: &str, max_bytes: usize) -> Result<S
         }
         body.extend_from_slice(&chunk);
     }
-    String::from_utf8(body).map_err(|_| "not UTF-8".to_string())
+    Ok(body)
 }
 
 /// An image for the Markdown image proxy: http(s) only, internal addresses

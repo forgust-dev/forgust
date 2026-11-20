@@ -57,6 +57,36 @@
         }
       }
     },
+    "/api/v1/admin/ai_review/models": {
+      "post": {
+        "tags": [
+          "ai_review"
+        ],
+        "summary": "The models the endpoint offers, asked from the server: a test of the\nendpoint and the key before saving them.",
+        "operationId": "admin_models",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminAiReviewModelsBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminAiReviewModels"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/admin/renovate": {
       "get": {
         "tags": [
@@ -5070,6 +5100,44 @@
             "type": "integer",
             "format": "int64",
             "minimum": 0
+          }
+        }
+      },
+      "AdminAiReviewModels": {
+        "type": "object",
+        "required": [
+          "models"
+        ],
+        "properties": {
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "AdminAiReviewModelsBody": {
+        "type": "object",
+        "required": [
+          "base_url"
+        ],
+        "properties": {
+          "api_key": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A key to try; absent: the one saved."
+          },
+          "base_url": {
+            "type": "string"
+          },
+          "ca_pem": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       },

@@ -8,7 +8,7 @@ import { useProviders } from "../prefetch";
 import { useSession } from "../session";
 import { Avatar, Badge, Card, ErrorBox, Field, FilterTabs, NotFound, Q, SearchField, UserLink, useDebounced, useFormRun } from "../components/ui";
 import { adminPage } from "./adminPages";
-import { Menu, type MenuItem } from "../components/controls";
+import { Combobox, Menu, Select, type MenuItem } from "../components/controls";
 import { MoreHorizontal } from "lucide-react";
 import { useAct, useToast } from "../shell/toast";
 import { useConfirm, usePrompt, type Ask } from "../shell/dialog";
@@ -533,6 +533,9 @@ function AiReviewAdmin() {
   return <Q q={q}>{(s) => <AiReviewForm initial={s} />}</Q>;
 }
 
+/** The APIs the released reviewer image talks to (its `AI_REVIEW_PROVIDER`). */
+const AI_PROVIDERS = [{ value: "openai", label: "OpenAI-compatible (OpenAI, Ollama, vLLM, llama.cpp, LiteLLM)" }];
+
 /** Where AI reviews send the code, which model they ask, and their limits. */
 function AiReviewForm({ initial }: { initial: S["AdminAiReviewStatus"] }) {
   const qc = useQueryClient();
@@ -556,6 +559,14 @@ function AiReviewForm({ initial }: { initial: S["AdminAiReviewStatus"] }) {
       setKey("");
       setSecrets("");
     }, "Saved.");
+  // listing the endpoint's models tests the endpoint and the key before saving
+  const probe = useMutation({
+    mutationFn: () => api.post<S["AdminAiReviewModels"]>("/admin/ai_review/models", { base_url: s.base_url, api_key: key || undefined, ca_pem: s.ca_pem || null }),
+    onSuccess: (r) => {
+      if (!s.model && r.models.length === 1) setS({ ...s, model: r.models[0] });
+    },
+  });
+  const models = probe.data?.models;
   let host = "";
   try {
     host = s.base_url ? new URL(s.base_url).host : "";
@@ -577,23 +588,44 @@ function AiReviewForm({ initial }: { initial: S["AdminAiReviewStatus"] }) {
       <label className="check">
         <input type="checkbox" checked={s.enabled} onChange={(e) => setS({ ...s, enabled: e.target.checked })} /> Offer AI review to projects
       </label>
-      <div className="grid2">
-        <Field label="Provider" hint="openai: any OpenAI-compatible API (OpenAI, Ollama, vLLM, llama.cpp); the reviewer image says which others it knows">
-          <input className="mono" value={s.provider} list="ai-providers" onChange={(e) => setS({ ...s, provider: e.target.value })} />
-          <datalist id="ai-providers">
-            <option value="openai" />
-          </datalist>
-        </Field>
-        <Field label="Endpoint" hint="The API's base, reached from the runners: https://api.openai.com/v1, http://vllm:8000/v1">
-          <input className="mono" value={s.base_url} placeholder="https://api.openai.com/v1" onChange={(e) => setS({ ...s, base_url: e.target.value })} />
-        </Field>
-        <Field label="Model">
-          <input className="mono" value={s.model} placeholder="qwen2.5-coder:32b" onChange={(e) => setS({ ...s, model: e.target.value })} />
-        </Field>
-      </div>
+      <Field label="Provider">
+        <Select
+          value={s.provider}
+          onChange={(provider) => setS({ ...s, provider })}
+          // one a reviewer image of your own knows, set before or in the config file: kept
+          options={AI_PROVIDERS.some((p) => p.value === s.provider) ? AI_PROVIDERS : [...AI_PROVIDERS, { value: s.provider, label: s.provider }]}
+          label="Provider"
+        />
+      </Field>
+      <Field label="Endpoint" hint="The API's base, reached from the runners: https://api.openai.com/v1, http://vllm:8000/v1">
+        <input className="mono" value={s.base_url} placeholder="https://api.openai.com/v1" onChange={(e) => setS({ ...s, base_url: e.target.value })} />
+      </Field>
       <Field label="API key" hint={initial.api_key_set ? "Set. Type a new one to replace it." : "Sent as a bearer token, masked in the job; none for a local model"}>
         <input type="password" autoComplete="new-password" value={key} onChange={(e) => setKey(e.target.value)} />
       </Field>
+      <Field label="Model">
+        {models?.length ? (
+          <Combobox value={s.model} onChange={(model) => setS({ ...s, model })} options={models.map((m) => ({ value: m, label: m }))} label="Model" />
+        ) : (
+          <input className="mono" value={s.model} placeholder="qwen2.5-coder:32b" onChange={(e) => setS({ ...s, model: e.target.value })} />
+        )}
+      </Field>
+      <div className="row" style={{ gap: 8, alignItems: "center" }}>
+        <button type="button" className="btn" disabled={!s.base_url.trim() || probe.isPending} onClick={() => probe.mutate()}>
+          {probe.isPending ? "Asking the endpoint…" : "Fetch models"}
+        </button>
+        <span className="muted small">Asks the endpoint for its models with the key above (or the saved one): a test of both. Asked from the server, not the runners.</span>
+      </div>
+      <ErrorBox error={probe.error} />
+      {models && (
+        <div className={`alert ${models.length && (!s.model || models.includes(s.model)) ? "ok" : "warn"}`}>
+          {!models.length
+            ? "The endpoint answered, with no models."
+            : !s.model || models.includes(s.model)
+              ? `The endpoint answered: ${models.length} model(s).`
+              : `The endpoint answered, but does not list ${s.model}.`}
+        </div>
+      )}
       <div className="grid2">
         <Field label="Comments per review">
           <input type="number" min={1} max={50} value={s.max_comments} onChange={(e) => setS({ ...s, max_comments: Number(e.target.value) })} />
@@ -604,13 +636,13 @@ function AiReviewForm({ initial }: { initial: S["AdminAiReviewStatus"] }) {
         <Field label="Timeout (minutes)">
           <input type="number" min={1} max={120} value={Math.round(s.timeout_secs / 60)} onChange={(e) => setS({ ...s, timeout_secs: Number(e.target.value) * 60 })} />
         </Field>
-        <Field label="Reviewer image" hint="Empty: the one released with this server, which follows each upgrade. Or an image of your own that runs forgust-review with the same contract">
-          <input className="mono" value={s.image} placeholder={initial.default_image} onChange={(e) => setS({ ...s, image: e.target.value })} />
-        </Field>
-        <Field label="Runner tags" hint="Comma-separated; instance runners only">
-          <input value={s.tags.join(", ")} onChange={(e) => setS({ ...s, tags: e.target.value.split(",").map((t) => t.trim()) })} />
-        </Field>
       </div>
+      <Field label="Reviewer image" hint="Empty: the one released with this server, which follows each upgrade. Or an image of your own that runs forgust-review with the same contract">
+        <input className="mono" value={s.image} placeholder={initial.default_image} onChange={(e) => setS({ ...s, image: e.target.value })} />
+      </Field>
+      <Field label="Runner tags" hint="Comma-separated; instance runners only">
+        <input value={s.tags.join(", ")} onChange={(e) => setS({ ...s, tags: e.target.value.split(",").map((t) => t.trim()) })} />
+      </Field>
       <Field
         label="Reviewer options"
         hint={
