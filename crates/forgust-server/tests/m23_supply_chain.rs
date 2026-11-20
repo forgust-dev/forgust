@@ -152,10 +152,10 @@ async fn trivy_db_is_mirrored_and_served(pool: sqlx::PgPool) {
         (Some("trivy-db"), Some(source.as_str()), Some(digest.as_str()))
     );
     let cfg = forgust_server::services::scanning::config(&srv.state).await.unwrap();
-    let flags = forgust_server::services::vulnerability_dbs::trivy_flags(&srv.state, &cfg).await.unwrap();
-    assert_eq!(flags.db.as_deref(), Some(format!("{}/admin/mirrors/trivy-db:2", srv.host()).as_str()));
-    assert!(flags.insecure, "the test server has no TLS");
-    assert!(flags.java_db.is_none() && flags.checks.is_none(), "only what the mirror holds");
+    let mirror = forgust_server::services::vulnerability_dbs::trivy_mirror(&srv.state, &cfg).await.unwrap();
+    let at = format!("{}/admin/mirrors/trivy-db:2", srv.host());
+    // only what the mirror holds; no TLS on the test server
+    assert_eq!(mirror.0, [("TRIVY_DB_REPOSITORY", at), ("TRIVY_INSECURE", "true".to_string())]);
     assert_eq!(srv.audit_events("vulnerability_db_stored").await.len(), 1, "once: the second sync stored nothing");
 }
 
@@ -222,8 +222,8 @@ async fn air_gapped_installs_import_from_a_file(pool: sqlx::PgPool) {
     // mirroring off: the scans read Trivy's own sources
     let mut cfg = forgust_server::services::scanning::config(&srv.state).await.unwrap();
     cfg.mirror_vulnerability_dbs = false;
-    let flags = forgust_server::services::vulnerability_dbs::trivy_flags(&srv.state, &cfg).await.unwrap();
-    assert_eq!(flags, Default::default());
+    let mirror = forgust_server::services::vulnerability_dbs::trivy_mirror(&srv.state, &cfg).await.unwrap();
+    assert_eq!(mirror, Default::default());
 }
 
 // ------------------------------------------------------------------ SBOMs

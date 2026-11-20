@@ -62,8 +62,9 @@ pub struct NewCopy<'a> {
 }
 
 /// Swap in a new copy; the one it replaces keeps its blobs until the next
-/// swap. Returns the digests no copy names any more (to delete).
-pub async fn swap(c: &mut sqlx::PgConnection, n: NewCopy<'_>) -> Result<Vec<String>> {
+/// swap. The blobs no copy names any more are queued for deletion
+/// (`blob_deletions`, under `blob_key`).
+pub async fn swap(c: &mut sqlx::PgConnection, n: NewCopy<'_>, blob_key: impl Fn(&str) -> String) -> Result<()> {
     let old = sqlx::query!("SELECT blob_digests, previous_blob_digests FROM vulnerability_db_mirrors WHERE name = $1 FOR UPDATE", n.name)
         .fetch_optional(&mut *c)
         .await?;
@@ -90,10 +91,24 @@ pub async fn swap(c: &mut sqlx::PgConnection, n: NewCopy<'_>) -> Result<Vec<Stri
     .execute(&mut *c)
     .await?;
     // blobs are shared by digest: one still named by any copy stays
-    let named: Vec<String> = sqlx::query_scalar!(
-        r#"SELECT DISTINCT d AS "d!" FROM vulnerability_db_mirrors, unnest(blob_digests || previous_blob_digests) AS d"#
+    let unused: Vec<String> = sqlx::query_scalar!(
+        r#"SELECT d AS "d!" FROM unnest($1::text[]) AS d
+           EXCEPT SELECT unnest(blob_digests || previous_blob_digests) FROM vulnerability_db_mirrors"#,
+        &dropped
     )
     .fetch_all(&mut *c)
     .await?;
-    Ok(dropped.into_iter().filter(|d| !named.contains(d)).collect())
+    let keys: Vec<String> = unused.iter().map(|d| blob_key(d)).collect();
+    sqlx::query!("INSERT INTO blob_deletions (blob_key) SELECT unnest($1::text[])", &keys).execute(&mut *c).await?;
+    Ok(())
+}
+
+/// A copy names this blob (one queued for deletion and named again stays).
+pub async fn names_blob(e: impl PgExecutor<'_>, digest: &str) -> Result<bool> {
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM vulnerability_db_mirrors WHERE $1 = ANY (blob_digests || previous_blob_digests)) AS "e!""#,
+        digest
+    )
+    .fetch_one(e)
+    .await
 }

@@ -1,0 +1,60 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT s.sha, (u.id = s.cyclonedx_upload_id) AS \"cyclonedx!\", u.secret, u.filename\n             FROM tag_sboms s JOIN uploads u ON u.id IN (s.cyclonedx_upload_id, s.spdx_upload_id)\n            WHERE s.project_id = $1 AND s.tag = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sha",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tag_sboms",
+            "name": "sha"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "cyclonedx!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "secret",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "uploads",
+            "name": "secret"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "filename",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "uploads",
+            "name": "filename"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      false,
+      false
+    ]
+  },
+  "hash": "bbcb1f09d57312da2c322a709c0290fd353f0e8eeb94c40ff5545543b7de92a4"
+}

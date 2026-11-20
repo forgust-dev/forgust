@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT d AS \"d!\" FROM unnest($1::text[]) AS d\n           EXCEPT SELECT unnest(blob_digests || previous_blob_digests) FROM vulnerability_db_mirrors",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "d!",
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "c6566180d873bfa84bf091ac7e4d5c59ea9fc02b40cd7cb9314bd102acbb5af0"
+}

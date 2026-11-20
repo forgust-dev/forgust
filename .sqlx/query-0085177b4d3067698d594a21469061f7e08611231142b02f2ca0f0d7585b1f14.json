@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, project_id, tag, sha, pipeline_id, cyclonedx_upload_id, spdx_upload_id FROM tag_sboms\n          WHERE project_id = $1 AND tag = $2 AND sha = $3 AND cyclonedx_upload_id IS NOT NULL AND spdx_upload_id IS NOT NULL",
+  "query": "SELECT id, project_id, tag, cyclonedx_upload_id, spdx_upload_id FROM tag_sboms WHERE pipeline_id = $1",
   "describe": {
     "columns": [
       {
@@ -38,28 +38,6 @@
       },
       {
         "ordinal": 3,
-        "name": "sha",
-        "type_info": "Text",
-        "origin": {
-          "Table": {
-            "table": "tag_sboms",
-            "name": "sha"
-          }
-        }
-      },
-      {
-        "ordinal": 4,
-        "name": "pipeline_id",
-        "type_info": "Int8",
-        "origin": {
-          "Table": {
-            "table": "tag_sboms",
-            "name": "pipeline_id"
-          }
-        }
-      },
-      {
-        "ordinal": 5,
         "name": "cyclonedx_upload_id",
         "type_info": "Int8",
         "origin": {
@@ -70,7 +48,7 @@
         }
       },
       {
-        "ordinal": 6,
+        "ordinal": 4,
         "name": "spdx_upload_id",
         "type_info": "Int8",
         "origin": {
@@ -83,20 +61,16 @@
     ],
     "parameters": {
       "Left": [
-        "Int8",
-        "Text",
-        "Text"
+        "Int8"
       ]
     },
     "nullable": [
       false,
       false,
       false,
-      false,
-      true,
       true,
       true
     ]
   },
-  "hash": "26fe331d4be9cc3603337e18e3a3ce3b9f6490253d3ce36e4b7cab1f33ec0349"
+  "hash": "0085177b4d3067698d594a21469061f7e08611231142b02f2ca0f0d7585b1f14"
 }
