@@ -2,9 +2,13 @@
 //   FORGUST_HOST=192.0.2.10 docker compose up -d --build
 //   FORGUST_HOST=192.0.2.10 python3 deploy/seed.py
 //   FORGUST_HOST=192.0.2.10 node deploy/screenshots.mjs [name]
-// Writes .github/images/<name>-light.png and <name>-dark.png (all of them, or
-// only the one named). Uses the web UI's Playwright: run `npm ci` in web/ first.
+// Writes .github/images/<name>-light.webp and <name>-dark.webp (all of them, or
+// only the one named), lossless. Uses the web UI's Playwright (run `npm ci` in web/
+// first) and libwebp's cwebp (`apt install webp`, `brew install webp`).
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -17,17 +21,25 @@ const base = `http://${host}:8080`;
 const password = process.env.SEED_PASSWORD ?? "forgust-demo-pass";
 const out = join(root, ".github/images");
 const only = process.argv[2];
+try {
+  execFileSync("cwebp", ["-version"], { stdio: "ignore" });
+} catch {
+  throw new Error("cwebp not found: install libwebp (`apt install webp`, `brew install webp`)");
+}
+// Playwright writes PNG only; cwebp turns each into a lossless WebP, about 40% of its size
+const tmp = mkdtempSync(join(tmpdir(), "forgust-shots-"));
 const P = "acme/shop";
 
 const browser = await chromium.launch();
 const contexts = {};
-/** One signed-in context per user; each page picks its colour scheme. */
+/** One signed-in context per user (null: signed out); each page picks its colour scheme. */
 async function as(user) {
   if (!contexts[user]) {
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1.5 });
+    contexts[user] = ctx;
+    if (user === null) return ctx;
     const r = await ctx.request.post(`${base}/api/v1/auth/login`, { data: { login: user, password } });
     if (!r.ok()) throw new Error(`sign-in as ${user}: ${r.status()} (is the instance seeded?)`);
-    contexts[user] = ctx;
   }
   return contexts[user];
 }
@@ -64,16 +76,29 @@ if (wanted("pipeline", "job")) {
 }
 
 const SHOTS = [
-  // name, user, path (a function when it needs a subject above)
+  // name, user (null: signed out), path (a function when it needs a subject above)
+  ["login", null, "login"],
+  ["dashboard", "alice", ""],
+  ["group", "alice", "acme"],
+  ["user", "alice", "bob"],
   ["code", "alice", P],
   ["file", "alice", `${P}/-/blob/main/shop/cart.py`],
+  ["commits", "alice", `${P}/-/commits/main`],
+  ["merge-requests", "alice", `${P}/-/merge_requests`],
   ["merge-request", "alice", () => `${P}/-/merge_requests/${mr.iid}`],
   ["diff", "alice", () => `${P}/-/merge_requests/${mr.iid}/diffs`],
   ["pipeline", "alice", () => `${P}/-/pipelines/${pipeline.iid}`],
   ["job", "alice", () => `${P}/-/jobs/${job.id}`],
   ["issues", "alice", `${P}/-/issues`],
   ["security", "alice", `${P}/-/security`],
+  ["releases", "alice", `${P}/-/releases`],
+  ["registry", "alice", `${P}/-/container_registry`],
+  ["environments", "alice", `${P}/-/environments`],
+  ["settings", "alice", `${P}/-/settings`],
+  ["profile-security", "alice", "profile/security"],
   ["admin", "root", "admin"],
+  ["admin-users", "root", "admin/users"],
+  ["admin-runners", "root", "admin/runners"],
   ["admin-storage", "root", "admin/storage"],
   ["admin-health", "root", "admin/health"],
 ];
@@ -89,10 +114,13 @@ for (const [name, user, at] of SHOTS) {
       await page.goto(`${base}/${path}`);
       await page.waitForLoadState("networkidle");
       await page.evaluate(() => document.fonts.ready);
-      await page.screenshot({ path: join(out, `${name}-${scheme}.png`), animations: "disabled" });
+      const png = join(tmp, `${name}-${scheme}.png`);
+      await page.screenshot({ path: png, animations: "disabled" });
       await page.close();
-      console.log(`wrote .github/images/${name}-${scheme}.png from /${path}`);
+      execFileSync("cwebp", ["-quiet", "-lossless", "-z", "9", "-mt", png, "-o", join(out, `${name}-${scheme}.webp`)]);
+      console.log(`wrote .github/images/${name}-${scheme}.webp from /${path}`);
     }),
   );
 }
 await browser.close();
+rmSync(tmp, { recursive: true });
