@@ -474,6 +474,7 @@ pub async fn passkey_finish(
     let Some(stored) = stored.filter(|s| s.kind == CredentialKind::Passkey) else { return Err(refused(None)) };
     // the authenticator's idea of whose passkey it is must be the account's
     if stored.user_handle != Some(handle) {
+        passkey_refused(&state, stored.user_id, stored.id, ip).await;
         return Err(refused(Some(stored.user_id)));
     }
     if !account_open(&state, ip, stored.user_id).await? {
@@ -483,11 +484,13 @@ pub async fn passkey_finish(
     let mut passkey: Passkey = webauthn::from_json(stored.credential)?;
     let result = match rp.finish_discoverable_authentication_v2(&req.credential, asked, &passkey) {
         Ok(r) if r.user_verified() => r,
-        Ok(_) => return Err(refused(Some(user.id))),
+        Ok(_) => {
+            passkey_refused(&state, user.id, stored.id, ip).await;
+            return Err(refused(Some(user.id)));
+        }
         Err(e) => {
             credential_refused(&state, &user, stored.id, &e).await;
-            let details = json!({ "reason": "passkey", "credential": stored.id });
-            services::audit(&state, &Principal::Anonymous, "login_failed", Some(("user", user.id)), details, ip.text().as_deref()).await;
+            passkey_refused(&state, user.id, stored.id, ip).await;
             return Err(refused(Some(user.id)));
         }
     };
@@ -501,9 +504,17 @@ pub async fn passkey_finish(
     start_session(&state, jar, &headers, ip, &user, "passkey").await
 }
 
-/// Someone got past the first step for a blocked account (or a bot's).
+/// A passkey that did not sign in (wrong account, not verified, refused).
+async fn passkey_refused(state: &AppState, user_id: i64, credential: i64, ip: ClientIp) {
+    let details = json!({ "reason": "passkey", "credential": credential });
+    services::audit(state, &Principal::Anonymous, "login_failed", Some(("user", user_id)), details, ip.text().as_deref()).await;
+}
+
+/// Someone got past the first step for a blocked account, or a bot's (bots
+/// do not sign in).
 async fn blocked_sign_in(state: &AppState, user: &forgust_db::users::User, method: &str, ip: &str) {
-    let details = json!({ "reason": "blocked", "method": method });
+    let reason = if user.is_bot() { "bot" } else { "blocked" };
+    let details = json!({ "reason": reason, "method": method });
     let ip = Some(ip).filter(|i| !i.is_empty());
     services::audit(state, &Principal::Anonymous, "login_failed", Some(("user", user.id)), details, ip).await;
 }

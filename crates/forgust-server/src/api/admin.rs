@@ -902,6 +902,13 @@ pub async fn update_user(
     Json(req): Json<UpdateUser>,
 ) -> ApiResult<Json<UserDto>> {
     let u = forgust_db::users::find(&state.db, id).await?.ok_or(ApiError::NotFound)?;
+    // as the request leaves the account, before changing any of it
+    if req.is_admin.unwrap_or(u.is_admin)
+        && req.is_external.unwrap_or(u.is_external)
+        && (req.is_admin.is_some() || req.is_external.is_some())
+    {
+        return Err(ApiError::bad("administrators cannot be external"));
+    }
     if let Some(admin) = req.is_admin {
         if u.id == me.id && !admin {
             return Err(ApiError::bad("you cannot remove your own admin rights"));
@@ -936,9 +943,6 @@ pub async fn update_user(
         if u.is_bot() {
             return Err(ApiError::bad("bots cannot be external"));
         }
-        if ext && u.is_admin {
-            return Err(ApiError::bad("administrators cannot be external"));
-        }
         forgust_db::admin::set_external(&state.db, id, ext).await?;
         if ext != u.is_external {
             let action = if ext { "user_made_external" } else { "user_made_internal" };
@@ -950,8 +954,9 @@ pub async fn update_user(
             return Err(ApiError::bad("bots have no address of their own"));
         }
         services::paths::validate_email(email)?;
-        services::accounts::set_email(&state, &p, &u, email, true).await?;
+        // the form sends every field: the same address changes nothing
         if !email.eq_ignore_ascii_case(&u.email) {
+            services::accounts::set_email(&state, &p, &u, email, true).await?;
             // the old inbox hears of it (nothing is sent without email)
             services::notify::send_to(
                 &state,

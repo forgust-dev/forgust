@@ -246,8 +246,7 @@ impl FromRequestParts<AppState> for Viewer {
                     None,
                     serde_json::json!({
                         "method": parts.method.as_str(),
-                        // the full path (nested routers see theirs only)
-                        "path": parts.extensions.get::<axum::extract::OriginalUri>().map_or(parts.uri.path(), |u| u.0.path()),
+                        "path": route_of(parts),
                     }),
                     None,
                 )
@@ -315,11 +314,16 @@ impl FromRequestParts<AppState> for Admin {
     }
 }
 
+/// The route a request matched (`/api/v1/users/{username}`), for the audit
+/// log: never the path itself, which can name people.
+fn route_of(parts: &Parts) -> &str {
+    parts.extensions.get::<axum::extract::MatchedPath>().map_or("(no route)", |m| m.as_str())
+}
+
 /// A request refused for who made it, in the audit log (throttled): the
-/// method and the full path, and why when there is more than one reason.
+/// method and the route, and why when there is more than one reason.
 async fn refused(state: &AppState, parts: &Parts, p: &Principal, action: &str, reason: Option<&str>) {
-    let path = parts.extensions.get::<axum::extract::OriginalUri>().map_or(parts.uri.path(), |u| u.0.path());
-    let mut details = serde_json::json!({ "method": parts.method.as_str(), "path": path });
+    let mut details = serde_json::json!({ "method": parts.method.as_str(), "path": route_of(parts) });
     if let Some(r) = reason {
         details["reason"] = r.into();
     }

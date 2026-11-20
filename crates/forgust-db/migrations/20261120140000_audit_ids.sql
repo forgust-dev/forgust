@@ -1,21 +1,9 @@
 -- Audit rows reference people by id, never by name or address: a person's
 -- erasure must leave nothing of them in `details` (the names are looked up
--- when the log is read). Earlier rows wrote usernames and addresses; drop
--- them, keeping the id where only the name was written.
+-- when the log is read). Earlier rows wrote usernames and addresses: they
+-- go. No id is guessed from a username: it may have been renamed since, and
+-- taken by someone else.
 
--- a member's username: its id instead, when the account still exists
-UPDATE audit_events a
-   SET details = (a.details - 'user') || jsonb_build_object('user_id', u.id)
-  FROM users u
- WHERE a.action = 'member_set' AND a.details ? 'user' AND NOT a.details ? 'user_id' AND u.username = a.details ->> 'user';
-
--- an LFS lock owner's username: its id instead, likewise
-UPDATE audit_events a
-   SET details = (a.details - 'owner') || jsonb_build_object('user_id', u.id)
-  FROM users u
- WHERE a.action = 'lfs_lock_removed' AND a.details ? 'owner' AND u.username = a.details ->> 'owner';
-
--- what is left: names and addresses, whoever they were
 UPDATE audit_events SET details = details - 'user' WHERE action = 'member_set' AND details ? 'user';
 UPDATE audit_events SET details = details - 'owner' WHERE action = 'lfs_lock_removed' AND details ? 'owner';
 UPDATE audit_events SET details = details - 'username'

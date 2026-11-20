@@ -110,6 +110,13 @@ async fn refusals_are_recorded_once_a_minute(pool: sqlx::PgPool) {
         (Some(carl_id), Some("POST"), Some("/api/v1/projects"))
     );
 
+    // another route is another row, written as the route (no ids, no names)
+    let (status, _) = ro.post("/api/v1/projects/123/issues", json!({ "title": "x" })).await;
+    assert_eq!(status, 403);
+    let refused = events(&srv, "token_scope_refused").await;
+    assert_eq!(refused.len(), 2, "{refused:?}");
+    assert_eq!(refused[1].2["path"], "/api/v1/projects/{id}/issues", "the route, not the id");
+
     // the admin API, by someone who is not an administrator
     let (status, _) = carl.get("/api/v1/admin/users").await;
     assert_eq!(status, 403);
@@ -242,8 +249,6 @@ async fn names_are_looked_up_not_stored(pool: sqlx::PgPool) {
 #[sqlx::test(migrator = "forgust_db::MIGRATOR")]
 async fn older_rows_lose_names_and_addresses(pool: sqlx::PgPool) {
     let srv = TestServer::start(pool).await;
-    srv.user("dave", false).await;
-    let dave = user_id(&srv, "dave").await;
     for (action, details) in [
         ("member_set", json!({ "user": "dave", "level": 30 })),
         ("member_set", json!({ "user": "gone", "level": 30 })),
@@ -268,9 +273,9 @@ async fn older_rows_lose_names_and_addresses(pool: sqlx::PgPool) {
     assert_eq!(
         rows,
         [
-            json!({ "user_id": dave, "level": 30 }),
             json!({ "level": 30 }),
-            json!({ "path": "a.bin", "user_id": dave }),
+            json!({ "level": 30 }),
+            json!({ "path": "a.bin" }),
             json!({ "projects_deleted": 2 }),
             json!({ "confirmed": false }),
             json!({}),

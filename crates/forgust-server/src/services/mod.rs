@@ -147,9 +147,10 @@ pub async fn audit_repository_read(
 }
 
 /// An event that can come in floods (a refusal a client retries in a loop, a
-/// fetch git makes in several requests): at most one row per principal,
-/// action, target and `via` (the transport, when there are several) a
-/// minute, the next one counting those held back (`repeated`).
+/// fetch git makes in several requests): at most one row a minute per
+/// principal, action, target and `details` (route, method, transport...), the
+/// count of those held back (`repeated`) written with the next row or when
+/// the minute ends ([`flush_held_audit`]).
 pub async fn audit_throttled(
     state: &AppState,
     principal: &Principal,
@@ -159,19 +160,53 @@ pub async fn audit_throttled(
     ip: Option<&str>,
 ) {
     let key = format!(
-        "{}:{}|{action}|{}|{}",
+        "{}:{}|{action}|{}|{details}",
         principal.kind(),
         principal.id().unwrap_or_default(),
         target.map(|(t, id)| format!("{t}:{id}")).unwrap_or_default(),
-        details.get("via").and_then(Value::as_str).unwrap_or_default(),
     );
-    let Some(repeated) = state.audit_throttle.admit(&key) else { return };
-    let details = match details {
+    let mut held = details.clone();
+    if let (Some(admin), Value::Object(m)) = (principal.impersonator(), &mut held) {
+        m.insert("impersonated_by".into(), Value::from(admin));
+    }
+    let event = crate::state::HeldEvent {
+        principal_kind: principal.kind(),
+        principal_id: principal.id(),
+        action: action.to_string(),
+        target: target.map(|(t, id)| (t.to_string(), id)),
+        details: held,
+        ip: ip.map(str::to_string),
+    };
+    let Some(repeated) = state.audit_throttle.admit(&key, event) else { return };
+    audit(state, principal, action, target, with_repeated(details, repeated), ip).await;
+}
+
+fn with_repeated(details: Value, repeated: u32) -> Value {
+    match details {
         Value::Object(mut m) if repeated > 0 => {
             m.insert("repeated".into(), Value::from(repeated));
             Value::Object(m)
         }
         d => d,
-    };
-    audit(state, principal, action, target, details, ip).await;
+    }
+}
+
+/// Write what throttled bursts held back once their minute is over: a copy
+/// of each burst's first row with `repeated`, so a burst that stops is
+/// counted too. Runs every 30 seconds in every server process.
+pub async fn flush_held_audit(state: &AppState) {
+    for (e, repeated) in state.audit_throttle.overdue() {
+        let ev = forgust_db::audit::NewEvent {
+            principal_kind: e.principal_kind,
+            principal_id: e.principal_id,
+            action: &e.action,
+            target_type: e.target.as_ref().map(|t| t.0.as_str()),
+            target_id: e.target.as_ref().map(|t| t.1),
+            details: with_repeated(e.details, repeated),
+            ip: e.ip.as_deref(),
+        };
+        if let Err(err) = forgust_db::audit::insert(&state.db, ev).await {
+            tracing::warn!(error = %err, action = e.action, "failed to write audit event");
+        }
+    }
 }

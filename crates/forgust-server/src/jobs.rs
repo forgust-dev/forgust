@@ -481,7 +481,10 @@ impl TaskHandler for Cleanup {
                 state,
                 "session_expired",
                 Some(("user", s.user_id)),
-                serde_json::json!({ "session_id": s.id, "impersonated_by": s.impersonator_id }),
+                match s.impersonator_id {
+                    Some(admin) => serde_json::json!({ "session_id": s.id, "impersonated_by": admin }),
+                    None => serde_json::json!({ "session_id": s.id }),
+                },
                 s.ip.as_deref(),
             )
             .await;

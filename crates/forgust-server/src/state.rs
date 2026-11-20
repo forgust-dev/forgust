@@ -98,12 +98,24 @@ impl RateLimiter {
     }
 }
 
-/// At most one audit row per key (principal, action, target) and window: the
-/// first refusal is written, the ones after it in the window are counted and
-/// reported by the next row written for that key.
+/// An audit row held by [`AuditThrottle`]: the first of its window, kept to
+/// write the count of those held back once the window ends.
+#[derive(Debug, Clone)]
+pub struct HeldEvent {
+    pub principal_kind: &'static str,
+    pub principal_id: Option<i64>,
+    pub action: String,
+    pub target: Option<(String, i64)>,
+    pub details: serde_json::Value,
+    pub ip: Option<String>,
+}
+
+/// At most one audit row per key and window: the first event is written, the
+/// ones after it in the window are counted, and the count is written when the
+/// window ends ([`AuditThrottle::overdue`]) or with the next row for the key.
 pub struct AuditThrottle {
     window: Duration,
-    seen: Mutex<HashMap<String, (std::time::Instant, u32)>>,
+    seen: Mutex<HashMap<String, (std::time::Instant, u32, HeldEvent)>>,
 }
 
 impl AuditThrottle {
@@ -111,27 +123,37 @@ impl AuditThrottle {
         AuditThrottle { window, seen: Mutex::new(HashMap::new()) }
     }
 
-    /// `Some(repeats held back since the last row)` when a row is due, `None`
-    /// when this one is only counted.
-    pub fn admit(&self, key: &str) -> Option<u32> {
+    /// `Some(repeats held back and not yet written)` when `event` is to be
+    /// written now, `None` when it is only counted.
+    pub fn admit(&self, key: &str, event: HeldEvent) -> Option<u32> {
         let mut seen = self.seen.lock().unwrap();
         let now = std::time::Instant::now();
-        // past this many keys, old windows go, with whatever they held back:
-        // a flood of distinct keys must not grow the map without bound
+        // a flood of distinct keys must not grow the map without bound: past
+        // this many, old windows go with whatever they held back
         if seen.len() > 100_000 {
-            seen.retain(|_, (t, _)| now.duration_since(*t) < self.window);
+            seen.retain(|_, (t, _, _)| now.duration_since(*t) < self.window);
         }
         match seen.get_mut(key) {
-            Some((t, n)) if now.duration_since(*t) < self.window => {
+            Some((t, n, _)) if now.duration_since(*t) < self.window => {
                 *n += 1;
                 None
             }
-            Some(e) => Some(std::mem::replace(e, (now, 0)).1),
+            Some(e) => Some(std::mem::replace(e, (now, 0, event)).1),
             None => {
-                seen.insert(key.to_string(), (now, 0));
+                seen.insert(key.to_string(), (now, 0, event));
                 Some(0)
             }
         }
+    }
+
+    /// Windows that ended: forgotten, and those that held events back
+    /// returned with their count, for a row saying so.
+    pub fn overdue(&self) -> Vec<(HeldEvent, u32)> {
+        let now = std::time::Instant::now();
+        let mut seen = self.seen.lock().unwrap();
+        let ended: Vec<String> =
+            seen.iter().filter(|(_, (t, _, _))| now.duration_since(*t) >= self.window).map(|(k, _)| k.clone()).collect();
+        ended.into_iter().filter_map(|k| seen.remove(&k)).filter(|(_, n, _)| *n > 0).map(|(_, n, e)| (e, n)).collect()
     }
 }
 
@@ -243,15 +265,40 @@ mod tests {
 
     use super::AuditThrottle;
 
+    fn event() -> super::HeldEvent {
+        super::HeldEvent {
+            principal_kind: "user",
+            principal_id: Some(1),
+            action: "x".into(),
+            target: None,
+            details: serde_json::json!({}),
+            ip: None,
+        }
+    }
+
     #[test]
     fn the_throttle_counts_what_it_holds_back() {
         let t = AuditThrottle::new(Duration::from_millis(100));
-        assert_eq!(t.admit("a"), Some(0));
-        assert_eq!(t.admit("a"), None);
-        assert_eq!(t.admit("a"), None);
-        assert_eq!(t.admit("b"), Some(0), "keys are apart");
+        assert_eq!(t.admit("a", event()), Some(0));
+        assert_eq!(t.admit("a", event()), None);
+        assert_eq!(t.admit("a", event()), None);
+        assert_eq!(t.admit("b", event()), Some(0), "keys are apart");
+        assert!(t.overdue().is_empty(), "windows still open");
         std::thread::sleep(Duration::from_millis(120));
-        assert_eq!(t.admit("a"), Some(2), "the next row says how many were held back");
-        assert_eq!(t.admit("a"), None);
+        assert_eq!(t.admit("a", event()), Some(2), "the next row says how many were held back");
+        assert_eq!(t.admit("a", event()), None);
+    }
+
+    #[test]
+    fn a_burst_that_stops_is_still_counted() {
+        let t = AuditThrottle::new(Duration::from_millis(50));
+        t.admit("a", event());
+        t.admit("a", event());
+        t.admit("b", event());
+        std::thread::sleep(Duration::from_millis(70));
+        let overdue = t.overdue();
+        assert_eq!(overdue.iter().map(|(_, n)| *n).collect::<Vec<_>>(), [1], "b held nothing back");
+        assert!(t.overdue().is_empty(), "written once");
+        assert_eq!(t.admit("a", event()), Some(0), "a fresh window");
     }
 }

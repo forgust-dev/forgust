@@ -269,6 +269,15 @@ pub async fn start(state: AppState) -> anyhow::Result<Running> {
     if state.cfg.has_role("worker") {
         crate::jobs::start_worker(state.clone(), 8).await?;
     }
+    // throttled audit events: the counts of bursts that stopped
+    let s = state.clone();
+    tokio::spawn(async move {
+        let mut tick = tokio::time::interval(Duration::from_secs(30));
+        loop {
+            tick.tick().await;
+            crate::services::flush_held_audit(&s).await;
+        }
+    });
     // internal API for git hooks (Unix socket)
     let sock = state.hooks.socket.clone();
     let _ = std::fs::remove_file(&sock);

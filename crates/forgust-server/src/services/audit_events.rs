@@ -77,7 +77,7 @@ pub const EVENTS: &[EventType] = &[
         SIGN_IN,
         U,
         &["reason", "method", "credential"],
-        "A sign-in to this account was refused. `reason`: password, second_factor, passkey (`credential`: its id) or blocked; `method`: the step that failed.",
+        "A sign-in to this account was refused. `reason`: password, second_factor, passkey (`credential`: its id), blocked or bot; `method`: the step that failed.",
     ),
     e("logout", SIGN_IN, U, &[], "Signed out of a browser session."),
     e(
@@ -98,7 +98,13 @@ pub const EVENTS: &[EventType] = &[
     ),
     e("impersonation_started", SIGN_IN, U, &[], "An administrator signed in as the user."),
     e("impersonation_stopped", SIGN_IN, U, &[], "The administrator went back to their own account."),
-    e("impersonated_request", SIGN_IN, NONE, &["method", "path"], "A change made while an administrator was signed in as someone."),
+    e(
+        "impersonated_request",
+        SIGN_IN,
+        NONE,
+        &["method", "path"],
+        "A change made while an administrator was signed in as someone (`path`: the route).",
+    ),
     e(
         "oauth_authorized",
         SIGN_IN,
@@ -309,7 +315,13 @@ pub const EVENTS: &[EventType] = &[
     e("ai_review_requested", BUILTIN, P, &["merge_request", "pipeline_id"], "An AI review of a merge request was asked for."),
     e("mcp_tool_call", BUILTIN, P, &["tool", "via", "token_id"], "An MCP client changed something through a tool."),
     // refusals
-    e("token_scope_refused", REFUSED, U, &["method", "path"], "A token was used for a request its scopes do not allow (throttled)."),
+    e(
+        "token_scope_refused",
+        REFUSED,
+        U,
+        &["method", "path"],
+        "A token was used for a request its scopes do not allow (`path`: the route, as `/api/v1/projects/{id}`; throttled).",
+    ),
     e(
         "admin_access_refused",
         REFUSED,
