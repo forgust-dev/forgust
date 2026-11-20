@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT u AS \"u!\" FROM tag_sboms, unnest(ARRAY[cyclonedx_upload_id, spdx_upload_id]) AS u\n            WHERE project_id = $1 AND tag = $2 AND u IS NOT NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "u!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "b3b6b0a0fef2aadb72a58d1eff0e1a885efa90badb6c32d1aad97f019dab6927"
+}

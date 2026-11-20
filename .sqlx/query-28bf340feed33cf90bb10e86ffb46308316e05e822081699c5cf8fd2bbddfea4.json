@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT status FROM ci_pipelines\n          WHERE project_id = $1 AND ref = $2 AND tag = $3 AND merge_request_id IS NOT DISTINCT FROM $4 AND id < $5\n            AND status IN ('success', 'failed') AND source NOT IN ('parent_pipeline', 'renovate', 'security')\n          ORDER BY id DESC LIMIT 1",
+  "query": "SELECT status FROM ci_pipelines\n          WHERE project_id = $1 AND ref = $2 AND tag = $3 AND merge_request_id IS NOT DISTINCT FROM $4 AND id < $5\n            AND status IN ('success', 'failed') AND source NOT IN ('parent_pipeline', 'renovate', 'security', 'ai_review', 'sbom')\n          ORDER BY id DESC LIMIT 1",
   "describe": {
     "columns": [
       {
@@ -28,5 +28,5 @@
       false
     ]
   },
-  "hash": "2f22de18355d6f3db2436ed07ed57e53a1030ae76443f94449339caf43b847cf"
+  "hash": "28bf340feed33cf90bb10e86ffb46308316e05e822081699c5cf8fd2bbddfea4"
 }

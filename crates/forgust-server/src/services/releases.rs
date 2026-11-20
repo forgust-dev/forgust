@@ -21,7 +21,7 @@ use crate::error::{ApiError, ApiResult};
 use crate::state::AppState;
 
 const LINK_TYPES: &[&str] = &["other", "runbook", "image", "package"];
-const MAX_LINKS: usize = 100;
+pub(crate) const MAX_LINKS: usize = 100;
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct NewLink {
