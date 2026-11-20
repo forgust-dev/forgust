@@ -413,7 +413,7 @@ async fn dispatch(
         // Trivy's databases, mirrored: anyone pulls them, nobody pushes
         if let Some(k) = crate::services::vulnerability_dbs::served_at(&name) {
             if action != "pull" {
-                return Err(RegError::new(StatusCode::FORBIDDEN, "DENIED", "the vulnerability database mirror is read-only"));
+                return Err(mirror_read_only());
             }
             return mirrored(&state, k, route, method == Method::HEAD).await;
         }
@@ -449,13 +449,7 @@ async fn mirrored(state: &AppState, k: crate::services::vulnerability_dbs::Kind,
     match route {
         Route::Manifest(r) => {
             let m = m.filter(|m| r == m.tag || r == m.digest).ok_or_else(RegError::manifest_unknown)?;
-            let len = m.manifest.len();
-            let mut resp = Response::new(if head { Body::empty() } else { Body::from(m.manifest) });
-            let h = resp.headers_mut();
-            h.insert(header::CONTENT_TYPE, HeaderValue::from_str(&m.media_type).unwrap_or(HeaderValue::from_static("application/json")));
-            h.insert(header::CONTENT_LENGTH, HeaderValue::from(len));
-            h.insert("Docker-Content-Digest", HeaderValue::from_str(&m.digest).expect("hex"));
-            Ok(resp)
+            Ok(manifest_response(&m.manifest, &m.media_type, &m.digest, head))
         }
         Route::Blob(d) => {
             let named = m.is_some_and(|m| m.blob_digests.contains(&d) || m.previous_blob_digests.contains(&d));
@@ -469,15 +463,14 @@ async fn mirrored(state: &AppState, k: crate::services::vulnerability_dbs::Kind,
                 let (size, stream) = state.blobs.get(&key).await?.ok_or_else(RegError::blob_unknown)?;
                 (size, Body::from_stream(stream))
             };
-            let mut resp = Response::new(body);
-            let h = resp.headers_mut();
-            h.insert(header::CONTENT_TYPE, HeaderValue::from_static("application/octet-stream"));
-            h.insert(header::CONTENT_LENGTH, HeaderValue::from(size));
-            h.insert("Docker-Content-Digest", HeaderValue::from_str(&d).expect("hex"));
-            Ok(resp)
+            Ok(blob_response(&d, size, body))
         }
-        _ => Err(RegError::new(StatusCode::FORBIDDEN, "DENIED", "the vulnerability database mirror is read-only")),
+        _ => Err(mirror_read_only()),
     }
+}
+
+fn mirror_read_only() -> RegError {
+    RegError::new(StatusCode::FORBIDDEN, "DENIED", "the vulnerability database mirror is read-only")
 }
 
 async fn repository(state: &AppState, t: &Target) -> RegResult<Option<rdb::Repository>> {
@@ -505,14 +498,7 @@ async fn get_blob(state: &AppState, t: &Target, digest: &str, head: bool) -> Reg
         let Some((_, stream)) = state.blobs.get(&blob_key(digest)).await? else { return Err(RegError::blob_unknown()) };
         Body::from_stream(stream)
     };
-    let mut r = Response::new(body);
-    let h = r.headers_mut();
-    h.insert(header::CONTENT_TYPE, HeaderValue::from_static("application/octet-stream"));
-    h.insert(header::CONTENT_LENGTH, HeaderValue::from(size));
-    h.insert("Docker-Content-Digest", HeaderValue::from_str(digest).expect("hex"));
-    h.insert(header::ETAG, HeaderValue::from_str(&format!("\"{digest}\"")).expect("hex"));
-    h.insert(header::CACHE_CONTROL, HeaderValue::from_static("max-age=31536000"));
-    Ok(r)
+    Ok(blob_response(digest, size as u64, body))
 }
 
 async fn delete_blob(state: &AppState, t: &Target, digest: &str) -> RegResult<Response> {
@@ -749,14 +735,25 @@ fn valid_tag(tag: &str) -> bool {
     RE.get_or_init(|| regex::Regex::new(r"^[A-Za-z0-9_][A-Za-z0-9._-]{0,127}$").unwrap()).is_match(tag)
 }
 
-fn manifest_response(m: &rdb::Manifest, head: bool) -> Response {
-    let len = m.payload.len();
-    let mut r = Response::new(if head { Body::empty() } else { Body::from(m.payload.clone()) });
+fn manifest_response(payload: &[u8], media_type: &str, digest: &str, head: bool) -> Response {
+    let mut r = Response::new(if head { Body::empty() } else { Body::from(payload.to_vec()) });
     let h = r.headers_mut();
-    h.insert(header::CONTENT_TYPE, HeaderValue::from_str(&m.media_type).unwrap_or(HeaderValue::from_static("application/json")));
-    h.insert(header::CONTENT_LENGTH, HeaderValue::from(len));
-    h.insert("Docker-Content-Digest", HeaderValue::from_str(&m.digest).expect("hex"));
-    h.insert(header::ETAG, HeaderValue::from_str(&format!("\"{}\"", m.digest)).expect("hex"));
+    h.insert(header::CONTENT_TYPE, HeaderValue::from_str(media_type).unwrap_or(HeaderValue::from_static("application/json")));
+    h.insert(header::CONTENT_LENGTH, HeaderValue::from(payload.len()));
+    h.insert("Docker-Content-Digest", HeaderValue::from_str(digest).expect("hex"));
+    h.insert(header::ETAG, HeaderValue::from_str(&format!("\"{digest}\"")).expect("hex"));
+    r
+}
+
+/// A blob (its digest checked valid): immutable, so cached for good.
+fn blob_response(digest: &str, size: u64, body: Body) -> Response {
+    let mut r = Response::new(body);
+    let h = r.headers_mut();
+    h.insert(header::CONTENT_TYPE, HeaderValue::from_static("application/octet-stream"));
+    h.insert(header::CONTENT_LENGTH, HeaderValue::from(size));
+    h.insert("Docker-Content-Digest", HeaderValue::from_str(digest).expect("hex"));
+    h.insert(header::ETAG, HeaderValue::from_str(&format!("\"{digest}\"")).expect("hex"));
+    h.insert(header::CACHE_CONTROL, HeaderValue::from_static("max-age=31536000"));
     r
 }
 
@@ -771,7 +768,8 @@ async fn find_manifest(state: &AppState, t: &Target, reference: &str) -> RegResu
 }
 
 async fn get_manifest(state: &AppState, t: &Target, reference: &str, head: bool) -> RegResult<Response> {
-    Ok(manifest_response(&find_manifest(state, t, reference).await?, head))
+    let m = find_manifest(state, t, reference).await?;
+    Ok(manifest_response(&m.payload, &m.media_type, &m.digest, head))
 }
 
 async fn put_manifest(state: &AppState, t: &Target, reference: &str, headers: &HeaderMap, body: Body) -> RegResult<Response> {

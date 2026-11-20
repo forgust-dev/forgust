@@ -170,6 +170,45 @@ impl super::builtin::Builtin for Scanning {
     }
 }
 
+/// `job` with the keys of `extra` set (replacing those it had).
+fn with(mut job: Value, extra: Value) -> Value {
+    for (k, v) in extra.as_object().cloned().unwrap_or_default() {
+        job[k] = v;
+    }
+    job
+}
+
+/// A job of Forgust's security pipelines: its image, the instance's runner
+/// tags and timeout, always run.
+fn job(cfg: &SecurityScanningConfig, image: Value, extra: Value) -> Value {
+    let base = json!({
+        "image": image,
+        "tags": cfg.tags,
+        "timeout": format!("{} minutes", cfg.timeout_secs.div_ceil(60).max(1)),
+        "rules": [{ "when": "always" }],
+    });
+    with(base, extra)
+}
+
+/// A Trivy job (scans, SBOMs): the instance's Trivy, its cache, where it
+/// reads its databases (`mirror`), and `variables` of its own. Scripts call
+/// it with `--config /dev/null`: never a `trivy.yaml` from the branch (it
+/// could point Trivy, and the job's credentials, elsewhere).
+pub(super) fn trivy_job(
+    cfg: &SecurityScanningConfig,
+    mirror: &super::vulnerability_dbs::TrivyMirror,
+    variables: Value,
+    extra: Value,
+) -> Value {
+    let mut vars = json!({ "TRIVY_CACHE_DIR": ".trivycache", "TRIVY_NO_PROGRESS": "true" });
+    for (k, v) in mirror.variables().into_iter().chain(variables.as_object().cloned().unwrap_or_default()) {
+        vars[k] = v;
+    }
+    let image = json!({ "name": cfg.trivy_image, "entrypoint": [""] });
+    let cache = json!({ "key": "trivy", "paths": [".trivycache/"], "when": "always" });
+    job(cfg, image, with(json!({ "variables": vars, "cache": cache }), extra))
+}
+
 /// The pipeline Forgust writes: one job per scanner, each uploading a report
 /// slice 1 reads. `history`: the secrets scanner looks at every commit.
 /// `mirror`: where Trivy reads its databases, when this server holds them.
@@ -178,36 +217,13 @@ pub fn job_config(
     scanners: &[String],
     history: bool,
     images: &[String],
-    mirror: &super::vulnerability_dbs::TrivyFlags,
+    mirror: &super::vulnerability_dbs::TrivyMirror,
 ) -> String {
-    let base = |image: Value| {
-        json!({
-            "image": image,
-            "tags": cfg.tags,
-            "timeout": format!("{} minutes", cfg.timeout_secs.div_ceil(60).max(1)),
-            "rules": [{ "when": "always" }],
-        })
-    };
-    let trivy = || json!({ "name": cfg.trivy_image, "entrypoint": [""] });
-    let with = |mut job: Value, extra: Value| {
-        for (k, v) in extra.as_object().cloned().unwrap_or_default() {
-            job[k] = v;
-        }
-        job
-    };
-    let trivy_cache = json!({ "key": "trivy", "paths": [".trivycache/"], "when": "always" });
-    // `--config /dev/null`: never a `trivy.yaml` from the scanned branch (it
-    // could point Trivy, and the job's credentials, elsewhere)
     let mut jobs = serde_json::Map::new();
     let on = |s: &str| scanners.iter().any(|x| x == s);
     if on("sast") {
-        jobs.insert(
-            "code".into(),
-            with(
-                base(json!(cfg.sast_image)),
-                json!({ "script": ["/analyzer run"], "artifacts": { "reports": { "sast": "gl-sast-report.json" } } }),
-            ),
-        );
+        let extra = json!({ "script": ["/analyzer run"], "artifacts": { "reports": { "sast": "gl-sast-report.json" } } });
+        jobs.insert("code".into(), job(cfg, json!(cfg.sast_image), extra));
     }
     if on("secret_detection") {
         let mut vars = json!({});
@@ -215,41 +231,22 @@ pub fn job_config(
             // the first run reads every commit
             vars = json!({ "GIT_DEPTH": "0", "SECRET_DETECTION_HISTORIC_SCAN": "true" });
         }
-        jobs.insert(
-            "secrets".into(),
-            with(
-                base(json!(cfg.secrets_image)),
-                json!({ "variables": vars, "script": ["/analyzer run"], "artifacts": { "reports": { "secret_detection": "gl-secret-detection-report.json" } } }),
-            ),
-        );
+        let extra = json!({ "variables": vars, "script": ["/analyzer run"], "artifacts": { "reports": { "secret_detection": "gl-secret-detection-report.json" } } });
+        jobs.insert("secrets".into(), job(cfg, json!(cfg.secrets_image), extra));
     }
     if on("dependency_scanning") {
-        jobs.insert(
-            "dependencies".into(),
-            with(
-                base(trivy()),
-                json!({
-                    "variables": { "TRIVY_CACHE_DIR": ".trivycache", "TRIVY_NO_PROGRESS": "true" },
-                    "cache": trivy_cache,
-                    "script": [format!("trivy fs --config /dev/null --scanners vuln --format sarif --output trivy-dependencies.sarif --exit-code 0{} .", mirror.vuln())],
-                    "artifacts": { "reports": { "dependency_scanning": "trivy-dependencies.sarif" } },
-                }),
-            ),
-        );
+        let extra = json!({
+            "script": ["trivy fs --config /dev/null --scanners vuln --format sarif --output trivy-dependencies.sarif --exit-code 0 ."],
+            "artifacts": { "reports": { "dependency_scanning": "trivy-dependencies.sarif" } },
+        });
+        jobs.insert("dependencies".into(), trivy_job(cfg, mirror, json!({}), extra));
     }
     if on("iac") {
-        jobs.insert(
-            "infrastructure".into(),
-            with(
-                base(trivy()),
-                json!({
-                    "variables": { "TRIVY_CACHE_DIR": ".trivycache", "TRIVY_NO_PROGRESS": "true" },
-                    "cache": trivy_cache,
-                    "script": [format!("trivy config --config /dev/null --format sarif --output trivy-iac.sarif --exit-code 0{} .", mirror.checks())],
-                    "artifacts": { "reports": { "sast": "trivy-iac.sarif" } },
-                }),
-            ),
-        );
+        let extra = json!({
+            "script": ["trivy config --config /dev/null --format sarif --output trivy-iac.sarif --exit-code 0 ."],
+            "artifacts": { "reports": { "sast": "trivy-iac.sarif" } },
+        });
+        jobs.insert("infrastructure".into(), trivy_job(cfg, mirror, json!({}), extra));
     }
     if on("container_scanning") && !images.is_empty() {
         let script: Vec<String> = images
@@ -257,27 +254,16 @@ pub fn job_config(
             .enumerate()
             .map(|(i, img)| {
                 format!(
-                    "trivy image --config /dev/null --format sarif --output trivy-container-{i}.sarif --exit-code 0{} '{}'",
-                    mirror.vuln(),
+                    "trivy image --config /dev/null --format sarif --output trivy-container-{i}.sarif --exit-code 0 '{}'",
                     img.replace('\'', "")
                 )
             })
             .collect();
         let files: Vec<String> = (0..images.len()).map(|i| format!("trivy-container-{i}.sarif")).collect();
-        jobs.insert(
-            "containers".into(),
-            with(
-                base(trivy()),
-                json!({
-                    // pulls from this instance's registry with the job's own credentials
-                    "variables": { "GIT_STRATEGY": "none", "TRIVY_USERNAME": "$CI_REGISTRY_USER", "TRIVY_PASSWORD": "$CI_REGISTRY_PASSWORD",
-                                   "TRIVY_CACHE_DIR": ".trivycache", "TRIVY_NO_PROGRESS": "true" },
-                    "cache": trivy_cache,
-                    "script": script,
-                    "artifacts": { "reports": { "container_scanning": files } },
-                }),
-            ),
-        );
+        // pulls from this instance's registry with the job's own credentials
+        let vars = json!({ "GIT_STRATEGY": "none", "TRIVY_USERNAME": "$CI_REGISTRY_USER", "TRIVY_PASSWORD": "$CI_REGISTRY_PASSWORD" });
+        let extra = json!({ "script": script, "artifacts": { "reports": { "container_scanning": files } } });
+        jobs.insert("containers".into(), trivy_job(cfg, mirror, vars, extra));
     }
     // JSON is YAML
     Value::Object(jobs).to_string()
@@ -343,7 +329,7 @@ async fn start(
     } else {
         vec![]
     };
-    let mirror = super::vulnerability_dbs::trivy_flags(state, &cfg).await.map_err(ApiError::Internal)?;
+    let mirror = super::vulnerability_dbs::trivy_mirror(state, &cfg).await.map_err(ApiError::Internal)?;
     let config_text = job_config(&cfg, &s.scanners, !s.history_scanned && merge_request_id.is_none(), &images, &mirror);
     if config_text == "{}" {
         return Ok(None);
@@ -425,18 +411,19 @@ mod tests {
     fn the_pipeline_parses() {
         let cfg = SecurityScanningConfig::default();
         let all: Vec<String> = SCANNERS.iter().map(|s| s.to_string()).collect();
-        let mirror = super::super::vulnerability_dbs::TrivyFlags {
-            db: Some("git.example.com/admin/mirrors/trivy-db:2".into()),
-            java_db: None,
-            checks: Some("git.example.com/admin/mirrors/trivy-checks:1".into()),
-            insecure: false,
-        };
+        let mirror = super::super::vulnerability_dbs::TrivyMirror(vec![
+            ("TRIVY_DB_REPOSITORY", "git.example.com/admin/mirrors/trivy-db:2".into()),
+            ("TRIVY_CHECKS_BUNDLE_REPOSITORY", "git.example.com/admin/mirrors/trivy-checks:1".into()),
+        ]);
         let text = job_config(&cfg, &all, true, &["registry.example.com/acme/shop:1.0".into()], &mirror);
         let parsed = forgust_ci_config::parse(&text).unwrap_or_else(|e| panic!("{e}\n{text}"));
         let mut names: Vec<&String> = parsed.jobs.keys().collect();
         names.sort();
         assert_eq!(names, ["code", "containers", "dependencies", "infrastructure", "secrets"]);
-        assert!(text.contains("--db-repository 'git.example.com/admin/mirrors/trivy-db:2' ."), "{text}");
-        assert!(text.contains("--checks-bundle-repository 'git.example.com/admin/mirrors/trivy-checks:1' ."), "{text}");
+        for job in ["dependencies", "infrastructure", "containers"] {
+            let vars = &parsed.jobs[job].variables;
+            assert_eq!(vars.get("TRIVY_DB_REPOSITORY").map(String::as_str), Some("git.example.com/admin/mirrors/trivy-db:2"), "{job}");
+            assert!(vars.contains_key("TRIVY_CACHE_DIR"), "{job}");
+        }
     }
 }

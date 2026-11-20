@@ -75,13 +75,16 @@ pub async fn sees_code(state: &AppState, principal: &Principal, p: &Project) -> 
     crate::auth::authz::can_project(state, principal, ProjectAction::ReadCode, p).await.unwrap_or(false)
 }
 
-/// The links of these releases `principal` may see: all of them, but for an
-/// SBOM of a tag to whoever cannot read the code (it is made from it).
-pub async fn visible_links(state: &AppState, principal: &Principal, p: &Project, release_ids: &[i64]) -> ApiResult<Vec<ReleaseLink>> {
+/// The links of these releases one may see: all of them for those who read
+/// the code (`sees_code`), else not those to files made from it (tags' SBOMs).
+pub async fn visible_links(state: &AppState, p: &Project, sees_code: bool, release_ids: &[i64]) -> ApiResult<Vec<ReleaseLink>> {
     let mut links = forgust_db::releases::links(&state.db, release_ids).await?;
-    if !sees_code(state, principal, p).await {
-        let secrets = forgust_db::security::sbom_upload_secrets(&state.db, p.id).await?;
-        links.retain(|l| !secrets.iter().any(|s| l.url.contains(&format!("/uploads/{s}/"))));
+    if !sees_code {
+        let hidden: std::collections::HashSet<String> =
+            forgust_db::releases::code_upload_secrets(&state.db, p.id).await?.into_iter().collect();
+        let prefix = uploads_prefix(p);
+        links
+            .retain(|l| !l.url.strip_prefix(&prefix).and_then(|rest| rest.split('/').next()).is_some_and(|secret| hidden.contains(secret)));
     }
     Ok(links)
 }

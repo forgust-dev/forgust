@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, project_id, secret, filename, size, content_type, blob_key, uploaded_by, created_at FROM uploads\n          WHERE project_id = $1 AND id = $2",
+  "query": "INSERT INTO uploads (project_id, secret, filename, size, content_type, blob_key, uploaded_by, requires_code)\n         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)\n         RETURNING id, project_id, secret, filename, size, content_type, blob_key, uploaded_by, created_at, requires_code",
   "describe": {
     "columns": [
       {
@@ -101,12 +101,29 @@
             "name": "created_at"
           }
         }
+      },
+      {
+        "ordinal": 9,
+        "name": "requires_code",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "uploads",
+            "name": "requires_code"
+          }
+        }
       }
     ],
     "parameters": {
       "Left": [
         "Int8",
-        "Int8"
+        "Text",
+        "Text",
+        "Int8",
+        "Text",
+        "Text",
+        "Int8",
+        "Bool"
       ]
     },
     "nullable": [
@@ -118,8 +135,9 @@
       false,
       false,
       true,
+      false,
       false
     ]
   },
-  "hash": "6fbf5ce53947c97048bfdf7d82ecd4e6bdc53bbcfdfc208b38039fc8519218d7"
+  "hash": "38afc9c8141d4dd4dd9f4c0bafd742d479572ee8697b6957468e46dbbb734b24"
 }

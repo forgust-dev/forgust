@@ -27,6 +27,31 @@ macro_rules! payload_free {
     };
 }
 
+/// A task whose payload is `{ report }` (missing: true), queued once at a
+/// time (it replaces one still waiting) and not retried.
+macro_rules! reported {
+    ($name:ident) => {
+        impl<'de> Deserialize<'de> for $name {
+            fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+                let payload = serde_json::Value::deserialize(d)?;
+                Ok($name { report: payload.get("report").and_then(|r| r.as_bool()).unwrap_or(true) })
+            }
+        }
+
+        impl $name {
+            pub fn request(self) -> JobRequest {
+                JobRequest {
+                    task: Self::IDENTIFIER,
+                    payload: serde_json::to_value(&self).unwrap_or_default(),
+                    job_key: Some(Self::IDENTIFIER.into()),
+                    max_attempts: Some(1),
+                    ..Default::default()
+                }
+            }
+        }
+    };
+}
+
 pub const SCHEMA: &str = "graphile_worker";
 
 #[derive(Debug, Clone, Default)]
@@ -746,25 +771,7 @@ pub struct UpdateCheck {
     pub report: bool,
 }
 
-impl<'de> Deserialize<'de> for UpdateCheck {
-    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        let payload = serde_json::Value::deserialize(d)?;
-        Ok(UpdateCheck { report: payload.get("report").and_then(|r| r.as_bool()).unwrap_or(true) })
-    }
-}
-
-impl UpdateCheck {
-    /// Soon, once (it replaces one still waiting).
-    pub fn request(self) -> JobRequest {
-        JobRequest {
-            task: Self::IDENTIFIER,
-            payload: serde_json::to_value(&self).unwrap_or_default(),
-            job_key: Some(Self::IDENTIFIER.into()),
-            max_attempts: Some(1),
-            ..Default::default()
-        }
-    }
-}
+reported!(UpdateCheck);
 
 impl TaskHandler for UpdateCheck {
     const IDENTIFIER: &'static str = "update_check";
@@ -791,25 +798,7 @@ pub struct MirrorVulnerabilityDbs {
     pub report: bool,
 }
 
-impl<'de> Deserialize<'de> for MirrorVulnerabilityDbs {
-    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        let payload = serde_json::Value::deserialize(d)?;
-        Ok(MirrorVulnerabilityDbs { report: payload.get("report").and_then(|r| r.as_bool()).unwrap_or(true) })
-    }
-}
-
-impl MirrorVulnerabilityDbs {
-    /// Soon, once: a copy still waiting stands for this one.
-    pub fn request(self) -> JobRequest {
-        JobRequest {
-            task: Self::IDENTIFIER,
-            payload: serde_json::to_value(&self).unwrap_or_default(),
-            job_key: Some(Self::IDENTIFIER.into()),
-            max_attempts: Some(1),
-            ..Default::default()
-        }
-    }
-}
+reported!(MirrorVulnerabilityDbs);
 
 impl TaskHandler for MirrorVulnerabilityDbs {
     const IDENTIFIER: &'static str = "mirror_vulnerability_dbs";

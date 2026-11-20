@@ -204,6 +204,8 @@ pub struct Upload {
     pub blob_key: String,
     pub uploaded_by: Option<i64>,
     pub created_at: DateTime<Utc>,
+    /// Made from the code (a tag's SBOM): only for those who read it.
+    pub requires_code: bool,
 }
 
 pub struct NewUpload<'a> {
@@ -214,48 +216,43 @@ pub struct NewUpload<'a> {
     pub content_type: &'a str,
     pub blob_key: &'a str,
     pub uploaded_by: Option<i64>,
+    pub requires_code: bool,
 }
 
 pub async fn add_upload(e: impl PgExecutor<'_>, u: NewUpload<'_>) -> Result<Upload> {
     sqlx::query_as!(
         Upload,
-        "INSERT INTO uploads (project_id, secret, filename, size, content_type, blob_key, uploaded_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         RETURNING id, project_id, secret, filename, size, content_type, blob_key, uploaded_by, created_at",
+        "INSERT INTO uploads (project_id, secret, filename, size, content_type, blob_key, uploaded_by, requires_code)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id, project_id, secret, filename, size, content_type, blob_key, uploaded_by, created_at, requires_code",
         u.project_id,
         u.secret,
         u.filename,
         u.size,
         u.content_type,
         u.blob_key,
-        u.uploaded_by
+        u.uploaded_by,
+        u.requires_code
     )
     .fetch_one(e)
-    .await
-}
-
-pub async fn upload_by_id(e: impl PgExecutor<'_>, project_id: i64, id: i64) -> Result<Option<Upload>> {
-    sqlx::query_as!(
-        Upload,
-        "SELECT id, project_id, secret, filename, size, content_type, blob_key, uploaded_by, created_at FROM uploads
-          WHERE project_id = $1 AND id = $2",
-        project_id,
-        id
-    )
-    .fetch_optional(e)
     .await
 }
 
 pub async fn upload(e: impl PgExecutor<'_>, project_id: i64, secret: &str) -> Result<Option<Upload>> {
     sqlx::query_as!(
         Upload,
-        "SELECT id, project_id, secret, filename, size, content_type, blob_key, uploaded_by, created_at
+        "SELECT id, project_id, secret, filename, size, content_type, blob_key, uploaded_by, created_at, requires_code
            FROM uploads WHERE project_id = $1 AND secret = $2",
         project_id,
         secret
     )
     .fetch_optional(e)
     .await
+}
+
+/// The secrets of a project's uploads made from its code (tags' SBOMs).
+pub async fn code_upload_secrets(e: impl PgExecutor<'_>, project_id: i64) -> Result<Vec<String>> {
+    sqlx::query_scalar!("SELECT secret FROM uploads WHERE project_id = $1 AND requires_code", project_id).fetch_all(e).await
 }
 
 /// Blob keys whose rows were deleted, taken off the queue (the caller deletes them).

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT EXISTS (SELECT 1 FROM tag_sboms WHERE project_id = $1 AND $2 IN (cyclonedx_upload_id, spdx_upload_id)) AS \"e!\"",
+  "query": "SELECT EXISTS (SELECT 1 FROM vulnerability_db_mirrors WHERE $1 = ANY (blob_digests || previous_blob_digests)) AS \"e!\"",
   "describe": {
     "columns": [
       {
@@ -12,13 +12,12 @@
     ],
     "parameters": {
       "Left": [
-        "Int8",
-        "Int8"
+        "Text"
       ]
     },
     "nullable": [
       null
     ]
   },
-  "hash": "5076055034f36147d0c3fcd07f2af14335e32803d307214a67dee96f11619e47"
+  "hash": "0d81586df23f3c83a5886baea65d0f07c65de84302e98533d9e1663834a9c9d7"
 }

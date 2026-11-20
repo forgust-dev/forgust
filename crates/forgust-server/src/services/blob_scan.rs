@@ -38,7 +38,7 @@ pub fn family(key: &str) -> &'static str {
         (Some("lfs"), _) => "lfs",
         (Some("registry"), Some("blobs")) => "registry",
         (Some("registry"), Some("uploads")) => "registry_uploads",
-        (Some("mirrors"), Some("sha256")) => "mirrors",
+        (Some("mirrors"), _) => "mirrors",
         (Some("ci"), Some("artifacts" | "traces")) => "ci",
         (Some("uploads"), _) => "uploads",
         (Some("avatars"), _) => "avatars",
