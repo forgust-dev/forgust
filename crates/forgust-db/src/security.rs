@@ -787,3 +787,26 @@ pub async fn sbom_uploads_of_tag(e: impl PgExecutor<'_>, project_id: i64, tag: &
     .fetch_all(e)
     .await
 }
+
+/// The secrets of a project's uploads that are SBOMs of its tags (made from
+/// its code: only those who read the code see them).
+pub async fn sbom_upload_secrets(e: impl PgExecutor<'_>, project_id: i64) -> Result<Vec<String>> {
+    sqlx::query_scalar!(
+        "SELECT u.secret FROM uploads u
+          WHERE u.project_id = $1
+            AND EXISTS (SELECT 1 FROM tag_sboms s WHERE s.project_id = $1 AND u.id IN (s.cyclonedx_upload_id, s.spdx_upload_id))",
+        project_id
+    )
+    .fetch_all(e)
+    .await
+}
+
+pub async fn is_sbom_upload(e: impl PgExecutor<'_>, project_id: i64, upload_id: i64) -> Result<bool> {
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM tag_sboms WHERE project_id = $1 AND $2 IN (cyclonedx_upload_id, spdx_upload_id)) AS "e!""#,
+        project_id,
+        upload_id
+    )
+    .fetch_one(e)
+    .await
+}

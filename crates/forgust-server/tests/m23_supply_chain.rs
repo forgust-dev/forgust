@@ -352,6 +352,20 @@ async fn tags_get_an_sbom_on_their_release(pool: sqlx::PgPool) {
     assert_eq!(s, 200);
     assert!(String::from_utf8_lossy(&body).contains(r#""tag":"v1.0""#));
 
+    // made from the code: Guests of the private project see the release, not its SBOMs
+    let guest = srv.user("gina", false).await;
+    let reporter = srv.user("rita", false).await;
+    owner.ok_post(&format!("/api/v1/projects/{p}/members"), json!({ "username": "gina", "access_level": "guest" })).await;
+    owner.ok_post(&format!("/api/v1/projects/{p}/members"), json!({ "username": "rita", "access_level": "reporter" })).await;
+    let seen = guest.ok_get(&format!("/api/v1/projects/{p}/releases/v1.0")).await;
+    assert!(sbom_links(&seen).is_empty(), "{seen}");
+    let v4 = guest.ok_get(&format!("/api/v4/projects/{p}/releases/v1.0")).await;
+    assert!(!v4.to_string().contains("SBOM"), "{v4}");
+    assert_eq!(guest.get_bytes(links[0].1.trim_start_matches(&srv.base)).await.0, 404, "nor its file");
+    let seen = reporter.ok_get(&format!("/api/v1/projects/{p}/releases/v1.0")).await;
+    assert_eq!(sbom_links(&seen).len(), 2, "who reads the code does");
+    assert_eq!(reporter.get_bytes(links[0].1.trim_start_matches(&srv.base)).await.0, 200);
+
     // a release made with its tag: the SBOM joins it once the job passed
     owner.ok_post(&format!("/api/v1/projects/{p}/releases"), json!({ "tag_name": "v2.0", "ref": "main", "name": "Two" })).await;
     wait_jobs(&srv.state).await;
@@ -386,7 +400,13 @@ async fn tags_get_an_sbom_on_their_release(pool: sqlx::PgPool) {
     let (_, body) = owner.get_bytes(links[0].1.trim_start_matches(&srv.base)).await;
     assert!(String::from_utf8_lossy(&body).contains("v1.0 again"));
 
-    // SBOM runs are not scans: the scan settings still say when the next one is due
-    let st = owner.ok_get(&scanning).await;
-    assert!(st["last_pipeline_iid"].is_null(), "{st}");
+    // SBOM runs are not scans: the scan settings' last run, if any, is a scan
+    let last: Option<String> = sqlx::query_scalar(
+        "SELECT p.source FROM security_scanning_settings s JOIN ci_pipelines p ON p.id = s.last_pipeline_id WHERE s.project_id = $1",
+    )
+    .bind(p)
+    .fetch_optional(&srv.state.db)
+    .await
+    .unwrap();
+    assert!(last.as_deref().is_none_or(|s| s == "security"), "{last:?}");
 }

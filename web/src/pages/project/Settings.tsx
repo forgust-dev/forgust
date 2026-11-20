@@ -693,7 +693,7 @@ function SecurityScanningForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S[
       </p>
       <label className="check">
         <input type="checkbox" disabled={!enabled} checked={sbom} onChange={(e) => setSbom(e.target.checked)} /> Make an SBOM (CycloneDX and SPDX) of each new tag,
-        attached to its release
+        attached to its release (for those who can read the code)
       </label>
       {initial.enabled && (
         <div className="list" aria-label="Security scanning status">

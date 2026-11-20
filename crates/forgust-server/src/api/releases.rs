@@ -62,7 +62,7 @@ pub fn link_dto(state: &AppState, p: &Project, tag: &str, l: ReleaseLink) -> Lin
 pub async fn views(state: &AppState, principal: &Principal, p: &Project, list: Vec<Release>) -> ApiResult<Vec<ReleaseDto>> {
     let code = svc::sees_code(state, principal, p).await;
     let ids: Vec<i64> = list.iter().map(|r| r.id).collect();
-    let mut links = forgust_db::releases::links(&state.db, &ids).await?;
+    let mut links = svc::visible_links(state, principal, p, &ids).await?;
     // every tagged commit at once (one listing, not two git calls per release)
     let mut tagged: std::collections::HashMap<String, forgust_storage::CommitSummary> = if code {
         state
