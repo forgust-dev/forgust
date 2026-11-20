@@ -161,6 +161,11 @@ pub async fn update(
     };
     let mut tx = state.db.begin().await?;
     mdb::update(&mut *tx, m.id, &change).await?;
+    // pipelines run as whoever turns them on, never as someone else
+    if change.trigger_pipelines && !m.trigger_pipelines {
+        let user = p0.direct_user().ok_or(ApiError::Unauthorized)?;
+        mdb::set_creator(&mut *tx, m.id, user.id).await?;
+    }
     let credentials = req.token.is_some() || req.username.is_some();
     if credentials {
         let sealed = match req.token.as_deref().map(str::trim) {

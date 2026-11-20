@@ -98,7 +98,7 @@ export function Branches({ ctx }: { ctx: Ctx }) {
   return (
     <div className="stack list-page">
       <ListHead title="Branches">
-        {ctx.p.can_push && !creating && (
+        {ctx.p.can_write_repository && !creating && (
           <button className="btn primary" onClick={() => setCreating(true)}>
             <Plus size={14} /> New branch
           </button>
@@ -139,7 +139,7 @@ export function Branches({ ctx }: { ctx: Ctx }) {
                       <GitMerge size={13} /> Merge request
                     </Link>
                   )}
-                  {!b.default && ctx.p.can_push && (
+                  {!b.default && ctx.p.can_write_repository && (
                     <button className="icon-btn" title={`Delete ${b.name}`} aria-label={`Delete branch ${b.name}`} onClick={() => remove(b.name)}>
                       <Trash2 size={15} />
                     </button>
@@ -229,7 +229,7 @@ export function Tags({ ctx }: { ctx: Ctx }) {
   return (
     <div className="stack list-page">
       <ListHead title="Tags">
-        {ctx.p.can_push && !creating && (
+        {ctx.p.can_write_repository && !creating && (
           <button className="btn primary" onClick={() => setCreating(true)}>
             <Plus size={14} /> New tag
           </button>
@@ -279,7 +279,7 @@ export function Tags({ ctx }: { ctx: Ctx }) {
                       tar.gz
                     </a>
                   </div>
-                  {(t.protected ? ctx.p.can_admin : ctx.p.can_push) && (
+                  {ctx.p.can_write_repository && (t.protected ? ctx.p.can_admin : ctx.p.can_push) && (
                     <button className="icon-btn" title={`Delete ${t.name}`} aria-label={`Delete tag ${t.name}`} onClick={() => remove(t)}>
                       <Trash2 size={15} />
                     </button>

@@ -57,7 +57,7 @@ export function StackMap({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
           layer {s.position} of {s.size} · into <code>{s.trunk}</code>
         </span>
         <span className="grow" />
-        {stale && ctx.p.can_push && (
+        {stale && ctx.p.can_write_repository && (
           <button className="btn small" onClick={() => act(() => api.post(`${path}/stack/rebase`), "Stack rebased")}>
             Rebase stack
           </button>

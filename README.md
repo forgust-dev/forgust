@@ -191,7 +191,9 @@ volumes: { forgust-data: {}, db-data: {} }
 - Import from GitLab, GitHub, Gitea and Forgejo, one project or a whole user or
   organization: repositories, merge requests, issues (confidential ones stay
   confidential, internal notes internal), labels, CI/CD variables, members; a dry run
-  first, resumable
+  first, resumable; optionally kept in sync afterwards
+- Repository mirrors, to or from any forge over http(s): pulled on a schedule (the
+  repository is then read-only here), or pushed after every change
 - Webhooks, also formatted for Slack, Discord, Matrix, Mattermost and Teams;
   confidential issues and internal comments only go to hooks that ask for their own
   events
@@ -213,6 +215,14 @@ maintains. Public projects import without a token. What each source cannot hand 
 (Actions secrets, GitHub's resolved threads, wikis, releases, packages) is listed by
 the dry run.
 
+A project's repository can also be mirrored (Settings > Repository > Mirroring):
+pulled from another repository every 15 minutes to once a day, its branches and tags
+replacing the project's (nobody can push, commit or merge there while it is a mirror),
+or pushed to up to ten others after every change, forced, with branches deleted here
+deleted there unless only protected branches are pushed. Issues, merge requests and
+LFS objects are not mirrored. Addresses on a private network are refused unless
+`features.imports_allow_local` is on.
+
 ## Performance
 
 Measured on an 8-vCPU development machine, p95 with one client, release build:
@@ -232,8 +242,8 @@ against 300 ms).
 ## Status
 
 Forgust is young (0.5) and built for private teams first. Not there yet: forks and
-merge requests from forks, wikis, snippets, package registries, push and pull
-mirroring, issue boards, system hooks, and SAML or LDAP sign-in.
+merge requests from forks, wikis, snippets, package registries, issue boards, system
+hooks, and SAML or LDAP sign-in.
 Code search covers each project's default branch, not other branches or tags.
 
 ## Tech stack

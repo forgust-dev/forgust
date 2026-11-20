@@ -49,11 +49,23 @@ pub struct Options {
     pub members: bool,
     /// Git LFS objects of the repository.
     pub lfs: bool,
+    /// Keep the repository in sync afterwards: a pull mirror of the source,
+    /// which keeps the token (off by default).
+    pub mirror: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { issues: true, merge_requests: true, labels: true, variables: true, protected_branches: true, members: true, lfs: true }
+        Options {
+            issues: true,
+            merge_requests: true,
+            labels: true,
+            variables: true,
+            protected_branches: true,
+            members: true,
+            lfs: true,
+            mirror: false,
+        }
     }
 }
 
@@ -485,6 +497,10 @@ impl<'a> Runner<'a> {
         for r in self.state.storage.refs(p.id, "refs/import/").await.map_err(other)? {
             let _ = self.state.storage.delete_ref(p.id, &r.name, None).await;
         }
+        if self.options.mirror {
+            let r = self.keep_in_sync(&p, &sp).await;
+            self.optional("Keeping the repository in sync", r)?;
+        }
         // keep the dry-run report, add what this run left out
         let mut report: Report = serde_json::from_value(self.row.report.clone()).unwrap_or_default();
         for w in self.warnings.drain(..) {
@@ -606,6 +622,50 @@ impl<'a> Runner<'a> {
         )
         .await
         .map_err(api)
+    }
+
+    // -------------------------------------------------------------- mirror
+
+    /// Make the project a pull mirror of the source, with the import's token.
+    async fn keep_in_sync(&mut self, p: &Project, sp: &SourceProject) -> Result<()> {
+        use forgust_db::project_mirrors as mdb;
+        if mdb::pulled_from(&self.state.db, p.id).await.map_err(other)?.is_some() {
+            return Ok(());
+        }
+        let url = services::repo_mirrors::checked(self.state, &sp.http_url).await.map_err(SourceError::Refused)?;
+        // the import's token, still sealed; an empty one is no token
+        let sealed = match idb::token(&self.state.db, self.import.id).await.map_err(other)? {
+            Some(s) if !self.state.secrets.decrypt(&s).map(|t| t.is_empty()).unwrap_or(true) => Some(s),
+            _ => None,
+        };
+        let id = mdb::insert(
+            &self.state.db,
+            mdb::NewMirror {
+                project_id: p.id,
+                direction: "pull",
+                url: url.as_str(),
+                username: "",
+                token_enc: sealed.as_deref(),
+                only_protected: false,
+                trigger_pipelines: false,
+                interval_minutes: 60,
+                created_by: Some(self.import.user_id),
+            },
+        )
+        .await
+        .map_err(other)?;
+        // just fetched: the next update comes at its turn
+        mdb::set_result(&self.state.db, id, None).await.map_err(other)?;
+        services::audit(
+            self.state,
+            &self.principal,
+            "mirror_added",
+            Some(("project", p.id)),
+            json!({ "mirror": id, "direction": "pull", "url": url.as_str() }),
+            None,
+        )
+        .await;
+        Ok(())
     }
 
     // -------------------------------------------------------------- repository

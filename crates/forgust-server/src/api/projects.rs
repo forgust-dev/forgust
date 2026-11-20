@@ -106,10 +106,12 @@ pub async fn show(State(state): State<AppState>, Viewer(p): Viewer, Path(id): Pa
     let role = project_role(&state, &p, &proj).await?;
     let ancestors = forgust_db::namespaces::find_many(&state.db, &proj.traversal_ids).await?;
     let empty = state.storage.is_empty(proj.id).await.unwrap_or(true);
+    let pull_mirror = if role.can_read_code { forgust_db::project_mirrors::pulled_from(&state.db, proj.id).await? } else { None };
     Ok(Json(ProjectDetail {
         access_level: forgust_db::access::name(if role.bypass { 0 } else { role.level }).into(),
         can_read_code: role.can_read_code,
         can_push: role.can_push,
+        can_write_repository: role.can_push && pull_mirror.is_none(),
         // archived: settings are read-only too (the Owner keeps unarchive, transfer, delete)
         can_admin: p.direct_user().is_some() && role.level >= forgust_db::access::MAINTAINER && !proj.archived(),
         can_own: p.direct_user().is_some() && role.level >= forgust_db::access::OWNER,
@@ -121,6 +123,7 @@ pub async fn show(State(state): State<AppState>, Viewer(p): Viewer, Path(id): Pa
             vec![]
         },
         storage_warning: if role.can_push { forgust_db::quotas::warning(&state.db, proj.id).await? } else { None },
+        pull_mirror,
         project: ProjectDto::from(&proj, &state.cfg),
     }))
 }

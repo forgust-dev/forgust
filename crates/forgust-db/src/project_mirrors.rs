@@ -138,6 +138,12 @@ pub async fn update(e: impl PgExecutor<'_>, id: i64, c: &MirrorChange) -> Result
     Ok(())
 }
 
+/// Whose pipelines a pull mirror's updates run as (who turned them on).
+pub async fn set_creator(e: impl PgExecutor<'_>, id: i64, user_id: i64) -> Result<()> {
+    sqlx::query!("UPDATE project_mirrors SET created_by = $2 WHERE id = $1", id, user_id).execute(e).await?;
+    Ok(())
+}
+
 /// Replace the credentials (the address stays).
 pub async fn set_credentials(e: impl PgExecutor<'_>, id: i64, username: &str, token_enc: Option<&str>) -> Result<()> {
     sqlx::query!("UPDATE project_mirrors SET username = $2, token_enc = $3 WHERE id = $1", id, username, token_enc).execute(e).await?;
