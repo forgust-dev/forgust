@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT project_id, enabled, scanners, interval_hours, user_id, next_run_at, last_pipeline_id, history_scanned\n           FROM security_scanning_settings WHERE project_id = $1",
+  "query": "SELECT project_id, enabled, scanners, interval_hours, user_id, next_run_at, last_pipeline_id, history_scanned, sbom_on_tags\n           FROM security_scanning_settings WHERE project_id = $1",
   "describe": {
     "columns": [
       {
@@ -90,6 +90,17 @@
             "name": "history_scanned"
           }
         }
+      },
+      {
+        "ordinal": 8,
+        "name": "sbom_on_tags",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "security_scanning_settings",
+            "name": "sbom_on_tags"
+          }
+        }
       }
     ],
     "parameters": {
@@ -105,8 +116,9 @@
       true,
       true,
       true,
+      false,
       false
     ]
   },
-  "hash": "fa1a2cb4ad8b215ec10ea9f31e927a0752460ebf305dcb9255f13616d16991be"
+  "hash": "1e724c8f5f27e5e6eed8033dcd108de3412db957b86998dbc16dfa1e22c3eef9"
 }

@@ -234,6 +234,18 @@ pub async fn add_upload(e: impl PgExecutor<'_>, u: NewUpload<'_>) -> Result<Uplo
     .await
 }
 
+pub async fn upload_by_id(e: impl PgExecutor<'_>, project_id: i64, id: i64) -> Result<Option<Upload>> {
+    sqlx::query_as!(
+        Upload,
+        "SELECT id, project_id, secret, filename, size, content_type, blob_key, uploaded_by, created_at FROM uploads
+          WHERE project_id = $1 AND id = $2",
+        project_id,
+        id
+    )
+    .fetch_optional(e)
+    .await
+}
+
 pub async fn upload(e: impl PgExecutor<'_>, project_id: i64, secret: &str) -> Result<Option<Upload>> {
     sqlx::query_as!(
         Upload,

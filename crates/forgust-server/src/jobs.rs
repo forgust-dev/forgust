@@ -175,6 +175,14 @@ impl PostReceive {
             {
                 tracing::warn!(project_id = self.project_id, error = %e, "releases of deleted tags not deleted");
             }
+            // new tags (by a push, in the browser, by a release): their SBOMs
+            let created_tags: Vec<(String, String)> = self
+                .updates
+                .iter()
+                .filter(|u| u.old == forgust_storage::ZERO_OID && u.new != forgust_storage::ZERO_OID)
+                .filter_map(|u| u.name.strip_prefix("refs/tags/").map(|t| (t.to_string(), u.new.clone())))
+                .collect();
+            crate::services::sbom::on_tags_created(state, &p, &created_tags).await;
             let who = pusher.as_ref().and_then(|p| p.user());
             // the contributions calendar: a push event per branch or tag a person pushed
             let person = pusher.as_ref().and_then(|p| p.direct_user());
@@ -854,6 +862,7 @@ pub async fn start_worker(state: AppState, concurrency: usize) -> anyhow::Result
         .define_job::<CiSweep>()
         .define_job::<UpdateCheck>()
         .define_job::<MirrorVulnerabilityDbs>()
+        .define_job::<crate::services::sbom::StoreSbom>()
         .define_job::<crate::services::auto_merge::AutoMergeCheck>()
         .define_job::<crate::import::ImportJob>()
         .with_crontab("*/5 * * * * cleanup\n17 * * * * maintenance_sweep\n* * * * * ci_sweep\n43 */6 * * * update_check {report:false}\n29 */6 * * * mirror_vulnerability_dbs {report:false}")?

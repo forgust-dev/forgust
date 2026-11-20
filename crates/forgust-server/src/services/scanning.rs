@@ -44,6 +44,8 @@ pub struct Change {
     pub enabled: bool,
     pub scanners: Vec<String>,
     pub interval_hours: i32,
+    /// `None`: as it was.
+    pub sbom_on_tags: Option<bool>,
 }
 
 /// Turn scanning on (the first run is due now, as the person turning it on)
@@ -82,10 +84,28 @@ pub async fn configure(state: &AppState, principal: &Principal, project: &Projec
         None
     };
     let owner = if c.enabled { Some(user.id) } else { before.as_ref().and_then(|s| s.user_id) };
-    sdb::save_scanning(&state.db, project.id, c.enabled, &scanners, c.interval_hours, owner, next).await?;
+    let had_sbom = before.as_ref().is_some_and(|s| s.sbom_on_tags);
+    let sbom = c.sbom_on_tags.unwrap_or(had_sbom);
+    sdb::save_scanning(
+        &state.db,
+        sdb::SaveScanning {
+            project_id: project.id,
+            enabled: c.enabled,
+            scanners: &scanners,
+            interval_hours: c.interval_hours,
+            user_id: owner,
+            next_run_at: next,
+            sbom_on_tags: sbom,
+        },
+    )
+    .await?;
     if c.enabled != was_on {
         let action = if c.enabled { "security_scanning_enabled" } else { "security_scanning_disabled" };
         super::audit(state, principal, action, Some(("project", project.id)), json!({ "scanners": scanners }), None).await;
+    }
+    if sbom != had_sbom {
+        let action = if sbom { "sbom_on_tags_enabled" } else { "sbom_on_tags_disabled" };
+        super::audit(state, principal, action, Some(("project", project.id)), json!({}), None).await;
     }
     Ok(())
 }
@@ -101,7 +121,7 @@ pub async fn set_group_default(
 }
 
 fn defaults() -> Change {
-    Change { enabled: true, scanners: DEFAULT_SCANNERS.iter().map(|s| s.to_string()).collect(), interval_hours: 24 }
+    Change { enabled: true, scanners: DEFAULT_SCANNERS.iter().map(|s| s.to_string()).collect(), interval_hours: 24, sbom_on_tags: None }
 }
 
 /// A new project under a group that turned scanning on gets it.
@@ -275,6 +295,22 @@ async fn images_of(state: &AppState, project: &Project) -> anyhow::Result<Vec<St
         .collect())
 }
 
+/// The project's scanner bot the runs are made as (a Reporter: their job
+/// token can clone and pull images, nothing of whoever turned scanning on),
+/// while who turned scanning on may still read the code.
+pub(super) async fn run_as(state: &AppState, project: &Project, s: &sdb::ScanningSettings) -> ApiResult<Option<forgust_db::users::User>> {
+    if runner_user(state, project, s.user_id).await.map_err(ApiError::Internal)?.is_none() {
+        return Ok(None);
+    }
+    let kind = super::renovate::ProjectBot {
+        username: format!("security-bot-{}", project.id),
+        name: "Security scanning",
+        user_type: "security_bot",
+        level: forgust_db::access::REPORTER,
+    };
+    Ok(Some(super::renovate::ensure_project_bot(state, project, &kind, None).await?))
+}
+
 /// Who the runs belong to, if they still may read the code.
 async fn runner_user(state: &AppState, project: &Project, user_id: Option<i64>) -> anyhow::Result<Option<forgust_db::users::User>> {
     let Some(id) = user_id else { return Ok(None) };
@@ -299,18 +335,9 @@ async fn start(
     if !cfg.enabled {
         return Err(ApiError::conflict("security scanning is turned off on this instance"));
     }
-    if runner_user(state, project, s.user_id).await.map_err(ApiError::Internal)?.is_none() {
+    let Some(user) = run_as(state, project, s).await? else {
         return Err(ApiError::conflict("who turned security scanning on can no longer read this project: turn it on again"));
-    }
-    // the jobs run as the project's scanner bot, a Reporter: their job token
-    // can clone and pull images, nothing of whoever turned scanning on
-    let kind = super::renovate::ProjectBot {
-        username: format!("security-bot-{}", project.id),
-        name: "Security scanning",
-        user_type: "security_bot",
-        level: forgust_db::access::REPORTER,
     };
-    let user = super::renovate::ensure_project_bot(state, project, &kind, None).await?;
     let images = if s.scanners.iter().any(|x| x == "container_scanning") {
         images_of(state, project).await.map_err(ApiError::Internal)?
     } else {

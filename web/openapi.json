@@ -14295,6 +14295,13 @@
             "type": "integer",
             "format": "int32"
           },
+          "sbom_on_tags": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Left out: as it was."
+          },
           "scanners": {
             "type": "array",
             "items": {
@@ -14310,7 +14317,8 @@
           "enabled",
           "scanners",
           "available",
-          "interval_hours"
+          "interval_hours",
+          "sbom_on_tags"
         ],
         "properties": {
           "available": {
@@ -14357,6 +14365,10 @@
               "null"
             ],
             "description": "The runs are this person's (they turned scanning on)."
+          },
+          "sbom_on_tags": {
+            "type": "boolean",
+            "description": "An SBOM (CycloneDX and SPDX) on each new tag, attached to its release."
           },
           "scanners": {
             "type": "array",
