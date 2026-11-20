@@ -174,7 +174,9 @@ volumes: { forgust-data: {}, db-data: {} }
 
 ### 🔐 Security
 - Built-in scanners (code, secrets, dependencies, containers, infrastructure as code)
-  with a Security tab, merge request checks and alerts
+  with a Security tab, merge request checks and alerts; their vulnerability databases
+  can live on the server, for installs without internet access
+- An SBOM (CycloneDX and SPDX) of each new tag, attached to its release
 - OIDC sign-in, passkeys, two-factor authentication (an authenticator app or security
   keys, with recovery codes), personal, project and deploy tokens
 - Strict CSP, an image proxy for Markdown images, rate limits
