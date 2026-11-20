@@ -21,6 +21,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/ai_review/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The models the endpoint offers, asked from the server: a test of the
+         *     endpoint and the key before saving them.
+         */
+        post: operations["admin_models"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/renovate": {
         parameters: {
             query?: never;
@@ -2779,6 +2799,15 @@ export interface components {
             tags: string[];
             /** Format: int64 */
             timeout_secs: number;
+        };
+        AdminAiReviewModels: {
+            models: string[];
+        };
+        AdminAiReviewModelsBody: {
+            /** @description A key to try; absent: the one saved. */
+            api_key?: string | null;
+            base_url: string;
+            ca_pem?: string | null;
         };
         AdminAiReviewStatus: components["schemas"]["AdminAiReview"] & {
             /** Format: int64 */
@@ -6549,6 +6578,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminAiReviewStatus"];
+                };
+            };
+        };
+    };
+    admin_models: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminAiReviewModelsBody"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAiReviewModels"];
                 };
             };
         };

@@ -656,3 +656,46 @@ async fn renamed_files_and_merges_of_the_target_branch(pool: sqlx::PgPool) {
     assert_ne!(base, first_head, "not since the last review: the merge would bring main's changes in");
     assert_eq!(Some(base), var(&job, "FORGUST_REVIEW_TARGET_SHA"), "the merge request's own base");
 }
+
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn listing_the_models_tests_the_endpoint_and_the_key(pool: sqlx::PgPool) {
+    use axum::{Json, Router, http::HeaderMap, routing::get};
+    let app = Router::new().route(
+        "/v1/models",
+        get(|h: HeaderMap| async move {
+            if h.get("authorization").and_then(|v| v.to_str().ok()) != Some("Bearer sk-good") {
+                return (StatusCode::UNAUTHORIZED, Json(json!({ "error": "Unauthorized" })));
+            }
+            (StatusCode::OK, Json(json!({ "object": "list", "data": [{ "id": "qwen" }, { "id": "llama" }] })))
+        }),
+    );
+    let l = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let base = format!("http://{}/v1", l.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(l, app).await.unwrap() });
+
+    let srv = TestServer::start(pool).await;
+    let owner = srv.user("olivia", false).await;
+    let admin = srv.user("root", true).await;
+    let url = "/api/v1/admin/ai_review/models";
+    assert_eq!(owner.post(url, json!({ "base_url": base })).await.0, 403);
+    assert_eq!(admin.post(url, json!({ "base_url": "ftp://x" })).await.0, 400);
+
+    let (s, e) = admin.post(url, json!({ "base_url": base, "api_key": "sk-bad" })).await;
+    assert_eq!(s, 400);
+    assert!(e.to_string().contains("refused the key"), "{e}");
+    let ok = admin.ok_post(url, json!({ "base_url": format!("{base}/"), "api_key": "sk-good" })).await;
+    assert_eq!(ok["models"], json!(["llama", "qwen"]));
+
+    // no key given: the saved one
+    let mut a = admin.ok_get("/api/v1/admin/ai_review").await;
+    a["base_url"] = json!(base);
+    a["api_key"] = json!("sk-good");
+    admin.ok_put("/api/v1/admin/ai_review", a).await;
+    assert_eq!(admin.ok_post(url, json!({ "base_url": base })).await["models"], json!(["llama", "qwen"]));
+
+    // nothing listening
+    let port = std::net::TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port();
+    let (s, e) = admin.post(url, json!({ "base_url": format!("http://127.0.0.1:{port}/v1") })).await;
+    assert_eq!(s, 400);
+    assert!(e.to_string().contains("could not reach"), "{e}");
+}

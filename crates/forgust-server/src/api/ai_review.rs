@@ -196,6 +196,14 @@ pub struct AdminAiReview {
     pub api_key: Option<String>,
 }
 
+/// The model endpoint: http(s), without credentials in it.
+fn check_base_url(url: &str) -> ApiResult<()> {
+    if crate::services::webhooks::validate_url(url).is_ok_and(|u| u.password().is_none()) {
+        return Ok(());
+    }
+    Err(ApiError::bad("the endpoint is an http(s) URL like https://api.openai.com/v1, without credentials (the key has its own field)"))
+}
+
 #[derive(Serialize, ToSchema)]
 pub struct AdminAiReviewStatus {
     #[serde(flatten)]
@@ -264,12 +272,7 @@ pub async fn admin_set(
 ) -> ApiResult<Json<AdminAiReviewStatus>> {
     let base_url = s.base_url.trim();
     if !base_url.is_empty() {
-        let ok = crate::services::webhooks::validate_url(base_url).is_ok_and(|u| u.password().is_none());
-        if !ok {
-            return Err(ApiError::bad(
-                "the endpoint is an http(s) URL like https://api.openai.com/v1, without credentials (the key has its own field)",
-            ));
-        }
+        check_base_url(base_url)?;
     }
     if s.enabled && (base_url.is_empty() || s.model.trim().is_empty()) {
         return Err(ApiError::bad("turning AI review on needs an endpoint and a model"));
@@ -364,4 +367,36 @@ pub async fn admin_set(
     };
     crate::services::audit(&state, &principal, "ai_review_instance_updated", None, audit, None).await;
     Ok(Json(admin_status(&state).await?))
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct AdminAiReviewModelsBody {
+    pub base_url: String,
+    /// A key to try; absent: the one saved.
+    #[serde(default)]
+    pub api_key: Option<String>,
+    pub ca_pem: Option<String>,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct AdminAiReviewModels {
+    pub models: Vec<String>,
+}
+
+/// The models the endpoint offers, asked from the server: a test of the
+/// endpoint and the key before saving them.
+#[utoipa::path(post, path = "/api/v1/admin/ai_review/models", request_body = AdminAiReviewModelsBody, responses((status = 200, body = AdminAiReviewModels)), tag = "ai_review")]
+pub async fn admin_models(
+    State(state): State<AppState>,
+    Admin(..): Admin,
+    Json(b): Json<AdminAiReviewModelsBody>,
+) -> ApiResult<Json<AdminAiReviewModels>> {
+    let base_url = b.base_url.trim();
+    check_base_url(base_url)?;
+    let key = match b.api_key.map(|k| k.trim().to_string()).filter(|k| !k.is_empty()) {
+        Some(k) => Some(k),
+        None => svc::api_key(&state).await.map_err(ApiError::Internal)?,
+    };
+    let models = svc::list_models(base_url, key.as_deref(), b.ca_pem.as_deref()).await.map_err(ApiError::bad)?;
+    Ok(Json(AdminAiReviewModels { models }))
 }

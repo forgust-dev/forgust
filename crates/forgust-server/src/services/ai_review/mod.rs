@@ -100,15 +100,77 @@ async fn usable_config(state: &AppState) -> ApiResult<AiReviewConfig> {
 /// admin area's when set there, else the config file's.
 pub async fn secrets(state: &AppState) -> anyhow::Result<(Option<String>, BTreeMap<String, String>)> {
     let i = forgust_db::ai_review::instance(&state.db).await?;
-    let key = match i.api_key_enc {
-        Some(sealed) => Some(state.secrets.decrypt_str(&sealed)?),
-        None => state.cfg.ai_review.api_key.clone(),
-    };
-    let options = match i.secret_options_enc {
-        Some(sealed) => state.secrets.decrypt_json(&sealed)?,
+    let options = match &i.secret_options_enc {
+        Some(sealed) => state.secrets.decrypt_json(sealed)?,
         None => state.cfg.ai_review.secret_options.clone(),
     };
-    Ok((key.filter(|k| !k.is_empty()), options))
+    Ok((key_of(state, &i)?, options))
+}
+
+/// The endpoint's key in effect, as [`secrets`] has it, without decrypting the options.
+pub async fn api_key(state: &AppState) -> anyhow::Result<Option<String>> {
+    key_of(state, &forgust_db::ai_review::instance(&state.db).await?)
+}
+
+fn key_of(state: &AppState, i: &forgust_db::ai_review::Instance) -> anyhow::Result<Option<String>> {
+    let key = match &i.api_key_enc {
+        Some(sealed) => Some(state.secrets.decrypt_str(sealed)?),
+        None => state.cfg.ai_review.api_key.clone(),
+    };
+    Ok(key.filter(|k| !k.is_empty()))
+}
+
+/// The models `base_url` offers (`GET {base_url}/models`, OpenAI's list,
+/// which Ollama, vLLM, llama.cpp and LiteLLM answer too), asked from the
+/// server with `api_key`: whether the endpoint and the key work, before a
+/// review finds out. The error says what went wrong, for the administrator.
+pub async fn list_models(base_url: &str, api_key: Option<&str>, ca_pem: Option<&str>) -> Result<Vec<String>, String> {
+    #[derive(serde::Deserialize)]
+    struct List {
+        data: Vec<Model>,
+    }
+    #[derive(serde::Deserialize)]
+    struct Model {
+        id: String,
+    }
+    // a list of models is a few KB
+    const MAX_BYTES: usize = 1 << 20;
+
+    let base = base_url.trim_end_matches('/');
+    let mut b = crate::tls::http_client()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(std::time::Duration::from_secs(15))
+        .user_agent(concat!("Forgust/", env!("CARGO_PKG_VERSION")));
+    if let Some(pem) = ca_pem.map(str::trim).filter(|p| !p.is_empty()) {
+        let certs =
+            reqwest::Certificate::from_pem_bundle(pem.as_bytes()).map_err(|e| format!("the certificate authority is not PEM: {e}"))?;
+        b = b.tls_certs_merge(certs);
+    }
+    let client = b.build().map_err(|e| e.to_string())?;
+    let mut req = client.get(format!("{base}/models"));
+    if let Some(k) = api_key {
+        req = req.bearer_auth(k);
+    }
+    // `:#`: reqwest's own message hides the cause (refused, DNS, TLS...)
+    let res = req.send().await.map_err(|e| format!("could not reach {base}: {:#}", anyhow::Error::from(e)))?;
+    let status = res.status();
+    if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
+        return Err(format!("the endpoint refused the key ({status})"));
+    }
+    let not_base = || format!("is {base} the API's base (often ending in /v1)?");
+    if status == reqwest::StatusCode::NOT_FOUND {
+        return Err(format!("{base}/models is not found: {}", not_base()));
+    }
+    let body = crate::services::webhooks::read_capped(res, MAX_BYTES).await.map_err(|e| format!("reading the answer: {e}"))?;
+    if !status.is_success() {
+        let text: String = String::from_utf8_lossy(&body).chars().take(300).collect();
+        return Err(format!("the endpoint answered {status}: {text}"));
+    }
+    let list: List = serde_json::from_slice(&body).map_err(|_| format!("{base}/models did not answer a list of models: {}", not_base()))?;
+    let mut models: Vec<String> = list.data.into_iter().map(|m| m.id).collect();
+    models.sort();
+    models.dedup();
+    Ok(models)
 }
 
 /// What Forgust gives a review job itself: an option may not take its name.
