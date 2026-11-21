@@ -199,18 +199,20 @@ volumes: { forgust-data: {}, db-data: {} }
 
 ## Performance
 
-Measured on an 8-vCPU development machine, p95 with one client, release build:
+Measured on a 12-vCPU development machine, p95 with one client, release build:
 
 | | |
 | --- | --- |
-| Repository tree, highlighted 2,000-line file, commit diff, blame | 7–11 ms |
-| Merge request page and first diff page of a 1,000-file merge request | 9 ms |
-| `ls-refs` with a prefix on a repository with 1M refs | 13 ms |
-| Code search in a 2,000-file repository (text one file has, text every file has) | 15–25 ms |
-| Code search in the Linux kernel, 97,000 files (plain text, a regular expression) | 40–250 ms |
+| Repository tree, highlighted 2,000-line file, commit diff, blame | 1–4 ms |
+| Merge request page and first diff page of a 1,000-file merge request | 1–5 ms |
+| Issue list and issue page in a project with 2,000 issues | 3–8 ms |
+| Search of projects, issues and merge requests by title, 2,000 issues | 12–24 ms |
+| `ls-refs` with a prefix on a repository with 1M refs | 3 ms |
+| Code search in a 2,000-file repository (text one file has, text every file has) | 9–20 ms |
+| Code search in the Linux kernel, 97,000 files (plain text, a regular expression) | 30–150 ms |
 | Pipeline created → job picked up by a runner | 24–40 ms |
 
-Pushing one branch to a 1M-ref repository is the one speed target still missed (7 s
+Pushing one branch to a 1M-ref repository is the one speed target still missed (3.7 s
 against 300 ms).
 
 ## Status
