@@ -895,3 +895,32 @@ async fn your_project_states_come_in_one_request(pool: sqlx::PgPool) {
     let stranger = fx.srv.user("stranger", false).await;
     assert_eq!(stranger.ok_get("/api/v1/user/project_states").await, json!([]));
 }
+
+/// Blocking someone cancels the jobs they started: no runner gets one (their
+/// variables and tokens with it), and none is left holding a resource group.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn a_blocked_users_jobs_are_canceled(pool: sqlx::PgPool) {
+    let fx = fixture(pool, &[(".gitlab-ci.yml", "job:\n  script: [x]\n")]).await;
+    let first = request(&fx).await.expect("the owner's job");
+    finish(&fx, &first, "success").await;
+    srv_member(&fx, "dave", "maintainer").await;
+    commit_file(&fx.work, "x.txt", "x\n", "dave's").await;
+    must(git(&fx.work, &["push", "-q", &fx.srv.http_url("dave", REPO), "main"]).await);
+    wait_jobs(&fx.srv.state).await;
+    let admin = fx.srv.user("root", true).await;
+    let users = admin.ok_get("/api/v1/admin/users").await;
+    let dave = users.as_array().unwrap().iter().find(|u| u["username"] == "dave").unwrap()["id"].as_i64().unwrap();
+    admin.ok_put(&format!("/api/v1/admin/users/{dave}"), json!({ "state": "blocked" })).await;
+    assert!(request(&fx).await.is_none(), "a blocked user's job is handed to no runner");
+    let p = pipeline(&fx, 2).await;
+    assert_eq!((job_named(&p, "job")["status"].as_str(), p["status"].as_str()), (Some("canceled"), Some("canceled")), "{p}");
+    // one that slips past the cancellation still waits for its user
+    sqlx::query("UPDATE users SET state = 'active' WHERE id = $1").bind(dave).execute(&fx.srv.state.db).await.unwrap();
+    commit_file(&fx.work, "y.txt", "y\n", "dave's again").await;
+    must(git(&fx.work, &["push", "-q", &fx.srv.http_url("dave", REPO), "main"]).await);
+    wait_jobs(&fx.srv.state).await;
+    sqlx::query("UPDATE users SET state = 'blocked' WHERE id = $1").bind(dave).execute(&fx.srv.state.db).await.unwrap();
+    assert!(request(&fx).await.is_none());
+    sqlx::query("UPDATE users SET state = 'active' WHERE id = $1").bind(dave).execute(&fx.srv.state.db).await.unwrap();
+    assert!(request(&fx).await.is_some());
+}
