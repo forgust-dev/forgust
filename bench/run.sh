@@ -53,6 +53,9 @@ git -C "$WORK/fixture" add gen && git -C "$WORK/fixture" -c user.name=b -c user.
 git -C "$WORK/fixture" push -q "$REMOTE/bench/fixture.git" big
 call -X POST "$API/projects/bench%2Ffixture/merge_requests" -d '{"source_branch":"big","title":"Big"}' >/dev/null
 
+# 2,000 issues, for the issue pages and the instance search
+$BIN/forgust-bench issues --url "http://127.0.0.1:$PORT" --token "$TOKEN" --project bench/fixture >/dev/null
+
 # 1M-ref repo: one commit, then refs written straight into packed-refs
 REFS_ID=$(call -X POST "$API/projects" -d '{"name":"refs1m"}' | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')
 git init -q -b main "$WORK/small" && git -C "$WORK/small" -c user.name=b -c user.email=b@x commit -q --allow-empty -m one
@@ -65,7 +68,7 @@ if [[ -n "${LINUX_BUNDLE:-}" ]]; then
   git clone -q --mirror "$LINUX_BUNDLE" "$WORK/linux.git" && git -C "$WORK/linux.git" push -q --mirror "$REMOTE/bench/linux.git"
 fi
 
-ARGS=(--url "http://127.0.0.1:$PORT" --token "$TOKEN" --project bench/fixture --file src/file_00000.rs --refs-project bench/refs1m --mr 'bench/fixture!1'
+ARGS=(--url "http://127.0.0.1:$PORT" --token "$TOKEN" --project bench/fixture --file src/file_00000.rs --refs-project bench/refs1m --mr 'bench/fixture!1' --issues
   --out "bench/results/$(date -u +%Y%m%dT%H%M%SZ).json" --baseline "$BASELINE" --host "$(uname -n), see bench/HOST.md")
 [[ -n "${LINUX_BUNDLE:-}" ]] && ARGS+=(--large-project bench/linux)
 [[ "${UPDATE_BASELINE:-0}" == 1 ]] && ARGS+=(--update-baseline)
