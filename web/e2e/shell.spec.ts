@@ -197,7 +197,7 @@ test("search issues and merge requests across projects", async ({ page }) => {
   // no issue has it in its title: the page opens on the merge requests, the word marked
   await expect(page.getByRole("button", { name: /Merge requests/ })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("link", { name: "Checkout with discounts" }).locator("mark")).toHaveText("discounts");
-  await page.getByRole("button", { name: "Merged" }).click();
+  await page.getByRole("radio", { name: "Merged" }).click();
   await expect(page.getByText("No merged merge request matches “discounts”.")).toBeVisible();
   // a word in no title: the code, rather than nothing
   await page.getByRole("searchbox", { name: "Search…" }).fill("no-such-title-anywhere");

@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CircleDot, FolderGit2, GitMerge } from "lucide-react";
 import { api, qs, timeAgo, type S } from "../api/client";
 import { Empty, FilterTabs, ListHead, Q, SearchField, Pager, Spinner, useDebounced } from "../components/ui";
+import { Segmented } from "../components/controls";
 import { CodeSearch } from "./SearchCode";
 
 type Scope = "projects" | "issues" | "merge_requests" | "code";
@@ -76,15 +77,19 @@ export function SearchPage() {
     setFirst({ q, scope: TITLED.find((s) => c[s] > 0) ?? "issues" });
   }
   const items = scope === "projects" ? (r.data?.projects.length ?? 0) : scope === "issues" ? (r.data?.issues.length ?? 0) : (r.data?.merge_requests.length ?? 0);
+  // what the list holds, in words, and so where the search looks
+  const noun = scope === "projects" ? "projects" : scope === "issues" ? "issues" : "merge requests";
+  const which = scope !== "projects" && state !== "all" ? `${STATE[state] ?? state} ${noun}` : noun;
+  const about = `${which[0].toUpperCase()}${which.slice(1)} with “${q}” in ${scope === "projects" ? "their name or path" : "their title"}`;
   return (
     <div className="page">
       <div className="stack list-page">
-        <ListHead title="Search" sub="Projects, issues and merge requests you can see, by title, and the code of default branches." />
+        <ListHead title="Search" />
         <div className="search-page-field">
           <SearchField value={term} onChange={setTerm} placeholder="Search…" autoFocus={!q} />
         </div>
         {!q ? (
-          <Empty>Type to search.</Empty>
+          <Empty>Search the titles of the issues, merge requests and projects you can see, and the code of their default branches.</Empty>
         ) : (
           <>
             <div className="list-toolbar">
@@ -99,26 +104,30 @@ export function SearchPage() {
                   { value: "code", label: "Code" },
                 ]}
               />
-              {scope !== "projects" && scope !== "code" && (
-                <div className="toolbar-end">
-                  <FilterTabs
-                    label="State"
-                    value={state}
-                    onChange={(v) => set("state", v)}
-                    options={[
-                      { value: "all", label: "All" },
-                      { value: "opened", label: "Open" },
-                      ...(scope === "merge_requests" ? [{ value: "merged", label: "Merged" }] : []),
-                      { value: "closed", label: "Closed" },
-                    ]}
-                  />
-                </div>
-              )}
             </div>
             {scope === "code" ? (
               <CodeSearch params={params} set={set} />
             ) : (
               <>
+                {/* as tall on every tab as the code's filters are: the list stays put */}
+                <div className="search-bar">
+                  <span className={`search-about muted${scope === "projects" ? "" : " with-state"}`} title={about}>
+                    {about}
+                  </span>
+                  {scope !== "projects" && (
+                    <Segmented
+                      label="State"
+                      value={state}
+                      onChange={(v) => set("state", v === "all" ? "" : v)}
+                      options={[
+                        { value: "all", label: "All" },
+                        { value: "opened", label: "Open" },
+                        ...(scope === "merge_requests" ? [{ value: "merged", label: "Merged" }] : []),
+                        { value: "closed", label: "Closed" },
+                      ]}
+                    />
+                  )}
+                </div>
                 <Q q={r}>
                   {(d) => {
                     const list = scope === "projects" ? d.projects : scope === "issues" ? d.issues : d.merge_requests;

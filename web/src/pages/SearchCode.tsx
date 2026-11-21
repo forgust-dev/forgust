@@ -84,7 +84,8 @@ export function CodeSearch({ params, set }: { params: URLSearchParams; set: (k: 
   const partial = r.data?.pages.some((p) => p.partial) ?? false;
   const notIndexed = r.data?.pages[0]?.not_indexed ?? 0;
   return (
-    <div className="stack" style={{ gap: 12 }}>
+    // spaced as the page's other tabs: their results start where these do
+    <div className="stack" style={{ gap: 14 }}>
       <div className="row wrap code-search-filters">
         <button type="button" className="btn small" aria-pressed={exact} onClick={() => set("case", exact ? "" : "1")} title="Match upper and lower case exactly">
           <CaseSensitive size={15} /> Match case

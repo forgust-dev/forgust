@@ -7686,6 +7686,35 @@ button.test-case-row:hover {
   height: 38px;
   font-size: 15px;
 }
+/* under the search's tabs: what the list holds and its state, or the code's filters,
+   as tall on every tab, so the list stays put from one tab to the next */
+.search-bar,
+.code-search-filters {
+  min-height: 32px;
+}
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 13.5px;
+}
+/* one line, cut short rather than taller */
+.search-about {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 600px) {
+  /* a phone: the state, wide enough to tap, says what the tab holds */
+  .search-about.with-state {
+    display: none;
+  }
+  .search-bar .segmented {
+    flex: 1;
+  }
+}
 .repo-code-search {
   flex: 0 1 150px;
   width: auto;
