@@ -48,6 +48,17 @@ enum Command {
 
 #[derive(Subcommand)]
 enum AdminCommand {
+    /// Store one of Trivy's databases from its file, for installs that cannot
+    /// reach ghcr.io (`oras pull ghcr.io/aquasecurity/trivy-db:2` on a machine
+    /// that can gives `db.tar.gz`). Turn mirroring on in Admin > Security
+    /// scanning for the scans to use it.
+    ImportVulnerabilityDb {
+        /// `trivy-db` (db.tar.gz), `trivy-java-db` (javadb.tar.gz) or `trivy-checks` (bundle.tar.gz).
+        #[arg(long)]
+        kind: String,
+        #[arg(long)]
+        file: PathBuf,
+    },
     /// Create a user (the first administrator, typically).
     CreateUser {
         #[arg(long)]
@@ -127,6 +138,17 @@ async fn run(command: Command, cfg: Config) -> anyhow::Result<()> {
             .map_err(|e| anyhow::anyhow!("{e}"))?;
             tx.commit().await?;
             println!("created user {} (id {}){}", u.username, u.id, if admin { " as administrator" } else { "" });
+        }
+        Command::Admin { command: AdminCommand::ImportVulnerabilityDb { kind, file } } => {
+            telemetry::init_cli();
+            let Some(k) = services::vulnerability_dbs::kind(&kind) else {
+                anyhow::bail!("--kind is trivy-db, trivy-java-db or trivy-checks");
+            };
+            let pool = app::connect(&cfg).await?;
+            app::migrate(&pool).await?;
+            let state = app::build_state(cfg, pool, None).await?;
+            let digest = services::vulnerability_dbs::import_file(&state, k, &file).await?;
+            println!("stored {} ({digest}), served at {}:{}", k.name, services::vulnerability_dbs::repository(k), k.tag);
         }
         Command::Backup { output } => {
             telemetry::init_cli();

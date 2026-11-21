@@ -197,6 +197,8 @@ pub struct ScanningStatus {
     pub run_as: Option<String>,
     pub last_pipeline_iid: Option<i64>,
     pub last_status: Option<String>,
+    /// An SBOM (CycloneDX and SPDX) on each new tag, attached to its release.
+    pub sbom_on_tags: bool,
 }
 
 async fn scanning_status(state: &AppState, p: &Project) -> ApiResult<ScanningStatus> {
@@ -223,6 +225,7 @@ async fn scanning_status(state: &AppState, p: &Project) -> ApiResult<ScanningSta
         run_as,
         last_pipeline_iid: last.as_ref().map(|l| l.iid),
         last_status: last.map(|l| l.status),
+        sbom_on_tags: s.as_ref().is_some_and(|s| s.sbom_on_tags),
     })
 }
 
@@ -238,6 +241,9 @@ pub struct ScanningBody {
     pub scanners: Vec<String>,
     #[serde(default = "day")]
     pub interval_hours: i32,
+    /// Left out: as it was.
+    #[serde(default)]
+    pub sbom_on_tags: Option<bool>,
 }
 
 fn day() -> i32 {
@@ -256,7 +262,12 @@ pub async fn set_scanning(
         &state,
         &v,
         &p,
-        services::scanning::Change { enabled: b.enabled, scanners: b.scanners, interval_hours: b.interval_hours },
+        services::scanning::Change {
+            enabled: b.enabled,
+            scanners: b.scanners,
+            interval_hours: b.interval_hours,
+            sbom_on_tags: b.sbom_on_tags,
+        },
     )
     .await?;
     Ok(Json(scanning_status(&state, &p).await?))
@@ -302,6 +313,8 @@ pub struct AdminScanning {
     pub running: usize,
     /// Projects with open critical or high findings, most first.
     pub exposed: Vec<sdb::ExposedProject>,
+    /// Trivy's databases this server holds (`mirror_vulnerability_dbs`).
+    pub mirrors: Vec<forgust_db::mirrors::MirrorStatus>,
 }
 
 #[utoipa::path(get, path = "/api/v1/admin/security/scanning", responses((status = 200, body = AdminScanning)), tag = "security")]
@@ -311,6 +324,7 @@ pub async fn admin_scanning(State(state): State<AppState>, crate::auth::Admin(..
         projects: sdb::scanning_count(&state.db).await?,
         running: sdb::active_scans(&state.db, None).await?.len(),
         exposed: sdb::exposed_projects(&state.db, 50).await?,
+        mirrors: forgust_db::mirrors::all(&state.db).await?,
     }))
 }
 
@@ -328,7 +342,19 @@ pub async fn set_admin_scanning(
     if !(1..=50).contains(&b.max_concurrent) || !(60..=86_400).contains(&b.timeout_secs) {
         return Err(ApiError::bad("1 to 50 scans at once, a timeout of 1 minute to a day"));
     }
+    for src in [&b.trivy_db_source, &b.trivy_java_db_source, &b.trivy_checks_source] {
+        // empty: that one is not copied (an import still works)
+        if !src.trim().is_empty() && services::vulnerability_dbs::parse_source(src).is_err() {
+            return Err(ApiError::bad(format!("`{src}`: a source is host/repository:tag, like ghcr.io/aquasecurity/trivy-db:2")));
+        }
+    }
+    let was_mirroring = services::scanning::config(&state).await.map_err(ApiError::Internal)?.mirror_vulnerability_dbs;
     sdb::set_scanning_overrides(&state.db, &serde_json::to_value(&b).map_err(|e| ApiError::Internal(e.into()))?).await?;
+    if b.mirror_vulnerability_dbs && !was_mirroring {
+        // turned on: the first copy now, not in up to 6 hours
+        let mut conn = state.db.acquire().await?;
+        state.jobs.enqueue(&mut conn, crate::jobs::MirrorVulnerabilityDbs { report: false }.request()).await.map_err(ApiError::Internal)?;
+    }
     services::audit(&state, &p, "security_scanning_settings", None, json!({}), None).await;
     admin_scanning(State(state), crate::auth::Admin(me, p)).await
 }

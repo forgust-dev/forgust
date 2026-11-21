@@ -301,11 +301,17 @@ pub fn encode_segment(s: &str) -> String {
     percent_encoding::utf8_percent_encode(s, SEGMENT).to_string()
 }
 
+/// `s` as a part of a file name anyone can type: ASCII letters, digits and
+/// `-_.`, anything else a `-`.
+pub fn ascii_name(s: &str) -> String {
+    s.chars().map(|c| if c.is_ascii_alphanumeric() || "-_.".contains(c) { c } else { '-' }).collect()
+}
+
 /// `Content-Disposition` for a file named `name`: an ASCII `filename` for old
 /// clients and the exact name as RFC 5987 `filename*`.
 pub fn disposition(name: &str, inline: bool) -> String {
     let base = name.rsplit('/').next().unwrap_or(name);
-    let ascii: String = base.chars().map(|c| if c.is_ascii_alphanumeric() || "-_.".contains(c) { c } else { '-' }).collect();
+    let ascii = ascii_name(base);
     let exact = encode_segment(base);
     format!("{}; filename=\"{ascii}\"; filename*=UTF-8''{exact}", if inline { "inline" } else { "attachment" })
 }

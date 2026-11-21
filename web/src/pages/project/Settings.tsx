@@ -632,6 +632,7 @@ function SecurityScanningForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S[
   const [enabled, setEnabled] = useState(initial.enabled);
   const [scanners, setScanners] = useState<string[]>(initial.scanners);
   const [hours, setHours] = useState(initial.interval_hours);
+  const [sbom, setSbom] = useState(initial.sbom_on_tags);
   const [error, setError] = useState<unknown>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const done = (m: string) => {
@@ -640,7 +641,7 @@ function SecurityScanningForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S[
     onSaved();
   };
   const save = useMutation({
-    mutationFn: () => api.put(`/projects/${ctx.p.id}/security/scanning`, { enabled, scanners, interval_hours: hours }),
+    mutationFn: () => api.put(`/projects/${ctx.p.id}/security/scanning`, { enabled, scanners, interval_hours: hours, sbom_on_tags: sbom }),
     onSuccess: () => done(enabled ? "Security scanning is on: the first scan starts within a minute, as you." : "Security scanning is off; findings stay."),
     onError: setError,
   });
@@ -690,6 +691,10 @@ function SecurityScanningForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S[
         Also after pushes to the default branch (at most every 10 minutes) and on each new commit of a merge request. Scans run without the project's CI/CD
         variables.
       </p>
+      <label className="check">
+        <input type="checkbox" disabled={!enabled} checked={sbom} onChange={(e) => setSbom(e.target.checked)} /> Make an SBOM (CycloneDX and SPDX) of each new tag,
+        attached to its release (for those who can read the code)
+      </label>
       {initial.enabled && (
         <div className="list" aria-label="Security scanning status">
           <div className="item">

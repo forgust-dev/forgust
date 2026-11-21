@@ -21,7 +21,7 @@ use crate::error::{ApiError, ApiResult};
 use crate::state::AppState;
 
 const LINK_TYPES: &[&str] = &["other", "runbook", "image", "package"];
-const MAX_LINKS: usize = 100;
+pub(crate) const MAX_LINKS: usize = 100;
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
 pub struct NewLink {
@@ -73,6 +73,20 @@ pub async fn require_release(state: &AppState, principal: &Principal, p: &Projec
 /// releases, not code).
 pub async fn sees_code(state: &AppState, principal: &Principal, p: &Project) -> bool {
     crate::auth::authz::can_project(state, principal, ProjectAction::ReadCode, p).await.unwrap_or(false)
+}
+
+/// The links of these releases one may see: all of them for those who read
+/// the code (`sees_code`), else not those to files made from it (tags' SBOMs).
+pub async fn visible_links(state: &AppState, p: &Project, sees_code: bool, release_ids: &[i64]) -> ApiResult<Vec<ReleaseLink>> {
+    let mut links = forgust_db::releases::links(&state.db, release_ids).await?;
+    if !sees_code {
+        let hidden: std::collections::HashSet<String> =
+            forgust_db::releases::code_upload_secrets(&state.db, p.id).await?.into_iter().collect();
+        let prefix = uploads_prefix(p);
+        links
+            .retain(|l| !l.url.strip_prefix(&prefix).and_then(|rest| rest.split('/').next()).is_some_and(|secret| hidden.contains(secret)));
+    }
+    Ok(links)
 }
 
 pub async fn find(state: &AppState, principal: &Principal, p: &Project, tag: &str) -> ApiResult<Release> {
@@ -172,6 +186,10 @@ pub async fn create(state: &AppState, principal: &Principal, p: &Project, req: N
         .ok_or_else(|| ApiError::conflict(format!("release for `{tag}` already exists")))?;
     for l in req.links {
         insert_link(state, p, id, l).await?;
+    }
+    // an SBOM of the tag made before the release
+    if let Err(e) = super::sbom::attach(state, p, &tag).await {
+        tracing::warn!(project_id = p.id, tag, error = %e, "SBOM not attached to the release");
     }
     let r = forgust_db::releases::find(&state.db, p.id, &tag).await?.ok_or(ApiError::NotFound)?;
     emit(state, p, &r, "create").await;

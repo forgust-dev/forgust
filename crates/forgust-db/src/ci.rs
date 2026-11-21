@@ -450,7 +450,7 @@ pub async fn previous_status(e: impl PgExecutor<'_>, p: &Pipeline) -> Result<Opt
     sqlx::query_scalar!(
         "SELECT status FROM ci_pipelines
           WHERE project_id = $1 AND ref = $2 AND tag = $3 AND merge_request_id IS NOT DISTINCT FROM $4 AND id < $5
-            AND status IN ('success', 'failed') AND source NOT IN ('parent_pipeline', 'renovate', 'security')
+            AND status IN ('success', 'failed') AND source <> 'parent_pipeline' AND NOT is_system_source(source)
           ORDER BY id DESC LIMIT 1",
         p.project_id,
         p.git_ref,

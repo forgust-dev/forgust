@@ -461,12 +461,14 @@ pub struct ScanningSettings {
     pub next_run_at: Option<DateTime<Utc>>,
     pub last_pipeline_id: Option<i64>,
     pub history_scanned: bool,
+    /// An SBOM on each new tag, attached to its release.
+    pub sbom_on_tags: bool,
 }
 
 pub async fn scanning(e: impl PgExecutor<'_>, project_id: i64) -> Result<Option<ScanningSettings>> {
     sqlx::query_as!(
         ScanningSettings,
-        "SELECT project_id, enabled, scanners, interval_hours, user_id, next_run_at, last_pipeline_id, history_scanned
+        "SELECT project_id, enabled, scanners, interval_hours, user_id, next_run_at, last_pipeline_id, history_scanned, sbom_on_tags
            FROM security_scanning_settings WHERE project_id = $1",
         project_id
     )
@@ -474,26 +476,29 @@ pub async fn scanning(e: impl PgExecutor<'_>, project_id: i64) -> Result<Option<
     .await
 }
 
-pub async fn save_scanning(
-    e: impl PgExecutor<'_>,
-    project_id: i64,
-    enabled: bool,
-    scanners: &[String],
-    interval_hours: i32,
-    user_id: Option<i64>,
-    next_run_at: Option<DateTime<Utc>>,
-) -> Result<()> {
+pub struct SaveScanning<'a> {
+    pub project_id: i64,
+    pub enabled: bool,
+    pub scanners: &'a [String],
+    pub interval_hours: i32,
+    pub user_id: Option<i64>,
+    pub next_run_at: Option<DateTime<Utc>>,
+    pub sbom_on_tags: bool,
+}
+
+pub async fn save_scanning(e: impl PgExecutor<'_>, s: SaveScanning<'_>) -> Result<()> {
     sqlx::query!(
-        "INSERT INTO security_scanning_settings (project_id, enabled, scanners, interval_hours, user_id, next_run_at)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        "INSERT INTO security_scanning_settings (project_id, enabled, scanners, interval_hours, user_id, next_run_at, sbom_on_tags)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          ON CONFLICT (project_id) DO UPDATE SET enabled = $2, scanners = $3, interval_hours = $4, user_id = $5, next_run_at = $6,
-                                                updated_at = now()",
-        project_id,
-        enabled,
-        scanners,
-        interval_hours,
-        user_id,
-        next_run_at
+                                                sbom_on_tags = $7, updated_at = now()",
+        s.project_id,
+        s.enabled,
+        s.scanners,
+        s.interval_hours,
+        s.user_id,
+        s.next_run_at,
+        s.sbom_on_tags
     )
     .execute(e)
     .await?;
@@ -556,11 +561,12 @@ pub async fn active_scans(e: impl PgExecutor<'_>, project_id: Option<i64>) -> Re
     .await
 }
 
-/// Security pipelines still unfinished after `secs` (no runner took them).
+/// Security pipelines (scans, tag SBOMs) still unfinished after `secs` (no
+/// runner took them).
 pub async fn stale_scans(e: impl PgExecutor<'_>, secs: f64) -> Result<Vec<i64>> {
     sqlx::query_scalar!(
         "SELECT id FROM ci_pipelines
-          WHERE source = 'security' AND created_at < now() - make_interval(secs => $1) AND status = ANY($2)",
+          WHERE source IN ('security', 'sbom') AND created_at < now() - make_interval(secs => $1) AND status = ANY($2)",
         secs,
         ACTIVE as &[&str]
     )
@@ -693,6 +699,86 @@ pub async fn exposed_projects(e: impl PgExecutor<'_>, limit: i64) -> Result<Vec<
             GROUP BY f.project_id, r.path
             ORDER BY 3 DESC, 4 DESC, 2 LIMIT $1"#,
         limit
+    )
+    .fetch_all(e)
+    .await
+}
+
+// ------------------------------------------------------------------ SBOMs
+
+#[derive(Debug, Clone)]
+pub struct TagSbom {
+    pub id: i64,
+    pub project_id: i64,
+    pub tag: String,
+    pub cyclonedx_upload_id: Option<i64>,
+    pub spdx_upload_id: Option<i64>,
+}
+
+/// A kept SBOM file of a tag: for the commit `sha` the tag pointed to then.
+#[derive(Debug, Clone)]
+pub struct SbomFile {
+    pub sha: String,
+    pub cyclonedx: bool,
+    pub secret: String,
+    pub filename: String,
+}
+
+/// Claim the SBOM run of `tag` at `sha`: `None` when one was claimed already
+/// (a retried post-receive, two paths creating the same tag).
+pub async fn claim_sbom(e: impl PgExecutor<'_>, project_id: i64, tag: &str, sha: &str) -> Result<Option<i64>> {
+    sqlx::query_scalar!(
+        "INSERT INTO tag_sboms (project_id, tag, sha) VALUES ($1, $2, $3) ON CONFLICT (project_id, tag, sha) DO NOTHING RETURNING id",
+        project_id,
+        tag,
+        sha
+    )
+    .fetch_optional(e)
+    .await
+}
+
+pub async fn sbom_started(e: impl PgExecutor<'_>, id: i64, pipeline_id: i64) -> Result<()> {
+    sqlx::query!("UPDATE tag_sboms SET pipeline_id = $2 WHERE id = $1", id, pipeline_id).execute(e).await?;
+    Ok(())
+}
+
+/// A run that could not start: another may claim the tag again.
+pub async fn unclaim_sbom(e: impl PgExecutor<'_>, id: i64) -> Result<()> {
+    sqlx::query!("DELETE FROM tag_sboms WHERE id = $1 AND pipeline_id IS NULL", id).execute(e).await?;
+    Ok(())
+}
+
+pub async fn sbom_of_pipeline(e: impl PgExecutor<'_>, pipeline_id: i64) -> Result<Option<TagSbom>> {
+    sqlx::query_as!(
+        TagSbom,
+        "SELECT id, project_id, tag, cyclonedx_upload_id, spdx_upload_id FROM tag_sboms WHERE pipeline_id = $1",
+        pipeline_id
+    )
+    .fetch_optional(e)
+    .await
+}
+
+pub async fn sbom_files(e: impl PgExecutor<'_>, id: i64, cyclonedx_upload_id: i64, spdx_upload_id: i64) -> Result<()> {
+    sqlx::query!(
+        "UPDATE tag_sboms SET cyclonedx_upload_id = $2, spdx_upload_id = $3 WHERE id = $1",
+        id,
+        cyclonedx_upload_id,
+        spdx_upload_id
+    )
+    .execute(e)
+    .await?;
+    Ok(())
+}
+
+/// Every file kept of the SBOMs of `tag`, at whatever commit.
+pub async fn sbom_files_of_tag(e: impl PgExecutor<'_>, project_id: i64, tag: &str) -> Result<Vec<SbomFile>> {
+    sqlx::query_as!(
+        SbomFile,
+        r#"SELECT s.sha, (u.id = s.cyclonedx_upload_id) AS "cyclonedx!", u.secret, u.filename
+             FROM tag_sboms s JOIN uploads u ON u.id IN (s.cyclonedx_upload_id, s.spdx_upload_id)
+            WHERE s.project_id = $1 AND s.tag = $2"#,
+        project_id,
+        tag
     )
     .fetch_all(e)
     .await

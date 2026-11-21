@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO security_scanning_settings (project_id, enabled, scanners, interval_hours, user_id, next_run_at, sbom_on_tags)\n         VALUES ($1, $2, $3, $4, $5, $6, $7)\n         ON CONFLICT (project_id) DO UPDATE SET enabled = $2, scanners = $3, interval_hours = $4, user_id = $5, next_run_at = $6,\n                                                sbom_on_tags = $7, updated_at = now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Bool",
+        "TextArray",
+        "Int4",
+        "Int8",
+        "Timestamptz",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "57e14635c57b8b208cd80d605cd38a4f4045ab854ecdaa9c42ffffdd8eb53e7c"
+}
