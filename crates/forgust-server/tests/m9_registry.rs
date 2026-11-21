@@ -524,3 +524,40 @@ async fn garbage_collection_spares_what_pushes_use(pool: sqlx::PgPool) {
     assert_eq!(r.status(), 200);
     assert_eq!(r.bytes().await.unwrap().to_vec(), old, "the file is there");
 }
+
+/// The catalog lists what the caller may read: an administrator's every
+/// project only with their password or a token made for the admin API.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn the_catalog_follows_the_tokens_reach(pool: sqlx::PgPool) {
+    let srv = TestServer::start(pool).await;
+    let owner = srv.user("olivia", false).await;
+    org_project(&owner).await;
+    let pw = password("olivia");
+    let reg = Reg::login(&srv.base, Some(("olivia", &pw)), IMAGE).await;
+    let (_, config) = reg.blob(IMAGE, b"{}").await;
+    let (_, layer) = reg.blob(IMAGE, b"layer").await;
+    let pushed = reg.put_manifest(IMAGE, "v1", OCI_MANIFEST, &image_manifest(&(config, 2), &[(layer, 5)])).await;
+    assert_eq!(pushed.status(), 201);
+
+    let admin = srv.user("root", true).await;
+    let pat = |scopes: Value| {
+        let admin = admin.clone();
+        async move {
+            admin.ok_post("/api/v1/user/tokens", json!({ "name": "t", "scopes": scopes })).await["token"].as_str().unwrap().to_string()
+        }
+    };
+    let catalog = |user: &'static str, secret: String| {
+        let base = srv.base.clone();
+        async move {
+            let t = token(&base, Some((user, &secret)), "registry:catalog:*").await;
+            let r =
+                reqwest::Client::new().get(format!("{base}/v2/_catalog")).bearer_auth(t["token"].as_str().unwrap()).send().await.unwrap();
+            assert_eq!(r.status(), 200);
+            r.json::<Value>().await.unwrap()["repositories"].clone()
+        }
+    };
+    assert_eq!(catalog("olivia", pw.clone()).await, json!([IMAGE]));
+    assert_eq!(catalog("root", pat(json!(["read_api"])).await).await, json!([]), "a plain token: the administrator's memberships");
+    assert_eq!(catalog("root", pat(json!(["read_api", "admin_mode"])).await).await, json!([IMAGE]));
+    assert_eq!(catalog("root", password("root")).await, json!([IMAGE]));
+}
