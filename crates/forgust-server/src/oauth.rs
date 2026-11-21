@@ -55,7 +55,8 @@ pub fn router() -> Router<AppState> {
     let mut r = Router::new()
         .route("/.well-known/oauth-protected-resource", get(resource_metadata))
         .route("/.well-known/oauth-authorization-server", get(server_metadata))
-        .route("/oauth/register", post(register))
+        // registration is open to anyone: its body stays small
+        .route("/oauth/register", post(register).layer(axum::extract::DefaultBodyLimit::max(REGISTRATION_BYTES)))
         .route("/oauth/token", post(token));
     for p in MCP_PATHS {
         r = r
@@ -145,6 +146,13 @@ fn redirect_matches(registered: &[String], asked: &str) -> bool {
     })
 }
 
+/// The largest registration request (a few addresses and a name), and the
+/// longest redirect address kept.
+const REGISTRATION_BYTES: usize = 16 * 1024;
+const REDIRECT_URI_CHARS: usize = 2000;
+
+/// Client metadata from an anonymous request: plain data, size-limited
+/// (`REGISTRATION_BYTES`), every field checked before it is kept.
 #[derive(Deserialize)]
 struct Registration {
     #[serde(default)]
@@ -167,6 +175,13 @@ async fn register(State(state): State<AppState>, ClientIp(ip): ClientIp, body: a
     };
     if reg.redirect_uris.is_empty() || reg.redirect_uris.len() > 10 {
         return oauth_error(StatusCode::BAD_REQUEST, "invalid_redirect_uri", "between 1 and 10 redirect_uris");
+    }
+    if reg.redirect_uris.iter().any(|u| u.chars().count() > REDIRECT_URI_CHARS) {
+        return oauth_error(
+            StatusCode::BAD_REQUEST,
+            "invalid_redirect_uri",
+            &format!("redirect_uris are at most {REDIRECT_URI_CHARS} characters"),
+        );
     }
     if let Some(bad) = reg.redirect_uris.iter().find(|u| !redirect_allowed(u)) {
         return oauth_error(

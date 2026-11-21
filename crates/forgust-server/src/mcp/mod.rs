@@ -131,6 +131,8 @@ pub async fn post(
         Ok(c) => c,
         Err(r) => return r,
     };
+    // plain JSON from a signed-in caller (checked above), within the request
+    // body limit, serde_json's nesting limit, and BATCH messages
     let msg: Value = match serde_json::from_slice(&body) {
         Ok(v) => v,
         Err(e) => return Json(rpc_error(Value::Null, -32700, &format!("parse error: {e}"))).into_response(),
