@@ -317,19 +317,19 @@ function Palette({ mode, close }: { mode: Mode; close: () => void }) {
             <kbd>↑</kbd> <kbd>↓</kbd> move
           </span>
           <span>
-            <kbd>Tab</kbd> next section
+            <kbd>Tab</kbd> section
           </span>
           <span>
             <kbd>↵</kbd> open
           </span>
           {searchAll && (
             <span>
-              <kbd>⇧ ↵</kbd> search everything
+              <kbd>⇧ ↵</kbd> search all
             </span>
           )}
           {searchCode && (
             <span>
-              <kbd>{MOD} ↵</kbd> search {searchCode.key === "code-here" ? "this project's" : "all"} code
+              <kbd>{MOD} ↵</kbd> {searchCode.key === "code-here" ? "search code here" : "search code"}
             </span>
           )}
           {searching && <span className="grow palette-busy">Searching…</span>}

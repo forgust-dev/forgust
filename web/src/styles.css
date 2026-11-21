@@ -2163,6 +2163,9 @@ kbd {
   padding: 7px 14px;
   border-top: 1px solid var(--border);
 }
+.palette-foot > span {
+  white-space: nowrap;
+}
 .palette-busy {
   text-align: right;
 }
