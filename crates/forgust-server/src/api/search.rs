@@ -17,7 +17,8 @@ use crate::state::AppState;
 pub struct SearchQuery {
     #[serde(default)]
     q: String,
-    /// all (a few of each, default), projects, issues or merge_requests
+    /// all (a few of each, default), projects, issues or merge_requests; or first:
+    /// the first of issues, merge_requests and projects that finds something
     scope: Option<String>,
     /// For issues and merge requests: opened, closed, merged or all (default)
     state: Option<String>,
@@ -27,6 +28,8 @@ pub struct SearchQuery {
 
 #[derive(Serialize, ToSchema)]
 pub struct SearchResults {
+    /// The scope answered: the one asked for, or the one `first` picked.
+    pub scope: String,
     pub counts: Counts,
     pub projects: Vec<ProjectHit>,
     pub issues: Vec<ItemHit>,
@@ -41,20 +44,28 @@ pub async fn search(State(state): State<AppState>, Viewer(v): Viewer, Query(q): 
     }
     let pattern = forgust_db::like_escape(term);
     let viewer = v.search_viewer();
-    let scope = q.scope.as_deref().unwrap_or("all");
+    let asked = q.scope.as_deref().unwrap_or("all");
     let st = q.state.as_deref().unwrap_or("all");
     if !["opened", "closed", "merged", "all"].contains(&st) {
         return Err(ApiError::bad("state must be opened, closed, merged or all"));
     }
-    let (per, offset) = super::page_window(q.page.unwrap_or(1), q.per_page.unwrap_or(20));
-    let (limit, offset) = if scope == "all" { (5, 0) } else { (per, offset) };
-    let issue_state = if st == "merged" { "none" } else { st };
-    let mut out =
-        SearchResults { counts: sdb::counts(&state.db, viewer, &pattern).await?, projects: vec![], issues: vec![], merge_requests: vec![] };
-    match scope {
-        "all" | "projects" | "issues" | "merge_requests" => {}
-        _ => return Err(ApiError::bad("scope must be all, projects, issues or merge_requests")),
+    match asked {
+        "all" | "first" | "projects" | "issues" | "merge_requests" => {}
+        _ => return Err(ApiError::bad("scope must be all, first, projects, issues or merge_requests")),
     }
+    let (per, offset) = super::page_window(q.page.unwrap_or(1), q.per_page.unwrap_or(20));
+    let issue_state = if st == "merged" { "none" } else { st };
+    let counts = sdb::counts(&state.db, viewer, &pattern).await?;
+    let scope = if asked == "first" {
+        // the counts ignore the state: a merged filter leaves issues out, which have none
+        let kinds: &[(&str, i64)] = &[("issues", counts.issues), ("merge_requests", counts.merge_requests), ("projects", counts.projects)];
+        let open = |k: &&(&str, i64)| !(st == "merged" && k.0 == "issues");
+        kinds.iter().filter(open).find(|k| k.1 > 0).or_else(|| kinds.iter().find(open)).map_or("issues", |k| k.0)
+    } else {
+        asked
+    };
+    let (limit, offset) = if scope == "all" { (5, 0) } else { (per, offset) };
+    let mut out = SearchResults { scope: scope.to_owned(), counts, projects: vec![], issues: vec![], merge_requests: vec![] };
     if matches!(scope, "all" | "projects") {
         out.projects = sdb::projects(&state.db, viewer, &pattern, limit, offset).await?;
     }

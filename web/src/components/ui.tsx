@@ -291,11 +291,11 @@ export function FilterTabs<T extends string>({ value, onChange, options, label }
 }
 
 /** A filter input with a search icon. */
-export function SearchField({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
+export function SearchField({ value, onChange, placeholder, autoFocus }: { value: string; onChange: (v: string) => void; placeholder: string; autoFocus?: boolean }) {
   return (
     <label className="search-field">
       <Search size={14} aria-hidden />
-      <input type="search" value={value} placeholder={placeholder} aria-label={placeholder} onChange={(e) => onChange(e.target.value)} />
+      <input type="search" value={value} placeholder={placeholder} aria-label={placeholder} autoFocus={autoFocus} onChange={(e) => onChange(e.target.value)} />
     </label>
   );
 }

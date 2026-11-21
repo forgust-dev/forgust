@@ -14462,6 +14462,7 @@
       "SearchResults": {
         "type": "object",
         "required": [
+          "scope",
           "counts",
           "projects",
           "issues",
@@ -14488,6 +14489,10 @@
             "items": {
               "$ref": "#/components/schemas/ProjectHit"
             }
+          },
+          "scope": {
+            "type": "string",
+            "description": "The scope answered: the one asked for, or the one `first` picked."
           }
         }
       },

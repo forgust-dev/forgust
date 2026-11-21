@@ -507,6 +507,10 @@ input[type="radio"] {
 .dropdown-item {
   padding-left: 10px;
 }
+/* a link in a menu: its highlight shows where the keyboard is, not the links' ring */
+a.dropdown-item:focus-visible {
+  outline: none;
+}
 .select-item[data-highlighted],
 .dropdown-item[data-highlighted] {
   background: var(--bg-hover);
@@ -535,26 +539,18 @@ input[type="radio"] {
 }
 .select-menu,
 .dropdown,
-.popover,
-.menu {
+.popover {
   transition:
     opacity 150ms var(--ease-out),
     transform 150ms var(--ease-out);
 }
 /* where they grow from. Base UI marks its popups' first frame, with transitions
-   off for that frame (so @starting-style would do nothing there); the user and
-   "new" menus are plain elements */
+   off for that frame (so @starting-style would do nothing there) */
 .select-menu[data-starting-style],
 .dropdown[data-starting-style],
 .popover[data-starting-style] {
   opacity: 0;
   transform: scale(0.97);
-}
-@starting-style {
-  .menu {
-    opacity: 0;
-    transform: scale(0.97);
-  }
 }
 .select-check {
   position: absolute;
@@ -1389,9 +1385,13 @@ form.stack {
   color: var(--text-faint);
   font: inherit;
   cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    color 120ms ease;
 }
 .search-btn:hover {
-  border-color: var(--border-strong);
+  border-color: color-mix(in srgb, var(--border-strong), var(--text-faint) 35%);
+  color: var(--text-muted);
 }
 .search-btn .search-label {
   flex: 1;
@@ -1468,48 +1468,26 @@ kbd {
   border-radius: 50%;
   cursor: pointer;
 }
-.menu-wrap {
-  position: relative;
-}
-.menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
-  z-index: 40;
+/* the user's menu and the "+" one, under their buttons */
+.topbar-menu {
   min-width: 220px;
-  padding: 6px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg);
-  box-shadow: var(--shadow-pop);
-  transform-origin: top right;
+  max-width: 300px;
 }
+.topbar-menu a.dropdown-item {
+  color: var(--text);
+  text-decoration: none;
+}
+.topbar-menu .dropdown-item > svg {
+  flex: none;
+  color: var(--text-muted);
+}
+/* who is signed in, above the user's menu */
 .menu-head {
   display: flex;
   flex-direction: column;
   padding: 6px 10px 8px;
   margin-bottom: 4px;
   border-bottom: 1px solid var(--border);
-}
-.menu a,
-.menu button {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 7px 10px;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: none;
-  color: var(--text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.menu a:hover,
-.menu button:hover {
-  background: var(--bg-hover);
-  text-decoration: none;
 }
 
 /* ---- sidebar + main */
@@ -2134,11 +2112,74 @@ kbd {
   padding: 18px;
   text-align: center;
 }
+.palette-group + .palette-group {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+.palette-group-title {
+  padding: 4px 10px;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.palette-hint {
+  flex: none;
+  max-width: 40%;
+}
+/* a file's path, its folder faint: the folder gives way, the name is cut only when it
+   is wider than the row on its own (shrinking at all, by a fraction of a pixel, would
+   cut it) */
+.palette-path {
+  display: flex;
+  white-space: nowrap;
+}
+.palette-dir {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-faint);
+}
+.palette-name {
+  flex: none;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.palette-more {
+  padding: 4px 10px 2px 35px;
+}
+.palette-foot {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 7px 14px;
+  border-top: 1px solid var(--border);
+}
+.palette-foot > span {
+  white-space: nowrap;
+}
+.palette-busy {
+  text-align: right;
+}
+@media (max-width: 640px) {
+  .palette-foot {
+    display: none;
+  }
+}
 .palette.help .card-head {
   display: flex;
   align-items: center;
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
+}
+/* the shortcuts scroll under the help's head */
+.help-body {
+  overflow-y: auto;
 }
 .shortcuts {
   width: 100%;
@@ -6545,16 +6586,6 @@ a.item.import-row:hover {
   color: var(--accent);
 }
 
-/* user menu head links to the profile */
-.menu a.menu-head {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0;
-  height: auto;
-  padding: 6px 10px 8px;
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-}
-
 /* links to people */
 .user-link {
   color: inherit;
@@ -7639,11 +7670,50 @@ button.test-case-row:hover {
 .code-hit-chunk + .code-hit-chunk {
   border-top: 1px dashed var(--border);
 }
-.code-hit mark {
+/* what was searched for, in the code found and in the titles found */
+.code-hit mark,
+.search-results mark {
   border-radius: 2px;
   background: var(--warn-soft);
   color: inherit;
   box-shadow: 0 0 0 1px var(--warn-soft);
+}
+/* the search page's own field: the page is for it */
+.search-page-field .search-field {
+  width: 640px;
+}
+.search-page-field .search-field input {
+  height: 38px;
+  font-size: 15px;
+}
+/* under the search's tabs: what the list holds and its state, or the code's filters,
+   as tall on every tab, so the list stays put from one tab to the next */
+.search-bar,
+.code-search-filters {
+  min-height: 32px;
+}
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 13.5px;
+}
+/* one line, cut short rather than taller */
+.search-about {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (max-width: 600px) {
+  /* a phone: the state, wide enough to tap, says what the tab holds */
+  .search-about.with-state {
+    display: none;
+  }
+  .search-bar .segmented {
+    flex: 1;
+  }
 }
 .repo-code-search {
   flex: 0 1 150px;
@@ -7691,7 +7761,6 @@ button.test-case-row:hover {
   .select-menu,
   .dropdown,
   .popover,
-  .menu,
   .modal,
   .toast {
     transition: opacity 150ms ease;
@@ -7704,7 +7773,6 @@ button.test-case-row:hover {
     transform: none;
   }
   @starting-style {
-    .menu,
     .toast,
     .theme-icon,
     .copied-icon,
