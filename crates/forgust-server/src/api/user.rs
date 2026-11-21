@@ -80,8 +80,10 @@ pub async fn update_me(
         services::accounts::set_email(&state, &p, &u, email, u.is_admin).await?;
     } else if changes {
         forgust_db::users::set_unconfirmed_email(&state.db, u.id, Some(email)).await?;
-        services::accounts::send_confirmation(&state, &u, email).await?;
+        // the address already waiting asked for no password: saving the profile
+        // again sends it nothing (`resend_confirmation` does, within its budget)
         if !pending {
+            services::accounts::send_confirmation(&state, &u, email).await?;
             // the current inbox hears of it: a change it did not ask for is a warning
             services::notify::send_to(
                 &state,
