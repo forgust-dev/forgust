@@ -28,13 +28,22 @@ function workbench(page: Page) {
     item: (name: string | RegExp) => page.getByRole("tree", { name: "Files" }).getByRole("treeitem", { name }),
     text: (path: string) => page.getByRole("textbox", { name: `Content of ${path}` }),
     changed: page.getByRole("list", { name: "Changed files" }).getByRole("listitem"),
+    // After a commit or an update the workbench starts over (a loader, then the IDE again,
+    // its side panel as it was): what is on screen is looked at again until it has settled.
     async panel(name: "Files" | "Changes") {
-      await expect(page.locator(".ide")).toBeVisible();
-      if (isMobile(page) && !(await side.isVisible())) await toggle.click();
-      await side.getByRole("tab", { name: new RegExp(`^${name}`) }).click();
+      await expect(async () => {
+        await expect(page.locator(".ide")).toBeVisible();
+        if (isMobile(page) && !(await side.isVisible())) await toggle.click({ timeout: 1000 });
+        await side.getByRole("tab", { name: new RegExp(`^${name}`) }).click({ timeout: 1000 });
+      }).toPass();
     },
     async editor() {
-      if (isMobile(page) && (await side.isVisible())) await toggle.click();
+      await expect(async () => {
+        await expect(page.locator(".ide")).toBeVisible();
+        if (!isMobile(page)) return;
+        if (await side.isVisible()) await toggle.click({ timeout: 1000 });
+        await expect(side).toBeHidden({ timeout: 1000 });
+      }).toPass();
     },
   };
 }
