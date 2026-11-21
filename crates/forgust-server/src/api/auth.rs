@@ -723,6 +723,9 @@ async fn sync_from_provider(
         if let Some(e) = email {
             // the provider returned it as verified
             forgust_db::users::confirm_email(&state.db, user.id, e).await?;
+            // links sent to the old address prove nothing about this one
+            forgust_db::users::delete_tokens(&state.db, user.id, "email").await?;
+            forgust_db::users::delete_tokens(&state.db, user.id, "password_reset").await?;
         }
         if name.is_some() || email.is_some() {
             let details = json!({ "provider": provider_name, "name": name.is_some(), "email": email.is_some() });

@@ -152,6 +152,8 @@ pub async fn confirm(state: &AppState, token: &str, signed_in: Option<i64>) -> A
             return Err(ApiError::conflict("this address is now used by another account"));
         }
         udb::confirm_email(&mut *tx, user.id, &email).await?;
+        // a reset link sent to the old address proves nothing about this one
+        udb::delete_tokens(&mut *tx, user.id, "password_reset").await?;
     } else {
         return Err(ApiError::bad("this link is for an address the account no longer uses"));
     }
