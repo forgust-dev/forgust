@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactElement } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -7,9 +7,9 @@ import { useDebounced } from "../components/ui";
 import { api, qs, refLink, type S } from "../api/client";
 import { useSession } from "../session";
 import { useNav } from "./nav";
-import { useGroups, useMyProjects } from "../prefetch";
+import { fetchers, keys, useGroups, useMyProjects } from "../prefetch";
 import { useRecentProjects } from "./recent";
-import { projectPages } from "./projectNav";
+import { globalPages, groupItems, newItems, projectPages, type Item } from "./navItems";
 import { MOD } from "./platform";
 
 // ---------------------------------------------------------------- shortcuts
@@ -46,17 +46,20 @@ export function useShortcuts(map: Record<string, Handler>, enabled = true) {
   }, [enabled]);
 }
 
-export const SHORTCUTS: { keys: string[]; what: string; where: string }[] = [
-  { keys: ["Ctrl", "K"], what: "Search or go to", where: "Everywhere" },
+/** `keys`: held together (+), or either of them (`or`). */
+export const SHORTCUTS: { keys: string[]; join?: "or"; what: string; where: string }[] = [
+  { keys: [MOD, "K"], what: "Search or go to", where: "Everywhere" },
+  { keys: ["/"], what: "Search or go to", where: "Everywhere" },
   { keys: ["t"], what: "Find a file in this project", where: "Project" },
-  { keys: ["?"], what: "Show keyboard shortcuts", where: "Everywhere" },
-  { keys: ["j", "k"], what: "Move down / up the file list", where: "Repository" },
+  { keys: ["?"], what: "Show or hide keyboard shortcuts", where: "Everywhere" },
+  { keys: ["j", "k"], join: "or", what: "Move down / up the file list", where: "Repository" },
   { keys: ["Enter"], what: "Open the selected entry", where: "Repository" },
-  { keys: ["]", "["], what: "Next / previous file", where: "Diffs" },
-  { keys: ["n", "p"], what: "Next / previous unresolved thread", where: "Merge request" },
-  { keys: ["j", "k"], what: "Move the line cursor (Shift: select lines)", where: "Merge request changes" },
+  { keys: ["]", "["], join: "or", what: "Next / previous file", where: "Diffs" },
+  { keys: ["n", "p"], join: "or", what: "Next / previous unresolved thread", where: "Merge request" },
+  { keys: ["j", "k"], join: "or", what: "Move the line cursor (Shift: select lines)", where: "Merge request changes" },
   { keys: ["c"], what: "Comment on the selected lines", where: "Merge request changes" },
   { keys: ["Shift", "click"], what: "Select a line range (or drag over line numbers)", where: "File view, changes" },
+  { keys: [MOD, "Enter"], what: "Send or save what you are writing", where: "Comments, descriptions" },
 ];
 
 // ---------------------------------------------------------------- palette
@@ -68,9 +71,13 @@ export function openPalette(mode: Mode = "all") {
   window.dispatchEvent(new CustomEvent(OPEN, { detail: mode }));
 }
 
-type Entry = { key: string; label: string; hint?: string; icon: ReactElement; to: string };
+/** `hint`: faint, on the right; `file`: a path, its folder faint. */
+type Entry = { key: string; label: string; hint?: string; file?: boolean; icon: ReactElement; to: string };
 /** A titled run of entries; `more` counts the matches left out. */
 type Section = { key: string; title: string; entries: Entry[]; more?: number; moreHint?: string; start?: number };
+
+/** At most this many of each, once something is typed (the file finder lists more). */
+const CAP = { pages: 4, files: 5, finder: 50, projects: 6, groups: 4, found: 5 };
 
 /** Subsequence match, scored so contiguous and basename hits rank first. */
 function fuzzy(needle: string, hay: string): number {
@@ -95,24 +102,74 @@ function fuzzy(needle: string, hay: string): number {
   return j === n.length ? score - h.length / 100 : -1;
 }
 
-/** The best `cap` of `items` for `term`, and how many more matched. Keeps only the
- *  best few while scanning: a short term matches most of a large repository. */
-function ranked<T>(items: readonly T[], term: string, hay: (t: T) => string, cap: number): { top: T[]; more: number } {
-  // nothing typed: the given order
-  if (!term) return { top: items.slice(0, cap), more: Math.max(0, items.length - cap) };
-  const best: { it: T; s: number }[] = [];
+/** The best `cap` of `items` by `score` (below 0: left out), and how many more scored.
+ *  Keeps only the best few while scanning: a short term matches most of a large repository. */
+function best<T>(items: readonly T[], score: (t: T) => number, cap: number): { top: T[]; more: number } {
+  const top: { it: T; s: number }[] = [];
   let hits = 0;
   for (const it of items) {
-    const s = fuzzy(term, hay(it));
+    const s = score(it);
     if (s < 0) continue;
     hits++;
-    if (best.length === cap && s <= best[cap - 1].s) continue;
-    let k = best.length;
-    while (k > 0 && best[k - 1].s < s) k--;
-    best.splice(k, 0, { it, s });
-    if (best.length > cap) best.pop();
+    if (top.length === cap && s <= top[cap - 1].s) continue;
+    let k = top.length;
+    while (k > 0 && top[k - 1].s < s) k--;
+    top.splice(k, 0, { it, s });
+    if (top.length > cap) top.pop();
   }
-  return { top: best.map((h) => h.it), more: hits - best.length };
+  return { top: top.map((h) => h.it), more: hits - top.length };
+}
+
+/** The best `cap` of `items` for `term` (in their order when nothing is typed). One or
+ *  two letters scattered through a path name nearly anything: those have to follow
+ *  each other ("re" finds README.md, not partners). */
+function ranked<T>(items: readonly T[], term: string, hay: (t: T) => string, cap: number): { top: T[]; more: number } {
+  if (!term) return { top: items.slice(0, cap), more: Math.max(0, items.length - cap) };
+  return best(
+    items,
+    (it) => {
+      const s = fuzzy(term, hay(it));
+      // a contiguous match scores 500 and more, a scattered one a few points
+      return term.length < 3 && s < 500 ? -1 : s;
+    },
+    cap,
+  );
+}
+
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** How well `term` (lower case) names a page: at the start of a word of its name, the
+ *  earlier the better ("re" finds Releases, not Explore), else one of its other names
+ *  ("mr" finds Merge requests; from 3 letters, their start: "webh" finds Integrations);
+ *  below 0 when it does not. */
+function pageScore(term: string, it: Item): number {
+  const label = it.label.toLowerCase();
+  const at = label.search(new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRe(term)}`, "u"));
+  if (at >= 0) return 1000 - at - label.length / 100;
+  return it.words?.split(" ").some((w) => w === term || (term.length >= 3 && w.startsWith(term))) ? 500 - label.length / 100 : -1;
+}
+
+type Jump = { kind: "issue" | "mr"; path: string; iid: number };
+
+/** `#12` or `!12` in the project shown, `group/project#12` anywhere: one issue or merge request. */
+function jumpOf(term: string, project: S["ProjectDetail"] | null): Jump | null {
+  const m = /^([\w.-]+(?:\/[\w.-]+)+)?([#!])(\d{1,9})$/.exec(term);
+  const path = m ? (m[1] ?? project?.full_path) : undefined;
+  return m && path ? { kind: m[2] === "#" ? "issue" : "mr", path, iid: Number(m[3]) } : null;
+}
+
+const pageEntry = (it: Item): Entry => ({ key: `n:${it.to}:${it.label}`, label: it.label, icon: <>{it.icon}</>, to: it.to });
+
+/** A file's path, its folder faint: the folder is cut first when the row is short, so
+ *  the name shows. */
+function FilePath({ path }: { path: string }) {
+  const cut = path.lastIndexOf("/") + 1;
+  return (
+    <span className="grow palette-path">
+      {cut > 0 && <span className="palette-dir">{path.slice(0, cut)}</span>}
+      <span className="palette-name">{path.slice(cut)}</span>
+    </span>
+  );
 }
 
 function Palette({ mode, close }: { mode: Mode; close: () => void }) {
@@ -123,6 +180,8 @@ function Palette({ mode, close }: { mode: Mode; close: () => void }) {
   // the selected entry, by key: results that arrive later do not move it; null: the first
   const [selKey, setSelKey] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  // each section's title names it, by an id of its own (a title holds spaces)
+  const uid = useId();
   const project = nav.kind === "project" ? nav.project : null;
   const ref = nav.kind === "project" ? (nav.ref ?? project?.default_branch ?? "main") : "";
   const recent = useRecentProjects(user?.id);
@@ -147,61 +206,114 @@ function Palette({ mode, close }: { mode: Mode; close: () => void }) {
     placeholderData: (prev) => prev,
   });
 
-  const pages = useMemo(() => {
-    if (!project) return { top: [] as Entry[], all: [] as Entry[] };
-    const entry = (it: { to: string; label: string; icon?: ReactNode }): Entry => ({ key: `n:${it.to}:${it.label}`, label: it.label, icon: <>{it.icon}</>, to: it.to });
-    const { top, all } = projectPages(project, ref);
-    return { top: top.map(entry), all: all.map(entry) };
-  }, [project, ref]);
+  // `#12`: the title of that issue, once typing settles (the hover cards' requests)
+  const jump = mode === "all" ? jumpOf(settled, project) : null;
+  const elsewhere = jump && jump.path !== project?.full_path ? jump.path : null;
+  const resolved = useQuery({ queryKey: keys.pathResolve(elsewhere ?? ""), queryFn: () => fetchers.pathResolve(elsewhere!), enabled: !!elsewhere, staleTime: 60_000, retry: false });
+  const jumpPid = !jump ? undefined : !elsewhere ? project?.id : resolved.data?.kind === "project" ? resolved.data.id : undefined;
+  const item = useQuery<{ title: string }>({
+    queryKey: jump?.kind === "mr" ? keys.mr(jumpPid ?? 0, jump.iid) : ["issue", jumpPid, jump?.iid],
+    queryFn: () => (jump!.kind === "mr" ? fetchers.mr(jumpPid!, jump!.iid) : api.get<S["IssueDetail"]>(`/projects/${jumpPid}/issues/${jump!.iid}`)),
+    enabled: !!jump && jumpPid != null,
+    staleTime: 30_000,
+    retry: false,
+  });
+  // what the answer says of what is typed now: its title, or that there is none
+  const current = !!jump && settled === t;
+  const jumpTitle = current ? item.data?.title : undefined;
+  const jumpGone = current && (item.isError || resolved.isError || (!!resolved.data && resolved.data.kind !== "project"));
+
+  // the pages of the project or group shown, and what can be made in it
+  const here = useMemo(() => {
+    if (nav.kind === "project") {
+      const { top, all } = projectPages(nav.project, ref);
+      return { title: nav.project.name, top, all: [...all, ...newItems(nav).filter((i) => i.here)] };
+    }
+    if (nav.kind === "group") {
+      const pages = groupItems(nav.group);
+      return { title: nav.group.name, top: pages, all: [...pages, ...newItems(nav).filter((i) => i.here)] };
+    }
+    return null;
+  }, [nav, ref]);
+  // the rest of the site: the main menu's pages, your settings, the admin area, and
+  // what can be made anywhere
+  const pages = useMemo(() => (user ? [...globalPages(user), ...newItems(nav).filter((i) => !i.here)] : []), [user, nav]);
 
   // the files on their own: a search response must not rank the whole repository again
   const fileHits = useMemo(() => {
     if (!project || !files.data || (mode === "all" && !t)) return null;
-    return ranked(files.data.paths, t, (f) => f, mode === "files" ? 50 : 8);
+    return ranked(files.data.paths, t, (f) => f, mode === "files" ? CAP.finder : CAP.files);
   }, [project, files.data, t, mode]);
 
   const { sections, entries, searchAll, searchCode } = useMemo(() => {
     const out: Section[] = [];
-    const push = (title: string, entries: Entry[], more?: number, moreHint?: string) => {
-      if (entries.length) out.push({ key: title, title, entries, more, moreHint });
+    const push = (key: string, title: string, entries: Entry[], more?: number, moreHint?: string) => {
+      if (entries.length) out.push({ key, title, entries, more, moreHint });
     };
-    const fileEntry = (f: string): Entry => ({ key: `f:${f}`, label: f, icon: <FileText size={15} />, to: refLink(`/${project!.full_path}`, "blob", ref, f) });
+    const fileEntry = (f: string): Entry => ({ key: `f:${f}`, label: f, file: true, icon: <FileText size={15} />, to: refLink(`/${project!.full_path}`, "blob", ref, f) });
     const projectEntry = (p: { id: number; full_path: string }): Entry => ({ key: `p:${p.id}`, label: p.full_path, icon: <FolderGit2 size={15} />, to: `/${p.full_path}` });
     const groupEntry = (g: { id: number; full_path: string }): Entry => ({ key: `g:${g.id}`, label: g.full_path, icon: <Users size={15} />, to: `/${g.full_path}` });
+    // your projects as they are now (renamed, moved, archived)
+    const mine = new Map((projects.data ?? []).map((p) => [p.id, p]));
+    const lc = t.toLowerCase();
     let searchAll: Entry | undefined;
     let searchCode: Entry | undefined;
 
     if (mode === "files") {
-      if (fileHits) push("Files", fileHits.top.map(fileEntry), fileHits.more, "keep typing to narrow");
+      if (fileHits) push("files", "Files", fileHits.top.map(fileEntry), fileHits.more, "keep typing to narrow");
     } else if (!t) {
       // nothing typed: where to go next, not every file of the repository
-      if (project) push(project.name, pages.top);
-      const rec = recent.filter((r) => r.id !== project?.id).slice(0, 5);
-      push("Recent projects", rec.map(projectEntry));
+      if (here) push("here", here.title, here.top.map(pageEntry));
+      // the sidebar's: archived ones left out
+      const rec = recent
+        .map((r) => mine.get(r.id) ?? r)
+        .filter((r) => r.id !== project?.id && !("archived" in r && r.archived))
+        .slice(0, 5);
+      push("recent", "Recent projects", rec.map(projectEntry));
       if (!project) {
         const seen = new Set(rec.map((r) => r.id));
-        push("Projects", (projects.data ?? []).filter((p) => !seen.has(p.id)).slice(0, 5).map(projectEntry));
-        push("Groups", (groups.data ?? []).slice(0, 5).map(groupEntry));
+        push("projects", "Projects", (projects.data ?? []).filter((p) => !seen.has(p.id)).slice(0, 5).map(projectEntry));
+        push("groups", "Groups", (groups.data ?? []).slice(0, 5).map(groupEntry));
       }
     } else {
-      if (project) {
-        // a page by its name, not by letters scattered through "Code › Tags"
-        const lc = t.toLowerCase();
-        push(`Go to in ${project.name}`, ranked(pages.all.filter((e) => e.label.toLowerCase().includes(lc)), t, (e) => e.label, 4).top);
+      const typed = mode === "all" ? jumpOf(t, project) : null;
+      if (typed && !jumpGone) {
+        const sigil = typed.kind === "issue" ? "#" : "!";
+        push("jump", "Go to", [
+          {
+            key: "jump",
+            label: jumpTitle ?? `${typed.kind === "issue" ? "Issue" : "Merge request"} ${sigil}${typed.iid}`,
+            hint: `${typed.path}${sigil}${typed.iid}`,
+            icon: typed.kind === "issue" ? <CircleDot size={15} /> : <GitMerge size={15} />,
+            to: `/${typed.path}/-/${typed.kind === "issue" ? "issues" : "merge_requests"}/${typed.iid}`,
+          },
+        ]);
       }
-      if (fileHits) push("Files", fileHits.top.map(fileEntry), fileHits.more, "press t for the file finder");
-      const pr = ranked(projects.data ?? [], t, (p) => p.full_path, 6);
-      push("Projects", pr.top.map(projectEntry), pr.more);
-      const gr = ranked(groups.data ?? [], t, (g) => g.full_path, 4);
-      push("Groups", gr.top.map(groupEntry), gr.more);
+      if (here) {
+        // a page by its name, not by letters scattered through "Code › Tags"
+        const hits = best(here.all, (it) => pageScore(lc, it), CAP.pages);
+        push("here", here.title, hits.top.map(pageEntry), hits.more);
+      }
+      const hits = best(pages, (it) => pageScore(lc, it), CAP.pages);
+      push("pages", "Pages", hits.top.map(pageEntry), hits.more);
+      if (fileHits) push("files", "Files", fileHits.top.map(fileEntry), fileHits.more, "press t for the file finder");
+      // yours first, then those the search finds that you are not a member of
+      const pr = ranked(projects.data ?? [], t, (p) => p.full_path, CAP.projects);
+      const others = t.length >= 2 ? (found.data?.projects ?? []).filter((p) => !mine.has(p.id)) : [];
+      const room = Math.max(0, CAP.projects - pr.top.length);
+      push("projects", "Projects", [...pr.top, ...others.slice(0, room)].map(projectEntry), pr.more + Math.max(0, others.length - room));
+      const gr = ranked(groups.data ?? [], t, (g) => g.full_path, CAP.groups);
+      push("groups", "Groups", gr.top.map(groupEntry), gr.more);
       if (t.length >= 2 && found.data) {
         push(
+          "issues",
           "Issues",
-          (found.data.issues ?? []).slice(0, 5).map((i) => ({ key: `i:${i.project_id}:${i.iid}`, label: i.title, hint: `${i.project_path}#${i.iid}`, icon: <CircleDot size={15} />, to: `/${i.project_path}/-/issues/${i.iid}` })),
+          (found.data.issues ?? []).slice(0, CAP.found).map((i) => ({ key: `i:${i.project_id}:${i.iid}`, label: i.title, hint: `${i.project_path}#${i.iid}`, icon: <CircleDot size={15} />, to: `/${i.project_path}/-/issues/${i.iid}` })),
         );
         push(
+          "mrs",
           "Merge requests",
-          (found.data.merge_requests ?? []).slice(0, 5).map((m) => ({ key: `m:${m.project_id}:${m.iid}`, label: m.title, hint: `${m.project_path}!${m.iid}`, icon: <GitMerge size={15} />, to: `/${m.project_path}/-/merge_requests/${m.iid}` })),
+          (found.data.merge_requests ?? []).slice(0, CAP.found).map((m) => ({ key: `m:${m.project_id}:${m.iid}`, label: m.title, hint: `${m.project_path}!${m.iid}`, icon: <GitMerge size={15} />, to: `/${m.project_path}/-/merge_requests/${m.iid}` })),
         );
       }
       // Shift+Enter and Ctrl/⌘+Enter open these from anywhere in the list
@@ -214,7 +326,7 @@ function Palette({ mode, close }: { mode: Mode; close: () => void }) {
         searchCode.hint = `${MOD}↵`;
         search.push(...(project ? [searchCode, codeAll] : [codeAll]));
       }
-      push("Search", search);
+      push("search", "Search", search);
     }
 
     let n = 0;
@@ -223,7 +335,7 @@ function Palette({ mode, close }: { mode: Mode; close: () => void }) {
       n += s.entries.length;
     }
     return { sections: out, entries: out.flatMap((s) => s.entries), searchAll, searchCode };
-  }, [t, mode, fileHits, projects.data, groups.data, found.data, project, ref, pages, recent]);
+  }, [t, mode, fileHits, projects.data, groups.data, found.data, project, ref, here, pages, recent, jumpTitle, jumpGone]);
 
   useEffect(() => setSelKey(null), [term]);
   const sel = Math.max(0, entries.findIndex((e) => e.key === selKey));
@@ -238,8 +350,13 @@ function Palette({ mode, close }: { mode: Mode; close: () => void }) {
     navigate(e.to);
   };
   const loading = files.isLoading || (mode === "all" && projects.isLoading);
-  const searching = mode === "all" && t.length >= 2 && (settled !== t || found.isFetching);
-  const placeholder = mode === "files" && project ? `Find a file in ${project.name}…` : project ? "Search files, pages, projects, issues and merge requests…" : "Search projects, groups, issues and merge requests…";
+  const searching = mode === "all" && t.length >= 2 && (settled !== t || found.isFetching || item.isFetching);
+  const placeholder =
+    mode === "files" && project
+      ? `Find a file in ${project.name}…`
+      : project
+        ? "Search files, pages, projects, issues and merge requests…"
+        : "Search pages, projects, groups, issues and merge requests…";
 
   return (
     <div className="dialog-backdrop" onMouseDown={close}>
@@ -276,9 +393,9 @@ function Palette({ mode, close }: { mode: Mode; close: () => void }) {
           }}
         />
         <div className="palette-list" id="palette-list" role="listbox" ref={listRef}>
-          {sections.map((s) => (
-            <div key={s.key} role="group" aria-labelledby={`palg-${s.key}`} className="palette-group">
-              <div className="palette-group-title" id={`palg-${s.key}`}>
+          {sections.map((s, si) => (
+            <div key={s.key} role="group" aria-labelledby={`${uid}-${si}`} className="palette-group">
+              <div className="palette-group-title" id={`${uid}-${si}`}>
                 {s.title}
               </div>
               {s.entries.map((e, j) => {
@@ -296,7 +413,7 @@ function Palette({ mode, close }: { mode: Mode; close: () => void }) {
                     onClick={() => go(e)}
                   >
                     {e.icon}
-                    <span className="grow ellipsis mono-ish">{e.label}</span>
+                    {e.file ? <FilePath path={e.label} /> : <span className="grow ellipsis">{e.label}</span>}
                     {e.hint && <span className="faint small ellipsis palette-hint">{e.hint}</span>}
                     {n === sel && <CornerDownLeft size={14} className="faint" />}
                   </button>
@@ -349,24 +466,26 @@ function Help({ close }: { close: () => void }) {
             Close
           </button>
         </div>
-        <table className="shortcuts">
-          <tbody>
-            {SHORTCUTS.map((s) => (
-              <tr key={s.what}>
-                <td>
-                  {s.keys.map((k, i) => (
-                    <span key={k}>
-                      {i > 0 && <span className="faint"> {s.keys.length === 2 && ["j", "]", "n"].includes(s.keys[0]) ? "/" : "+"} </span>}
-                      <kbd>{k}</kbd>
-                    </span>
-                  ))}
-                </td>
-                <td>{s.what}</td>
-                <td className="faint small">{s.where}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="help-body">
+          <table className="shortcuts">
+            <tbody>
+              {SHORTCUTS.map((s, i) => (
+                <tr key={i}>
+                  <td>
+                    {s.keys.map((k, j) => (
+                      <span key={j}>
+                        {j > 0 && <span className="faint"> {s.join === "or" ? "/" : "+"} </span>}
+                        <kbd>{k}</kbd>
+                      </span>
+                    ))}
+                  </td>
+                  <td>{s.what}</td>
+                  <td className="faint small">{s.where}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
@@ -378,15 +497,29 @@ export function PaletteHost() {
   const [help, setHelp] = useState(false);
   const nav = useNav();
   const { user } = useSession();
+  // what the key handler, registered once, reads when a key comes
+  const now = useRef({ nav, user, help });
+  now.current = { nav, user, help };
   useEffect(() => {
     const onOpen = (e: Event) => setMode((e as CustomEvent<Mode>).detail);
     const onKey = (e: KeyboardEvent) => {
+      const { nav, user, help } = now.current;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
+        setHelp(false);
         setMode((m) => (m ? null : "all"));
         return;
       }
-      if (isTyping(e) || e.ctrlKey || e.metaKey || e.altKey || document.querySelector(".dialog-backdrop")) return;
+      if (isTyping(e) || e.ctrlKey || e.metaKey || e.altKey) return;
+      // the help open: "?" again, or Escape, closes it
+      if (help) {
+        if (e.key === "?" || e.key === "Escape") {
+          e.preventDefault();
+          setHelp(false);
+        }
+        return;
+      }
+      if (document.querySelector(".dialog-backdrop")) return;
       if (e.key === "?") {
         e.preventDefault();
         setHelp(true);
@@ -404,7 +537,7 @@ export function PaletteHost() {
       window.removeEventListener(OPEN, onOpen);
       window.removeEventListener("keydown", onKey);
     };
-  }, [nav.kind, user]);
+  }, []);
   return createPortal(
     <>
       {mode && <Palette mode={mode} close={() => setMode(null)} />}
@@ -413,4 +546,3 @@ export function PaletteHost() {
     document.body,
   );
 }
-

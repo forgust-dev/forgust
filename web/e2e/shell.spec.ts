@@ -1,4 +1,4 @@
-import { test, expect, P, ADMIN, at, isMobile } from "./fixtures";
+import { test, expect, P, ADMIN, SEED, at, isMobile } from "./fixtures";
 
 test("dashboard → project through the sidebar and breadcrumbs", async ({ page }) => {
   await page.goto("/dashboard/projects");
@@ -71,11 +71,56 @@ test("command palette jumps to projects and files", async ({ page }) => {
   await page.keyboard.press("Enter");
   await at(page, `${P}/-/blob/main/src/cart.rs`);
   await expect(page.locator(".code-line").first()).toBeVisible();
-  // `?`: help
+  // `?`: help, closed by `?` again or by Escape
+  const help = page.getByRole("dialog", { name: "Keyboard shortcuts" });
   await page.keyboard.press("?");
-  await expect(page.getByRole("dialog", { name: "Keyboard shortcuts" })).toBeVisible();
-  await page.keyboard.press("Escape").catch(() => {});
-  await page.getByRole("button", { name: "Close" }).click();
+  await expect(help).toBeVisible();
+  await page.keyboard.press("?");
+  await expect(help).toBeHidden();
+  await page.keyboard.press("?");
+  await expect(help).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(help).toBeHidden();
+});
+
+test("pages and numbers in the palette", async ({ page }) => {
+  await page.goto(P);
+  await expect(page.locator(".page-head h1")).toBeVisible();
+  // a page of the project by its name, or by another one
+  await page.keyboard.press("Control+k");
+  const dialog = page.getByRole("dialog", { name: "Search" });
+  await dialog.locator("input").fill("pipe");
+  await expect(dialog.getByRole("option").first()).toHaveText("Pipelines");
+  await dialog.locator("input").fill("mr");
+  await expect(dialog.getByRole("option").first()).toHaveText("Merge requests");
+  await page.keyboard.press("Enter");
+  await at(page, `${P}/-/merge_requests`);
+  // a page of your settings
+  await page.keyboard.press("Control+k");
+  await dialog.locator("input").fill("ssh");
+  await expect(dialog.getByRole("group", { name: "Pages" }).getByRole("option").first()).toContainText("Your settings › SSH keys");
+  await page.keyboard.press("Enter");
+  await at(page, "/profile/keys");
+  // a merge request by its number, from elsewhere: its title once found
+  await page.keyboard.press("Control+k");
+  await dialog.locator("input").fill(`${SEED.group}/${SEED.project}!1`);
+  await expect(dialog.getByRole("group", { name: "Go to" }).getByRole("option")).toContainText("Checkout with discounts");
+  await page.keyboard.press("Enter");
+  await at(page, `${P}/-/merge_requests/1`);
+});
+
+test("the user menu works from the keyboard", async ({ page }) => {
+  await page.goto("/");
+  await page.locator(".avatar-btn").focus();
+  await page.keyboard.press("Enter");
+  const menu = page.getByRole("menu");
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole("menuitem", { name: "Your profile" })).toHaveAttribute("data-highlighted");
+  await page.keyboard.press("ArrowDown");
+  await expect(menu.getByRole("menuitem", { name: "Settings" })).toHaveAttribute("data-highlighted");
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
+  await expect(page.locator(".avatar-btn")).toBeFocused();
 });
 
 test("tree keyboard navigation and hover prefetch", async ({ page }) => {
