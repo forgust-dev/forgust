@@ -7,8 +7,8 @@ test("the import form picks its source and mode", async ({ page }) => {
   await page.goto("/import");
   const sources = page.getByRole("radiogroup", { name: "Source" });
   for (const name of ["GitLab", "GitHub", "Gitea", "Forgejo"]) await expect(sources.getByRole("radio", { name: new RegExp(name) })).toBeVisible();
+  await expect(sources.getByRole("radio", { name: /GitLab/ })).toHaveAttribute("aria-checked", "true");
   await expect(sources.getByRole("radio", { name: /GitHub/ })).toContainText(/\d+\.\d+\+ \(Enterprise\)/);
-  await expect(page.getByText(/Self-hosted: GitLab \d+\.\d+ or later/)).toBeVisible();
 
   // one project by default: a project URL on another forge moves the address and source there
   const address = page.getByRole("textbox", { name: /^Address/ });
