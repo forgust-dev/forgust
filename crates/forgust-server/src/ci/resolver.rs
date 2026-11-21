@@ -31,6 +31,8 @@ impl RepoResolver {
     async fn other(&self, project: &str, git_ref: Option<&str>) -> Result<(forgust_db::projects::Project, String), String> {
         let p = crate::api::load_project(&self.state, project).await.map_err(|_| "project not found".to_string())?;
         let principal = match &self.user {
+            // an administrator's pipeline reads other projects as a member would
+            Some(u) if p.id != self.project_id => Principal::member(u.clone()),
             Some(u) => Principal::User { user: u.clone(), scopes: None },
             None => Principal::Anonymous,
         };

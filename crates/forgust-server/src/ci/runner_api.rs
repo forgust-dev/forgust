@@ -516,7 +516,8 @@ pub async fn cross_dependencies(
         (None, None) => None,
     };
     let principal = match user {
-        Some(u) => crate::auth::Principal::User { user: u, scopes: None },
+        // only other projects are asked about: as a member, whoever the user is
+        Some(u) => crate::auth::Principal::member(u),
         None => crate::auth::Principal::Anonymous,
     };
     let mut out: Vec<Build> = Vec::new();

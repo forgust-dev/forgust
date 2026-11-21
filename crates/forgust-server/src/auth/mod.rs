@@ -62,6 +62,13 @@ pub enum Principal {
 }
 
 impl Principal {
+    /// `user` acting through what a repository says (a pipeline's includes,
+    /// triggers and artifacts from other projects): with their memberships
+    /// alone, never an administrator's powers over every project.
+    pub fn member(user: User) -> Self {
+        Principal::User { user, scopes: Some(vec!["api".to_string()]) }
+    }
+
     pub fn user(&self) -> Option<&User> {
         match self {
             Principal::User { user, .. } | Principal::Job { user, .. } => Some(user),

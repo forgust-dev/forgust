@@ -192,7 +192,12 @@ async fn create_downstream(state: &AppState, b: &Build, spec: &StoredSpec, t: &T
         }
         Some(path) => {
             let target = crate::api::load_project(state, path).await.map_err(|_| Refusal("downstream_bridge_project_not_found"))?;
-            let principal = Principal::User { user: user.clone(), scopes: None };
+            // an administrator's pipeline starts others as a member would
+            let principal = if target.id == b.project_id {
+                Principal::User { user: user.clone(), scopes: None }
+            } else {
+                Principal::member(user.clone())
+            };
             if !crate::auth::authz::can_project(state, &principal, crate::auth::authz::ProjectAction::Read, &target).await? {
                 return Err(Refusal("downstream_bridge_project_not_found"));
             }
