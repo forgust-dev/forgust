@@ -867,29 +867,45 @@ const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(naviga
 /** Pages a signed-out visitor reaches to get in: they replace the top bar with their own frame. */
 const AUTH_PATHS = ["/login", "/setup", "/forgot-password", "/reset-password", "/verify-email"];
 
+/** The id of the page's slide as the sidebar folds or unfolds, among its other animations. */
+const SLIDE = "sidebar-slide";
+
 export function Shell({ children }: { children: ReactNode }) {
   const { user } = useSession();
-  const [collapsed, setCollapsed] = usePref("sidebar.collapsed", false);
+  const [collapsed, setCollapsedPref] = usePref("sidebar.collapsed", false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const loc = useLocation();
   useSettleNav();
   useEffect(() => setMobileOpen(false), [loc.pathname]);
-  // the page slides along as the sidebar folds or unfolds (FLIP: its margin
-  // changes at once, a transform eases it over); the sidebar itself is clipped
+  // the page slides along as the sidebar folds or unfolds (FLIP: its margin changes at
+  // once, a transform eases each part of it over from where it was); the sidebar itself
+  // is clipped. Each part on its own: the page is centred in what the sidebar leaves, so
+  // it moves by less than the margin does (half, on a wide screen), a banner by as much;
+  // eased over by the margin's change, the page jumped by the difference first
   const mainRef = useRef<HTMLElement>(null);
-  const mainLeft = useRef<number | null>(null);
-  useLayoutEffect(() => {
+  const before = useRef<Map<Element, number> | null>(null);
+  const setCollapsed = (c: boolean) => {
+    // where the parts are on screen now, partway through a slide included
     const el = mainRef.current;
-    if (!el) return;
-    el.getAnimations().forEach((a) => a.cancel());
-    const left = el.getBoundingClientRect().left;
-    const from = mainLeft.current;
-    mainLeft.current = left;
-    if (from == null || from === left || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    before.current = el ? new Map(Array.from(el.children, (part) => [part, part.getBoundingClientRect().left])) : null;
+    setCollapsedPref(c);
+  };
+  useLayoutEffect(() => {
+    const was = before.current;
+    before.current = null;
+    const el = mainRef.current;
+    if (!was || !el) return;
     // the sidebar's own curve and duration (styles.css)
     const easing = getComputedStyle(el).getPropertyValue("--ease-in-out").trim() || "ease-in-out";
-    el.animate([{ transform: `translateX(${from - left}px)` }, { transform: "none" }], { duration: 240, easing });
-  }, [collapsed, !!user]);
+    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    for (const part of Array.from(el.children)) {
+      part.getAnimations().forEach((a) => a.id === SLIDE && a.cancel());
+      const from = was.get(part);
+      const dx = from == null ? 0 : from - part.getBoundingClientRect().left;
+      if (still || Math.abs(dx) < 1) continue;
+      part.animate([{ transform: `translateX(${dx}px)` }, { transform: "none" }], { id: SLIDE, duration: 240, easing });
+    }
+  }, [collapsed]);
   // Escape closes the menu on small screens
   useEffect(() => {
     if (!mobileOpen) return;
