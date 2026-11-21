@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { Menu as BMenu } from "@base-ui/react/menu";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -7,50 +7,27 @@ import {
   UserCheck,
   Info,
   X,
-  CircleDot,
-  Boxes,
-  Rocket,
   ChevronLeft,
   ChevronsLeft,
   ChevronsRight,
   ChevronsUpDown,
-  Code2,
   Compass,
   Ellipsis,
   FolderGit2,
-  GitMerge,
   Home,
   KeyRound,
   LogOut,
   Menu,
-  Milestone as MilestoneIcon,
   Monitor,
   Moon,
   Plus,
   Search,
   Settings,
   Shield,
-  ShieldAlert,
   Sun,
   User,
-  Users,
-  Bell,
-  DatabaseBackup,
-  FileKey,
-  Gauge,
-  HardDrive,
-  HeartPulse,
-  ListChecks,
-  LockKeyhole,
-  RefreshCw,
-  ScrollText,
-  Server,
-  ShieldCheck,
-  Sparkles,
-  Ticket,
-  Workflow,
 } from "lucide-react";
-import { api, qs, refLink, type S } from "../api/client";
+import { api, qs, type S } from "../api/client";
 import { useSession, wasSignedIn } from "../session";
 import { useToast } from "./toast";
 import { usePref, useTheme } from "./theme";
@@ -62,14 +39,12 @@ import { ResendLink } from "../components/ResendLink";
 import { Logo } from "../components/Logo";
 import { fetchers, keys, useMyGroups, useMyProjects, usePrefetch, useWork, type PrefetchTarget } from "../prefetch";
 import { useRecentProjects, useRememberProject, type RecentProject } from "./recent";
-import { SETTINGS_PAGES } from "../pages/project/settingsPages";
-import { ADMIN_PAGES, type AdminPath } from "../pages/adminPages";
-import { PROFILE_PAGES, type ProfilePath } from "../pages/profilePages";
+import { ADMIN_ICONS, PROFILE_ICONS, areaItems, groupItems, newItems, projectItems, type Item } from "./navItems";
+import { IS_MAC, MOD } from "./platform";
+import { ADMIN_PAGES } from "../pages/adminPages";
+import { PROFILE_PAGES } from "../pages/profilePages";
 import { InboxBell } from "../components/Inbox";
 
-/** A nav entry; `children` show under it while its section is active. `title`: the
- *  entry's tip, folded or not (a project's full path); `prefetch`: what it opens. */
-type Item = { to: string; label: string; icon?: ReactNode; end?: boolean; count?: number; match?: RegExp; children?: Item[]; title?: string; prefetch?: PrefetchTarget };
 
 function SideLink({ item, collapsed, onNavigate, sub }: { item: Item; collapsed: boolean; onNavigate: () => void; sub?: boolean }) {
   const loc = useLocation();
@@ -152,43 +127,6 @@ function levelOf(nav: Nav, area: Area | null): { key: string; depth: number } {
   if (area) return { key: area, depth: 1 };
   if (nav.kind === "pending") return { key: "pending", depth: 0 };
   return { key: "global", depth: 0 };
-}
-
-
-// a page without an icon would leave a blank row on the folded rail: the type wants each
-const ADMIN_ICONS: Record<AdminPath, ReactNode> = {
-  "": <Gauge size={16} />,
-  users: <Users size={16} />,
-  projects: <FolderGit2 size={16} />,
-  storage: <HardDrive size={16} />,
-  runners: <Server size={16} />,
-  jobs: <ListChecks size={16} />,
-  health: <HeartPulse size={16} />,
-  backups: <DatabaseBackup size={16} />,
-  settings: <Settings size={16} />,
-  "dependency-updates": <RefreshCw size={16} />,
-  "security-scanning": <ShieldCheck size={16} />,
-  "ai-review": <Sparkles size={16} />,
-  audit: <ScrollText size={16} />,
-};
-
-const PROFILE_ICONS: Record<ProfilePath, ReactNode> = {
-  "": <User size={16} />,
-  keys: <KeyRound size={16} />,
-  gpg_keys: <FileKey size={16} />,
-  tokens: <Ticket size={16} />,
-  security: <LockKeyhole size={16} />,
-  notifications: <Bell size={16} />,
-};
-
-/** An area's pages as entries: `base` is its path ("/admin"), each page's under it. */
-function areaItems<P extends string>(base: string, pages: readonly { path: P; label: string }[], icons: Record<P, ReactNode>): Item[] {
-  return pages.map(({ path, label }) => ({
-    to: path ? `${base}/${path}` : base,
-    label,
-    icon: icons[path],
-    match: path ? new RegExp(`^${base}/${path}(/|$)`) : new RegExp(`^${base}/?$`),
-  }));
 }
 
 /** A level shown less than this is left without a slide: changes in quick succession don't slide one after the other. */
@@ -305,106 +243,6 @@ function ContextSwitcher({
       </BMenu.Portal>
     </BMenu.Root>
   );
-}
-
-function projectItems(p: S["ProjectDetail"], ref: string, mrCount?: number, issueCount?: number): Item[] {
-  const web = `/${p.full_path}`;
-  const esc = p.full_path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const sec = (s: string) => new RegExp(`^/${esc}/-/(${s})(/|$)`);
-  const files = new RegExp(`^/${esc}(/-/(tree|blob|blame|raw)(/|$)|/?$)`);
-  const code = new RegExp(`${files.source}|${sec("commits?|branches|tags|compare").source}`);
-  const schedules = p.can_push ? [{ to: `${web}/-/pipeline_schedules`, label: "Schedules", match: sec("pipeline_schedules") }] : [];
-  // findings are for Developers and above
-  const developer = p.can_push || p.can_admin || ["developer", "maintainer", "owner"].includes(p.access_level);
-  // the audit log is for Maintainers and above, with the findings
-  const audit = p.can_admin ? [{ to: `${web}/-/audit`, label: "Audit log", match: sec("audit") }] : [];
-  const security = developer
-    ? [
-        {
-          to: `${web}/-/security`,
-          label: "Security",
-          icon: <ShieldAlert size={16} />,
-          match: sec("security|audit"),
-          children: [{ to: `${web}/-/security`, label: "Findings", match: sec("security") }, ...audit],
-        },
-      ]
-    : [];
-  return [
-    {
-      to: web,
-      label: "Code",
-      icon: <Code2 size={16} />,
-      match: code,
-      children: [
-        { to: web, label: "Files", match: files },
-        { to: refLink(web, "commits", ref), label: "Commits", match: sec("commits?") },
-        { to: `${web}/-/branches`, label: "Branches", match: sec("branches") },
-        { to: `${web}/-/tags`, label: "Tags", match: sec("tags") },
-        { to: `${web}/-/compare`, label: "Compare", match: sec("compare") },
-      ],
-    },
-    { to: `${web}/-/issues`, label: "Issues", icon: <CircleDot size={16} />, count: issueCount, match: sec("issues") },
-    { to: `${web}/-/merge_requests`, label: "Merge requests", icon: <GitMerge size={16} />, count: mrCount, match: sec("merge_requests") },
-    // milestones and labels gather issues and merge requests alike
-    {
-      to: `${web}/-/milestones`,
-      label: "Plan",
-      icon: <MilestoneIcon size={16} />,
-      match: sec("labels|milestones"),
-      children: [
-        { to: `${web}/-/milestones`, label: "Milestones", match: sec("milestones") },
-        { to: `${web}/-/labels`, label: "Labels", match: sec("labels") },
-      ],
-    },
-    {
-      to: `${web}/-/pipelines`,
-      label: "Pipelines",
-      icon: <Workflow size={16} />,
-      match: sec("pipelines|jobs|pipeline_schedules"),
-      children: [{ to: `${web}/-/pipelines`, label: "Pipelines", match: sec("pipelines|jobs") }, ...schedules],
-    },
-    // what the project ships, and where: its releases, its images, its environments
-    {
-      to: `${web}/-/releases`,
-      label: "Deploy",
-      icon: <Rocket size={16} />,
-      match: sec("releases|container_registry|environments"),
-      children: [
-        { to: `${web}/-/releases`, label: "Releases", match: sec("releases") },
-        { to: `${web}/-/container_registry`, label: "Container registry", match: sec("container_registry") },
-        { to: `${web}/-/environments`, label: "Environments", match: sec("environments") },
-      ],
-    },
-    ...security,
-    { to: `${web}/-/members`, label: "Members", icon: <Users size={16} />, match: sec("members") },
-    ...(p.can_admin
-      ? [
-          {
-            to: `${web}/-/settings`,
-            label: "Settings",
-            icon: <Settings size={16} />,
-            match: sec("settings"),
-            // only the page's own path: deeper ones are not found
-            children: SETTINGS_PAGES.map(({ slug, label }) => {
-              const path = slug ? `settings/${slug}` : "settings";
-              return { to: `${web}/-/${path}`, label, match: new RegExp(`^/${esc}/-/${path}/?$`) };
-            }),
-          },
-        ]
-      : // archived, its Owner keeps the general page (rename, move, delete, unarchive)
-        p.archived && p.can_own
-        ? [{ to: `${web}/-/settings`, label: "Settings", icon: <Settings size={16} />, match: sec("settings") }]
-        : []),
-  ];
-}
-
-function groupItems(g: S["GroupDetail"]): Item[] {
-  const web = `/${g.full_path}`;
-  return [
-    { to: web, label: g.kind === "user" ? "Projects" : "Overview", icon: <Boxes size={16} />, end: true },
-    ...(g.kind === "group" ? [{ to: `${web}/-/members`, label: "Members", icon: <Users size={16} /> }] : []),
-    ...(g.can_admin ? [{ to: `${web}/-/settings`, label: "Settings", icon: <Settings size={16} /> }] : []),
-  ];
 }
 
 function Sidebar({ collapsed, setCollapsed, mobileOpen, closeMobile }: { collapsed: boolean; setCollapsed: (c: boolean) => void; mobileOpen: boolean; closeMobile: () => void }) {
@@ -651,37 +489,60 @@ export function ThemeButton() {
   );
 }
 
+/** A menu of the top bar, under its button, its right edges lined up: the keyboard moves
+ *  through it, Escape closes it and gives the focus back to its button. */
+function TopbarMenu({ trigger, children }: { trigger: ReactElement; children: ReactNode }) {
+  return (
+    <BMenu.Root modal={false}>
+      <BMenu.Trigger render={trigger} />
+      <BMenu.Portal>
+        <BMenu.Positioner className="positioner" side="bottom" align="end" sideOffset={6}>
+          <BMenu.Popup className="dropdown topbar-menu">{children}</BMenu.Popup>
+        </BMenu.Positioner>
+      </BMenu.Portal>
+    </BMenu.Root>
+  );
+}
+
+/** An entry of such a menu that goes to a page. */
+function MenuLink({ to, children }: { to: string; children: ReactNode }) {
+  return (
+    <BMenu.LinkItem className="dropdown-item" closeOnClick render={<Link to={to} />}>
+      {children}
+    </BMenu.LinkItem>
+  );
+}
+
 function UserMenu() {
   const { user, logout } = useSession();
-  const [open, setOpen] = useState(false);
   if (!user) return null;
   return (
-    <div className="menu-wrap" onBlur={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setOpen(false)}>
-      <button className="avatar-btn" onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open} title={user.username}>
-        <Avatar name={user.name || user.username} src={user.avatar_url} />
-      </button>
-      {open && (
-        <div className="menu" role="menu">
-          {/* who is signed in; "Your profile" below goes to their page */}
-          <div className="menu-head" role="presentation">
-            <strong>{user.name || user.username}</strong>
-            <span className="faint small">@{user.username}</span>
-          </div>
-          <Link role="menuitem" to={`/${user.username}`} onClick={() => setOpen(false)}>
-            <User size={15} /> Your profile
-          </Link>
-          <Link role="menuitem" to="/profile" onClick={() => setOpen(false)}>
-            <Settings size={15} /> Settings
-          </Link>
-          <Link role="menuitem" to="/profile/keys" onClick={() => setOpen(false)}>
-            <KeyRound size={15} /> SSH keys and tokens
-          </Link>
-          <button role="menuitem" onClick={() => logout()}>
-            <LogOut size={15} /> Sign out
-          </button>
-        </div>
-      )}
-    </div>
+    <TopbarMenu
+      trigger={
+        <button className="avatar-btn" title={user.username}>
+          <Avatar name={user.name || user.username} src={user.avatar_url} />
+        </button>
+      }
+    >
+      {/* who is signed in; "Your profile" below goes to their page */}
+      <div className="menu-head">
+        <strong className="ellipsis">{user.name || user.username}</strong>
+        <span className="faint small ellipsis">@{user.username}</span>
+      </div>
+      <MenuLink to={`/${user.username}`}>
+        <User size={15} /> Your profile
+      </MenuLink>
+      <MenuLink to="/profile">
+        <Settings size={15} /> Settings
+      </MenuLink>
+      <MenuLink to="/profile/keys">
+        <KeyRound size={15} /> SSH keys
+      </MenuLink>
+      <BMenu.Separator className="dropdown-sep" />
+      <BMenu.Item className="dropdown-item" onClick={() => logout()}>
+        <LogOut size={15} /> Sign out
+      </BMenu.Item>
+    </TopbarMenu>
   );
 }
 
@@ -836,32 +697,34 @@ function EmailBanner() {
 
 function NewMenu() {
   const nav = useNav();
-  const [open, setOpen] = useState(false);
-  const items: { to: string; label: string }[] = [];
-  if (nav.kind === "project") items.push({ to: `/${nav.project.full_path}/-/issues/new`, label: "New issue" });
-  if (nav.kind === "project" && nav.project.can_push) items.push({ to: `/${nav.project.full_path}/-/merge_requests/new`, label: "New merge request" });
-  if (nav.kind === "group" && nav.group.can_create_project) items.push({ to: `/new/project?namespace=${encodeURIComponent(nav.group.full_path)}`, label: "New project in this group" });
-  if (nav.kind === "group" && nav.group.can_create_subgroup) items.push({ to: `/new/group?parent=${nav.group.id}`, label: "New subgroup" });
-  items.push({ to: "/new/project", label: "New project" }, { to: "/new/group", label: "New organization" }, { to: "/import", label: "Import projects" });
+  const items = newItems(nav);
+  const here = items.filter((i) => i.here);
   return (
-    <div className="menu-wrap" onBlur={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setOpen(false)}>
-      <button className="icon-btn" onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open} title="Create new…" aria-label="Create new">
-        <Plus size={18} />
-      </button>
-      {open && (
-        <div className="menu" role="menu">
-          {items.map((i) => (
-            <Link key={i.to} role="menuitem" to={i.to} onClick={() => setOpen(false)}>
-              {i.label}
-            </Link>
-          ))}
-        </div>
-      )}
-    </div>
+    <TopbarMenu
+      trigger={
+        <button className="icon-btn" title="Create new…" aria-label="Create new">
+          <Plus size={18} />
+        </button>
+      }
+    >
+      {/* what goes in this project or group, then what goes anywhere */}
+      {here.map((i) => (
+        <MenuLink key={i.to} to={i.to}>
+          {i.label}
+        </MenuLink>
+      ))}
+      {here.length > 0 && <BMenu.Separator className="dropdown-sep" />}
+      {items
+        .filter((i) => !i.here)
+        .map((i) => (
+          <MenuLink key={i.to} to={i.to}>
+            {i.label}
+          </MenuLink>
+        ))}
+    </TopbarMenu>
   );
 }
 
-const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 
 /** The app frame: sidebar, slim top bar with breadcrumbs, and the page. */
 /** Pages a signed-out visitor reaches to get in: they replace the top bar with their own frame. */
@@ -939,7 +802,7 @@ export function Shell({ children }: { children: ReactNode }) {
           <span className="brand-name">Forgust</span>
         </Link>
         <Breadcrumbs />
-        <button className="search-btn" onClick={() => openPalette()} aria-label="Search or go to (Ctrl+K)">
+        <button className="search-btn" onClick={() => openPalette()} aria-label={`Search or go to (${MOD}+K)`}>
           <Search size={15} />
           <span className="search-label">Search or go to…</span>
           <kbd>{IS_MAC ? "⌘K" : "Ctrl K"}</kbd>
