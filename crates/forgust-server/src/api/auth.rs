@@ -202,29 +202,35 @@ async fn second_factor(
     second_step_allowed(&state, user_id)?;
     let user = forgust_db::users::find(&mut *tx, user_id).await?.ok_or(ApiError::Unauthorized)?;
     // wrong codes: 5 per 10 minutes per account; then the challenge is gone
-    // and the password is asked again
+    // and the password is asked again. Each answer is counted before it is
+    // checked (and given back when right): answers sent at once, on several
+    // challenges, share the limit too
     let acct = format!("totp|{}", user.id);
-    if state.totp_failures.exceeded(&acct) {
+    if !state.totp_failures.allow(&acct) {
         forgust_db::sessions::delete_challenge(&mut *tx, &hash).await?;
         tx.commit().await?;
         return Err(ApiError::forbidden("too many wrong codes: sign in again in a few minutes"));
     }
-    let ok = match factor {
-        // a secret still being set up is no second factor
-        Factor::Totp(code) => user.totp_enabled && session::verify_totp(&state, &mut tx, &user, code).await?,
-        Factor::Recovery(code) => {
-            user.two_factor() && forgust_db::recovery_codes::consume(&mut *tx, user.id, &session::recovery_code_hash(code)).await?
-        }
-        Factor::SecurityKey(answer) => {
-            // what the keys were asked to sign is answered once, right or wrong
-            forgust_db::webauthn::set_challenge_state(&mut *tx, &hash, None).await?;
-            security_key_signed(&state, &mut tx, &user, webauthn_state, answer).await?
-        }
-    };
+    let checked: ApiResult<bool> = async {
+        Ok(match factor {
+            // a secret still being set up is no second factor
+            Factor::Totp(code) => user.totp_enabled && session::verify_totp(&state, &mut tx, &user, code).await?,
+            Factor::Recovery(code) => {
+                user.two_factor() && forgust_db::recovery_codes::consume(&mut *tx, user.id, &session::recovery_code_hash(code)).await?
+            }
+            Factor::SecurityKey(answer) => {
+                // what the keys were asked to sign is answered once, right or wrong
+                forgust_db::webauthn::set_challenge_state(&mut *tx, &hash, None).await?;
+                security_key_signed(&state, &mut tx, &user, webauthn_state, answer).await?
+            }
+        })
+    }
+    .await;
+    // a check that could not be made (ours to fix) is no wrong answer
+    let ok = checked.inspect_err(|_| state.totp_failures.undo(&acct))?;
     if !ok {
         // a wrong answer changes nothing but what it used up
         tx.commit().await?;
-        state.totp_failures.allow(&acct);
         login_failed(&state, user.id, json!({ "reason": "second_factor", "method": factor.method() }), ip).await;
         return Err(ApiError::Unauthorized);
     }
@@ -234,6 +240,7 @@ async fn second_factor(
     };
     forgust_db::sessions::delete_challenge(&mut *tx, &hash).await?;
     tx.commit().await?;
+    state.totp_failures.undo(&acct);
     if let Some(left) = codes_left {
         recovery_code_used(&state, &user, left, ip.text().as_deref()).await;
     }
