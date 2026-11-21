@@ -129,6 +129,11 @@ pub mod visibility {
 }
 
 /// True when the error is a unique-constraint violation.
+/// The row a new one points to is gone (deleted meanwhile).
+pub fn is_foreign_key_violation(e: &sqlx::Error) -> bool {
+    matches!(e, sqlx::Error::Database(d) if d.code().as_deref() == Some("23503"))
+}
+
 pub fn is_unique_violation(e: &sqlx::Error) -> bool {
     matches!(e, sqlx::Error::Database(d) if d.code().as_deref() == Some("23505"))
 }

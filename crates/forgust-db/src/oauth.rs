@@ -145,3 +145,27 @@ pub async fn delete_family(e: impl PgExecutor<'_>, access_token_id: i64) -> Resu
     sqlx::query!("DELETE FROM oauth_refresh_tokens WHERE access_token_id = $1", access_token_id).execute(e).await?;
     Ok(())
 }
+
+/// Someone let the client in (its code or refresh token was traded for
+/// tokens): it is kept from now on.
+pub async fn granted(e: impl PgExecutor<'_>, client_id: &str) -> Result<()> {
+    sqlx::query!("UPDATE oauth_clients SET granted_at = now() WHERE client_id = $1", client_id).execute(e).await?;
+    Ok(())
+}
+
+/// Drop codes and refresh tokens that ran out, then the clients nobody ever
+/// let in: registered more than a day ago (time enough to ask for consent),
+/// with no code waiting. Anyone may register a client, so the ones never used
+/// must not pile up. Returns the clients forgotten.
+pub async fn forget_unused(pool: &sqlx::PgPool) -> Result<u64> {
+    sqlx::query!("DELETE FROM oauth_codes WHERE expires_at < now()").execute(pool).await?;
+    sqlx::query!("DELETE FROM oauth_refresh_tokens WHERE expires_at < now()").execute(pool).await?;
+    let gone = sqlx::query!(
+        "DELETE FROM oauth_clients c
+          WHERE c.granted_at IS NULL AND c.created_at < now() - interval '1 day'
+            AND NOT EXISTS (SELECT 1 FROM oauth_codes WHERE client_id = c.client_id)"
+    )
+    .execute(pool)
+    .await?;
+    Ok(gone.rows_affected())
+}

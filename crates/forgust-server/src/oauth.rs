@@ -340,7 +340,11 @@ pub async fn authorize(
             &scopes,
             expires,
         )
-        .await?;
+        .await
+        // forgotten while the consent page was open (never used, a day old)
+        .map_err(|e| {
+            if forgust_db::is_foreign_key_violation(&e) { ApiError::bad("unknown client: register it again") } else { e.into() }
+        })?;
         services::audit(
             &state,
             &p,
@@ -474,6 +478,7 @@ async fn token_grant(state: &AppState, f: &HashMap<String, String>) -> Grant {
         .await
         .map_err(server_error)?,
     };
+    forgust_db::oauth::granted(&state.db, &client.client_id).await.map_err(server_error)?;
     let refresh = crypto::random_urlsafe(32);
     let refresh_expires = Utc::now() + chrono::Duration::days(REFRESH_DAYS);
     forgust_db::oauth::create_refresh(&state.db, &crypto::token_hash(&refresh), &client.client_id, user.id, &scopes, id, refresh_expires)
