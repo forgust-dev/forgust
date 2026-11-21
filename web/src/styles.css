@@ -7670,11 +7670,21 @@ button.test-case-row:hover {
 .code-hit-chunk + .code-hit-chunk {
   border-top: 1px dashed var(--border);
 }
-.code-hit mark {
+/* what was searched for, in the code found and in the titles found */
+.code-hit mark,
+.search-results mark {
   border-radius: 2px;
   background: var(--warn-soft);
   color: inherit;
   box-shadow: 0 0 0 1px var(--warn-soft);
+}
+/* the search page's own field: the page is for it */
+.search-page-field .search-field {
+  width: 640px;
+}
+.search-page-field .search-field input {
+  height: 38px;
+  font-size: 15px;
 }
 .repo-code-search {
   flex: 0 1 150px;

@@ -76,7 +76,7 @@ test("code is found from the repository page, the search page and the palette", 
     await expect(page.getByRole("region", { name: /Notes\.txt/ })).toBeVisible();
     // the other tabs still search titles
     await page.getByRole("button", { name: /^Projects/ }).click();
-    await expect(page.getByText("No project matches")).toBeVisible();
+    await expect(page.getByText(`Nothing has “${word}” in its title.`)).toBeVisible();
   } finally {
     await remove();
   }
