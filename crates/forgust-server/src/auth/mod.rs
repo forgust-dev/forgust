@@ -375,6 +375,18 @@ impl ClientIp {
         ClientIp(Self::resolve(peer, headers, &state.cfg.server.trusted_proxies))
     }
 
+    /// Who the limits count as one client: an IPv4 address, or an IPv6 /64
+    /// (one subscriber's network: its holder picks any address in it).
+    pub fn client(&self) -> Option<String> {
+        self.0.map(|ip| match ip {
+            std::net::IpAddr::V4(v4) => v4.to_string(),
+            std::net::IpAddr::V6(v6) => {
+                let network = std::net::Ipv6Addr::from_bits(v6.to_bits() & (u128::MAX << 64));
+                format!("{network}/64")
+            }
+        })
+    }
+
     /// As stored in audit records and sessions.
     pub fn text(&self) -> Option<String> {
         self.0.map(|ip| ip.to_string())
@@ -387,8 +399,8 @@ pub fn heavy_read_allowed(state: &AppState, p: &Principal, ip: ClientIp) -> crat
     if !matches!(p, Principal::Anonymous) {
         return Ok(());
     }
-    match ip.0 {
-        Some(ip) if !state.anon_heavy_reads.allow(&ip.to_string()) => {
+    match ip.client() {
+        Some(client) if !state.anon_heavy_reads.allow(&client) => {
             Err(crate::error::ApiError::TooMany("too many requests from this address; sign in or try again in a minute".into()))
         }
         _ => Ok(()),
@@ -405,9 +417,10 @@ pub fn login_allowed(state: &AppState, ip: ClientIp, login: &str) -> bool {
         return false;
     }
     let login = login.to_lowercase();
-    let client = ip.text().unwrap_or_default();
+    let client = ip.client();
     // an unknown client is no one in particular: no shared budget for all of them
-    !ip.text().is_some_and(|c| state.login_ip_failures.exceeded(&c)) && state.login_limiter.allow(&format!("{client}|{login}"))
+    !client.as_deref().is_some_and(|c| state.login_ip_failures.exceeded(c))
+        && state.login_limiter.allow(&format!("{}|{login}", client.unwrap_or_default()))
 }
 
 /// The account's limit: past 20 failures in 10 minutes (from anyone, by
@@ -428,12 +441,12 @@ pub async fn account_open(state: &AppState, ip: ClientIp, user_id: i64) -> Resul
 pub fn login_checked(state: &AppState, ip: ClientIp, login: &str, user_id: Option<i64>, ok: bool) {
     let login = login.to_lowercase();
     if ok {
-        state.login_limiter.forget(&format!("{}|{login}", ip.text().unwrap_or_default()));
+        state.login_limiter.forget(&format!("{}|{login}", ip.client().unwrap_or_default()));
     } else {
         if let Some(id) = user_id {
             state.login_failures.allow(&format!("acct|{id}"));
         }
-        if let Some(c) = ip.text() {
+        if let Some(c) = ip.client() {
             state.login_ip_failures.allow(&c);
         }
     }
@@ -474,5 +487,15 @@ mod tests {
         assert_eq!(resolve("127.0.0.1", Some("1.2.3.4, nonsense, 10.0.0.5")), "10.0.0.5");
         assert_eq!(resolve("127.0.0.1", None), "127.0.0.1");
         assert_eq!(resolve("::ffff:198.51.100.7", Some("1.2.3.4")), "198.51.100.7");
+    }
+
+    #[test]
+    fn limits_count_an_ipv6_network_as_one_client() {
+        let client = |ip: &str| ClientIp(Some(ip.parse().unwrap())).client().unwrap();
+        assert_eq!(client("198.51.100.7"), "198.51.100.7");
+        assert_eq!(client("2001:db8:1:2:aaaa:bbbb:cccc:dddd"), "2001:db8:1:2::/64");
+        assert_eq!(client("2001:db8:1:2::1"), client("2001:db8:1:2:ffff:ffff:ffff:ffff"));
+        assert_ne!(client("2001:db8:1:2::1"), client("2001:db8:1:3::1"));
+        assert_eq!(ClientIp(None).client(), None);
     }
 }

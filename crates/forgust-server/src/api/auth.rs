@@ -455,7 +455,7 @@ pub async fn passkey_finish(
     Json(req): Json<PasskeyFinish>,
 ) -> ApiResult<(CookieJar, Json<LoginResponse>)> {
     let rp = webauthn::of(&state)?;
-    if ip.text().is_some_and(|c| state.login_ip_failures.exceeded(&c)) {
+    if ip.client().is_some_and(|c| state.login_ip_failures.exceeded(&c)) {
         return Err(ApiError::forbidden("too many attempts, try again later"));
     }
     let refused = |user_id: Option<i64>| {
@@ -618,7 +618,7 @@ pub async fn register(
         return Err(ApiError::forbidden("sign-up is disabled; ask an administrator for an account"));
     }
     // each sign-up costs a password hash and sends an email
-    if !state.login_limiter.allow(&format!("register|{}", ip.text().unwrap_or_default())) {
+    if !state.login_limiter.allow(&format!("register|{}", ip.client().unwrap_or_default())) {
         return Err(ApiError::TooMany("too many sign-ups from this address; wait a minute".into()));
     }
     let mut tx = state.db.begin().await?;
@@ -1026,7 +1026,7 @@ pub async fn forgot_password(
         return Err(ApiError::bad("enter your username or email"));
     }
     // per client and per account: no flooding an inbox, no probing at speed
-    if !state.login_limiter.allow(&format!("forgot|{}", ip.text().unwrap_or_default()))
+    if !state.login_limiter.allow(&format!("forgot|{}", ip.client().unwrap_or_default()))
         || !state.login_failures.allow(&format!("forgot|{login}"))
     {
         return Err(ApiError::forbidden("too many attempts, try again later"));
@@ -1048,7 +1048,7 @@ pub async fn reset_password(
     ip: ClientIp,
     Json(req): Json<ResetPassword>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    if !state.login_limiter.allow(&format!("reset|{}", ip.text().unwrap_or_default())) {
+    if !state.login_limiter.allow(&format!("reset|{}", ip.client().unwrap_or_default())) {
         return Err(ApiError::TooMany("too many tries; wait a minute".into()));
     }
     let user = services::accounts::reset(&state, req.token.trim(), &req.password).await?;

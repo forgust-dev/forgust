@@ -163,11 +163,11 @@ struct Registration {
 
 /// RFC 7591 dynamic registration: anyone may register a public client (it
 /// can do nothing until a person consents), a few an hour per address.
-async fn register(State(state): State<AppState>, ClientIp(ip): ClientIp, body: axum::body::Bytes) -> Response {
+async fn register(State(state): State<AppState>, ip: ClientIp, body: axum::body::Bytes) -> Response {
     static LIMITER: OnceLock<RateLimiter> = OnceLock::new();
     let limiter = LIMITER.get_or_init(|| RateLimiter::new(30, Duration::from_secs(3600)));
     // unknown clients share one budget
-    if !limiter.allow(&ip.map(|i| i.to_string()).unwrap_or_default()) {
+    if !limiter.allow(&ip.client().unwrap_or_default()) {
         return oauth_error(StatusCode::TOO_MANY_REQUESTS, "rate_limited", "too many registrations from this address");
     }
     let Ok(reg) = serde_json::from_slice::<Registration>(&body) else {
@@ -376,11 +376,11 @@ fn token_name(client: &str) -> String {
 }
 
 /// `POST /oauth/token` (form-encoded): a code or a refresh token for tokens.
-async fn token(State(state): State<AppState>, ClientIp(ip): ClientIp, Form(f): Form<HashMap<String, String>>) -> Response {
+async fn token(State(state): State<AppState>, ip: ClientIp, Form(f): Form<HashMap<String, String>>) -> Response {
     static LIMITER: OnceLock<RateLimiter> = OnceLock::new();
     let limiter = LIMITER.get_or_init(|| RateLimiter::new(60, Duration::from_secs(60)));
     // unknown clients share one budget
-    if !limiter.allow(&ip.map(|i| i.to_string()).unwrap_or_default()) {
+    if !limiter.allow(&ip.client().unwrap_or_default()) {
         return oauth_error(StatusCode::TOO_MANY_REQUESTS, "rate_limited", "too many token requests from this address");
     }
     match token_grant(&state, &f).await {
