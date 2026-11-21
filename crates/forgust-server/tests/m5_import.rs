@@ -101,6 +101,10 @@ async fn import_a_gitlab_project(pool: sqlx::PgPool) {
     let srv = TestServer::start_with(pool, |c| c.features.imports_allow_local = true).await;
     let owner = srv.user("olivia", false).await;
     srv.user("jane", false).await; // jane@example.com, matched by email
+    // ghost@example.com, never confirmed: whoever typed a source user's address
+    // at sign-up gets neither their work nor their membership
+    srv.user("ghost", false).await;
+    sqlx::query("UPDATE users SET email_verified_at = NULL WHERE username = 'ghost'").execute(&srv.state.db).await.unwrap();
 
     // the "GitLab" repository: main, an open MR (topic) and a closed one whose branch is gone
     let org = owner.ok_post("/api/v1/groups", json!({ "name": "Acme", "path": "acme" })).await;
@@ -364,6 +368,10 @@ async fn import_a_gitlab_project(pool: sqlx::PgPool) {
         owner.post(&format!("/api/v1/projects/{pid}/merge_requests"), json!({ "source_branch": "topic", "title": "Again" })).await.0,
         409
     );
+
+    let members = owner.ok_get(&format!("/api/v1/projects/{pid}/members")).await;
+    assert!(!members.as_array().unwrap().iter().any(|m| m["username"] == "ghost"), "an unconfirmed address joins nothing: {members}");
+    sqlx::query("UPDATE users SET email = 'parked@example.com' WHERE username = 'ghost'").execute(&srv.state.db).await.unwrap();
 
     // what the source's ghosty wrote becomes the account that gets their
     // address here, once confirmed: typing an address proves nothing
