@@ -44,6 +44,8 @@ pub fn load_or_create_host_key(path: &Path) -> anyhow::Result<PrivateKey> {
 /// offer: each offer is looked up, and russh neither delays nor counts the
 /// offers it accepts.
 const MAX_AUTH_ATTEMPTS: usize = 10;
+/// One answer for a project that is missing and one the key cannot read.
+const NOT_FOUND: &str = "The project you were looking for could not be found or you don't have permission to view it.";
 
 pub async fn serve(state: AppState, listener: tokio::net::TcpListener) -> anyhow::Result<()> {
     let key = load_or_create_host_key(&state.cfg.server.data_dir.join("ssh_host_ed25519_key"))?;
@@ -151,12 +153,7 @@ impl Conn {
             return Ok(());
         };
         let Some((project, moved)) = crate::git_http::find_project(&self.state, &path).await? else {
-            self.send_error(
-                &handle,
-                channel,
-                "The project you were looking for could not be found or you don't have permission to view it.",
-            )
-            .await;
+            self.send_error(&handle, channel, NOT_FOUND).await;
             return Ok(());
         };
 
@@ -187,7 +184,7 @@ impl Conn {
             } else if visible {
                 "You are not allowed to push code to this project."
             } else {
-                "The project you were looking for could not be found or you don't have permission to view it."
+                NOT_FOUND
             };
             if visible {
                 crate::services::audit_push_refused(&self.state, &principal, project.id, msg, "ssh", ip.as_deref()).await;
@@ -275,11 +272,20 @@ impl Conn {
         op: &str,
     ) -> anyhow::Result<()> {
         let write = op == "upload";
-        let ok = can_project(&self.state, principal, if write { ProjectAction::Push } else { ProjectAction::ReadCode }, project)
-            .await
-            .unwrap_or(false);
+        let action = if write { ProjectAction::Push } else { ProjectAction::ReadCode };
+        let ok = match can_project(&self.state, principal, action, project).await {
+            Ok(ok) => ok,
+            Err(crate::error::ApiError::TwoFactorRequired) => {
+                self.send_error(handle, channel, "two-factor authentication is required by this organization").await;
+                return Ok(());
+            }
+            Err(_) => false,
+        };
         if !ok {
-            self.send_error(handle, channel, "access denied").await;
+            // an upload refused on a project the key can read says so; a project
+            // it cannot read answers as a missing one
+            let readable = write && can_project(&self.state, principal, ProjectAction::ReadCode, project).await.unwrap_or(false);
+            self.send_error(handle, channel, if readable { "access denied" } else { NOT_FOUND }).await;
             return Ok(());
         }
         let token = crypto::random_token(crypto::prefix::LFS_SSH);

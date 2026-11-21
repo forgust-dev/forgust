@@ -146,10 +146,16 @@ async fn handle_inner(state: AppState, full_path: String, route: GitRoute, req: 
     // may read it: a missing project answers as a private one would
     let ip = ClientIp::of(&state, req.headers(), req.extensions());
     let Some((project, moved)) = find_project(&state, &full_path).await? else {
-        if crate::lfs::lfs_ssh_token(req.headers()).is_none() {
-            // bad credentials: 401, as for a private project
-            if let Principal::Anonymous = basic_principal(&state, req.headers(), ip).await? {
-                return Err(ApiError::Unauthorized);
+        // bad credentials: 401, as for a private project. An LFS token from
+        // `git-lfs-authenticate` counts on LFS routes only, and only a live one
+        match (&route, crate::lfs::lfs_ssh_token(req.headers())) {
+            (GitRoute::Lfs(_), Some(token)) => {
+                forgust_db::tokens::find_lfs_ssh_token(&state.db, &crypto::token_hash(&token)).await?.ok_or(ApiError::Unauthorized)?;
+            }
+            _ => {
+                if let Principal::Anonymous = basic_principal(&state, req.headers(), ip).await? {
+                    return Err(ApiError::Unauthorized);
+                }
             }
         }
         return Err(ApiError::NotFound);
