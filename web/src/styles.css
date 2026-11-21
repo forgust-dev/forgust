@@ -2134,6 +2134,43 @@ kbd {
   padding: 18px;
   text-align: center;
 }
+.palette-group + .palette-group {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+.palette-group-title {
+  padding: 4px 10px;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.palette-hint {
+  flex: none;
+  max-width: 40%;
+}
+.palette-more {
+  padding: 4px 10px 2px 35px;
+}
+.palette-foot {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+  padding: 7px 14px;
+  border-top: 1px solid var(--border);
+}
+.palette-busy {
+  text-align: right;
+}
+@media (max-width: 640px) {
+  .palette-foot {
+    display: none;
+  }
+}
 .palette.help .card-head {
   display: flex;
   align-items: center;

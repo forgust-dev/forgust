@@ -7,30 +7,24 @@ import {
   UserCheck,
   Info,
   X,
-  CircleDot,
   Boxes,
-  Rocket,
   ChevronLeft,
   ChevronsLeft,
   ChevronsRight,
   ChevronsUpDown,
-  Code2,
   Compass,
   Ellipsis,
   FolderGit2,
-  GitMerge,
   Home,
   KeyRound,
   LogOut,
   Menu,
-  Milestone as MilestoneIcon,
   Monitor,
   Moon,
   Plus,
   Search,
   Settings,
   Shield,
-  ShieldAlert,
   Sun,
   User,
   Users,
@@ -48,9 +42,8 @@ import {
   ShieldCheck,
   Sparkles,
   Ticket,
-  Workflow,
 } from "lucide-react";
-import { api, qs, refLink, type S } from "../api/client";
+import { api, qs, type S } from "../api/client";
 import { useSession, wasSignedIn } from "../session";
 import { useToast } from "./toast";
 import { usePref, useTheme } from "./theme";
@@ -62,14 +55,12 @@ import { ResendLink } from "../components/ResendLink";
 import { Logo } from "../components/Logo";
 import { fetchers, keys, useMyGroups, useMyProjects, usePrefetch, useWork, type PrefetchTarget } from "../prefetch";
 import { useRecentProjects, useRememberProject, type RecentProject } from "./recent";
-import { SETTINGS_PAGES } from "../pages/project/settingsPages";
+import { projectItems, type Item } from "./projectNav";
+import { IS_MAC } from "./platform";
 import { ADMIN_PAGES, type AdminPath } from "../pages/adminPages";
 import { PROFILE_PAGES, type ProfilePath } from "../pages/profilePages";
 import { InboxBell } from "../components/Inbox";
 
-/** A nav entry; `children` show under it while its section is active. `title`: the
- *  entry's tip, folded or not (a project's full path); `prefetch`: what it opens. */
-type Item = { to: string; label: string; icon?: ReactNode; end?: boolean; count?: number; match?: RegExp; children?: Item[]; title?: string; prefetch?: PrefetchTarget };
 
 function SideLink({ item, collapsed, onNavigate, sub }: { item: Item; collapsed: boolean; onNavigate: () => void; sub?: boolean }) {
   const loc = useLocation();
@@ -305,97 +296,6 @@ function ContextSwitcher({
       </BMenu.Portal>
     </BMenu.Root>
   );
-}
-
-function projectItems(p: S["ProjectDetail"], ref: string, mrCount?: number, issueCount?: number): Item[] {
-  const web = `/${p.full_path}`;
-  const esc = p.full_path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const sec = (s: string) => new RegExp(`^/${esc}/-/(${s})(/|$)`);
-  const files = new RegExp(`^/${esc}(/-/(tree|blob|blame|raw)(/|$)|/?$)`);
-  const code = new RegExp(`${files.source}|${sec("commits?|branches|tags|compare").source}`);
-  const schedules = p.can_push ? [{ to: `${web}/-/pipeline_schedules`, label: "Schedules", match: sec("pipeline_schedules") }] : [];
-  // findings are for Developers and above
-  const developer = p.can_push || p.can_admin || ["developer", "maintainer", "owner"].includes(p.access_level);
-  // the audit log is for Maintainers and above, with the findings
-  const audit = p.can_admin ? [{ to: `${web}/-/audit`, label: "Audit log", match: sec("audit") }] : [];
-  const security = developer
-    ? [
-        {
-          to: `${web}/-/security`,
-          label: "Security",
-          icon: <ShieldAlert size={16} />,
-          match: sec("security|audit"),
-          children: [{ to: `${web}/-/security`, label: "Findings", match: sec("security") }, ...audit],
-        },
-      ]
-    : [];
-  return [
-    {
-      to: web,
-      label: "Code",
-      icon: <Code2 size={16} />,
-      match: code,
-      children: [
-        { to: web, label: "Files", match: files },
-        { to: refLink(web, "commits", ref), label: "Commits", match: sec("commits?") },
-        { to: `${web}/-/branches`, label: "Branches", match: sec("branches") },
-        { to: `${web}/-/tags`, label: "Tags", match: sec("tags") },
-        { to: `${web}/-/compare`, label: "Compare", match: sec("compare") },
-      ],
-    },
-    { to: `${web}/-/issues`, label: "Issues", icon: <CircleDot size={16} />, count: issueCount, match: sec("issues") },
-    { to: `${web}/-/merge_requests`, label: "Merge requests", icon: <GitMerge size={16} />, count: mrCount, match: sec("merge_requests") },
-    // milestones and labels gather issues and merge requests alike
-    {
-      to: `${web}/-/milestones`,
-      label: "Plan",
-      icon: <MilestoneIcon size={16} />,
-      match: sec("labels|milestones"),
-      children: [
-        { to: `${web}/-/milestones`, label: "Milestones", match: sec("milestones") },
-        { to: `${web}/-/labels`, label: "Labels", match: sec("labels") },
-      ],
-    },
-    {
-      to: `${web}/-/pipelines`,
-      label: "Pipelines",
-      icon: <Workflow size={16} />,
-      match: sec("pipelines|jobs|pipeline_schedules"),
-      children: [{ to: `${web}/-/pipelines`, label: "Pipelines", match: sec("pipelines|jobs") }, ...schedules],
-    },
-    // what the project ships, and where: its releases, its images, its environments
-    {
-      to: `${web}/-/releases`,
-      label: "Deploy",
-      icon: <Rocket size={16} />,
-      match: sec("releases|container_registry|environments"),
-      children: [
-        { to: `${web}/-/releases`, label: "Releases", match: sec("releases") },
-        { to: `${web}/-/container_registry`, label: "Container registry", match: sec("container_registry") },
-        { to: `${web}/-/environments`, label: "Environments", match: sec("environments") },
-      ],
-    },
-    ...security,
-    { to: `${web}/-/members`, label: "Members", icon: <Users size={16} />, match: sec("members") },
-    ...(p.can_admin
-      ? [
-          {
-            to: `${web}/-/settings`,
-            label: "Settings",
-            icon: <Settings size={16} />,
-            match: sec("settings"),
-            // only the page's own path: deeper ones are not found
-            children: SETTINGS_PAGES.map(({ slug, label }) => {
-              const path = slug ? `settings/${slug}` : "settings";
-              return { to: `${web}/-/${path}`, label, match: new RegExp(`^/${esc}/-/${path}/?$`) };
-            }),
-          },
-        ]
-      : // archived, its Owner keeps the general page (rename, move, delete, unarchive)
-        p.archived && p.can_own
-        ? [{ to: `${web}/-/settings`, label: "Settings", icon: <Settings size={16} />, match: sec("settings") }]
-        : []),
-  ];
 }
 
 function groupItems(g: S["GroupDetail"]): Item[] {
@@ -861,7 +761,6 @@ function NewMenu() {
   );
 }
 
-const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 
 /** The app frame: sidebar, slim top bar with breadcrumbs, and the page. */
 /** Pages a signed-out visitor reaches to get in: they replace the top bar with their own frame. */

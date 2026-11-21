@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -8,6 +8,9 @@ import { api, qs, refLink, type S } from "../api/client";
 import { useSession } from "../session";
 import { useNav } from "./nav";
 import { useGroups, useMyProjects } from "../prefetch";
+import { useRecentProjects } from "./recent";
+import { projectPages } from "./projectNav";
+import { MOD } from "./platform";
 
 // ---------------------------------------------------------------- shortcuts
 
@@ -66,6 +69,8 @@ export function openPalette(mode: Mode = "all") {
 }
 
 type Entry = { key: string; label: string; hint?: string; icon: ReactElement; to: string };
+/** A titled run of entries; `more` counts the matches left out. */
+type Section = { key: string; title: string; entries: Entry[]; more?: number; moreHint?: string; start?: number };
 
 /** Subsequence match, scored so contiguous and basename hits rank first. */
 function fuzzy(needle: string, hay: string): number {
@@ -90,15 +95,37 @@ function fuzzy(needle: string, hay: string): number {
   return j === n.length ? score - h.length / 100 : -1;
 }
 
+/** The best `cap` of `items` for `term`, and how many more matched. Keeps only the
+ *  best few while scanning: a short term matches most of a large repository. */
+function ranked<T>(items: readonly T[], term: string, hay: (t: T) => string, cap: number): { top: T[]; more: number } {
+  // nothing typed: the given order
+  if (!term) return { top: items.slice(0, cap), more: Math.max(0, items.length - cap) };
+  const best: { it: T; s: number }[] = [];
+  let hits = 0;
+  for (const it of items) {
+    const s = fuzzy(term, hay(it));
+    if (s < 0) continue;
+    hits++;
+    if (best.length === cap && s <= best[cap - 1].s) continue;
+    let k = best.length;
+    while (k > 0 && best[k - 1].s < s) k--;
+    best.splice(k, 0, { it, s });
+    if (best.length > cap) best.pop();
+  }
+  return { top: best.map((h) => h.it), more: hits - best.length };
+}
+
 function Palette({ mode, close }: { mode: Mode; close: () => void }) {
   const nav = useNav();
   const navigate = useNavigate();
   const { user } = useSession();
   const [term, setTerm] = useState("");
-  const [sel, setSel] = useState(0);
+  // the selected entry, by key: results that arrive later do not move it; null: the first
+  const [selKey, setSelKey] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const project = nav.kind === "project" ? nav.project : null;
   const ref = nav.kind === "project" ? (nav.ref ?? project?.default_branch ?? "main") : "";
+  const recent = useRecentProjects(user?.id);
 
   const files = useQuery({
     queryKey: ["files", project?.id, ref],
@@ -110,7 +137,8 @@ function Palette({ mode, close }: { mode: Mode; close: () => void }) {
   const projects = useMyProjects("", !!user && mode === "all");
   const groups = useGroups(!!user && mode === "all");
   // issues and merge requests across the instance, once typing settles
-  const settled = useDebounced(term.trim(), 200);
+  const t = term.trim();
+  const settled = useDebounced(t, 200);
   const found = useQuery({
     queryKey: ["palette-search", settled],
     queryFn: () => api.get<S["SearchResults"]>(`/search${qs({ q: settled })}`),
@@ -119,43 +147,87 @@ function Palette({ mode, close }: { mode: Mode; close: () => void }) {
     placeholderData: (prev) => prev,
   });
 
-  const entries = useMemo(() => {
-    const out: (Entry & { score: number })[] = [];
-    const t = term.trim();
-    if (project && files.data) {
-      for (const f of files.data.paths) {
-        const s = fuzzy(t, f);
-        if (s >= 0) out.push({ key: `f:${f}`, label: f, hint: "file", icon: <FileText size={15} />, to: refLink(`/${project.full_path}`, "blob", ref, f), score: s + 10 });
-      }
-    }
-    if (mode === "all") {
-      for (const p of projects.data ?? []) {
-        const s = fuzzy(t, p.full_path);
-        if (s >= 0) out.push({ key: `p:${p.id}`, label: p.full_path, hint: "project", icon: <FolderGit2 size={15} />, to: `/${p.full_path}`, score: s + (t ? 0 : 50) });
-      }
-      for (const g of groups.data ?? []) {
-        const s = fuzzy(t, g.full_path);
-        if (s >= 0) out.push({ key: `g:${g.id}`, label: g.full_path, hint: "group", icon: <Users size={15} />, to: `/${g.full_path}`, score: s });
-      }
-    }
-    out.sort((a, b) => b.score - a.score);
-    const top = out.slice(0, 40);
-    if (mode === "all" && t.length >= 2) {
-      for (const i of found.data?.issues ?? [])
-        top.push({ key: `i:${i.project_id}:${i.iid}`, label: `${i.title}`, hint: `${i.project_path}#${i.iid}`, icon: <CircleDot size={15} />, to: `/${i.project_path}/-/issues/${i.iid}`, score: 0 });
-      for (const m of found.data?.merge_requests ?? [])
-        top.push({ key: `m:${m.project_id}:${m.iid}`, label: `${m.title}`, hint: `${m.project_path}!${m.iid}`, icon: <GitMerge size={15} />, to: `/${m.project_path}/-/merge_requests/${m.iid}`, score: 0 });
-      top.push({ key: "search", label: `Search everything for “${t}”`, hint: "search", icon: <Search size={15} />, to: `/search${qs({ q: t })}`, score: 0 });
-      if (t.length >= 3) {
-        // in a project: its code first
-        if (project) top.push({ key: "code-here", label: `Search this project's code for “${t}”`, hint: "code", icon: <FileSearch size={15} />, to: `/search${qs({ q: t, scope: "code", project_id: project.full_path })}`, score: 0 });
-        top.push({ key: "code", label: `Search all code for “${t}”`, hint: "code", icon: <FileSearch size={15} />, to: `/search${qs({ q: t, scope: "code" })}`, score: 0 });
-      }
-    }
-    return top;
-  }, [term, files.data, projects.data, groups.data, found.data, project, ref, mode]);
+  const pages = useMemo(() => {
+    if (!project) return { top: [] as Entry[], all: [] as Entry[] };
+    const entry = (it: { to: string; label: string; icon?: ReactNode }): Entry => ({ key: `n:${it.to}:${it.label}`, label: it.label, icon: <>{it.icon}</>, to: it.to });
+    const { top, all } = projectPages(project, ref);
+    return { top: top.map(entry), all: all.map(entry) };
+  }, [project, ref]);
 
-  useEffect(() => setSel(0), [term]);
+  // the files on their own: a search response must not rank the whole repository again
+  const fileHits = useMemo(() => {
+    if (!project || !files.data || (mode === "all" && !t)) return null;
+    return ranked(files.data.paths, t, (f) => f, mode === "files" ? 50 : 8);
+  }, [project, files.data, t, mode]);
+
+  const { sections, entries, searchAll, searchCode } = useMemo(() => {
+    const out: Section[] = [];
+    const push = (title: string, entries: Entry[], more?: number, moreHint?: string) => {
+      if (entries.length) out.push({ key: title, title, entries, more, moreHint });
+    };
+    const fileEntry = (f: string): Entry => ({ key: `f:${f}`, label: f, icon: <FileText size={15} />, to: refLink(`/${project!.full_path}`, "blob", ref, f) });
+    const projectEntry = (p: { id: number; full_path: string }): Entry => ({ key: `p:${p.id}`, label: p.full_path, icon: <FolderGit2 size={15} />, to: `/${p.full_path}` });
+    const groupEntry = (g: { id: number; full_path: string }): Entry => ({ key: `g:${g.id}`, label: g.full_path, icon: <Users size={15} />, to: `/${g.full_path}` });
+    let searchAll: Entry | undefined;
+    let searchCode: Entry | undefined;
+
+    if (mode === "files") {
+      if (fileHits) push("Files", fileHits.top.map(fileEntry), fileHits.more, "keep typing to narrow");
+    } else if (!t) {
+      // nothing typed: where to go next, not every file of the repository
+      if (project) push(project.name, pages.top);
+      const rec = recent.filter((r) => r.id !== project?.id).slice(0, 5);
+      push("Recent projects", rec.map(projectEntry));
+      if (!project) {
+        const seen = new Set(rec.map((r) => r.id));
+        push("Projects", (projects.data ?? []).filter((p) => !seen.has(p.id)).slice(0, 5).map(projectEntry));
+        push("Groups", (groups.data ?? []).slice(0, 5).map(groupEntry));
+      }
+    } else {
+      if (project) {
+        // a page by its name, not by letters scattered through "Code › Tags"
+        const lc = t.toLowerCase();
+        push(`Go to in ${project.name}`, ranked(pages.all.filter((e) => e.label.toLowerCase().includes(lc)), t, (e) => e.label, 4).top);
+      }
+      if (fileHits) push("Files", fileHits.top.map(fileEntry), fileHits.more, "press t for the file finder");
+      const pr = ranked(projects.data ?? [], t, (p) => p.full_path, 6);
+      push("Projects", pr.top.map(projectEntry), pr.more);
+      const gr = ranked(groups.data ?? [], t, (g) => g.full_path, 4);
+      push("Groups", gr.top.map(groupEntry), gr.more);
+      if (t.length >= 2 && found.data) {
+        push(
+          "Issues",
+          (found.data.issues ?? []).slice(0, 5).map((i) => ({ key: `i:${i.project_id}:${i.iid}`, label: i.title, hint: `${i.project_path}#${i.iid}`, icon: <CircleDot size={15} />, to: `/${i.project_path}/-/issues/${i.iid}` })),
+        );
+        push(
+          "Merge requests",
+          (found.data.merge_requests ?? []).slice(0, 5).map((m) => ({ key: `m:${m.project_id}:${m.iid}`, label: m.title, hint: `${m.project_path}!${m.iid}`, icon: <GitMerge size={15} />, to: `/${m.project_path}/-/merge_requests/${m.iid}` })),
+        );
+      }
+      // Shift+Enter and Ctrl/⌘+Enter open these from anywhere in the list
+      searchAll = { key: "search", label: `Search everything for “${t}”`, hint: "⇧↵", icon: <Search size={15} />, to: `/search${qs({ q: t })}` };
+      const search = [searchAll];
+      if (t.length >= 3) {
+        const codeAll: Entry = { key: "code", label: `Search all code for “${t}”`, icon: <FileSearch size={15} />, to: `/search${qs({ q: t, scope: "code" })}` };
+        // in a project: its code first
+        searchCode = project ? { key: "code-here", label: `Search ${project.name}'s code for “${t}”`, icon: <FileSearch size={15} />, to: `/search${qs({ q: t, scope: "code", project_id: project.full_path })}` } : codeAll;
+        searchCode.hint = `${MOD}↵`;
+        search.push(...(project ? [searchCode, codeAll] : [codeAll]));
+      }
+      push("Search", search);
+    }
+
+    let n = 0;
+    for (const s of out) {
+      s.start = n;
+      n += s.entries.length;
+    }
+    return { sections: out, entries: out.flatMap((s) => s.entries), searchAll, searchCode };
+  }, [t, mode, fileHits, projects.data, groups.data, found.data, project, ref, pages, recent]);
+
+  useEffect(() => setSelKey(null), [term]);
+  const sel = Math.max(0, entries.findIndex((e) => e.key === selKey));
+  const setSel = (i: number) => setSelKey(entries[i]?.key ?? null);
   useEffect(() => {
     listRef.current?.querySelector(`[data-i="${sel}"]`)?.scrollIntoView({ block: "nearest" });
   }, [sel]);
@@ -166,7 +238,8 @@ function Palette({ mode, close }: { mode: Mode; close: () => void }) {
     navigate(e.to);
   };
   const loading = files.isLoading || (mode === "all" && projects.isLoading);
-  const placeholder = mode === "files" && project ? `Find a file in ${project.name}…` : project ? "Search files, projects, issues and merge requests…" : "Search projects, groups, issues and merge requests…";
+  const searching = mode === "all" && t.length >= 2 && (settled !== t || found.isFetching);
+  const placeholder = mode === "files" && project ? `Find a file in ${project.name}…` : project ? "Search files, pages, projects, issues and merge requests…" : "Search projects, groups, issues and merge requests…";
 
   return (
     <div className="dialog-backdrop" onMouseDown={close}>
@@ -183,35 +256,83 @@ function Palette({ mode, close }: { mode: Mode; close: () => void }) {
             if (e.key === "Escape") close();
             else if (e.key === "ArrowDown" || (e.ctrlKey && e.key === "n")) {
               e.preventDefault();
-              setSel((s) => Math.min(s + 1, entries.length - 1));
+              setSel(Math.min(sel + 1, entries.length - 1));
             } else if (e.key === "ArrowUp" || (e.ctrlKey && e.key === "p")) {
               e.preventDefault();
-              setSel((s) => Math.max(s - 1, 0));
+              setSel(Math.max(sel - 1, 0));
+            } else if (e.key === "Tab") {
+              // section to section; back: this section's head first, then the previous one
+              e.preventDefault();
+              const n = sections.length;
+              if (!n) return;
+              let cur = 0;
+              while (cur + 1 < n && sections[cur + 1].start! <= sel) cur++;
+              const next = e.shiftKey ? (sel > sections[cur].start! ? cur : (cur - 1 + n) % n) : (cur + 1) % n;
+              setSel(sections[next].start!);
             } else if (e.key === "Enter") {
               e.preventDefault();
-              go(entries[sel]);
+              go(e.shiftKey && searchAll ? searchAll : (e.ctrlKey || e.metaKey) && searchCode ? searchCode : entries[sel]);
             }
           }}
         />
         <div className="palette-list" id="palette-list" role="listbox" ref={listRef}>
-          {entries.map((e, i) => (
-            <button
-              key={e.key}
-              id={`pal-${i}`}
-              data-i={i}
-              role="option"
-              aria-selected={i === sel}
-              className={`palette-item ${i === sel ? "active" : ""}`}
-              onMouseMove={() => setSel(i)}
-              onClick={() => go(e)}
-            >
-              {e.icon}
-              <span className="grow ellipsis mono-ish">{e.label}</span>
-              {i === sel ? <CornerDownLeft size={14} className="faint" /> : <span className="faint small">{e.hint}</span>}
-            </button>
+          {sections.map((s) => (
+            <div key={s.key} role="group" aria-labelledby={`palg-${s.key}`} className="palette-group">
+              <div className="palette-group-title" id={`palg-${s.key}`}>
+                {s.title}
+              </div>
+              {s.entries.map((e, j) => {
+                const n = s.start! + j;
+                return (
+                  <button
+                    key={e.key}
+                    id={`pal-${n}`}
+                    data-i={n}
+                    role="option"
+                    tabIndex={-1}
+                    aria-selected={n === sel}
+                    className={`palette-item ${n === sel ? "active" : ""}`}
+                    onMouseMove={() => setSel(n)}
+                    onClick={() => go(e)}
+                  >
+                    {e.icon}
+                    <span className="grow ellipsis mono-ish">{e.label}</span>
+                    {e.hint && <span className="faint small ellipsis palette-hint">{e.hint}</span>}
+                    {n === sel && <CornerDownLeft size={14} className="faint" />}
+                  </button>
+                );
+              })}
+              {!!s.more && (
+                <div className="palette-more faint small">
+                  {s.more} more{s.moreHint ? ` — ${s.moreHint}` : ""}
+                </div>
+              )}
+            </div>
           ))}
           {entries.length === 0 && <div className="palette-empty muted">{loading ? "Loading…" : "No matches"}</div>}
-          {files.data?.truncated && <div className="palette-empty faint small">Only the first {files.data.paths.length} files are searchable.</div>}
+          {mode === "files" && files.data?.truncated && <div className="palette-empty faint small">Only the first {files.data.paths.length} files are searchable.</div>}
+        </div>
+        <div className="palette-foot faint small">
+          <span>
+            <kbd>↑</kbd> <kbd>↓</kbd> move
+          </span>
+          <span>
+            <kbd>Tab</kbd> next section
+          </span>
+          <span>
+            <kbd>↵</kbd> open
+          </span>
+          {searchAll && (
+            <span>
+              <kbd>⇧ ↵</kbd> search everything
+            </span>
+          )}
+          {searchCode && (
+            <span>
+              <kbd>{MOD} ↵</kbd> search {searchCode.key === "code-here" ? "this project's" : "all"} code
+            </span>
+          )}
+          {searching && <span className="grow palette-busy">Searching…</span>}
         </div>
       </div>
     </div>
