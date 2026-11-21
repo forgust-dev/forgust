@@ -476,6 +476,7 @@ impl TaskHandler for Cleanup {
     async fn run(self, ctx: WorkerContext) -> impl IntoTaskHandlerResult {
         let state = ctx.get_ext::<AppState>().ok_or("no app state")?;
         forgust_db::sessions::delete_expired(&state.db).await.map_err(|e| e.to_string())?;
+        forgust_db::oauth::forget_unused(&state.db).await.map_err(|e| e.to_string())?;
         // memberships and shares that expired: their access ends now
         let mut conn = state.db.acquire().await.map_err(|e| e.to_string())?;
         let ended = forgust_db::members::expire(&mut conn).await.map_err(|e| e.to_string())?;

@@ -300,3 +300,27 @@ async fn oauth_sign_in(pool: sqlx::PgPool) {
     assert_eq!(token(refresh(w2["refresh_token"].as_str().unwrap())).await.unwrap().status(), 400, "and its refresh");
     form.clear();
 }
+
+/// Anyone may register an OAuth client: the ones nobody ever let in are
+/// forgotten after a day; one that was stays, its tokens run out or not.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn unused_oauth_clients_are_forgotten(pool: sqlx::PgPool) {
+    let srv = TestServer::start(pool).await;
+    let owner = srv.user("olivia", false).await;
+    let uid = owner.ok_get("/api/v1/user").await["id"].as_i64().unwrap();
+    let db = &srv.state.db;
+    let uris = ["http://127.0.0.1/cb".to_string()];
+    for id in ["mcp-idle", "mcp-asking", "mcp-granted", "mcp-new"] {
+        forgust_db::oauth::create_client(db, id, id, &uris).await.unwrap();
+    }
+    let later = chrono::Utc::now() + chrono::Duration::minutes(10);
+    forgust_db::oauth::create_code(db, b"hash", "mcp-asking", uid, &uris[0], "challenge", &["mcp".to_string()], later).await.unwrap();
+    forgust_db::oauth::granted(db, "mcp-granted").await.unwrap();
+    sqlx::query("UPDATE oauth_clients SET created_at = now() - interval '40 days' WHERE client_id <> 'mcp-new'").execute(db).await.unwrap();
+    assert_eq!(forgust_db::oauth::forget_unused(db).await.unwrap(), 1);
+    let kept = |id: &'static str| async move { forgust_db::oauth::find_client(db, id).await.unwrap().is_some() };
+    assert!(!kept("mcp-idle").await);
+    assert!(kept("mcp-asking").await, "a consent is under way");
+    assert!(kept("mcp-granted").await, "someone let it in: it may come back for consent with the same id");
+    assert!(kept("mcp-new").await, "just registered");
+}
