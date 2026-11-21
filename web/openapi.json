@@ -1035,7 +1035,7 @@
         "tags": [
           "imports"
         ],
-        "summary": "Check a token and list the projects it can import.",
+        "summary": "Check the address and token, and say where projects can be listed from.",
         "operationId": "connect",
         "requestBody": {
           "content": {
@@ -1065,7 +1065,7 @@
         "tags": [
           "imports"
         ],
-        "summary": "One project by path or URL, for public projects the token is not a member of.",
+        "summary": "One project by path or URL (single imports, and public projects the token\nis not a member of).",
         "operationId": "lookup",
         "requestBody": {
           "content": {
@@ -1083,6 +1083,62 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SourceProject"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imports/projects": {
+      "post": {
+        "tags": [
+          "imports"
+        ],
+        "summary": "The projects of a user, group or organization on the source (bulk imports).",
+        "operationId": "projects",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectsBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SourceProject"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/imports/sources": {
+      "get": {
+        "tags": [
+          "imports"
+        ],
+        "summary": "The forges projects can be imported from, and the versions they need.",
+        "operationId": "sources",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SourceInfo"
+                  }
                 }
               }
             }
@@ -7046,16 +7102,8 @@
           "url"
         ],
         "properties": {
-          "scope": {
-            "type": "string",
-            "description": "Only projects under this group (GitLab) or owner (GitHub)."
-          },
-          "search": {
-            "type": "string"
-          },
           "source": {
-            "type": "string",
-            "description": "`gitlab` (or `github`)."
+            "$ref": "#/components/schemas/ImportSource"
           },
           "token": {
             "type": "string",
@@ -7072,21 +7120,29 @@
         "required": [
           "username",
           "name",
-          "projects"
+          "namespaces"
         ],
         "properties": {
           "name": {
             "type": "string"
           },
-          "projects": {
+          "namespaces": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/SourceProject"
-            }
+              "$ref": "#/components/schemas/SourceNamespace"
+            },
+            "description": "Where the token's user has projects: their own, then their groups or\norganizations (none without a token)."
           },
           "username": {
             "type": "string",
-            "description": "The token's user on the source."
+            "description": "The token's user on the source (empty without a token)."
+          },
+          "version": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "What the server says it runs (`Forgejo 9.0.1`), when it says."
           }
         }
       },
@@ -7264,7 +7320,7 @@
             }
           },
           "source": {
-            "type": "string"
+            "$ref": "#/components/schemas/ImportSource"
           },
           "target_namespace_id": {
             "type": "integer",
@@ -9277,6 +9333,16 @@
           }
         }
       },
+      "ImportSource": {
+        "type": "string",
+        "description": "The forges Forgust imports from.",
+        "enum": [
+          "gitlab",
+          "github",
+          "gitea",
+          "forgejo"
+        ]
+      },
       "ImportUser": {
         "type": "object",
         "required": [
@@ -10526,7 +10592,7 @@
             "description": "`group/project`, `owner/repo`, or the project's URL."
           },
           "source": {
-            "type": "string"
+            "$ref": "#/components/schemas/ImportSource"
           },
           "token": {
             "type": "string"
@@ -12991,6 +13057,31 @@
         ],
         "description": "What a project keeps, against its quotas."
       },
+      "ProjectsBody": {
+        "type": "object",
+        "required": [
+          "source",
+          "url"
+        ],
+        "properties": {
+          "owner": {
+            "type": "string",
+            "description": "A user, group or organization; empty: every project the token can read."
+          },
+          "search": {
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ImportSource"
+          },
+          "token": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
       "ProtectBranch": {
         "type": "object",
         "required": [
@@ -14881,9 +14972,61 @@
           }
         }
       },
+      "SourceInfo": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "default_url",
+          "minimum_version",
+          "token_scopes"
+        ],
+        "properties": {
+          "default_url": {
+            "type": "string",
+            "description": "The public instance the form starts with."
+          },
+          "id": {
+            "$ref": "#/components/schemas/ImportSource"
+          },
+          "minimum_version": {
+            "type": "string",
+            "description": "The oldest self-hosted version imports work with (`17.0`)."
+          },
+          "name": {
+            "type": "string"
+          },
+          "token_scopes": {
+            "type": "string",
+            "description": "What the access token needs."
+          }
+        }
+      },
+      "SourceNamespace": {
+        "type": "object",
+        "description": "Where projects live on the source: a user's own, or a group (GitLab) or\norganization's.",
+        "required": [
+          "kind",
+          "path",
+          "name"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "description": "`user` or `group`."
+          },
+          "name": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string",
+            "description": "The path to list it by: a username, `group/sub`, or an organization."
+          }
+        }
+      },
       "SourceProject": {
         "type": "object",
-        "description": "A project (GitLab) or repository (GitHub) on the source.",
+        "description": "A project (GitLab) or repository (GitHub, Gitea, Forgejo) on the source.",
         "required": [
           "id",
           "full_path",
