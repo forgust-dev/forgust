@@ -285,7 +285,8 @@ pub async fn users(e: impl PgExecutor<'_>, import_id: i64) -> Result<Vec<ImportU
 }
 
 /// Remember a source user and match them to an account here by email
-/// (case-insensitive; only confirmed, active accounts).
+/// (case-insensitive; only confirmed, active accounts: a match an earlier run
+/// stored for an account that is not one is dropped).
 pub async fn upsert_user(
     e: impl PgExecutor<'_>,
     import_id: i64,
@@ -297,11 +298,14 @@ pub async fn upsert_user(
     sqlx::query_scalar!(
         r#"INSERT INTO import_users (import_id, source_user_id, username, name, email, user_id)
            VALUES ($1, $2, $3, $4, $5,
-                   (SELECT id FROM users WHERE $5::text IS NOT NULL AND lower(email) = lower($5) AND state = 'active' LIMIT 1))
+                   (SELECT id FROM users WHERE $5::text IS NOT NULL AND lower(email) = lower($5) AND email_verified_at IS NOT NULL
+                      AND state = 'active' AND user_type = 'human' LIMIT 1))
            ON CONFLICT (import_id, source_user_id) DO UPDATE
                SET username = EXCLUDED.username, name = EXCLUDED.name,
                    email = coalesce(EXCLUDED.email, import_users.email),
-                   user_id = coalesce(EXCLUDED.user_id, import_users.user_id)
+                   user_id = coalesce(EXCLUDED.user_id,
+                       (SELECT id FROM users WHERE id = import_users.user_id AND email_verified_at IS NOT NULL
+                          AND state = 'active' AND user_type = 'human'))
            RETURNING user_id"#,
         import_id,
         source_user_id,
