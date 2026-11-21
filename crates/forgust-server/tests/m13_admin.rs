@@ -534,6 +534,15 @@ async fn tokens_need_admin_mode_and_cannot_mint_credentials(pool: sqlx::PgPool) 
     // nor an instance runner with an administrator's admin_mode token
     assert_eq!(admin_mode.post("/api/v1/admin/runners", json!({ "description": "i" })).await.0, 403);
     admin.ok_post("/api/v1/admin/runners", json!({ "description": "i" })).await;
+    // nor change the administrator's own ways in: those need their browser session
+    let me = format!("/api/v1/admin/users/{}", admin.ok_get("/api/v1/user").await["id"]);
+    assert_eq!(admin_mode.put(&me, json!({ "password": "taken-over-by-a-token-1" })).await.0, 403);
+    assert_eq!(admin_mode.put(&me, json!({ "email": "elsewhere@example.com" })).await.0, 403);
+    assert_eq!(admin_mode.post(&format!("{me}/reset_two_factor"), json!({})).await.0, 403);
+    assert_eq!(admin_mode.post(&format!("{me}/identities"), json!({ "provider": "corp", "subject": "someone-else" })).await.0, 403);
+    admin.ok_post(&format!("{me}/reset_two_factor"), json!({})).await;
+    let them = format!("/api/v1/admin/users/{}", user.ok_get("/api/v1/user").await["id"]);
+    admin_mode.ok_put(&them, json!({ "password": "an-administrator-set-it-1" })).await;
 }
 
 /// A deleted project's access tokens stop working: their bots are blocked.
