@@ -9,9 +9,6 @@ import { CodeSearch } from "./SearchCode";
 
 type Scope = "projects" | "issues" | "merge_requests" | "code";
 const SCOPES: readonly Scope[] = ["issues", "merge_requests", "projects", "code"];
-/** The tabs searched by title, in their order: with none picked, the page shows the
- *  first that finds something. */
-const TITLED = ["issues", "merge_requests", "projects"] as const;
 const PER_PAGE = 20;
 
 /** A state as the state tabs name it. */
@@ -30,10 +27,8 @@ function Marked({ text, term }: { text: string; term: string }) {
 export function SearchPage() {
   const [params, setParams] = useSearchParams();
   const q = params.get("q") ?? "";
-  // the tab picked; none: the first that finds something, once the counts come
+  // the tab picked; none: the first that finds something, as the server picks it
   const picked = SCOPES.find((s) => s === params.get("scope")) ?? null;
-  const [first, setFirst] = useState<{ q: string; scope: Scope } | null>(null);
-  const scope: Scope = picked ?? (first?.q === q ? first.scope : "issues");
   const state = params.get("state") ?? "all";
   const page = Number(params.get("page") ?? "1");
   const [term, setTerm] = useState(q);
@@ -59,23 +54,23 @@ export function SearchPage() {
     else next.delete(k);
     next.delete("page");
     if (k === "scope") next.delete("state");
+    // a state is the shown tab's: it stays on it
+    else if (!picked) next.set("scope", scope);
     setParams(next, { replace: true });
   };
   // on the code tab this only fetches the counts of the other tabs (titles
-  // hold 200 characters at most); the code itself is `CodeSearch`'s request
-  const titles = scope === "code" ? "all" : scope;
+  // hold 200 characters at most); the code itself is `CodeSearch`'s request.
+  // None picked: one request, the server answers the first tab that finds something
+  const titles = picked === "code" ? "all" : (picked ?? "first");
   const r = useQuery({
     queryKey: ["search", q, titles, state, page],
     queryFn: () => api.get<S["SearchResults"]>(`/search${qs({ q, scope: titles, state: titles === "projects" || titles === "all" ? undefined : state, page, per_page: PER_PAGE })}`),
     enabled: !!q && q.length <= 200,
     placeholderData: (prev) => prev,
   });
-  // any tab's answer brings the counts of all: with none picked, the first with results
-  // (worked out while rendering, so an empty tab never shows on the way)
-  if (!picked && r.data && !r.isPlaceholderData && first?.q !== q) {
-    const c = r.data.counts;
-    setFirst({ q, scope: TITLED.find((s) => c[s] > 0) ?? "issues" });
-  }
+  // none picked: the tab answered, and while another term loads, the one shown (no
+  // other tab lights up on the way)
+  const scope: Scope = picked ?? SCOPES.find((s) => s === r.data?.scope) ?? "issues";
   const items = scope === "projects" ? (r.data?.projects.length ?? 0) : scope === "issues" ? (r.data?.issues.length ?? 0) : (r.data?.merge_requests.length ?? 0);
   // what the list holds, in words, and so where the search looks
   const noun = scope === "projects" ? "projects" : scope === "issues" ? "issues" : "merge requests";
@@ -131,8 +126,9 @@ export function SearchPage() {
                 <Q q={r}>
                   {(d) => {
                     const list = scope === "projects" ? d.projects : scope === "issues" ? d.issues : d.merge_requests;
-                    // another tab's answer, shown while this one's comes: not "nothing"
-                    if (list.length === 0 && r.isPlaceholderData) return <Spinner />;
+                    // another tab's answer, shown while this one's comes: neither "nothing"
+                    // nor its rows
+                    if (r.isPlaceholderData && (list.length === 0 || (picked !== null && d.scope !== titles))) return <Spinner />;
                     if (list.length === 0) {
                       const none = d.counts.issues + d.counts.merge_requests + d.counts.projects === 0;
                       const what = scope === "projects" ? "project" : `${state === "all" ? "" : `${STATE[state] ?? state} `}${scope === "issues" ? "issue" : "merge request"}`;

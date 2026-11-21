@@ -5726,6 +5726,8 @@ export interface components {
             issues: components["schemas"]["ItemHit"][];
             merge_requests: components["schemas"]["ItemHit"][];
             projects: components["schemas"]["ProjectHit"][];
+            /** @description The scope answered: the one asked for, or the one `first` picked. */
+            scope: string;
         };
         /** @description The second factors a pending sign-in can be finished with. */
         SecondFactors: {

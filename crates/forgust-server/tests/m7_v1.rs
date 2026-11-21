@@ -760,6 +760,18 @@ async fn instance_search_sees_only_what_it_may(pool: sqlx::PgPool) {
     assert_eq!(p["issues"].as_array().unwrap().len(), 1);
     assert_eq!(p["projects"], json!([]));
     assert_eq!(rep.get("/api/v1/search?q=").await.0, 400);
+    // first: the first kind that finds something, a page of it, and which it was
+    let f = rep.ok_get("/api/v1/search?q=launch&scope=first").await;
+    assert_eq!(f["scope"], "issues", "{f}");
+    assert_eq!(f["issues"].as_array().unwrap().len(), 2);
+    assert_eq!(f["merge_requests"], json!([]));
+    assert_eq!(rep.ok_get("/api/v1/search?q=site&scope=first").await["scope"], "projects");
+    // merged: issues have none, the merge requests answer
+    let m = rep.ok_get("/api/v1/search?q=launch&scope=first&state=merged").await;
+    assert_eq!(m["scope"], "merge_requests", "{m}");
+    // nothing found: the first tab
+    assert_eq!(rep.ok_get("/api/v1/search?q=zzzz&scope=first").await["scope"], "issues");
+    assert_eq!(rep.ok_get("/api/v1/search?q=launch").await["scope"], "all");
 }
 
 #[sqlx::test(migrator = "forgust_db::MIGRATOR")]
