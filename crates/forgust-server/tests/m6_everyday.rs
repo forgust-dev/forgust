@@ -844,9 +844,13 @@ async fn email_confirmation(pool: sqlx::PgPool) {
     let me = newbie.ok_get("/api/v1/user").await;
     assert_eq!(me["email"], "newbie@example.com");
     assert_eq!(me["unconfirmed_email"], "moved@example.com");
+    assert_eq!(anon.post("/api/v1/auth/password/forgot", json!({ "login": "newbie" })).await.0, 200);
     wait_jobs(&srv.state).await;
+    let reset = link_token(&last_mail_to(&srv, "newbie@example.com").expect("a reset link to the old address").body, "reset-password");
     let token = link_token(&last_mail_to(&srv, "moved@example.com").expect("a link to the new address").body, "verify-email");
     newbie.ok_post("/api/v1/auth/email/confirm", json!({ "token": token })).await;
+    // the reset link in the old inbox died with the move
+    assert_eq!(anon.post("/api/v1/auth/password/reset", json!({ "token": reset, "password": "the-old-inbox-wins-1" })).await.0, 400);
     let me = newbie.ok_get("/api/v1/user").await;
     assert_eq!(me["email"], "moved@example.com");
     assert!(me["unconfirmed_email"].is_null());
