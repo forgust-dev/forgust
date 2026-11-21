@@ -345,6 +345,16 @@ async fn multi_project_pipelines(pool: sqlx::PgPool) {
     let p = pipeline(&fx, 2).await;
     let b = job_named(&p, "bridge");
     assert_eq!((b["status"].as_str(), b["failure_reason"].as_str()), (Some("failed"), Some("downstream_bridge_project_not_found")), "{b}");
+
+    // an administrator's pipeline runs what the repository says: it reaches
+    // other projects with their memberships, not their powers
+    fx.srv.user("adam", true).await;
+    commit_file(&fx.work, "y.txt", "y\n", "adam's").await;
+    must(git(&fx.work, &["push", "-q", &fx.srv.http_url("adam", REPO), "main"]).await);
+    wait_jobs(&fx.srv.state).await;
+    let p = pipeline(&fx, 3).await;
+    let b = job_named(&p, "bridge");
+    assert_eq!((b["status"].as_str(), b["failure_reason"].as_str()), (Some("failed"), Some("downstream_bridge_project_not_found")), "{b}");
 }
 
 #[sqlx::test(migrator = "forgust_db::MIGRATOR")]
