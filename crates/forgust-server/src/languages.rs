@@ -86,6 +86,11 @@ pub fn file_type_of(path: &str) -> Option<&'static str> {
     })
 }
 
+/// A language's colour, by its name (`Rust`): as the language bar shows it.
+pub fn color_of(name: &str) -> Option<&'static str> {
+    TABLE.iter().find(|(_, n, _)| *n == name).map(|(_, _, c)| *c)
+}
+
 /// Every name `file_type_of` gives, in alphabetical order.
 pub fn names() -> Vec<&'static str> {
     let mut names: Vec<&str> = TABLE.iter().map(|(_, name, _)| *name).chain(OTHER.iter().map(|(_, name)| *name)).collect();

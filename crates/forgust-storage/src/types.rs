@@ -161,6 +161,16 @@ pub struct CommitInfo {
     pub body: String,
 }
 
+/// A commit as [`crate::Storage::log_paths`] gives it: who made it, and what it changed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommitPaths {
+    pub name: String,
+    pub email: String,
+    /// When it was authored (Unix time).
+    pub time: i64,
+    pub paths: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, utoipa::ToSchema)]
 pub struct BlameHunk {
     pub commit: CommitSummary,

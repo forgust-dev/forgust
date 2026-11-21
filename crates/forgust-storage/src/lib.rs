@@ -80,6 +80,10 @@ pub trait Storage: Send + Sync + 'static {
     async fn commit_count(&self, repo: i64, rev: &str) -> Result<u64>;
     /// Commits reachable from `to` but not from `from` (`from..to`), newest first.
     async fn log_between(&self, repo: i64, from: &str, to: &str, limit: usize) -> Result<Vec<CommitInfo>>;
+    /// The commits reachable from `rev` since `since` (a Unix time), newest first and merges
+    /// left out, at most `limit`: who made each (the `.mailmap` of `rev` applied) and the
+    /// paths it changes. Who knows which part of the code; the bool says it was cut short.
+    async fn log_paths(&self, repo: i64, rev: &str, since: i64, limit: usize) -> Result<(Vec<CommitPaths>, bool)>;
     async fn diff(&self, repo: i64, from: Option<&str>, to: &str, opts: DiffOptions) -> Result<Diff>;
     async fn blame(&self, repo: i64, commit: &str, path: &str) -> Result<Vec<BlameHunk>>;
     async fn archive(&self, repo: i64, commit: &str, format: ArchiveFormat, prefix: &str) -> Result<ServiceProcess>;

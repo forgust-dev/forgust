@@ -70,7 +70,7 @@ export function projectItems(p: S["ProjectDetail"], ref: string, mrCount?: numbe
   const esc = p.full_path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const sec = (s: string) => new RegExp(`^/${esc}/-/(${s})(/|$)`);
   const files = new RegExp(`^/${esc}(/-/(tree|blob|blame|raw)(/|$)|/?$)`);
-  const code = new RegExp(`${files.source}|${sec("commits?|branches|tags|compare").source}`);
+  const code = new RegExp(`${files.source}|${sec("commits?|branches|tags|compare|smart_view").source}`);
   const schedules = p.can_push ? [{ to: `${web}/-/pipeline_schedules`, label: "Schedules", match: sec("pipeline_schedules") }] : [];
   // findings are for Developers and above
   const developer = p.can_push || p.can_admin || ["developer", "maintainer", "owner"].includes(p.access_level);
@@ -95,6 +95,7 @@ export function projectItems(p: S["ProjectDetail"], ref: string, mrCount?: numbe
       match: code,
       children: [
         { to: web, label: "Files", match: files, words: "repository tree" },
+        { to: `${web}/-/smart_view`, label: "Smart View", match: sec("smart_view"), words: "map blocks architecture dependencies people owners experts" },
         { to: refLink(web, "commits", ref), label: "Commits", match: sec("commits?"), words: "history" },
         { to: `${web}/-/branches`, label: "Branches", match: sec("branches") },
         { to: `${web}/-/tags`, label: "Tags", match: sec("tags") },

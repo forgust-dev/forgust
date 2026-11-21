@@ -29,7 +29,7 @@ export function useResolved(ctx: Ctx, refAndPath: string) {
   return q;
 }
 
-export function RefPicker({ ctx, current, path, kind }: { ctx: Ctx; current: string; path: string; kind: "tree" | "blob" | "commits" }) {
+export function RefPicker({ ctx, current, path, kind }: { ctx: Ctx; current: string; path: string; kind: "tree" | "blob" | "commits" | "smart_view" }) {
   const nav = useNavigate();
   const branches = useBranches(ctx);
   const tags = useTags(ctx);

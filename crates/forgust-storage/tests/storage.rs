@@ -164,3 +164,67 @@ async fn empty_repo_bundle_is_skipped() {
     storage.create_repo(1, CreateRepoOptions { default_branch: "main".into(), ref_format: RefFormat::Files }).await.unwrap();
     assert!(!storage.bundle_create(1, &root.path().join("x.bundle")).await.unwrap());
 }
+
+#[tokio::test]
+async fn log_paths_tells_who_changed_what() {
+    let root = tempfile::tempdir().unwrap();
+    let work = tempfile::tempdir().unwrap();
+    let storage = LocalStorage::new(LocalStorageConfig::new(root.path()));
+    let repo = 7;
+    storage.create_repo(repo, CreateRepoOptions { default_branch: "main".into(), ref_format: RefFormat::Files }).await.unwrap();
+    let w = work.path();
+    let as_bob = |args: &[&str]| {
+        let out = Command::new("git")
+            .current_dir(w)
+            .args(args)
+            .env("GIT_AUTHOR_NAME", "Bobby")
+            .env("GIT_AUTHOR_EMAIL", "bob@old.example")
+            .env("GIT_COMMITTER_NAME", "Bobby")
+            .env("GIT_COMMITTER_EMAIL", "bob@old.example")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("HOME", w)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}");
+    };
+    git(w, &["init", "-q", "-b", "main"]);
+    std::fs::create_dir_all(w.join("web app")).unwrap();
+    std::fs::write(w.join("web app/q\"uote.ts"), "1\n").unwrap();
+    std::fs::write(w.join("README.md"), "# Hi\n").unwrap();
+    git(w, &["add", "."]);
+    git(w, &["commit", "-q", "-m", "first"]);
+    std::fs::write(w.join("README.md"), "# Hi there\n").unwrap();
+    as_bob(&["commit", "-q", "-am", "by Bob, under his old address"]);
+    git(w, &["checkout", "-q", "-b", "side"]);
+    std::fs::write(w.join("side.txt"), "s\n").unwrap();
+    git(w, &["add", "side.txt"]);
+    git(w, &["commit", "-q", "-m", "side"]);
+    git(w, &["checkout", "-q", "main"]);
+    git(w, &["merge", "-q", "--no-ff", "side", "-m", "merge side"]);
+    std::fs::write(w.join(".mailmap"), "Bob <bob@new.example> <bob@old.example>\n").unwrap();
+    git(w, &["add", ".mailmap"]);
+    git(w, &["commit", "-q", "-m", "mailmap"]);
+    git(w, &["push", "-q", storage.repo_path(repo).to_str().unwrap(), "main"]);
+    let head = storage.resolve(repo, "main").await.unwrap().unwrap();
+
+    let (commits, cut) = storage.log_paths(repo, &head, 0, 100).await.unwrap();
+    assert!(!cut);
+    let mut seen: Vec<(&str, &str, Vec<&str>)> =
+        commits.iter().map(|c| (c.name.as_str(), c.email.as_str(), c.paths.iter().map(String::as_str).collect())).collect();
+    // made within the same second, some come in either order
+    seen.sort();
+    assert_eq!(
+        seen,
+        [
+            ("Ada", "ada@example.com", vec![".mailmap"]),
+            ("Ada", "ada@example.com", vec!["README.md", "web app/q\"uote.ts"]),
+            ("Ada", "ada@example.com", vec!["side.txt"]),
+            ("Bob", "bob@new.example", vec!["README.md"]),
+        ],
+        "merges left out, the .mailmap applied, paths as they are"
+    );
+    assert!(commits.iter().all(|c| c.time > 1_700_000_000));
+    assert_eq!(storage.log_paths(repo, &head, 0, 2).await.unwrap().0.len(), 2);
+    let tomorrow = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64 + 86_400;
+    assert!(storage.log_paths(repo, &head, tomorrow, 100).await.unwrap().0.is_empty(), "nothing since then");
+}

@@ -47,6 +47,7 @@ const ProjectAuditLog = lazy(() => import("./Audit").then((m) => ({ default: m.P
 const SecurityPage = lazy(() => import("./Security").then((m) => ({ default: m.SecurityPage })));
 const Registry = lazy(() => import("./Registry").then((m) => ({ default: m.Registry })));
 const EditFile = lazy(() => import("./Edit").then((m) => ({ default: m.EditFile })));
+const SmartView = lazy(() => import("./SmartView").then((m) => ({ default: m.SmartView })));
 
 export type Ctx = { p: S["ProjectDetail"]; base: string; web: string; setRef?: (r: string) => void };
 
@@ -54,6 +55,7 @@ const SECTIONS: Record<string, string> = {
   tree: "Repository",
   blob: "Repository",
   blame: "Blame",
+  smart_view: "Smart View",
   commits: "Commits",
   commit: "Commits",
   branches: "Branches",
@@ -120,8 +122,9 @@ function ReleaseRoute({ ctx, more }: { ctx: Ctx; more: string[] }) {
 export function ProjectPage({ id, fullPath, rest }: { id: number; fullPath: string; rest: string }) {
   const q = useQuery({ queryKey: keys.project(id), queryFn: () => fetchers.project(id) });
   const [gitRef, setRef] = useState<string | undefined>();
+  // the Smart View's graph takes the room a wide screen has
   return (
-    <div className="page">
+    <div className={rest.split("/")[0] === "smart_view" ? "page wide" : "page"}>
       {q.isLoading && <KeepNav />}
       <Q q={q}>
         {(p) => {
@@ -137,7 +140,7 @@ export function ProjectPage({ id, fullPath, rest }: { id: number; fullPath: stri
               <StorageBanner p={p} />
               {!p.can_read_code && !["members", "issues", "labels", "milestones"].includes(section) ? (
                 <p className="muted">You can see this project but not its code. Ask a maintainer for the Reporter role.</p>
-              ) : p.empty_repo && ["", "tree", "blob", "commits", "merge_requests", "pipelines"].includes(section) ? (
+              ) : p.empty_repo && ["", "tree", "blob", "commits", "merge_requests", "pipelines", "smart_view"].includes(section) ? (
                 <EmptyRepo p={p} />
               ) : (
                 // a section still loading: a spinner here, the header and sidebar stay
@@ -154,6 +157,7 @@ export function ProjectPage({ id, fullPath, rest }: { id: number; fullPath: stri
                   {section === "tree" && <Tree ctx={ctx} refAndPath={tail} />}
                   {section === "blob" && <Blob ctx={ctx} refAndPath={tail} />}
                   {section === "blame" && <Blame ctx={ctx} refAndPath={tail} />}
+                  {section === "smart_view" && <SmartView ctx={ctx} gitRef={tail} />}
                   {(section === "edit" || section === "new" || section === "delete") && (p.can_push ? <EditFile ctx={ctx} refAndPath={tail} mode={section} /> : <NotFound />)}
                   {section === "commits" && <Commits ctx={ctx} refAndPath={tail || ref} />}
                   {section === "commit" && <Commit ctx={ctx} sha={tail} />}

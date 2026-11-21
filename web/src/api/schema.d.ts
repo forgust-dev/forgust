@@ -2008,6 +2008,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/repository/map": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The Smart View of a ref (without one, the default branch), kept per commit. */
+        get: operations["map"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/repository/signatures": {
         parameters: {
             query?: never;
@@ -4485,6 +4502,72 @@ export interface components {
             token?: string;
             url: string;
         };
+        /** @description A part of the repository built, run or deployed apart. */
+        MapBlock: {
+            /** @description How many people made at least a fifth of its recent commits: 1, only one knows it. */
+            bus_factor?: number | null;
+            /** @description Declared by assay.toml rather than found. */
+            configured: boolean;
+            files: number;
+            /** @description Stable while its name is: what assay.toml names it by. */
+            id: string;
+            /** @description The image a service runs. */
+            image?: string | null;
+            /** @description The CI jobs that build or test it. */
+            jobs: string[];
+            kind: components["schemas"]["MapKind"];
+            /** @description Code first, then the most files. */
+            languages: components["schemas"]["MapLanguage"][];
+            /** @description The files (or a folder of them) that declare it. */
+            manifests: components["schemas"]["MapPath"][];
+            name: string;
+            /** @description Its CODEOWNERS owners, then assay.toml's referents: `@user`, `@group` or an address. */
+            owners: string[];
+            /** @description The block it is part of (a database's schema, in its crate). */
+            parent?: string | null;
+            /** @description Who changed it lately, most commits first: people to ask, never a score. */
+            people: components["schemas"]["MapPerson"][];
+            role?: components["schemas"]["MapRole"] | null;
+            /** @description The folders or files whose files are its own. */
+            roots: components["schemas"]["MapPath"][];
+        };
+        /** @enum {string} */
+        MapKind: "rust" | "node" | "python" | "go" | "docker" | "service" | "migrations" | "ci" | "docs" | "other";
+        MapLanguage: {
+            /** @description `#rrggbb`, as the repository's language bar shows it; none for prose and data (JSON…). */
+            color?: string | null;
+            files: number;
+            name: string;
+        };
+        /** @description `from` needs `to`. */
+        MapLink: {
+            from: string;
+            /** @description A guess (a service's environment names the other as a host), not declared. */
+            inferred: boolean;
+            kind: components["schemas"]["MapLinkKind"];
+            to: string;
+            /** @description The file that says so. */
+            via: string;
+        };
+        /** @enum {string} */
+        MapLinkKind: "uses" | "builds" | "runs" | "depends_on" | "connects" | "calls";
+        /** @description A path of the repository: `.` is its top. */
+        MapPath: {
+            /** @description A folder, not a file. */
+            dir: boolean;
+            path: string;
+        };
+        MapPerson: {
+            /** @description Their commits there, within the days of history read. */
+            commits: number;
+            /** @description The day of their latest one (`YYYY-MM-DD`). */
+            last: string;
+            name: string;
+            /** @description Their account, by their verified email. */
+            username?: string | null;
+        };
+        /** @enum {string} */
+        MapRole: "web" | "api" | "cli" | "library" | "database" | "cache" | "queue" | "search" | "storage" | "mail";
         /** @description A note's position on another version of the MR. */
         MappedPosition: {
             /** Format: int32 */
@@ -5489,6 +5572,31 @@ export interface components {
              *     its defaults, no config file needed.
              */
             onboarding: boolean;
+        };
+        /** @description The map of a commit: its blocks, the links between them, and who knows each. */
+        RepoMap: {
+            blocks: components["schemas"]["MapBlock"][];
+            /** @description The commit mapped. */
+            commit: string;
+            /** @description Why assay.toml could not be read: nothing is mapped until it is fixed. */
+            config_error?: string | null;
+            /**
+             * Format: int32
+             * @description The days of history that tell who knows a block.
+             */
+            days: number;
+            /** @description From the block that needs to the one needed. */
+            links: components["schemas"]["MapLink"][];
+            /** @description So many files or commits that only the first files, or the latest commits, were read. */
+            truncated: boolean;
+            /** @description How many files are in no block (READMEs, a workspace's manifest…), and the first ones. */
+            unassigned: number;
+            unassigned_sample: string[];
+            /**
+             * @description What could not be read: a manifest that does not parse, a block assay.toml names but
+             *     that is not there…
+             */
+            warnings: string[];
         };
         RepoStats: {
             commit: string;
@@ -9880,6 +9988,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LastCommits"];
+                };
+            };
+        };
+    };
+    map: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepoMap"];
                 };
             };
         };

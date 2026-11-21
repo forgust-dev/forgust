@@ -23,6 +23,7 @@ pub mod repo;
 pub mod review;
 pub mod search;
 pub mod security;
+pub mod smart_view;
 pub mod tests;
 pub mod user;
 
@@ -241,6 +242,7 @@ pub fn router() -> Router<AppState> {
         .route("/projects/{id}/repository/tags/{*tag}", delete(repo::delete_tag))
         .route("/projects/{id}/repository/blame", get(repo::blame))
         .route("/projects/{id}/repository/files", get(repo::files))
+        .route("/projects/{id}/repository/map", get(smart_view::map))
         .route("/projects/{id}/markdown", post(repo::markdown))
         .route("/projects/{id}/templates/{kind}", get(repo::templates))
         // merge requests (M3)

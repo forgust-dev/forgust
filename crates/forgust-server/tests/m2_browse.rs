@@ -270,6 +270,85 @@ async fn file_finder_markdown_preview_and_highlighted_diffs(pool: sqlx::PgPool) 
     assert_eq!(other.post(&format!("/api/v1/projects/{p}/markdown"), json!({ "text": "x" })).await.0, 404);
 }
 
+/// The Smart View: the blocks of what was pushed, their links, and the people to ask,
+/// linked to their accounts; an assay.toml that cannot be read says why.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn smart_view_maps_blocks_links_and_people(pool: sqlx::PgPool) {
+    let srv = TestServer::start(pool).await;
+    let owner = srv.user("olivia", false).await;
+    let (_org, _sub, p) = org_project(&owner).await;
+    let work = srv.work_dir("map");
+    must(git(&work, &["init", "-q", "-b", "main"]).await);
+    for (path, text) in [
+        ("Cargo.toml", "[workspace]\nmembers = [\"crates/*\"]\n"),
+        ("crates/api/Cargo.toml", "[package]\nname = \"api\"\n\n[dependencies]\naxum = \"0.8\"\ncore = { path = \"../core\" }\n"),
+        ("crates/api/src/main.rs", "fn main() {}\n"),
+        ("crates/core/Cargo.toml", "[package]\nname = \"core\"\n"),
+        ("crates/core/src/lib.rs", "\n"),
+        ("Dockerfile", "FROM rust\nCOPY crates crates\nRUN cargo build -p api\n"),
+        ("README.md", "# Demo\n"),
+    ] {
+        std::fs::create_dir_all(work.join(path).parent().unwrap()).unwrap();
+        std::fs::write(work.join(path), text).unwrap();
+    }
+    must(git(&work, &["add", "."]).await);
+    must(git(&work, &["commit", "-q", "-m", "first"]).await);
+    // Olivia's commits, under her verified address, link her account
+    let olivia = [("GIT_AUTHOR_NAME", "Olivia"), ("GIT_AUTHOR_EMAIL", "olivia@example.com")];
+    for n in 1..=2 {
+        std::fs::write(work.join("crates/api/src/main.rs"), format!("fn main() {{ println!(\"{n}\"); }}\n")).unwrap();
+        must(git_env(&work, &["commit", "-q", "-am", "greet"], &olivia).await);
+    }
+    let url = srv.http_url("olivia", "acme/platform/api");
+    must(git(&work, &["push", "-q", &url, "main"]).await);
+    wait_jobs(&srv.state).await;
+
+    let base = format!("/api/v1/projects/{p}/repository/map");
+    let m = owner.ok_get(&base).await;
+    let ids: Vec<&str> = m["blocks"].as_array().unwrap().iter().map(|b| b["id"].as_str().unwrap()).collect();
+    assert_eq!(ids, ["api", "core", "image"]);
+    let api = &m["blocks"][0];
+    assert_eq!((&api["kind"], &api["role"]), (&json!("rust"), &json!("api")));
+    assert_eq!(
+        (&api["roots"][0], &api["manifests"][0]),
+        (&json!({ "path": "crates/api", "dir": true }), &json!({ "path": "crates/api/Cargo.toml", "dir": false }))
+    );
+    assert_eq!(api["languages"][0], json!({ "name": "Rust", "files": 1, "color": "#dea584" }));
+    let people: Vec<(&str, Option<&str>, i64)> = api["people"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|x| (x["name"].as_str().unwrap(), x["username"].as_str(), x["commits"].as_i64().unwrap()))
+        .collect();
+    assert_eq!(people, [("Olivia", Some("olivia"), 2), ("Ada", None, 1)]);
+    assert_eq!(api["bus_factor"], 2);
+    let links: Vec<(&str, &str, &str)> = m["links"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|l| (l["from"].as_str().unwrap(), l["to"].as_str().unwrap(), l["kind"].as_str().unwrap()))
+        .collect();
+    assert_eq!(links, [("api", "core", "uses"), ("image", "api", "builds")], "the image builds only what its cargo build names");
+    assert_eq!((&m["unassigned"], &m["days"], &m["truncated"]), (&json!(2), &json!(365), &json!(false)));
+    assert!(m["config_error"].is_null() && m["warnings"].as_array().unwrap().is_empty(), "{m}");
+    let first = m["commit"].as_str().unwrap().to_string();
+
+    // an assay.toml with a mistake: nothing is mapped, and the page can say why
+    std::fs::write(work.join("assay.toml"), "[blocks.api]\nrenamed = \"API\"\n").unwrap();
+    must(git(&work, &["add", "assay.toml"]).await);
+    must(git(&work, &["commit", "-q", "-m", "name the blocks"]).await);
+    must(git(&work, &["push", "-q", &url, "main"]).await);
+    let broken = owner.ok_get(&base).await;
+    assert!(broken["config_error"].as_str().unwrap().contains("renamed"), "{broken}");
+    assert!(broken["blocks"].as_array().unwrap().is_empty());
+    // an earlier commit keeps its map
+    assert_eq!(owner.ok_get(&format!("{base}?ref={first}")).await["blocks"].as_array().unwrap().len(), 3);
+    assert_eq!(owner.get(&format!("{base}?ref=nope")).await.0, 404);
+
+    let other = srv.user("mallory", false).await;
+    assert_eq!(other.get(&base).await.0, 404);
+}
+
 /// The last commit of each tree entry, and size / language stats.
 #[sqlx::test(migrator = "forgust_db::MIGRATOR")]
 async fn tree_last_commits_and_repo_stats(pool: sqlx::PgPool) {

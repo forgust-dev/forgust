@@ -134,6 +134,9 @@ volumes: { forgust-data: {}, db-data: {} }
 ### 📦 Code
 - Git over HTTP and SSH, Git LFS with file locking
 - Fast code browsing: tree, blame, history, compare, syntax highlighting
+- Smart View: the code as blocks (packages, images, services, database schemas, the CI),
+  what each needs and who to ask about it, found from the manifests and the history by
+  [assay](https://github.com/forgust-dev/assay)
 - Code search across projects: exact text or regular expressions, filters by path,
   file name and language, only in code you can read
 - Markdown with diagrams (Mermaid), math, alerts and emoji shortcodes

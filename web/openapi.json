@@ -3727,6 +3727,26 @@
         }
       }
     },
+    "/api/v1/projects/{id}/repository/map": {
+      "get": {
+        "tags": [
+          "repository"
+        ],
+        "summary": "The Smart View of a ref (without one, the default branch), kept per commit.",
+        "operationId": "map",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepoMap"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{id}/repository/signatures": {
       "post": {
         "tags": [
@@ -10536,6 +10556,258 @@
           }
         }
       },
+      "MapBlock": {
+        "type": "object",
+        "description": "A part of the repository built, run or deployed apart.",
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "roots",
+          "manifests",
+          "files",
+          "languages",
+          "jobs",
+          "owners",
+          "people",
+          "configured"
+        ],
+        "properties": {
+          "bus_factor": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "How many people made at least a fifth of its recent commits: 1, only one knows it.",
+            "minimum": 0
+          },
+          "configured": {
+            "type": "boolean",
+            "description": "Declared by assay.toml rather than found."
+          },
+          "files": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "id": {
+            "type": "string",
+            "description": "Stable while its name is: what assay.toml names it by."
+          },
+          "image": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The image a service runs."
+          },
+          "jobs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The CI jobs that build or test it."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MapKind"
+          },
+          "languages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapLanguage"
+            },
+            "description": "Code first, then the most files."
+          },
+          "manifests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapPath"
+            },
+            "description": "The files (or a folder of them) that declare it."
+          },
+          "name": {
+            "type": "string"
+          },
+          "owners": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Its CODEOWNERS owners, then assay.toml's referents: `@user`, `@group` or an address."
+          },
+          "parent": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The block it is part of (a database's schema, in its crate)."
+          },
+          "people": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapPerson"
+            },
+            "description": "Who changed it lately, most commits first: people to ask, never a score."
+          },
+          "role": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MapRole",
+                "description": "A guess from its dependencies or its image, which assay.toml corrects."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "roots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapPath"
+            },
+            "description": "The folders or files whose files are its own."
+          }
+        }
+      },
+      "MapKind": {
+        "type": "string",
+        "enum": [
+          "rust",
+          "node",
+          "python",
+          "go",
+          "docker",
+          "service",
+          "migrations",
+          "ci",
+          "docs",
+          "other"
+        ]
+      },
+      "MapLanguage": {
+        "type": "object",
+        "required": [
+          "name",
+          "files"
+        ],
+        "properties": {
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`#rrggbb`, as the repository's language bar shows it; none for prose and data (JSON…)."
+          },
+          "files": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "MapLink": {
+        "type": "object",
+        "description": "`from` needs `to`.",
+        "required": [
+          "from",
+          "to",
+          "kind",
+          "inferred",
+          "via"
+        ],
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "inferred": {
+            "type": "boolean",
+            "description": "A guess (a service's environment names the other as a host), not declared."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MapLinkKind"
+          },
+          "to": {
+            "type": "string"
+          },
+          "via": {
+            "type": "string",
+            "description": "The file that says so."
+          }
+        }
+      },
+      "MapLinkKind": {
+        "type": "string",
+        "enum": [
+          "uses",
+          "builds",
+          "runs",
+          "depends_on",
+          "connects",
+          "calls"
+        ]
+      },
+      "MapPath": {
+        "type": "object",
+        "description": "A path of the repository: `.` is its top.",
+        "required": [
+          "path",
+          "dir"
+        ],
+        "properties": {
+          "dir": {
+            "type": "boolean",
+            "description": "A folder, not a file."
+          },
+          "path": {
+            "type": "string"
+          }
+        }
+      },
+      "MapPerson": {
+        "type": "object",
+        "required": [
+          "name",
+          "commits",
+          "last"
+        ],
+        "properties": {
+          "commits": {
+            "type": "integer",
+            "description": "Their commits there, within the days of history read.",
+            "minimum": 0
+          },
+          "last": {
+            "type": "string",
+            "description": "The day of their latest one (`YYYY-MM-DD`)."
+          },
+          "name": {
+            "type": "string"
+          },
+          "username": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Their account, by their verified email."
+          }
+        }
+      },
+      "MapRole": {
+        "type": "string",
+        "enum": [
+          "web",
+          "api",
+          "cli",
+          "library",
+          "database",
+          "cache",
+          "queue",
+          "search",
+          "storage",
+          "mail"
+        ]
+      },
       "MappedPosition": {
         "type": "object",
         "description": "A note's position on another version of the MR.",
@@ -13700,6 +13972,74 @@
           "onboarding": {
             "type": "boolean",
             "description": "Renovate opens an onboarding merge request first; false: it runs with\nits defaults, no config file needed."
+          }
+        }
+      },
+      "RepoMap": {
+        "type": "object",
+        "description": "The map of a commit: its blocks, the links between them, and who knows each.",
+        "required": [
+          "commit",
+          "blocks",
+          "links",
+          "unassigned",
+          "unassigned_sample",
+          "warnings",
+          "truncated",
+          "days"
+        ],
+        "properties": {
+          "blocks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapBlock"
+            }
+          },
+          "commit": {
+            "type": "string",
+            "description": "The commit mapped."
+          },
+          "config_error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Why assay.toml could not be read: nothing is mapped until it is fixed."
+          },
+          "days": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The days of history that tell who knows a block.",
+            "minimum": 0
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapLink"
+            },
+            "description": "From the block that needs to the one needed."
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "So many files or commits that only the first files, or the latest commits, were read."
+          },
+          "unassigned": {
+            "type": "integer",
+            "description": "How many files are in no block (READMEs, a workspace's manifest…), and the first ones.",
+            "minimum": 0
+          },
+          "unassigned_sample": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "What could not be read: a manifest that does not parse, a block assay.toml names but\nthat is not there…"
           }
         }
       },
