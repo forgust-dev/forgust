@@ -82,6 +82,7 @@ impl russh::server::Server for SshServer {
             peer,
             offers: 0,
             principal: None,
+            key: None,
             channels: HashMap::new(),
         }
     }
@@ -100,6 +101,8 @@ pub struct Conn {
     /// Keys offered so far.
     offers: usize,
     principal: Option<Principal>,
+    /// The key that signed in (its fingerprint), looked up again for each command.
+    key: Option<String>,
     channels: HashMap<ChannelId, ChannelState>,
 }
 
@@ -145,6 +148,26 @@ impl Conn {
     async fn exec(&mut self, channel: ChannelId, command: String, session: &mut Session) -> anyhow::Result<()> {
         let handle = session.handle();
         let Some(principal) = self.principal.clone() else {
+            self.send_error(&handle, channel, "not authenticated").await;
+            return Ok(());
+        };
+        // a connection outlives its sign-in: the key and the account as they
+        // are now, for each command (key removed or expired since, account
+        // blocked, no longer an administrator)
+        let key = match &self.key {
+            Some(fp) => forgust_db::ssh_keys::find_by_fingerprint(&self.state.db, fp).await?.filter(|k| k.for_auth()),
+            None => None,
+        };
+        let principal = match (key, principal) {
+            (Some(_), Principal::User { user, scopes }) => forgust_db::users::find(&self.state.db, user.id)
+                .await?
+                .filter(|u| u.is_active())
+                .map(|user| Principal::User { user, scopes }),
+            (Some(_), other) => Some(other),
+            (None, _) => None,
+        };
+        let Some(principal) = principal else {
+            self.principal = None;
             self.send_error(&handle, channel, "not authenticated").await;
             return Ok(());
         };
@@ -358,6 +381,7 @@ impl russh::server::Handler for Conn {
             ("deploy", _) => Some(Principal::DeployKey { key_id: k.id }),
             _ => None,
         };
+        self.key = self.principal.is_some().then_some(fp);
         Ok(if self.principal.is_some() { Auth::Accept } else { reject() })
     }
 

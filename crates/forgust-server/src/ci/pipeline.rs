@@ -781,6 +781,21 @@ async fn cancel_downstream(state: &AppState, b: &Build, status: &str) -> anyhow:
     Ok(())
 }
 
+/// A blocked account's jobs stop: one running acts with its reach, one
+/// waiting would never be handed to a runner (`forgust_db::ci::claim`) and
+/// would hold its resource group. A job that cannot be canceled is logged, not
+/// a reason to keep the account open.
+pub async fn cancel_jobs_of(state: &AppState, user_id: i64) -> anyhow::Result<()> {
+    for id in forgust_db::ci::live_builds_of(&state.db, user_id).await? {
+        if let Some(b) = forgust_db::ci::build(&state.db, id).await?
+            && let Err(e) = cancel_job(state, &b).await
+        {
+            tracing::warn!(user = user_id, build = id, error = %e, "a blocked user's job was not canceled");
+        }
+    }
+    Ok(())
+}
+
 /// Cancel one job.
 pub async fn cancel_job(state: &AppState, build: &Build) -> anyhow::Result<()> {
     let mut tx = state.db.begin().await?;

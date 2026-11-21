@@ -952,6 +952,7 @@ pub async fn update_user(
         forgust_db::users::set_state(&state.db, id, s).await?;
         if s == "blocked" {
             forgust_db::sessions::delete_for_user(&state.db, id).await?;
+            crate::ci::pipeline::cancel_jobs_of(&state, id).await?;
         }
         let action = if s == "blocked" { "user_blocked" } else { "user_unblocked" };
         services::audit(&state, &p, action, Some(("user", id)), json!({ "previous_state": u.state }), None).await;

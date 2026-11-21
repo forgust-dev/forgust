@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id FROM ci_builds\n          WHERE user_id = $1 AND status IN ('waiting_for_resource', 'preparing', 'pending', 'running') ORDER BY id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_builds",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2d827b54d8c20137cf283d9432503ec9fe865ee5d14a07932cc1e5c25a2f3ef5"
+}
