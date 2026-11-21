@@ -237,6 +237,25 @@ async fn who_may_pull_push_and_mount(pool: sqlx::PgPool) {
     assert_eq!(granted(&token(&srv.base, Some(("dave", &dave)), &scope).await, IMAGE), ["pull", "push"]);
     assert!(granted(&token(&srv.base, Some(("eve", &eve)), &scope).await, IMAGE).is_empty());
     assert!(granted(&token(&srv.base, None, &scope).await, IMAGE).is_empty(), "a private project: nothing anonymous");
+    // and nothing that tells a private project from a missing one: the same
+    // token body for both, the same 401 over git, whatever the password looks like
+    let access = |t: Value| {
+        use base64::Engine;
+        let body = t["token"].as_str().unwrap().split('.').nth(1).unwrap().to_string();
+        let claims: Value = serde_json::from_slice(&base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(body).unwrap()).unwrap();
+        claims["access"].clone()
+    };
+    assert_eq!(access(token(&srv.base, None, &scope).await), json!([]));
+    assert_eq!(access(token(&srv.base, None, "repository:acme/nothing-here:pull").await), json!([]));
+    for path in [IMAGE, "acme/nothing-here"] {
+        for (method, route) in
+            [(reqwest::Method::GET, "info/refs?service=git-upload-pack"), (reqwest::Method::POST, "info/lfs/objects/batch")]
+        {
+            let url = format!("{}/{path}.git/{route}", srv.base);
+            let r = reqwest::Client::new().request(method, url).basic_auth("x", Some("fglfs-made-up")).send().await;
+            assert_eq!(r.unwrap().status(), 401, "{path} {route}");
+        }
+    }
     // bad credentials are refused outright
     let r = reqwest::Client::new()
         .get(format!("{}/jwt/auth?service=container_registry&scope={scope}", srv.base))

@@ -262,6 +262,11 @@ async fn token(State(state): State<AppState>, Query(q): Query<TokenQuery>, ip: C
                 .flat_map(|a| if a == "*" { allowed.clone() } else { vec![a.to_string()] })
                 .filter(|a| allowed.contains(a))
                 .collect();
+            // nothing granted says nothing: a repository the caller cannot see
+            // answers as one that does not exist
+            if granted.is_empty() {
+                continue;
+            }
             access.push(Access { kind: "repository".into(), name: name.into(), actions: granted });
         }
         let now = chrono::Utc::now().timestamp();
