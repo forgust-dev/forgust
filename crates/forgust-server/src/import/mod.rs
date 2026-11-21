@@ -496,6 +496,22 @@ impl<'a> Runner<'a> {
         Ok(hit)
     }
 
+    /// `kind` `local_id`, written for `u` while they have no account here
+    /// (`matched` is none): theirs once an account confirms their address.
+    async fn unmatched(
+        &self,
+        e: &mut sqlx::PgConnection,
+        u: Option<&SourceUser>,
+        matched: Option<i64>,
+        kind: &str,
+        local_id: i64,
+    ) -> Result<()> {
+        match (u, matched) {
+            (Some(u), None) => idb::authored(e, self.import.id, &u.id, kind, local_id).await.map_err(other),
+            _ => Ok(()),
+        }
+    }
+
     // -------------------------------------------------------------- project
 
     async fn local_project(&mut self, sp: &SourceProject) -> Result<Project> {
@@ -907,8 +923,9 @@ impl<'a> Runner<'a> {
         .await
         .map_err(other)?;
         issuedb::set_issue_labels(&mut tx, id, &labels).await.map_err(other)?;
+        self.unmatched(&mut tx, issue.author.as_ref(), author_id, "issue", id).await?;
         for (c, (uid, name)) in comments.iter().zip(&people) {
-            issuedb::add_note(
+            let note = issuedb::add_note(
                 &mut *tx,
                 NewIssueNote {
                     issue_id: id,
@@ -922,6 +939,7 @@ impl<'a> Runner<'a> {
             )
             .await
             .map_err(other)?;
+            self.unmatched(&mut tx, c.author.as_ref(), *uid, "issue_note", note).await?;
         }
         idb::record(&mut *tx, p.id, "issue", &issue.id, id).await.map_err(other)?;
         tx.commit().await.map_err(other)?;
@@ -1118,6 +1136,8 @@ impl<'a> Runner<'a> {
         .await
         .map_err(other)?;
         issuedb::set_mr_labels(&mut tx, id, &labels).await.map_err(other)?;
+        self.unmatched(&mut tx, mr.author.as_ref(), author_id, "merge_request", id).await?;
+        self.unmatched(&mut tx, mr.merged_by.as_ref(), merged_by, "merged_by", id).await?;
         for t in &threads {
             let mut parent = None;
             for (i, n) in t.notes.iter().enumerate() {
@@ -1153,6 +1173,7 @@ impl<'a> Runner<'a> {
                 )
                 .await
                 .map_err(other)?;
+                self.unmatched(&mut tx, n.author.as_ref(), uid, "note", note).await?;
                 if i == 0 {
                     parent = Some(note);
                 }
