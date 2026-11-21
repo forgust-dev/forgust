@@ -182,6 +182,11 @@ async fn oauth_sign_in(pool: sqlx::PgPool) {
     // registration: public clients with safe redirect addresses
     let reg = |body: Value| http.post(format!("{base}/oauth/register")).json(&body).send();
     assert_eq!(reg(json!({ "redirect_uris": ["http://evil.example/cb"] })).await.unwrap().status(), 400);
+    // anyone may register: what is kept stays small
+    let long = format!("http://127.0.0.1/{}", "a".repeat(2000));
+    assert_eq!(reg(json!({ "redirect_uris": [long] })).await.unwrap().status(), 400, "a redirect address too long");
+    let big = json!({ "redirect_uris": ["http://127.0.0.1/cb"], "client_name": "x".repeat(20_000) });
+    assert_eq!(reg(big).await.unwrap().status(), 413, "a request too large");
     let r = reg(json!({ "client_name": "Test client", "redirect_uris": ["http://127.0.0.1/cb"] })).await.unwrap();
     assert_eq!(r.status(), 201);
     let client: Value = r.json().await.unwrap();
