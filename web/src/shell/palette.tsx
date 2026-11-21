@@ -49,7 +49,7 @@ export function useShortcuts(map: Record<string, Handler>, enabled = true) {
 /** `keys`: held together (+), or either of them (`or`). */
 export const SHORTCUTS: { keys: string[]; join?: "or"; what: string; where: string }[] = [
   { keys: [MOD, "K"], what: "Search or go to", where: "Everywhere" },
-  { keys: ["/"], what: "Search or go to", where: "Everywhere" },
+  { keys: ["/"], what: "Search or go to", where: "Signed in" },
   { keys: ["t"], what: "Find a file in this project", where: "Project" },
   { keys: ["?"], what: "Show or hide keyboard shortcuts", where: "Everywhere" },
   { keys: ["j", "k"], join: "or", what: "Move down / up the file list", where: "Repository" },
@@ -125,15 +125,8 @@ function best<T>(items: readonly T[], score: (t: T) => number, cap: number): { t
  *  each other ("re" finds README.md, not partners). */
 function ranked<T>(items: readonly T[], term: string, hay: (t: T) => string, cap: number): { top: T[]; more: number } {
   if (!term) return { top: items.slice(0, cap), more: Math.max(0, items.length - cap) };
-  return best(
-    items,
-    (it) => {
-      const s = fuzzy(term, hay(it));
-      // a contiguous match scores 500 and more, a scattered one a few points
-      return term.length < 3 && s < 500 ? -1 : s;
-    },
-    cap,
-  );
+  const lc = term.toLowerCase();
+  return best(items, (it) => (term.length < 3 && !hay(it).toLowerCase().includes(lc) ? -1 : fuzzy(term, hay(it))), cap);
 }
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -146,7 +139,9 @@ function pageScore(term: string, it: Item): number {
   const label = it.label.toLowerCase();
   const at = label.search(new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRe(term)}`, "u"));
   if (at >= 0) return 1000 - at - label.length / 100;
-  return it.words?.split(" ").some((w) => w === term || (term.length >= 3 && w.startsWith(term))) ? 500 - label.length / 100 : -1;
+  // the start of a word there, or of several ("deploy keys")
+  const words = ` ${it.words ?? ""} `;
+  return words.includes(` ${term} `) || (term.length >= 3 && words.includes(` ${term}`)) ? 500 - label.length / 100 : -1;
 }
 
 type Jump = { kind: "issue" | "mr"; path: string; iid: number };
@@ -299,7 +294,8 @@ function Palette({ mode, close }: { mode: Mode; close: () => void }) {
       if (fileHits) push("files", "Files", fileHits.top.map(fileEntry), fileHits.more, "press t for the file finder");
       // yours first, then those the search finds that you are not a member of
       const pr = ranked(projects.data ?? [], t, (p) => p.full_path, CAP.projects);
-      const others = t.length >= 2 ? (found.data?.projects ?? []).filter((p) => !mine.has(p.id)) : [];
+      // not the last term's answer while this one's comes: those would not match
+      const others = t.length >= 2 && settled === t && !found.isPlaceholderData ? (found.data?.projects ?? []).filter((p) => !mine.has(p.id)) : [];
       const room = Math.max(0, CAP.projects - pr.top.length);
       push("projects", "Projects", [...pr.top, ...others.slice(0, room)].map(projectEntry), pr.more + Math.max(0, others.length - room));
       const gr = ranked(groups.data ?? [], t, (g) => g.full_path, CAP.groups);
@@ -335,7 +331,7 @@ function Palette({ mode, close }: { mode: Mode; close: () => void }) {
       n += s.entries.length;
     }
     return { sections: out, entries: out.flatMap((s) => s.entries), searchAll, searchCode };
-  }, [t, mode, fileHits, projects.data, groups.data, found.data, project, ref, here, pages, recent, jumpTitle, jumpGone]);
+  }, [t, mode, fileHits, projects.data, groups.data, found.data, found.isPlaceholderData, settled, project, ref, here, pages, recent, jumpTitle, jumpGone]);
 
   useEffect(() => setSelKey(null), [term]);
   const sel = Math.max(0, entries.findIndex((e) => e.key === selKey));
