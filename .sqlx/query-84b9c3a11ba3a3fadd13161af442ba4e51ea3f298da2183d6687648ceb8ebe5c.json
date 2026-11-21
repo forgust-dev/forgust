@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE project_mirrors SET last_update_at = now() WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "84b9c3a11ba3a3fadd13161af442ba4e51ea3f298da2183d6687648ceb8ebe5c"
+}

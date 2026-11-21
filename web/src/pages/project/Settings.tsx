@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, timeAgo, type S, bytes } from "../../api/client";
 import { Badge, Section, ErrorBox, Field, Q, VisibilitySelect, ListHead, NotFound, Tile, QuotaBar, useFormRun } from "../../components/ui";
 import { AvatarUpload } from "../../components/AvatarUpload";
-import { Select } from "../../components/controls";
+import { Segmented, Select } from "../../components/controls";
 import { AccessTokens, DeployTokens } from "../../components/Tokens";
 import { ApprovalRules, Webhooks } from "../../components/Webhooks";
 import type { Ctx } from "./Project";
@@ -12,6 +12,7 @@ import { HostRules } from "../../components/HostRules";
 import { useBranches } from "./Code";
 import { fetchers } from "../../prefetch";
 import { StatusBadge } from "./ci/Status";
+import { useConfirm } from "../../shell/dialog";
 import { settingsPage, type SettingsSlug } from "./settingsPages";
 const CiSettings = lazy(() => import("./ci/Settings").then((m) => ({ default: m.CiSettings })));
 
@@ -65,6 +66,13 @@ function RepositorySettings({ ctx }: { ctx: Ctx }) {
       </Section>
       <Section title="Deploy tokens" description="Credentials to clone the repository without a user account.">
         <DeployTokens base={`/projects/${p.id}`} />
+      </Section>
+      <Section
+        id="mirroring"
+        title="Mirroring"
+        description="Keep this repository in step with another one, on any forge: pull its branches and tags from there (this repository is then read-only), or push them there after every change. Only the repository is mirrored: not issues, merge requests or LFS files."
+      >
+        <Mirrors ctx={ctx} />
       </Section>
     </div>
   );
@@ -917,6 +925,174 @@ function DeployKeys({ ctx }: { ctx: Ctx }) {
                   <button className="btn small danger" onClick={() => del.mutate(k.id)}>
                     Remove
                   </button>
+                </div>
+              ))}
+            </div>
+          )
+        }
+      </Q>
+    </div>
+  );
+}
+
+const MIRROR_INTERVALS = [
+  { value: "15", label: "Every 15 minutes" },
+  { value: "60", label: "Every hour" },
+  { value: "360", label: "Every 6 hours" },
+  { value: "1440", label: "Every day" },
+];
+
+type MirrorForm = { direction: "pull" | "push"; url: string; username: string; token: string; only_protected: boolean; trigger_pipelines: boolean; interval_minutes: string };
+const NEW_MIRROR: MirrorForm = { direction: "push", url: "", username: "", token: "", only_protected: false, trigger_pipelines: false, interval_minutes: "60" };
+
+function Mirrors({ ctx }: { ctx: Ctx }) {
+  const qc = useQueryClient();
+  const confirm = useConfirm();
+  const key = ["mirrors", ctx.p.id];
+  const base = `/projects/${ctx.p.id}/mirrors`;
+  // updates run in the background: after starting one, look again for a while
+  const [pollUntil, setPollUntil] = useState(0);
+  const list = useQuery({
+    queryKey: key,
+    queryFn: () => api.get<S["MirrorDto"][]>(base),
+    refetchInterval: (q) => (Date.now() < pollUntil || q.state.data?.some((m) => m.enabled && !m.last_success_at && !m.last_error) ? 2000 : false),
+  });
+  const [form, setForm] = useState<MirrorForm>(NEW_MIRROR);
+  const [error, setError] = useState<unknown>(null);
+  const done = (list: S["MirrorDto"][]) => {
+    setPollUntil(Date.now() + 30_000);
+    qc.setQueryData(key, list);
+    qc.invalidateQueries({ queryKey: ["project", ctx.p.id] });
+  };
+  const add = useMutation({
+    mutationFn: () => api.post<S["MirrorDto"][]>(base, { ...form, interval_minutes: Number(form.interval_minutes) }),
+    onSuccess: (l) => {
+      setForm(NEW_MIRROR);
+      setError(null);
+      done(l);
+    },
+    onError: setError,
+  });
+  // each button passes its own request
+  const act = useMutation({ mutationFn: (call: () => Promise<S["MirrorDto"][]>) => call(), onSuccess: done, onError: setError });
+  const pulling = list.data?.some((m) => m.direction === "pull");
+  const submit = async () => {
+    const pull = form.direction === "pull";
+    const ok = await confirm({
+      title: pull ? "Make this repository a pull mirror?" : "Push this repository there?",
+      body: pull
+        ? "Its branches and tags become the source's: branches and tags that exist only here are deleted, and nobody can push, commit or merge here until the mirror is removed."
+        : form.only_protected
+          ? "Protected branches and every tag are pushed there after each change, overwriting what is there."
+          : "Every branch and tag is pushed there after each change, overwriting what is there; branches and tags deleted here are deleted there.",
+      action: pull ? "Pull mirror" : "Push mirror",
+      danger: pull ? !ctx.p.empty_repo : !form.only_protected,
+    });
+    if (ok) add.mutate();
+  };
+  return (
+    <div className="stack">
+      <ErrorBox error={error} />
+      <form
+        className="stack"
+        onSubmit={(e) => {
+          e.preventDefault();
+          submit();
+        }}
+      >
+        <Segmented
+          label="Direction"
+          value={form.direction}
+          onChange={(direction) => setForm({ ...form, direction })}
+          options={[
+            { value: "push", label: "Push to" },
+            { value: "pull", label: "Pull from", disabled: pulling, hint: pulling ? "This repository is already a pull mirror" : undefined },
+          ]}
+        />
+        <Field label="Repository address" hint="Its http(s) clone address, without a name or password in it.">
+          <input value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="https://github.com/owner/repository.git" />
+        </Field>
+        <div className="grid2">
+          <Field label="Username" hint="Optional: GitLab, GitHub, Gitea and Forgejo take any name with a token.">
+            <input value={form.username} autoComplete="off" onChange={(e) => setForm({ ...form, username: e.target.value })} />
+          </Field>
+          <Field label="Token or password" hint={form.direction === "push" ? "With write access to the repository. Kept encrypted." : "Optional for a public repository. Kept encrypted."}>
+            <input type="password" autoComplete="off" value={form.token} onChange={(e) => setForm({ ...form, token: e.target.value })} />
+          </Field>
+        </div>
+        {form.direction === "pull" ? (
+          <div className="row wrap">
+            <Select label="How often" value={form.interval_minutes} onChange={(v) => setForm({ ...form, interval_minutes: v })} options={MIRROR_INTERVALS} style={{ maxWidth: 220 }} />
+            <label className="check grow">
+              <input type="checkbox" checked={form.trigger_pipelines} onChange={(e) => setForm({ ...form, trigger_pipelines: e.target.checked })} />
+              Run pipelines for what arrives (as you)
+            </label>
+          </div>
+        ) : (
+          <label className="check">
+            <input type="checkbox" checked={form.only_protected} onChange={(e) => setForm({ ...form, only_protected: e.target.checked })} />
+            Protected branches only <span className="faint small">· and nothing deleted there</span>
+          </label>
+        )}
+        <div className="form-actions">
+          <button className="btn primary" disabled={!form.url.trim() || add.isPending}>
+            Add mirror
+          </button>
+        </div>
+      </form>
+      <Q q={list}>
+        {(mirrors) =>
+          mirrors.length === 0 ? (
+            <p className="muted">No mirrors.</p>
+          ) : (
+            <div className="list">
+              {mirrors.map((m) => (
+                <div className="item mirror-row" key={m.id}>
+                  <Badge tone={m.direction === "pull" ? "accent" : undefined}>{m.direction === "pull" ? "Pull" : "Push"}</Badge>
+                  <div className="grow" style={{ minWidth: 0 }}>
+                    <div className="mono small ellipsis">{m.url}</div>
+                    <div className="small">
+                      {!m.enabled ? (
+                        <span className="faint">Paused</span>
+                      ) : m.last_error ? (
+                        <span className="error-text" title={m.last_error}>
+                          Failed {m.last_update_at ? timeAgo(m.last_update_at) : ""}: {m.last_error}
+                        </span>
+                      ) : m.last_success_at ? (
+                        <span className="faint">Updated {timeAgo(m.last_success_at)}</span>
+                      ) : (
+                        <span className="faint">Waiting for its first update…</span>
+                      )}
+                      <span className="faint">
+                        {m.direction === "pull" ? ` · ${MIRROR_INTERVALS.find((i) => i.value === String(m.interval_minutes))?.label.toLowerCase() ?? `every ${m.interval_minutes} minutes`}` : ""}
+                        {m.only_protected ? " · protected branches" : ""}
+                        {m.trigger_pipelines ? " · runs pipelines" : ""}
+                        {m.has_token ? "" : " · no token"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mirror-actions">
+                    <button className="btn small" disabled={!m.enabled} onClick={() => act.mutate(() => api.post(`${base}/${m.id}/update`, {}))}>
+                      Update now
+                    </button>
+                    <button className="btn small" onClick={() => act.mutate(() => api.put(`${base}/${m.id}`, { enabled: !m.enabled }))}>
+                      {m.enabled ? "Pause" : "Resume"}
+                    </button>
+                    <button
+                      className="btn small danger"
+                      onClick={async () => {
+                        const ok = await confirm({
+                          title: "Remove this mirror?",
+                          body: m.direction === "pull" ? "The repository stops following its source and can be pushed to again (pausing keeps it read-only)." : "Changes here stop going there.",
+                          action: "Remove",
+                          danger: true,
+                        });
+                        if (ok) act.mutate(() => api.del(`${base}/${m.id}`));
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

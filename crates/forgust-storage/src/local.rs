@@ -13,7 +13,7 @@ use sha2::{Digest, Sha256};
 
 use crate::catfile::{CatFilePool, parse_raw_tree};
 use crate::types::*;
-use crate::{Result, Storage, StorageError, cli};
+use crate::{RefChange, Result, Storage, StorageError, cli};
 use forgust_diff::{Diff, DiffOptions, parse_numstat_z, parse_unified_diff};
 
 const SHORT: Duration = Duration::from_secs(30);
@@ -352,6 +352,27 @@ impl LocalStorage {
             })
             .await?;
         Ok(h.map(|h| h.oid))
+    }
+}
+
+impl LocalStorage {
+    /// git for another server (mirrors): http(s) only (no file://, ext:: or
+    /// ssh), no stored credentials, no redirects (the caller pins the checked
+    /// addresses, a redirect would leave them), and `config` (credentials,
+    /// pinned addresses) as `GIT_CONFIG_*` variables, never on the command line.
+    async fn remote_git(&self, repo: i64, url: &str, config: &[(String, String)]) -> Result<tokio::process::Command> {
+        self.ensure(repo).await?;
+        if !(url.starts_with("https://") || url.starts_with("http://")) {
+            return Err(StorageError::Invalid("only http(s) remotes are reached".into()));
+        }
+        let mut c = self.git(repo);
+        c.args(["-c", "protocol.allow=never", "-c", "protocol.http.allow=always", "-c", "protocol.https.allow=always"])
+            .args(["-c", "credential.helper=", "-c", "http.followRedirects=false"])
+            .env("GIT_CONFIG_COUNT", config.len().to_string());
+        for (i, (k, v)) in config.iter().enumerate() {
+            c.env(format!("GIT_CONFIG_KEY_{i}"), k).env(format!("GIT_CONFIG_VALUE_{i}"), v);
+        }
+        Ok(c)
     }
 }
 
@@ -1069,6 +1090,39 @@ impl Storage for LocalStorage {
         Ok(())
     }
 
+    async fn transact_refs(&self, repo: i64, changes: &[RefChange]) -> Result<()> {
+        if changes.is_empty() {
+            return Ok(());
+        }
+        self.ensure(repo).await?;
+        let mut input = String::new();
+        for ch in changes {
+            check_ref_name(&ch.name)?;
+            if ch.new.iter().chain(&ch.old).any(|o| !is_valid_oid(o)) {
+                return Err(StorageError::Invalid("bad object id".into()));
+            }
+            let old = ch.old.as_deref().map(|o| format!(" {o}")).unwrap_or_default();
+            match &ch.new {
+                Some(new) => input.push_str(&format!("update {} {new}{old}\n", ch.name)),
+                None => input.push_str(&format!("delete {}{old}\n", ch.name)),
+            }
+        }
+        let mut c = self.git(repo);
+        c.args(["update-ref", "-m", "forgust", "--stdin"]);
+        cli::run_input(c, input.into_bytes(), 64 * 1024, LONG).await.map(|_| ())
+    }
+
+    async fn ref_targets(&self, repo: i64, prefixes: &[&str]) -> Result<Vec<(String, String)>> {
+        self.ensure(repo).await?;
+        let mut c = self.git(repo);
+        c.args(["for-each-ref", "--format=%(objectname) %(refname)", "--"]).args(prefixes);
+        let out = cli::run(c, 512 * 1024 * 1024, LONG).await?;
+        Ok(String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .filter_map(|l| l.split_once(' ').map(|(oid, name)| (name.to_string(), oid.to_string())))
+            .collect())
+    }
+
     async fn delete_ref(&self, repo: i64, name: &str, expected_old: Option<&str>) -> Result<()> {
         self.ensure(repo).await?;
         check_ref_name(name)?;
@@ -1263,28 +1317,38 @@ impl Storage for LocalStorage {
     }
 
     async fn fetch(&self, repo: i64, url: &str, refspecs: &[String], config: &[(String, String)]) -> Result<()> {
-        self.ensure(repo).await?;
-        if !(url.starts_with("https://") || url.starts_with("http://")) {
-            return Err(StorageError::Invalid("only http(s) remotes can be fetched".into()));
-        }
         if refspecs.iter().any(|r| r.starts_with('-') || r.contains("..")) {
             return Err(StorageError::Invalid("bad refspec".into()));
         }
-        let mut c = self.git(repo);
-        // no file://, ext:: or ssh: an import URL must not reach local files or run commands
-        // and no redirects: the caller pins the checked host, a redirect would leave it for any address
-        c.args(["-c", "protocol.allow=never", "-c", "protocol.http.allow=always", "-c", "protocol.https.allow=always"])
-            .args(["-c", "credential.helper=", "-c", "http.followRedirects=false"])
-            .args(["fetch", "--quiet", "--no-write-fetch-head", "--no-auto-gc", "--"])
-            .arg(url)
-            .args(refspecs)
-            .env("GIT_CONFIG_COUNT", config.len().to_string());
-        for (i, (k, v)) in config.iter().enumerate() {
-            c.env(format!("GIT_CONFIG_KEY_{i}"), k).env(format!("GIT_CONFIG_VALUE_{i}"), v);
-        }
+        let mut c = self.remote_git(repo, url, config).await?;
+        c.args(["fetch", "--quiet", "--no-write-fetch-head", "--no-auto-gc", "--"]).arg(url).args(refspecs);
         let r = cli::run(c, 64 * 1024, Duration::from_secs(6 * 3600)).await;
         self.forget(repo);
         r.map(|_| ())
+    }
+
+    async fn push(&self, repo: i64, url: &str, refspecs: &[String], config: &[(String, String)], prune: bool) -> Result<()> {
+        if refspecs.is_empty() || refspecs.iter().any(|r| r.starts_with('-') || r.contains("..")) {
+            return Err(StorageError::Invalid("bad refspec".into()));
+        }
+        let mut c = self.remote_git(repo, url, config).await?;
+        // quiet: a truncated report must not pass for a finished push
+        c.args(["push", "--quiet", "--no-verify"]);
+        if prune {
+            c.arg("--prune");
+        }
+        c.arg("--").arg(url).args(refspecs);
+        cli::run(c, 1024 * 1024, Duration::from_secs(6 * 3600)).await.map(|_| ())
+    }
+
+    async fn remote_head(&self, repo: i64, url: &str, config: &[(String, String)]) -> Result<Option<String>> {
+        let mut c = self.remote_git(repo, url, config).await?;
+        c.args(["ls-remote", "--symref", "--"]).arg(url).arg("HEAD");
+        let out = cli::run(c, 64 * 1024, Duration::from_secs(120)).await?;
+        // `ref: refs/heads/main\tHEAD`
+        Ok(String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .find_map(|l| l.strip_prefix("ref: refs/heads/")?.split('\t').next().map(str::to_string)))
     }
 
     async fn small_blobs(&self, repo: i64, max_size: u64) -> Result<Vec<String>> {

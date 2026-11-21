@@ -1,0 +1,196 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, project_id, direction, url, username, token_enc, enabled, only_protected, trigger_pipelines, interval_minutes,\n                created_by, created_at, last_update_at, last_success_at, last_error\n         FROM project_mirrors WHERE project_id = $1 ORDER BY direction, id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "project_mirrors",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "project_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "project_mirrors",
+            "name": "project_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "direction",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "project_mirrors",
+            "name": "direction"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "url",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "project_mirrors",
+            "name": "url"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "username",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "project_mirrors",
+            "name": "username"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "token_enc",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "project_mirrors",
+            "name": "token_enc"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "enabled",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "project_mirrors",
+            "name": "enabled"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "only_protected",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "project_mirrors",
+            "name": "only_protected"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "trigger_pipelines",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "project_mirrors",
+            "name": "trigger_pipelines"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "interval_minutes",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "project_mirrors",
+            "name": "interval_minutes"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "created_by",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "project_mirrors",
+            "name": "created_by"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "project_mirrors",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "last_update_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "project_mirrors",
+            "name": "last_update_at"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "last_success_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "project_mirrors",
+            "name": "last_success_at"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "last_error",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "project_mirrors",
+            "name": "last_error"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "28cc1bc6dadb76744a2446e33f4915e72a165a1788802c543c742f2a5503a2ee"
+}

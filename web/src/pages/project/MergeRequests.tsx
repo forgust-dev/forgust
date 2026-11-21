@@ -1142,7 +1142,7 @@ function Thread({ ctx, m, root, replies, boxed }: { ctx: Ctx; m: S["MrDetail"]; 
                     </Link>
                   </div>
                 ) : (
-                  ctx.p.can_push &&
+                  ctx.p.can_write_repository &&
                   m.state === "opened" &&
                   !root.outdated &&
                   root.new_line != null && (

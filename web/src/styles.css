@@ -6379,6 +6379,24 @@ a.item.import-row:hover {
   }
 }
 
+/* repository mirrors */
+.mirror-row {
+  flex-wrap: wrap;
+}
+.mirror-actions {
+  display: flex;
+  gap: 6px;
+}
+@media (max-width: 760px) {
+  .mirror-row > .grow {
+    flex-basis: calc(100% - 60px);
+  }
+  .mirror-actions {
+    flex-basis: 100%;
+    justify-content: flex-end;
+  }
+}
+
 /* people: assignees and reviewers */
 .people-list {
   display: flex;

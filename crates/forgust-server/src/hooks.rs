@@ -231,6 +231,10 @@ pub async fn check_push(
     if project.as_ref().is_some_and(|p| p.archived()) {
         return Ok(HookResponse { allowed: false, message: crate::auth::authz::ARCHIVED.into() });
     }
+    // a pull mirror's branches and tags come from its source only
+    if let Some(url) = forgust_db::project_mirrors::pulled_from(&state.db, project_id).await? {
+        return Ok(HookResponse { allowed: false, message: crate::services::repo_mirrors::read_only(&url) });
+    }
     // storage quota: new objects must fit (a push that only moves or deletes refs
     // brings none and always passes)
     if let Some(q) = quarantine {
@@ -388,7 +392,7 @@ async fn post_receive(State(state): State<AppState>, headers: HeaderMap, Json(re
     check_secret(&state, &headers)?;
     let updates = req.updates.into_iter().map(|u| RefUpdate { old: u.old, new: u.new, name: u.name }).collect();
     let mut tx = state.db.begin().await?;
-    state.jobs.enqueue(&mut tx, PostReceive { project_id: req.project_id, updates, principal: Some(req.principal) }.request()).await?;
+    state.jobs.enqueue(&mut tx, PostReceive::pushed(req.project_id, updates, req.principal).request()).await?;
     tx.commit().await?;
     Ok(Json(HookResponse { allowed: true, message: String::new() }))
 }

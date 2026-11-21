@@ -44,6 +44,16 @@ pub enum StorageError {
 }
 
 /// The storage boundary. All methods are keyed by repo ID (ADR-0009).
+/// One change of a [`Storage::transact_refs`] transaction.
+#[derive(Debug, Clone)]
+pub struct RefChange {
+    pub name: String,
+    /// The new target; None deletes the ref.
+    pub new: Option<String>,
+    /// What it must point at first (`ZERO_OID`: must not exist); None: anything.
+    pub old: Option<String>,
+}
+
 #[async_trait]
 pub trait Storage: Send + Sync + 'static {
     async fn create_repo(&self, repo: i64, opts: CreateRepoOptions) -> Result<()>;
@@ -100,6 +110,12 @@ pub trait Storage: Send + Sync + 'static {
     async fn delete_ref(&self, repo: i64, name: &str, expected_old: Option<&str>) -> Result<()>;
     /// Set many refs in one transaction (no compare-and-swap): imports.
     async fn update_refs(&self, repo: i64, updates: &[(String, String)]) -> Result<()>;
+    /// Several ref changes in one transaction: all of them happen, or none.
+    /// (Deleting `foo` and creating `foo/bar` take two.)
+    async fn transact_refs(&self, repo: i64, changes: &[RefChange]) -> Result<()>;
+    /// Names and targets of the refs under `prefixes`, without reading their
+    /// objects (unlike [`Storage::refs`]).
+    async fn ref_targets(&self, repo: i64, prefixes: &[&str]) -> Result<Vec<(String, String)>>;
     /// In-memory merge of `theirs` into `ours` (no working copy).
     async fn merge_tree(&self, repo: i64, ours: &str, theirs: &str, merge_base: Option<&str>) -> Result<MergeTreeResult>;
     /// Write an annotated tag object `name` pointing at commit `target`; returns its id
@@ -129,6 +145,13 @@ pub trait Storage: Send + Sync + 'static {
     /// passed as `GIT_CONFIG_*` environment variables (credentials, pinned
     /// addresses), never on the command line.
     async fn fetch(&self, repo: i64, url: &str, refspecs: &[String], config: &[(String, String)]) -> Result<()>;
+    /// Push `refspecs` to another server over http(s) (push mirrors), with
+    /// `config` as for [`Storage::fetch`]. `prune` deletes the remote refs the
+    /// refspecs cover that are gone here.
+    async fn push(&self, repo: i64, url: &str, refspecs: &[String], config: &[(String, String)], prune: bool) -> Result<()>;
+    /// The branch another server's HEAD names (its default branch), with
+    /// `config` as for [`Storage::fetch`]; None when it does not say.
+    async fn remote_head(&self, repo: i64, url: &str, config: &[(String, String)]) -> Result<Option<String>>;
     /// Blob ids and sizes of small blobs reachable from any ref (LFS pointer scan):
     /// at most `max_size` bytes each.
     async fn small_blobs(&self, repo: i64, max_size: u64) -> Result<Vec<String>>;

@@ -1387,7 +1387,8 @@ async fn import_a_forgejo_repository(pool: sqlx::PgPool) {
     let started = owner
         .ok_post(
             "/api/v1/imports",
-            conn(json!({ "target_namespace_id": target["id"], "projects": [{ "source_id": "octo/app", "source_path": "octo/app", "target_path": "app" }] })),
+            conn(json!({ "target_namespace_id": target["id"], "options": { "mirror": true },
+                         "projects": [{ "source_id": "octo/app", "source_path": "octo/app", "target_path": "app" }] })),
         )
         .await;
     let id = started["id"].as_i64().unwrap();
@@ -1433,6 +1434,20 @@ async fn import_a_forgejo_repository(pool: sqlx::PgPool) {
     assert_eq!(pbs[0]["push_access_level"], "maintainer", "{pbs}");
     let members = owner.ok_get(&format!("/api/v1/projects/{pid}/members")).await;
     assert!(members.as_array().unwrap().iter().any(|m| m["username"] == "jane" && m["access_level"] == "developer"), "{members}");
+
+    // kept in sync: a pull mirror of the source, with the import's token (erased from the import)
+    let mirrors = owner.ok_get(&format!("/api/v1/projects/{pid}/mirrors")).await;
+    assert_eq!((mirrors[0]["direction"].as_str(), mirrors[0]["has_token"].as_bool()), (Some("pull"), Some(true)), "{mirrors}");
+    assert_eq!(mirrors[0]["url"], format!("{}/acme/origin.git", srv.base));
+    assert_eq!(owner.ok_get(&format!("/api/v1/projects/{pid}")).await["pull_mirror"], mirrors[0]["url"]);
+    assert_eq!(done["has_token"], false);
+    owner.ok_post(&format!("/api/v1/projects/{pid}/mirrors/{}/update", mirrors[0]["id"]), json!({})).await;
+    wait_jobs(&srv.state).await;
+    let after = owner.ok_get(&format!("/api/v1/projects/{pid}/mirrors")).await;
+    assert!(after[0]["last_error"].is_null(), "{after}");
+    let branches = owner.ok_get(&format!("/api/v1/projects/{pid}/repository/branches")).await;
+    let names: Vec<&str> = branches.as_array().unwrap().iter().map(|b| b["name"].as_str().unwrap()).collect();
+    assert!(names.contains(&"topic") && names.contains(&"main"), "{names:?}");
 }
 
 /// A server older than the importer supports is refused when it says its version.
