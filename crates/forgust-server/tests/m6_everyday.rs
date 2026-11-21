@@ -847,6 +847,13 @@ async fn email_confirmation(pool: sqlx::PgPool) {
     assert_eq!(anon.post("/api/v1/auth/password/forgot", json!({ "login": "newbie" })).await.0, 200);
     wait_jobs(&srv.state).await;
     let reset = link_token(&last_mail_to(&srv, "newbie@example.com").expect("a reset link to the old address").body, "reset-password");
+    // saving the profile again sends the waiting address nothing more
+    for _ in 0..3 {
+        newbie.ok_put("/api/v1/user", json!({ "name": "Newbie", "email": "moved@example.com" })).await;
+    }
+    wait_jobs(&srv.state).await;
+    let links = srv.state.mailer.sent().into_iter().filter(|m| m.to.iter().any(|t| t == "moved@example.com")).count();
+    assert_eq!(links, 1, "one link for the address that was asked for once");
     let token = link_token(&last_mail_to(&srv, "moved@example.com").expect("a link to the new address").body, "verify-email");
     newbie.ok_post("/api/v1/auth/email/confirm", json!({ "token": token })).await;
     // the reset link in the old inbox died with the move
