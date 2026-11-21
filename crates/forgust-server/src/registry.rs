@@ -129,6 +129,10 @@ struct Claims {
     /// The user the catalog is listed for (by id: a username can change hands).
     #[serde(default)]
     uid: Option<i64>,
+    /// Signed in with an administrator's powers (a password, or a token made
+    /// for them): the catalog then lists every project's images.
+    #[serde(default)]
+    admin: bool,
     iat: i64,
     exp: i64,
     access: Vec<Access>,
@@ -280,7 +284,8 @@ async fn token(State(state): State<AppState>, Query(q): Query<TokenQuery>, ip: C
             Principal::User { user, .. } => Some(user.id),
             _ => None,
         };
-        let claims = Claims { iss: "forgust".into(), aud: SERVICE.into(), sub, uid, iat: now, exp: now + ttl, access };
+        let admin = principal.is_admin();
+        let claims = Claims { iss: "forgust".into(), aud: SERVICE.into(), sub, uid, admin, iat: now, exp: now + ttl, access };
         let t = sign(&state, &claims);
         let issued = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true);
         Ok(axum::Json(json!({ "token": t, "access_token": t, "expires_in": ttl, "issued_at": issued })).into_response())
@@ -902,7 +907,9 @@ async fn catalog(state: &AppState, uri: &Uri, headers: &HeaderMap) -> RegResult<
         Some(id) => forgust_db::users::find(&state.db, id).await?.filter(|u| u.is_active()),
         None => None,
     };
-    let principal = user.map(|u| Principal::User { user: u, scopes: None }).unwrap_or(Principal::Anonymous);
+    // a token without an administrator's powers lists what its user is a member of
+    let scopes = (!claims.admin).then(|| vec!["read_api".to_string()]);
+    let principal = user.map(|u| Principal::User { user: u, scopes }).unwrap_or(Principal::Anonymous);
     let mut names = Vec::new();
     let last = q.last.unwrap_or_default();
     for (repo, path) in rdb::all_repositories(&state.db, 10_000).await? {
