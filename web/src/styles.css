@@ -6496,14 +6496,16 @@ a.item.import-row:hover {
 }
 .contrib-grid {
   /* 53 weeks share the card's width: cells grow up to 16px, then the grid
-     centers; below 10px a cell keeps its size and the card scrolls */
+     centers; below 8px a cell keeps its size and the card scrolls (the grid is
+     at least as wide as its cells at their smallest, not at their largest:
+     those made every card narrower than 1037px scroll) */
   display: grid;
-  grid-template-columns: 30px repeat(53, minmax(10px, 16px));
+  grid-template-columns: 30px repeat(53, minmax(8px, 16px));
   grid-template-rows: 16px;
   grid-auto-rows: auto;
   gap: 3px;
   justify-content: center;
-  min-width: max-content;
+  min-width: min-content;
   width: 100%;
 }
 .contrib-month {
