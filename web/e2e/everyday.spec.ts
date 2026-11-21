@@ -343,7 +343,7 @@ test("edit a file in the browser onto a new branch, add and delete files, manage
     await page.goto(`${P}/-/blob/main/README.md`);
     await page.getByRole("link", { name: "Edit this file" }).click();
     const editor = page.getByRole("textbox", { name: "File content" });
-    await expect(editor).toHaveValue(/A fixture project/);
+    await expect(editor).toContainText("A fixture project");
     await editor.fill("# Shop\n\nEdited in the browser.\n");
     await page.getByRole("radio", { name: /new branch and open a merge request/ }).check();
     await page.getByRole("textbox", { name: "New branch name" }).fill(branch);
@@ -375,6 +375,16 @@ test("edit a file in the browser onto a new branch, add and delete files, manage
     // keep the "recently pushed branches" banner of the other tests intact
     for (const b of [branch, `${branch}-b`]) await page.request.delete(`/api/v1/projects/${project.id}/repository/branches/${b}`, { headers: csrf });
   }
+});
+
+test("the file editor colors the code and searches it", async ({ page }) => {
+  await page.goto(`${P}/-/edit/main/src/cart.rs`);
+  const editor = page.locator(".code-editor");
+  // the grammar comes on its own, after the text
+  await expect(editor.locator(".tok-keyword").first()).toBeVisible();
+  await expect(editor.locator(".cm-lineNumbers")).toBeVisible();
+  await page.getByRole("textbox", { name: "File content" }).press("ControlOrMeta+f");
+  await expect(editor.getByRole("textbox", { name: "Find" })).toBeFocused();
 });
 
 test("tag, release with a file, download it, edit and delete", async ({ page }) => {

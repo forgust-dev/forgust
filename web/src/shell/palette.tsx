@@ -179,6 +179,7 @@ function Palette({ mode, close }: { mode: Mode; close: () => void }) {
   const uid = useId();
   const project = nav.kind === "project" ? nav.project : null;
   const ref = nav.kind === "project" ? (nav.ref ?? project?.default_branch ?? "main") : "";
+  const inIde = nav.kind === "project" && !!nav.ide;
   const recent = useRecentProjects(user?.id);
 
   const files = useQuery({
@@ -245,7 +246,9 @@ function Palette({ mode, close }: { mode: Mode; close: () => void }) {
     const push = (key: string, title: string, entries: Entry[], more?: number, moreHint?: string) => {
       if (entries.length) out.push({ key, title, entries, more, moreHint });
     };
-    const fileEntry = (f: string): Entry => ({ key: `f:${f}`, label: f, file: true, icon: <FileText size={15} />, to: refLink(`/${project!.full_path}`, "blob", ref, f) });
+    // from the web IDE, a file opens in it
+    const kind = inIde ? "ide" : "blob";
+    const fileEntry = (f: string): Entry => ({ key: `f:${f}`, label: f, file: true, icon: <FileText size={15} />, to: refLink(`/${project!.full_path}`, kind, ref, f) });
     const projectEntry = (p: { id: number; full_path: string }): Entry => ({ key: `p:${p.id}`, label: p.full_path, icon: <FolderGit2 size={15} />, to: `/${p.full_path}` });
     const groupEntry = (g: { id: number; full_path: string }): Entry => ({ key: `g:${g.id}`, label: g.full_path, icon: <Users size={15} />, to: `/${g.full_path}` });
     // your projects as they are now (renamed, moved, archived)
@@ -331,7 +334,7 @@ function Palette({ mode, close }: { mode: Mode; close: () => void }) {
       n += s.entries.length;
     }
     return { sections: out, entries: out.flatMap((s) => s.entries), searchAll, searchCode };
-  }, [t, mode, fileHits, projects.data, groups.data, found.data, found.isPlaceholderData, settled, project, ref, here, pages, recent, jumpTitle, jumpGone]);
+  }, [t, mode, fileHits, projects.data, groups.data, found.data, found.isPlaceholderData, settled, project, ref, inIde, here, pages, recent, jumpTitle, jumpGone]);
 
   useEffect(() => setSelKey(null), [term]);
   const sel = Math.max(0, entries.findIndex((e) => e.key === selKey));
@@ -500,10 +503,18 @@ export function PaletteHost() {
     const onOpen = (e: Event) => setMode((e as CustomEvent<Mode>).detail);
     const onKey = (e: KeyboardEvent) => {
       const { nav, user, help } = now.current;
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+      // Mod+K alone, and not one an editor took for itself (Mod+Shift+K deletes a line there)
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && !e.defaultPrevented && e.key.toLowerCase() === "k") {
         e.preventDefault();
         setHelp(false);
         setMode((m) => (m ? null : "all"));
+        return;
+      }
+      // in the web IDE, Mod+P finds a file, from the editor too (`t` is a letter there)
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && !e.defaultPrevented && e.key.toLowerCase() === "p" && nav.kind === "project" && nav.ide) {
+        e.preventDefault();
+        setHelp(false);
+        setMode("files");
         return;
       }
       if (isTyping(e) || e.ctrlKey || e.metaKey || e.altKey) return;

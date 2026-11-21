@@ -18,8 +18,8 @@ export const test = base.extend<{ errors: string[] }>({
         document.addEventListener("securitypolicyviolation", (e) => console.error(`CSP blocked ${e.blockedURI} (${e.violatedDirective})`));
       });
       page.on("console", (m) => {
-        // 400/401/403/404: answers the page shows (validation, sign-in, access); 5xx and the rest fail
-        if (m.type() === "error" && !/status of 40[0134]/.test(m.text())) errors.push(m.text());
+        // 400/401/403/404/409: answers the page shows (validation, sign-in, access, a conflict); 5xx and the rest fail
+        if (m.type() === "error" && !/status of 40[01349]/.test(m.text())) errors.push(m.text());
       });
       await use(errors);
       expect(errors, "page errors").toEqual([]);

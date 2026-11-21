@@ -71,7 +71,9 @@ export function projectItems(p: S["ProjectDetail"], ref: string, mrCount?: numbe
   const esc = p.full_path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const sec = (s: string) => new RegExp(`^/${esc}/-/(${s})(/|$)`);
   const files = new RegExp(`^/${esc}(/-/(tree|blob|blame|raw)(/|$)|/?$)`);
-  const code = new RegExp(`${files.source}|${sec("commits?|branches|tags|compare|smart_view").source}`);
+  const code = new RegExp(`${files.source}|${sec("commits?|branches|tags|compare|smart_view|ide").source}`);
+  // the web IDE commits: for those who can change the repository (not a pull mirror)
+  const ide = p.can_write_repository ? [{ to: refLink(web, "ide", ref), label: "Web IDE", match: sec("ide"), words: "editor edit files" }] : [];
   const schedules = p.can_push ? [{ to: `${web}/-/pipeline_schedules`, label: "Schedules", match: sec("pipeline_schedules") }] : [];
   // findings are for Developers and above
   const developer = p.can_push || p.can_admin || ["developer", "maintainer", "owner"].includes(p.access_level);
@@ -101,6 +103,7 @@ export function projectItems(p: S["ProjectDetail"], ref: string, mrCount?: numbe
         { to: `${web}/-/branches`, label: "Branches", match: sec("branches") },
         { to: `${web}/-/tags`, label: "Tags", match: sec("tags") },
         { to: `${web}/-/compare`, label: "Compare", match: sec("compare") },
+        ...ide,
       ],
     },
     { to: `${web}/-/issues`, label: "Issues", icon: <CircleDot size={16} />, count: issueCount, match: sec("issues") },

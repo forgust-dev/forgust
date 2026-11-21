@@ -49,6 +49,7 @@ const SecurityPage = lazy(() => import("./Security").then((m) => ({ default: m.S
 const Registry = lazy(() => import("./Registry").then((m) => ({ default: m.Registry })));
 const EditFile = lazy(() => import("./Edit").then((m) => ({ default: m.EditFile })));
 const SmartView = lazy(() => import("./SmartView").then((m) => ({ default: m.SmartView })));
+const Ide = lazy(() => import("./ide/Ide").then((m) => ({ default: m.Ide })));
 
 export type Ctx = { p: S["ProjectDetail"]; base: string; web: string; setRef?: (r: string) => void };
 
@@ -76,6 +77,7 @@ const SECTIONS: Record<string, string> = {
   jobs: "Jobs",
   pipeline_schedules: "Schedules",
   environments: "Environments",
+  ide: "Web IDE",
 };
 
 /** Sections with no breadcrumb: the project's home and the file editor's actions. */
@@ -102,7 +104,7 @@ function ProjectNav({ p, rest, gitRef }: { p: S["ProjectDetail"]; rest: string; 
   }
   if (section === "milestones" && more[0]) crumbs.push({ label: more[0] === "new" ? "New" : more[1] === "edit" ? "Edit" : `Milestone` });
   if (section === "releases" && more[0]) crumbs.push({ label: more.length === 1 && more[0] === "new" ? "New" : more.at(-1) === "edit" ? `Edit ${more.slice(0, -1).join("/")}` : more.join("/") });
-  useSetNav({ kind: "project", project: p, ref: gitRef, crumbs }, [p, rest, gitRef]);
+  useSetNav({ kind: "project", project: p, ref: gitRef, ide: section === "ide", crumbs }, [p, rest, gitRef]);
   return null;
 }
 
@@ -123,9 +125,9 @@ function ReleaseRoute({ ctx, more }: { ctx: Ctx; more: string[] }) {
 export function ProjectPage({ id, fullPath, rest }: { id: number; fullPath: string; rest: string }) {
   const q = useQuery({ queryKey: keys.project(id), queryFn: () => fetchers.project(id) });
   const [gitRef, setRef] = useState<string | undefined>();
-  // the Smart View's graph takes the room a wide screen has
+  // the Smart View's graph takes the room a wide screen has; the web IDE, the whole window
   return (
-    <div className={rest.split("/")[0] === "smart_view" ? "page wide" : "page"}>
+    <div className={{ smart_view: "page wide", ide: "page page-ide" }[rest.split("/")[0]] ?? "page"}>
       {q.isLoading && <KeepNav />}
       <Q q={q}>
         {(p) => {
@@ -142,7 +144,7 @@ export function ProjectPage({ id, fullPath, rest }: { id: number; fullPath: stri
               <StorageBanner p={p} />
               {!p.can_read_code && !["members", "issues", "labels", "milestones"].includes(section) ? (
                 <p className="muted">You can see this project but not its code. Ask a maintainer for the Reporter role.</p>
-              ) : p.empty_repo && ["", "tree", "blob", "commits", "merge_requests", "pipelines", "smart_view"].includes(section) ? (
+              ) : p.empty_repo && ["", "tree", "blob", "commits", "merge_requests", "pipelines", "smart_view", "ide"].includes(section) ? (
                 <EmptyRepo p={p} />
               ) : (
                 // a section still loading: a spinner here, the header and sidebar stay
@@ -157,6 +159,7 @@ export function ProjectPage({ id, fullPath, rest }: { id: number; fullPath: stri
                     </CodeLayout>
                   )}
                   {section === "smart_view" && <SmartView ctx={ctx} />}
+                  {section === "ide" && (p.can_write_repository ? <Ide ctx={ctx} refAndPath={tail || ref} /> : <NotFound />)}
                   {(section === "edit" || section === "new" || section === "delete") && (p.can_write_repository ? <EditFile ctx={ctx} refAndPath={tail} mode={section} /> : <NotFound />)}
                   {section === "commits" && <Commits ctx={ctx} refAndPath={tail || ref} />}
                   {section === "commit" && <Commit ctx={ctx} sha={tail} />}

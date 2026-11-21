@@ -1,31 +1,18 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { lazy, Suspense, useEffect, useState, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FilePlus2, GitBranch, Map as MapIcon, Pencil, Trash2 } from "lucide-react";
-import { api, ApiError, qs, refLink, type S } from "../../api/client";
-import { useSession } from "../../session";
+import { FilePlus2, Map as MapIcon, Pencil, Trash2 } from "lucide-react";
+import { qs, refLink, type S } from "../../api/client";
+import { usePref } from "../../shell/theme";
 import { ErrorBox, Field, ListHead, Q } from "../../components/ui";
 import { applyAssayEdit, assayMessage, type AssayEdit } from "./assayToml";
 import { useResolved } from "./Code";
+import { CommitTarget, useCommit } from "./commitTarget";
 import type { Ctx } from "./Project";
 
+// fetched while the file loads; deleting a file never needs it
+const CodeEditor = lazy(() => import("../../components/CodeEditor").then((m) => ({ default: m.CodeEditor })));
+
 type Mode = "edit" | "new" | "delete";
-
-/** The branch a ref names, with its head (null when the ref is a tag or a commit). */
-function useBranch(ctx: Ctx, ref: string) {
-  return useQuery({
-    queryKey: ["branch-head", ctx.p.id, ref],
-    queryFn: async () => {
-      const list = await api.get<S["BranchDto"][]>(`${ctx.base}/branches${qs({ search: ref, per_page: 100 })}`);
-      return list.find((b) => b.name === ref) ?? null;
-    },
-    staleTime: 0,
-  });
-}
-
-function suggestBranch(username: string) {
-  return `${username}-patch-${Math.floor(Date.now() / 1000) % 100000}`;
-}
 
 /** Edit, create or delete a file and commit it, here or on a new branch with an MR. */
 export function EditFile({ ctx, refAndPath, mode }: { ctx: Ctx; refAndPath: string; mode: Mode }) {
@@ -35,10 +22,6 @@ export function EditFile({ ctx, refAndPath, mode }: { ctx: Ctx; refAndPath: stri
 
 function Editor({ ctx, res, mode }: { ctx: Ctx; res: S["RefResolved"]; mode: Mode }) {
   const nav = useNavigate();
-  const qc = useQueryClient();
-  const { user } = useSession();
-  const branch = useBranch(ctx, res.ref);
-  const isBranch = !!branch.data;
   const name = res.path.split("/").pop() ?? "";
   // a correction from the Smart View: written into assay.toml as it is loaded (or made)
   const assay = (useLocation().state as { assay?: AssayEdit } | null)?.assay;
@@ -46,13 +29,14 @@ function Editor({ ctx, res, mode }: { ctx: Ctx; res: S["RefResolved"]; mode: Mod
   const [content, setContent] = useState(mode === "new" && assay ? applyAssayEdit("", assay) : "");
   const [loaded, setLoaded] = useState(mode !== "edit");
   const [message, setMessage] = useState(assay ? assayMessage(assay) : mode === "edit" ? `Update ${name}` : mode === "delete" ? `Delete ${name}` : "");
-  const [target, setTarget] = useState<"here" | "new">("here");
-  const [newBranch, setNewBranch] = useState(() => suggestBranch(user?.username ?? "patch"));
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   // the commit the editor started from, pinned: a refetch of the ref must not
   // reload the text under the author nor move the head the commit is checked against
   const [base] = useState(res.commit);
+  const { commit, ready, targetProps } = useCommit(ctx, res.ref, base);
+  // chosen in the web IDE
+  const [vim] = usePref("editor.vim", false);
 
   // the file as it is now (raw, so it is byte for byte what gets edited)
   useEffect(() => {
@@ -67,10 +51,6 @@ function Editor({ ctx, res, mode }: { ctx: Ctx; res: S["RefResolved"]; mode: Mod
     // the correction is the one the page was opened with
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, ctx.p.id, base, res.path]);
-  // a tag or a commit cannot take commits: a new branch it is
-  useEffect(() => {
-    if (branch.isSuccess && !isBranch) setTarget("new");
-  }, [branch.isSuccess, isBranch]);
   useEffect(() => {
     if (mode === "new" && !assay) setMessage(path.split("/").pop() ? `Add ${path.split("/").pop()}` : "");
   }, [path, mode, assay]);
@@ -79,35 +59,23 @@ function Editor({ ctx, res, mode }: { ctx: Ctx; res: S["RefResolved"]; mode: Mod
     e.preventDefault();
     setError(null);
     setBusy(true);
-    const onBranch = target === "here" ? res.ref : newBranch.trim();
-    const action =
+    const action: S["FileAction"] =
       mode === "delete"
         ? { action: "delete", file_path: res.path }
         : mode === "new"
           ? { action: "create", file_path: path.replace(/^\/+/, ""), content }
           : { action: "update", file_path: res.path, content };
     try {
-      await api.post<S["Committed"]>(`${ctx.base}/commits`, {
-        branch: onBranch,
-        start_branch: target === "new" ? base : undefined,
-        commit_message: message,
-        actions: [action],
-        // what was loaded: a push since then is not overwritten
-        expected_head: target === "here" ? base : undefined,
-      });
-      qc.invalidateQueries({ queryKey: ["branches", ctx.p.id] });
-      if (target === "new") {
-        const t = isBranch ? res.ref : (ctx.p.default_branch ?? "");
-        nav(`${ctx.web}/-/merge_requests/new${qs({ source: onBranch, target: t })}`);
+      const landed = await commit(message, [action]);
+      if (landed.target === "new") {
+        nav(`${ctx.web}/-/merge_requests/new${qs({ source: landed.branch, target: landed.mrTarget })}`);
       } else if (mode === "delete") {
         const dir = res.path.split("/").slice(0, -1).join("/");
-        nav(refLink(ctx.web, "tree", onBranch, dir));
+        nav(refLink(ctx.web, "tree", landed.branch, dir));
       } else {
-        nav(refLink(ctx.web, "blob", onBranch, action.file_path));
+        nav(refLink(ctx.web, "blob", landed.branch, action.file_path));
       }
     } catch (err) {
-      // a protected branch: offer the other way at once
-      if (err instanceof ApiError && err.status === 403 && target === "here") setTarget("new");
       setError(err);
     } finally {
       setBusy(false);
@@ -153,25 +121,9 @@ function Editor({ ctx, res, mode }: { ctx: Ctx; res: S["RefResolved"]; mode: Mod
         )}
         {mode !== "delete" &&
           (loaded ? (
-            <textarea
-              className="code-editor"
-              aria-label="File content"
-              value={content}
-              spellCheck={false}
-              autoFocus={mode === "edit"}
-              onChange={(e) => setContent(e.target.value)}
-              onKeyDown={(e) => {
-                // Tab indents instead of leaving the editor (Escape then Tab leaves it)
-                if (e.key === "Tab" && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
-                  e.preventDefault();
-                  const t = e.currentTarget;
-                  const { selectionStart: a, selectionEnd: b } = t;
-                  const next = `${content.slice(0, a)}\t${content.slice(b)}`;
-                  setContent(next);
-                  requestAnimationFrame(() => t.setSelectionRange(a + 1, a + 1));
-                }
-              }}
-            />
+            <Suspense fallback={<p className="muted">Loading the editor…</p>}>
+              <CodeEditor value={content} onChange={setContent} path={mode === "new" ? path : res.path} label="File content" autoFocus={mode === "edit"} vim={vim} />
+            </Suspense>
           ) : (
             <p className="muted">Loading the file…</p>
           ))}
@@ -179,26 +131,9 @@ function Editor({ ctx, res, mode }: { ctx: Ctx; res: S["RefResolved"]; mode: Mod
         <Field label="Commit message">
           <textarea rows={2} value={message} onChange={(e) => setMessage(e.target.value)} />
         </Field>
-        <fieldset className="commit-target">
-          <legend className="small muted">Where to commit</legend>
-          <label className={`check ${!isBranch ? "disabled" : ""}`}>
-            <input type="radio" name="target" checked={target === "here"} disabled={!isBranch} onChange={() => setTarget("here")} />
-            <span>
-              Commit directly to <code>{res.ref}</code>
-              {!isBranch && branch.isSuccess && <span className="muted"> (not a branch)</span>}
-              {branch.data?.protected && <span className="muted"> (protected)</span>}
-            </span>
-          </label>
-          <label className="check">
-            <input type="radio" name="target" checked={target === "new"} onChange={() => setTarget("new")} />
-            <span>
-              <GitBranch size={13} /> Commit to a new branch and open a merge request
-            </span>
-          </label>
-          {target === "new" && <input aria-label="New branch name" value={newBranch} onChange={(e) => setNewBranch(e.target.value)} spellCheck={false} />}
-        </fieldset>
+        <CommitTarget {...targetProps} />
         <div className="row">
-          <button className={`btn large ${mode === "delete" ? "danger" : "primary"}`} aria-busy={busy} disabled={busy || !message.trim() || (mode === "new" && !path.trim()) || (target === "new" && !newBranch.trim()) || !loaded}>
+          <button className={`btn large ${mode === "delete" ? "danger" : "primary"}`} aria-busy={busy} disabled={busy || !message.trim() || (mode === "new" && !path.trim()) || !ready || !loaded}>
             {busy ? "Committing…" : mode === "delete" ? "Delete the file" : "Commit changes"}
           </button>
           <button type="button" className="btn large" onClick={() => nav(-1)}>
