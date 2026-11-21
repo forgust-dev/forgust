@@ -123,7 +123,7 @@ export function ImportPage() {
       ) : (
         <form className="import-card stack" onSubmit={next}>
           <ErrorBox error={error} />
-          <FieldGroup label="From" hint={info ? `Self-hosted: ${info.name} ${info.minimum_version} or later.` : undefined}>
+          <FieldGroup label="From">
             <Choices
               label="Source"
               value={source}
@@ -131,7 +131,7 @@ export function ImportPage() {
               options={(sources.data ?? []).map((s) => ({
                 value: s.id,
                 label: s.name,
-                hint: s.id === "github" ? `Enterprise ${s.minimum_version}+` : `${s.minimum_version}+`,
+                hint: s.id === "github" ? `${s.minimum_version}+ (Enterprise)` : `${s.minimum_version}+`,
               }))}
             />
           </FieldGroup>
