@@ -212,7 +212,7 @@ Measured on a 12-vCPU development machine, p95 with one client, release build:
 | Code search in the Linux kernel, 97,000 files (plain text, a regular expression) | 30–150 ms |
 | Pipeline created → job picked up by a runner | 24–40 ms |
 
-Pushing one branch to a 1M-ref repository is the one speed target still missed (3.7 s
+Pushing one branch to a 1M-ref repository is the one speed target still missed (3.1 s
 against 300 ms).
 
 ## Status

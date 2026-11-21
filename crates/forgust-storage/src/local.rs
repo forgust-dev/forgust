@@ -444,6 +444,13 @@ impl Storage for LocalStorage {
         // allowReachableSHA1InWant, which walks history)
         c.args(["-c", "uploadpack.allowTipSHA1InWant=true"]);
         c.arg("-c").arg(format!("transfer.hideRefs={}", REBASE_PREFIX.trim_end_matches('/')));
+        if service == GitService::ReceivePack {
+            // a push lands in a quarantine whose alternate is the repository itself:
+            // git would list every ref of that alternate (`for-each-ref`, 0.5 s with
+            // 1M refs) on top of the `--not --all` that already covers them. `true`
+            // prints none.
+            c.args(["-c", "core.alternateRefsCommand=true"]);
+        }
         c.arg(service.subcommand());
         if opts.stateless_rpc {
             c.arg("--stateless-rpc");
