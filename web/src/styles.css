@@ -6265,8 +6265,11 @@ a.milestone-chip:hover {
 
 /* ================================================================ imports */
 
+/* the form, the steps after it and the earlier imports share one column */
+.page.import-page {
+  max-width: 800px;
+}
 .import-card {
-  max-width: 760px;
   padding: 20px 22px;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);

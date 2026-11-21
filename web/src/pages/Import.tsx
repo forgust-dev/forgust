@@ -114,7 +114,7 @@ export function ImportPage() {
   const started = (id: number) => nav(`/import/${id}`);
 
   return (
-    <div className="page stack list-page">
+    <div className="page stack list-page import-page">
       <ListHead title="Import projects" sub="Bring a repository over from another forge, with its merge requests, issues, labels and CI/CD variables." />
       {found ? (
         <ImportOne conn={conn} project={found} back={back} started={started} />
