@@ -1,0 +1,136 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT name, tag, media_type, manifest, digest, blob_digests, previous_blob_digests, size, origin, stored_at\n           FROM vulnerability_db_mirrors WHERE name = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "vulnerability_db_mirrors",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "tag",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "vulnerability_db_mirrors",
+            "name": "tag"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "media_type",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "vulnerability_db_mirrors",
+            "name": "media_type"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "manifest",
+        "type_info": "Bytea",
+        "origin": {
+          "Table": {
+            "table": "vulnerability_db_mirrors",
+            "name": "manifest"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "digest",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "vulnerability_db_mirrors",
+            "name": "digest"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "blob_digests",
+        "type_info": "TextArray",
+        "origin": {
+          "Table": {
+            "table": "vulnerability_db_mirrors",
+            "name": "blob_digests"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "previous_blob_digests",
+        "type_info": "TextArray",
+        "origin": {
+          "Table": {
+            "table": "vulnerability_db_mirrors",
+            "name": "previous_blob_digests"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "size",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "vulnerability_db_mirrors",
+            "name": "size"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "origin",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "vulnerability_db_mirrors",
+            "name": "origin"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "stored_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "vulnerability_db_mirrors",
+            "name": "stored_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "41edac39680c4dfc6a2189a5652e98ab09de4f1e79833caf60fbc36f640a370c"
+}

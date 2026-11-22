@@ -53,6 +53,16 @@ pub struct SecurityScanningConfig {
     /// Scans running at once on the instance; due projects wait their turn.
     pub max_concurrent: u32,
     pub timeout_secs: u64,
+    /// Keep Trivy's databases on this server (copied from the sources below
+    /// every 6 hours, or imported from files with `forgust admin
+    /// import-vulnerability-db`), and have the scans read them from here: for
+    /// installs that cannot or should not reach ghcr.io.
+    pub mirror_vulnerability_dbs: bool,
+    /// Where the copies come from: `host/repository:tag`, as Trivy's own
+    /// `--db-repository` (`http://` in front for a registry without TLS).
+    pub trivy_db_source: String,
+    pub trivy_java_db_source: String,
+    pub trivy_checks_source: String,
 }
 
 impl Default for SecurityScanningConfig {
@@ -65,6 +75,10 @@ impl Default for SecurityScanningConfig {
             tags: Vec::new(),
             max_concurrent: 2,
             timeout_secs: 3600,
+            mirror_vulnerability_dbs: false,
+            trivy_db_source: "ghcr.io/aquasecurity/trivy-db:2".into(),
+            trivy_java_db_source: "ghcr.io/aquasecurity/trivy-java-db:1".into(),
+            trivy_checks_source: "ghcr.io/aquasecurity/trivy-checks:1".into(),
         }
     }
 }

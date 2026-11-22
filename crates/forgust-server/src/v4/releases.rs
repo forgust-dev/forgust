@@ -87,8 +87,9 @@ async fn release_json(
 }
 
 async fn render(state: &AppState, principal: &Principal, p: &Project, r: &Release) -> ApiResult<Value> {
-    let links = forgust_db::releases::links(&state.db, &[r.id]).await?;
-    release_json(state, svc::sees_code(state, principal, p).await, p, r, &links, None).await
+    let code = svc::sees_code(state, principal, p).await;
+    let links = svc::visible_links(state, p, code, &[r.id]).await?;
+    release_json(state, code, p, r, &links, None).await
 }
 
 pub async fn list(
@@ -102,8 +103,8 @@ pub async fn list(
     let list = forgust_db::releases::list(&state.db, p.id, pg.probe(), pg.offset()).await?;
     let total = forgust_db::releases::count(&state.db, p.id).await?;
     let ids: Vec<i64> = list.iter().map(|r| r.id).collect();
-    let links = forgust_db::releases::links(&state.db, &ids).await?;
     let code = svc::sees_code(&state, &v, &p).await;
+    let links = svc::visible_links(&state, &p, code, &ids).await?;
     // every tag's commit in one listing; then each release's commit, a few at a time
     let tags: std::collections::HashMap<String, String> = if code {
         state
@@ -229,7 +230,7 @@ pub async fn links(
 ) -> ApiResult<Json<Value>> {
     let p = project_for(&state, &v, &id, ProjectAction::Read).await?;
     let r = svc::find(&state, &v, &p, &tag).await?;
-    let links = forgust_db::releases::links(&state.db, &[r.id]).await?;
+    let links = svc::visible_links(&state, &p, svc::sees_code(&state, &v, &p).await, &[r.id]).await?;
     Ok(Json(json!(links.iter().map(|l| link_json(&state, &p, &tag, l)).collect::<Vec<_>>())))
 }
 
@@ -240,7 +241,7 @@ pub async fn link(
 ) -> ApiResult<Json<Value>> {
     let p = project_for(&state, &v, &id, ProjectAction::Read).await?;
     let r = svc::find(&state, &v, &p, &tag).await?;
-    let links = forgust_db::releases::links(&state.db, &[r.id]).await?;
+    let links = svc::visible_links(&state, &p, svc::sees_code(&state, &v, &p).await, &[r.id]).await?;
     let l = links.iter().find(|l| l.id == link_id).ok_or(ApiError::NotFound)?;
     Ok(Json(link_json(&state, &p, &tag, l)))
 }

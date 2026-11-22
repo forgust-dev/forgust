@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE tag_sboms SET cyclonedx_upload_id = $2, spdx_upload_id = $3 WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f949802a5d6ff23598568be098e9f8e29a4844fc0a107be795afaa2c1a770100"
+}

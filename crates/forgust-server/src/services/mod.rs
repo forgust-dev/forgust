@@ -29,6 +29,7 @@ pub mod refs;
 pub mod releases;
 pub mod renovate;
 pub mod repos;
+pub mod sbom;
 pub mod scanning;
 pub mod security;
 pub mod signatures;
@@ -37,6 +38,7 @@ pub mod suggestions;
 pub mod updates;
 pub mod uploads;
 pub mod users;
+pub mod vulnerability_dbs;
 pub mod webhooks;
 
 use serde_json::Value;
