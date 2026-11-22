@@ -295,7 +295,7 @@ dependencies = [
 [[package]]
 name = "assay"
 version = "0.1.0"
-source = "git+https://github.com/forgust-dev/assay?rev=383e716a0c0b3cc0d4daa3c9ff9761d57de7511e#383e716a0c0b3cc0d4daa3c9ff9761d57de7511e"
+source = "git+https://github.com/forgust-dev/assay?rev=7e9797ffe9c99ff62278dee9a1cc76e5375889fa#7e9797ffe9c99ff62278dee9a1cc76e5375889fa"
 dependencies = [
  "anyhow",
  "clap",

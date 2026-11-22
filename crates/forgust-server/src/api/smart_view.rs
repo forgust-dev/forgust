@@ -56,8 +56,12 @@ pub struct MapBlock {
     /// Stable while its name is: what assay.toml names it by.
     pub id: String,
     pub name: String,
+    /// What it is for, in a line: its manifest's (a package's description, an image's
+    /// `org.opencontainers.image.description` label), or assay.toml's.
+    pub description: Option<String>,
     pub kind: MapKind,
-    /// A guess from its dependencies or its image, which assay.toml corrects.
+    /// A guess from its manifest (its dependencies, a binary) or its image, which assay.toml
+    /// corrects.
     pub role: Option<MapRole>,
     /// The folders or files whose files are its own.
     pub roots: Vec<MapPath>,
@@ -257,6 +261,7 @@ fn block(b: assay::Block, accounts: &HashMap<String, String>, files: &HashSet<&s
     MapBlock {
         id: b.id,
         name: b.name,
+        description: b.description,
         kind: kind(b.kind),
         role: b.role.map(role),
         roots: paths(b.roots),

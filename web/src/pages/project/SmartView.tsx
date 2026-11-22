@@ -499,7 +499,14 @@ function BlockCard({ b, status, chosen, dim, onSelect, links }: CardData) {
         )}
       </span>
       <span className="smart-name">{title(b)}</span>
-      <span className="smart-place">{place(b)}</span>
+      {/* what it is for, when its manifest says: its place is in the details */}
+      {b.description ? (
+        <span className="smart-desc" title={`${b.description}\n${place(b)}`}>
+          {b.description}
+        </span>
+      ) : (
+        <span className="smart-place">{place(b)}</span>
+      )}
       {links && <span className="smart-links">{links}</span>}
       <span className="smart-foot">
         {b.files > 0 && <span className="smart-files">{`${plural(b.files, "file")}${lang ? ` · ${lang.name}` : ""}`}</span>}
@@ -554,6 +561,7 @@ function Details({ ctx, gitRef, map, lay, b, jobs, select }: { ctx: Ctx; gitRef:
       </header>
       <div>
         <h2>{title(b)}</h2>
+        {b.description && <p className="smart-about">{b.description}</p>}
         {b.roots.map((r) => (
           <Link key={r.path} className="smart-root" to={at(r)}>
             {where(r.path)}

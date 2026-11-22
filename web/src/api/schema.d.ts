@@ -4508,6 +4508,11 @@ export interface components {
             bus_factor?: number | null;
             /** @description Declared by assay.toml rather than found. */
             configured: boolean;
+            /**
+             * @description What it is for, in a line: its manifest's (a package's description, an image's
+             *     `org.opencontainers.image.description` label), or assay.toml's.
+             */
+            description?: string | null;
             files: number;
             /** @description Stable while its name is: what assay.toml names it by. */
             id: string;

@@ -10585,6 +10585,13 @@
             "type": "boolean",
             "description": "Declared by assay.toml rather than found."
           },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "What it is for, in a line: its manifest's (a package's description, an image's\n`org.opencontainers.image.description` label), or assay.toml's."
+          },
           "files": {
             "type": "integer",
             "minimum": 0
@@ -10652,7 +10659,7 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/MapRole",
-                "description": "A guess from its dependencies or its image, which assay.toml corrects."
+                "description": "A guess from its manifest (its dependencies, a binary) or its image, which assay.toml\ncorrects."
               },
               {
                 "type": "null"

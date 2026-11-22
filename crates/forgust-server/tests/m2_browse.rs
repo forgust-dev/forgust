@@ -281,7 +281,7 @@ async fn smart_view_maps_blocks_links_and_people(pool: sqlx::PgPool) {
     must(git(&work, &["init", "-q", "-b", "main"]).await);
     for (path, text) in [
         ("Cargo.toml", "[workspace]\nmembers = [\"crates/*\"]\n"),
-        ("crates/api/Cargo.toml", "[package]\nname = \"api\"\n\n[dependencies]\naxum = \"0.8\"\ncore = { path = \"../core\" }\n"),
+        ("crates/api/Cargo.toml", "[package]\nname = \"api\"\ndescription = \"Serves the shop\"\n\n[dependencies]\naxum = \"0.8\"\ncore = { path = \"../core\" }\n"),
         ("crates/api/src/main.rs", "fn main() {}\n"),
         ("crates/core/Cargo.toml", "[package]\nname = \"core\"\n"),
         ("crates/core/src/lib.rs", "\n"),
@@ -308,7 +308,7 @@ async fn smart_view_maps_blocks_links_and_people(pool: sqlx::PgPool) {
     let ids: Vec<&str> = m["blocks"].as_array().unwrap().iter().map(|b| b["id"].as_str().unwrap()).collect();
     assert_eq!(ids, ["api", "core", "image"]);
     let api = &m["blocks"][0];
-    assert_eq!((&api["kind"], &api["role"]), (&json!("rust"), &json!("api")));
+    assert_eq!((&api["kind"], &api["role"], &api["description"]), (&json!("rust"), &json!("api"), &json!("Serves the shop")));
     assert_eq!(
         (&api["roots"][0], &api["manifests"][0]),
         (&json!({ "path": "crates/api", "dir": true }), &json!({ "path": "crates/api/Cargo.toml", "dir": false }))

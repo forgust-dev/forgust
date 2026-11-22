@@ -16,7 +16,7 @@ test("the Smart View maps the code into blocks and tells what each needs", async
       branch: "main",
       commit_message: "Add the crates",
       actions: [
-        { action: "create", file_path: "api/Cargo.toml", content: crate("api", '\n[dependencies]\naxum = "0.8"\ncore = { path = "../core" }\n') },
+        { action: "create", file_path: "api/Cargo.toml", content: crate("api", 'description = "Serves the shop"\n\n[dependencies]\naxum = "0.8"\ncore = { path = "../core" }\n') },
         { action: "create", file_path: "api/src/main.rs", content: "fn main() {}\n" },
         { action: "create", file_path: "core/Cargo.toml", content: crate("core") },
         { action: "create", file_path: "core/src/lib.rs", content: "pub fn f() {}\n" },
@@ -30,6 +30,7 @@ test("the Smart View maps the code into blocks and tells what each needs", async
     const card = (id: string) => page.locator(`.smart-card[data-id="${id}"]`);
     for (const id of ["app", "db", "image", "api", "core"]) await expect(card(id)).toBeVisible();
     await expect(card("api")).toContainText("Rust crate · API");
+    await expect(card("api")).toContainText("Serves the shop");
     await expect(card("db")).toContainText("postgres:17");
     if (!isMobile(page)) await expect(page.getByRole("link", { name: "Smart View" }).first()).toBeVisible();
 
