@@ -62,14 +62,22 @@ struct TUser {
     email: Option<String>,
 }
 
+/// The address Gitea and Forgejo answer for a user who keeps theirs private:
+/// `login@noreply.<the instance's domain>` (`jane@noreply.codeberg.org`).
+fn placeholder_email(email: &str, login: &str) -> bool {
+    email
+        .rsplit_once('@')
+        .is_some_and(|(local, host)| local.eq_ignore_ascii_case(login) && host.to_ascii_lowercase().starts_with("noreply."))
+}
+
 impl From<TUser> for SourceUser {
     fn from(u: TUser) -> Self {
         SourceUser {
             id: u.id.to_string(),
             name: if u.full_name.is_empty() { u.login.clone() } else { u.full_name },
+            // a placeholder is nobody's address: not kept, never matched
+            email: u.email.filter(|e| !e.is_empty() && !placeholder_email(e, &u.login)),
             username: u.login,
-            // Gitea answers a placeholder when the user keeps their email private
-            email: u.email.filter(|e| !e.is_empty() && !e.ends_with("@noreply.localhost")),
         }
     }
 }
@@ -715,6 +723,15 @@ mod tests {
         assert_eq!(flavor("1.22.3"), Kind::Gitea);
         assert_eq!(flavor("1.23.0+dev-12-gabc"), Kind::Gitea);
         assert_eq!(flavor("9.0.1+gitea-1.22.0"), Kind::Forgejo);
+    }
+
+    #[test]
+    fn placeholder_emails() {
+        assert!(placeholder_email("jane@noreply.codeberg.org", "jane"));
+        assert!(placeholder_email("jane@noreply.localhost", "Jane"));
+        assert!(!placeholder_email("jane@example.com", "jane"));
+        // a real mailbox that happens to be on such a domain, under another name
+        assert!(!placeholder_email("team@noreply.example.com", "jane"));
     }
 
     #[test]

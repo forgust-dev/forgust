@@ -11,7 +11,7 @@ use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use url::Url;
 
-use super::client::{ByNumber, Http, basic_auth, by_number, number_of};
+use super::client::{ByNumber, Http, basic_auth, by_number, number_of, urlencode};
 
 /// GitHub sorts repository-wide lists only when asked.
 const OLDEST_FIRST: &[(&str, &str)] = &[("sort", "created"), ("direction", "asc")];
@@ -325,6 +325,7 @@ impl Source for GitHub {
             // `users/:me/repos` lists only public ones
             self.http.all("user/repos", &[("affiliation", "owner"), sort]).await?
         } else {
+            let owner = urlencode(owner);
             match self.http.all(&format!("orgs/{owner}/repos"), &[("type", "all"), sort]).await {
                 Err(SourceError::NotFound(_)) => self.http.all(&format!("users/{owner}/repos"), &[("type", "all"), sort]).await?,
                 r => r?,

@@ -89,6 +89,8 @@ export function ImportPage() {
     const at = parseUrl(v);
     if (!at || at.host === hostOf(url)) return;
     setUrl(at.origin);
+    // a token typed for the other address is not sent to this one
+    setToken("");
     // a public instance says which forge it runs
     const known = sources.data?.find((s) => hostOf(s.default_url) === at.host);
     if (known) setSource(known.id);
