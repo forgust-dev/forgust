@@ -190,14 +190,30 @@ volumes: { forgust-data: {}, db-data: {} }
   be turned off)
 
 ### 🔌 Integrations
-- Import from GitLab and GitHub: repositories, merge requests, issues (confidential
-  ones stay confidential, internal notes internal), labels, members; a dry run first,
-  resumable
+- Import from GitLab, GitHub, Gitea and Forgejo, one project or a whole user or
+  organization: repositories, merge requests, issues (confidential ones stay
+  confidential, internal notes internal), labels, CI/CD variables, members; a dry run
+  first, resumable
 - Webhooks, also formatted for Slack, Discord, Matrix, Mattermost and Teams;
   confidential issues and internal comments only go to hooks that ask for their own
   events
 - A GitLab-compatible `/api/v4` subset, so Renovate and `glab` work
 - An MCP server for AI assistants, with OAuth sign-in
+
+### Importing projects
+
+| From | Self-hosted, oldest version | Access token |
+| --- | --- | --- |
+| GitLab (gitlab.com or self-managed) | 12.10 | `read_api`, `read_repository` |
+| GitHub (github.com or Enterprise Server) | Enterprise Server 3.9 | classic `repo`, or fine-grained read access to contents, issues, pull requests and metadata |
+| Gitea (gitea.com or self-hosted) | 1.22 | `read:repository`, `read:issue`, `read:user`, `read:organization` |
+| Forgejo (Codeberg or self-hosted) | 8.0 | the same as Gitea |
+
+A server that says an older version is refused before anything is read. These are the
+oldest versions with every API the importer uses; run a version the forge still
+maintains. Public projects import without a token. What each source cannot hand over
+(Actions secrets, GitHub's resolved threads, wikis, releases, packages) is listed by
+the dry run.
 
 ## Performance
 

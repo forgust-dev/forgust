@@ -1,13 +1,11 @@
 //! GitLab (gitlab.com or self-managed) through `/api/v4`.
 
 use async_trait::async_trait;
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use url::Url;
 
-use super::client::Http;
+use super::client::{Http, basic_auth, urlencode};
 use super::model::*;
 
 pub struct GitLab {
@@ -20,8 +18,8 @@ pub struct GitLab {
 }
 
 impl GitLab {
-    pub fn new(web: Url, addrs: Vec<std::net::SocketAddr>, token: &str) -> Result<GitLab> {
-        let api = web.join("api/v4/").map_err(|e| SourceError::Other(e.to_string()))?;
+    /// `web` is the instance's address, `api` its checked `/api/v4/` root.
+    pub fn new(web: Url, api: Url, addrs: Vec<std::net::SocketAddr>, token: &str) -> Result<GitLab> {
         // no token: public projects only
         let auth = if token.is_empty() { reqwest::header::HeaderMap::new() } else { Http::header("private-token", token)? };
         let http = Http::new(api, addrs, auth)?;
@@ -50,6 +48,18 @@ impl From<GUser> for SourceUser {
 
 fn user(u: Option<GUser>) -> Option<SourceUser> {
     u.map(Into::into)
+}
+
+#[derive(Deserialize)]
+struct GGroup {
+    full_path: String,
+    #[serde(default)]
+    full_name: String,
+}
+
+#[derive(Deserialize)]
+struct GVersion {
+    version: String,
 }
 
 #[derive(Deserialize)]
@@ -326,22 +336,48 @@ impl Source for GitLab {
         Ok(self.http.get::<GUser>("user", &[]).await?.into())
     }
 
-    async fn list_projects(&self, scope: &str, search: &str) -> Result<Vec<SourceProject>> {
-        let scope = scope.trim().trim_matches('/');
-        let list: Vec<GProject> = if scope.is_empty() {
-            self.http.all("projects", &[("membership", "true"), ("search", search), ("order_by", "path"), ("sort", "asc")]).await?
+    async fn version(&self) -> Option<ServerVersion> {
+        // gitlab.com runs the latest; elsewhere `/version` wants a token
+        if self.web.host_str() == Some("gitlab.com") || self.token.is_empty() {
+            return None;
+        }
+        let v: GVersion = self.http.get_no_wait("version", &[]).await.ok()?;
+        Some(ServerVersion { kind: Kind::Gitlab, raw: v.version })
+    }
+
+    async fn groups(&self) -> Result<Vec<SourceNamespace>> {
+        let groups: Vec<GGroup> = self.http.all("groups", &[("min_access_level", "10"), ("order_by", "path"), ("sort", "asc")]).await?;
+        Ok(groups
+            .into_iter()
+            .map(|g| SourceNamespace {
+                kind: "group".into(),
+                name: if g.full_name.is_empty() { g.full_path.clone() } else { g.full_name },
+                path: g.full_path,
+            })
+            .collect())
+    }
+
+    async fn list_projects(&self, owner: &str, search: &str) -> Result<Vec<SourceProject>> {
+        let owner = owner.trim().trim_matches('/');
+        let order = [("search", search), ("order_by", "path"), ("sort", "asc")];
+        let list: Vec<GProject> = if owner.is_empty() {
+            self.http.all("projects", &[[("membership", "true")].as_slice(), &order].concat()).await?
         } else {
             // projects shared with the group live elsewhere: not part of it
-            let path = format!("groups/{}/projects", urlencode(scope));
-            let all: Vec<GProject> = self
+            let path = format!("groups/{}/projects", urlencode(owner));
+            match self
                 .http
-                .all(
-                    &path,
-                    &[("include_subgroups", "true"), ("with_shared", "false"), ("search", search), ("order_by", "path"), ("sort", "asc")],
-                )
-                .await?;
-            let prefix = format!("{}/", scope.to_lowercase());
-            all.into_iter().filter(|p| p.source().full_path.to_lowercase().starts_with(&prefix)).collect()
+                .all::<GProject>(&path, &[[("include_subgroups", "true"), ("with_shared", "false")].as_slice(), &order].concat())
+                .await
+            {
+                Ok(all) => {
+                    let prefix = format!("{}/", owner.to_lowercase());
+                    all.into_iter().filter(|p| p.source().full_path.to_lowercase().starts_with(&prefix)).collect()
+                }
+                // not a group: a user's personal projects
+                Err(SourceError::NotFound(_)) => self.http.all(&format!("users/{}/projects", urlencode(owner)), &order).await?,
+                Err(e) => return Err(e),
+            }
         };
         // forks are imported as plain projects; their upstream link is lost
         Ok(list.iter().map(GProject::source).collect())
@@ -368,13 +404,7 @@ impl Source for GitLab {
     }
 
     fn git_auth(&self) -> Vec<(String, String)> {
-        let mut cfg = Vec::new();
-        if !self.token.is_empty() {
-            let basic = STANDARD.encode(format!("oauth2:{}", self.token));
-            cfg.push(("http.extraHeader".to_string(), format!("Authorization: Basic {basic}")));
-        }
-        cfg.extend(pin(&self.web, &self.http.addrs));
-        cfg
+        if self.token.is_empty() { Vec::new() } else { vec![basic_auth("oauth2", &self.token)] }
     }
 
     fn mr_ref_glob(&self) -> &'static str {
@@ -385,7 +415,7 @@ impl Source for GitLab {
         let list: Vec<GLabel> = self.http.all(&format!("{}/labels", pid(p)), &[("include_ancestor_groups", "true")]).await?;
         Ok(list
             .into_iter()
-            .map(|l| SourceLabel { name: l.name, color: normalize_color(&l.color), description: l.description.unwrap_or_default() })
+            .map(|l| SourceLabel { name: l.name, color: label_color(&l.color), description: l.description.unwrap_or_default() })
             .collect())
     }
 
@@ -627,63 +657,5 @@ impl Source for GitLab {
             }
         }
         Ok(r)
-    }
-}
-
-/// Path segments as GitLab wants them in URLs (`group%2Fproject`).
-pub fn urlencode(s: &str) -> String {
-    percent_encoding::utf8_percent_encode(s, percent_encoding::NON_ALPHANUMERIC).to_string()
-}
-
-/// GitLab colors are #rrggbb, sometimes #rgb or a CSS name; keep what fits.
-fn normalize_color(c: &str) -> String {
-    let c = c.trim();
-    if c.len() == 7 && c.starts_with('#') && c[1..].chars().all(|ch| ch.is_ascii_hexdigit()) {
-        return c.to_ascii_lowercase();
-    }
-    if c.len() == 4 && c.starts_with('#') && c[1..].chars().all(|ch| ch.is_ascii_hexdigit()) {
-        let d: Vec<char> = c[1..].chars().collect();
-        return format!("#{0}{0}{1}{1}{2}{2}", d[0], d[1], d[2]).to_ascii_lowercase();
-    }
-    "#6366f1".into()
-}
-
-/// The `http.curloptResolve` entry pinning git to the checked addresses: one
-/// entry listing them all (curl keeps only the last entry per host and port),
-/// IPv4 first.
-pub fn pin(web: &Url, addrs: &[std::net::SocketAddr]) -> Vec<(String, String)> {
-    let (Some(host), Some(port)) = (web.host_str(), web.port_or_known_default()) else { return Vec::new() };
-    if addrs.is_empty() {
-        return Vec::new();
-    }
-    let mut ips: Vec<std::net::IpAddr> = addrs.iter().map(|a| a.ip()).collect();
-    ips.sort_by_key(|ip| ip.is_ipv6());
-    ips.dedup();
-    let list: Vec<String> = ips
-        .iter()
-        .map(|ip| match ip {
-            std::net::IpAddr::V6(v6) => format!("[{v6}]"),
-            ip => ip.to_string(),
-        })
-        .collect();
-    vec![("http.curloptResolve".to_string(), format!("{host}:{port}:{}", list.join(",")))]
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn colors() {
-        assert_eq!(super::normalize_color("#FF0000"), "#ff0000");
-        assert_eq!(super::normalize_color("#abc"), "#aabbcc");
-        assert_eq!(super::normalize_color("red"), "#6366f1");
-    }
-
-    #[test]
-    fn pins() {
-        let u = url::Url::parse("https://gitlab.example.com/").unwrap();
-        // one entry (curl keeps the last per host:port), IPv4 first
-        let p = super::pin(&u, &["[2001:db8::1]:443".parse().unwrap(), "10.0.0.5:443".parse().unwrap()]);
-        assert_eq!(p.len(), 1);
-        assert_eq!(p[0].1, "gitlab.example.com:443:10.0.0.5,[2001:db8::1]");
     }
 }
