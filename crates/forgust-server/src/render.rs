@@ -271,7 +271,7 @@ pub fn markdown_with(source: &str, project_url: &str, git_ref: &str, dir: &str, 
     // `:tada:` and the other emoji shortcodes, as on GitLab and GitHub
     opts.extension.shortcodes = true;
     opts.render.r#unsafe = false;
-    let html = comrak::markdown_to_html(source, &opts);
+    let html = markdown_html(source, &opts);
 
     let rewrite = LinkRewriter {
         base_dir: if dir.is_empty() { String::new() } else { format!("{dir}/") },
@@ -316,6 +316,49 @@ pub fn markdown_with(source: &str, project_url: &str, git_ref: &str, dir: &str, 
         })
         .clean(&html)
         .to_string()
+}
+
+/// comrak's HTML, with one rule more for `$x$` math than Pandoc's: a closing `$`
+/// glued to a word (`http://$HOST`, a shell's `$VAR`) does not close it. Such a span's
+/// opening `$` is escaped and the source parsed again, so the text keeps its own
+/// Markdown (`**http://$A** and **http://$B**` stays bold, not one math span).
+fn markdown_html(source: &str, opts: &comrak::Options) -> String {
+    use comrak::nodes::NodeValue;
+    let mut src = std::borrow::Cow::Borrowed(source);
+    // each pass escapes every bad span; a few passes undo the chains a new one makes
+    for pass in 0.. {
+        let arena = comrak::Arena::new();
+        let root = comrak::parse_document(&arena, &src, opts);
+        let line_starts: Vec<usize> = std::iter::once(0).chain(src.match_indices('\n').map(|(i, _)| i + 1)).collect();
+        let mut escapes: Vec<usize> = root
+            .descendants()
+            .filter(|node| {
+                let NodeValue::Math(m) = &node.data().value else { return false };
+                let glued = node.next_sibling().is_some_and(|next| match &next.data().value {
+                    NodeValue::Text(t) => t.chars().next().is_some_and(|c| c.is_alphanumeric() || c == '_'),
+                    _ => false,
+                });
+                m.dollar_math && !m.display_math && glued
+            })
+            .filter_map(|node| {
+                let start = node.data().sourcepos.start;
+                let at = line_starts.get(start.line.checked_sub(1)?)? + start.column.checked_sub(1)?;
+                // a position off the `$` (a source comrak changed): leave that span
+                (src.as_bytes().get(at) == Some(&b'$')).then_some(at)
+            })
+            .collect();
+        if escapes.is_empty() || pass == 4 {
+            let mut out = String::new();
+            comrak::format_html(root, opts, &mut out).expect("writing to a String cannot fail");
+            return out;
+        }
+        escapes.sort_unstable();
+        let s = src.to_mut();
+        for at in escapes.into_iter().rev() {
+            s.insert(at, '\\');
+        }
+    }
+    unreachable!()
 }
 
 // ------------------------------------------------------------------ references (M6)
@@ -632,6 +675,22 @@ mod tests {
         assert!(html.contains("prices $5 and $10"), "dollars in prose stay: {html}");
         assert!(html.contains(r#"<code class="language-math" data-math-style="display">a+b"#), "{html}");
         assert!(!html.contains("evil") && !html.contains(r#"data-math-style="x""#), "{html}");
+        // a `$` glued to a word closes no math: the text keeps its own Markdown
+        let html = markdown(
+            "At **http://$HOST:8080**, and\n**http://$HOST:8027**. Then $a$ and `$` $b$, \\$c and > $x$y $z$.",
+            "/acme/api",
+            "main",
+            "",
+        );
+        assert!(html.contains("At <strong>http://$HOST:8080</strong>, and\n<strong>http://$HOST:8027</strong>."), "{html}");
+        assert!(
+            html.contains(r#"Then <span data-math-style="inline">a</span> and <code>$</code> <span data-math-style="inline">b</span>"#),
+            "{html}"
+        );
+        assert!(html.contains(r#"$c and &gt; $x$y <span data-math-style="inline">z</span>."#), "{html}");
+        // inside a quote and a list too, and with a multibyte text before
+        let html = markdown("> - é **http://$A** and **http://$B**", "/acme/api", "main", "");
+        assert!(html.contains("é <strong>http://$A</strong> and <strong>http://$B</strong>"), "{html}");
     }
 
     #[test]
