@@ -4,6 +4,8 @@
 /web/tools/gen-api/node_modules
 /web/dist
 /bench/results
+# the pages `assay view` writes
+*.assay.html
 .env
 forgust.toml
 /data-server.log

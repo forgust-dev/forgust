@@ -1,6 +1,6 @@
 //! The Smart View: a project's code as blocks (what is built, run or deployed apart: a
 //! package, an image, a service, a database's schema, the CI, the docs), the links between
-//! them and the people to ask. assay finds them (github.com/forgust-dev/assay), from the
+//! them and the people to ask. assay finds them (the forgust-assay crate), from the
 //! manifests and the history read here through the storage: a bare repository has no
 //! working copy for it to read.
 
@@ -184,23 +184,26 @@ async fn build(state: &AppState, p: &Project, commit: String) -> ApiResult<RepoM
     let (blobs, files_cut) = state.storage.tree_blobs(p.id, &commit, MAX_FILES).await?;
     // the text of what assay reads; a link's target is no file's text
     let wanted: Vec<&forgust_storage::TreeBlob> =
-        blobs.iter().filter(|b| b.mode != SYMLINK && b.size <= MAX_TEXT && assay::reads(&b.path)).take(MAX_TEXTS).collect();
+        blobs.iter().filter(|b| b.mode != SYMLINK && b.size <= MAX_TEXT && forgust_assay::reads(&b.path)).take(MAX_TEXTS).collect();
     let oids: Vec<String> = wanted.iter().map(|b| b.oid.clone()).collect();
     let contents = state.storage.blobs_by_id(p.id, &oids, MAX_TEXT as usize).await?;
     let texts: HashMap<String, String> =
         wanted.iter().zip(contents).filter_map(|(b, c)| Some((b.path.clone(), String::from_utf8(c?.1).ok()?))).collect();
-    let days = assay::history_days(&texts);
+    let days = forgust_assay::history_days(&texts);
     let since = chrono::Utc::now().timestamp() - i64::from(days) * 86_400;
     let (log, log_cut) = state.storage.log_paths(p.id, &commit, since, MAX_COMMITS).await?;
-    let snapshot = assay::Snapshot {
+    let snapshot = forgust_assay::Snapshot {
         name: p.path.clone(),
         commit: Some(commit.clone()),
         files: blobs.into_iter().map(|b| b.path).collect(),
         texts,
-        history: Some(log.into_iter().map(|c| assay::Commit { name: c.name, email: c.email, time: c.time, files: c.paths }).collect()),
+        history: Some(
+            log.into_iter().map(|c| forgust_assay::Commit { name: c.name, email: c.email, time: c.time, files: c.paths }).collect(),
+        ),
     };
-    let (mapped, snapshot) =
-        tokio::task::spawn_blocking(move || (assay::map_snapshot(&snapshot), snapshot)).await.map_err(|e| ApiError::Internal(e.into()))?;
+    let (mapped, snapshot) = tokio::task::spawn_blocking(move || (forgust_assay::map_snapshot(&snapshot), snapshot))
+        .await
+        .map_err(|e| ApiError::Internal(e.into()))?;
     let mut out = RepoMap {
         commit,
         blocks: Vec::new(),
@@ -229,7 +232,7 @@ async fn build(state: &AppState, p: &Project, commit: String) -> ApiResult<RepoM
             from: l.from,
             to: l.to,
             kind: link_kind(l.kind),
-            inferred: l.certainty == assay::Certainty::Inferred,
+            inferred: l.certainty == forgust_assay::Certainty::Inferred,
             via: l.via,
         })
         .collect();
@@ -240,7 +243,7 @@ async fn build(state: &AppState, p: &Project, commit: String) -> ApiResult<RepoM
 }
 
 /// The accounts of the people found, by verified email (lowercased). Best effort.
-async fn accounts(state: &AppState, map: &assay::RepoMap) -> HashMap<String, String> {
+async fn accounts(state: &AppState, map: &forgust_assay::RepoMap) -> HashMap<String, String> {
     let mut emails: Vec<String> = map.blocks.iter().flat_map(|b| b.people.iter().map(|p| p.email.to_lowercase())).collect();
     emails.sort();
     emails.dedup();
@@ -256,7 +259,7 @@ async fn accounts(state: &AppState, map: &assay::RepoMap) -> HashMap<String, Str
     }
 }
 
-fn block(b: assay::Block, accounts: &HashMap<String, String>, files: &HashSet<&str>) -> MapBlock {
+fn block(b: forgust_assay::Block, accounts: &HashMap<String, String>, files: &HashSet<&str>) -> MapBlock {
     let paths = |list: Vec<String>| list.into_iter().map(|path| MapPath { dir: !files.contains(path.as_str()), path }).collect();
     MapBlock {
         id: b.id,
@@ -282,47 +285,47 @@ fn block(b: assay::Block, accounts: &HashMap<String, String>, files: &HashSet<&s
             .map(|p| MapPerson { username: accounts.get(&p.email.to_lowercase()).cloned(), name: p.name, commits: p.commits, last: p.last })
             .collect(),
         bus_factor: b.bus_factor,
-        configured: b.source == assay::Source::Configured,
+        configured: b.source == forgust_assay::Source::Configured,
     }
 }
 
-fn kind(k: assay::Kind) -> MapKind {
+fn kind(k: forgust_assay::Kind) -> MapKind {
     match k {
-        assay::Kind::Rust => MapKind::Rust,
-        assay::Kind::Node => MapKind::Node,
-        assay::Kind::Python => MapKind::Python,
-        assay::Kind::Go => MapKind::Go,
-        assay::Kind::Docker => MapKind::Docker,
-        assay::Kind::Service => MapKind::Service,
-        assay::Kind::Migrations => MapKind::Migrations,
-        assay::Kind::Ci => MapKind::Ci,
-        assay::Kind::Docs => MapKind::Docs,
-        assay::Kind::Other => MapKind::Other,
+        forgust_assay::Kind::Rust => MapKind::Rust,
+        forgust_assay::Kind::Node => MapKind::Node,
+        forgust_assay::Kind::Python => MapKind::Python,
+        forgust_assay::Kind::Go => MapKind::Go,
+        forgust_assay::Kind::Docker => MapKind::Docker,
+        forgust_assay::Kind::Service => MapKind::Service,
+        forgust_assay::Kind::Migrations => MapKind::Migrations,
+        forgust_assay::Kind::Ci => MapKind::Ci,
+        forgust_assay::Kind::Docs => MapKind::Docs,
+        forgust_assay::Kind::Other => MapKind::Other,
     }
 }
 
-fn role(r: assay::Role) -> MapRole {
+fn role(r: forgust_assay::Role) -> MapRole {
     match r {
-        assay::Role::Web => MapRole::Web,
-        assay::Role::Api => MapRole::Api,
-        assay::Role::Cli => MapRole::Cli,
-        assay::Role::Library => MapRole::Library,
-        assay::Role::Database => MapRole::Database,
-        assay::Role::Cache => MapRole::Cache,
-        assay::Role::Queue => MapRole::Queue,
-        assay::Role::Search => MapRole::Search,
-        assay::Role::Storage => MapRole::Storage,
-        assay::Role::Mail => MapRole::Mail,
+        forgust_assay::Role::Web => MapRole::Web,
+        forgust_assay::Role::Api => MapRole::Api,
+        forgust_assay::Role::Cli => MapRole::Cli,
+        forgust_assay::Role::Library => MapRole::Library,
+        forgust_assay::Role::Database => MapRole::Database,
+        forgust_assay::Role::Cache => MapRole::Cache,
+        forgust_assay::Role::Queue => MapRole::Queue,
+        forgust_assay::Role::Search => MapRole::Search,
+        forgust_assay::Role::Storage => MapRole::Storage,
+        forgust_assay::Role::Mail => MapRole::Mail,
     }
 }
 
-fn link_kind(k: assay::LinkKind) -> MapLinkKind {
+fn link_kind(k: forgust_assay::LinkKind) -> MapLinkKind {
     match k {
-        assay::LinkKind::Uses => MapLinkKind::Uses,
-        assay::LinkKind::Builds => MapLinkKind::Builds,
-        assay::LinkKind::Runs => MapLinkKind::Runs,
-        assay::LinkKind::DependsOn => MapLinkKind::DependsOn,
-        assay::LinkKind::Connects => MapLinkKind::Connects,
-        assay::LinkKind::Calls => MapLinkKind::Calls,
+        forgust_assay::LinkKind::Uses => MapLinkKind::Uses,
+        forgust_assay::LinkKind::Builds => MapLinkKind::Builds,
+        forgust_assay::LinkKind::Runs => MapLinkKind::Runs,
+        forgust_assay::LinkKind::DependsOn => MapLinkKind::DependsOn,
+        forgust_assay::LinkKind::Connects => MapLinkKind::Connects,
+        forgust_assay::LinkKind::Calls => MapLinkKind::Calls,
     }
 }

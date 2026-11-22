@@ -293,21 +293,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "assay"
-version = "0.1.0"
-source = "git+https://github.com/forgust-dev/assay?rev=7e9797ffe9c99ff62278dee9a1cc76e5375889fa#7e9797ffe9c99ff62278dee9a1cc76e5375889fa"
-dependencies = [
- "anyhow",
- "clap",
- "globset",
- "saphyr",
- "saphyr-parser",
- "serde",
- "serde_json",
- "toml 1.2.2+spec-1.1.0",
-]
-
-[[package]]
 name = "async-channel"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2379,6 +2364,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
+name = "forgust-assay"
+version = "0.5.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "globset",
+ "saphyr",
+ "saphyr-parser",
+ "serde",
+ "serde_json",
+ "toml 1.2.2+spec-1.1.0",
+]
+
+[[package]]
 name = "forgust-bench"
 version = "0.5.0"
 dependencies = [
@@ -2453,7 +2452,6 @@ dependencies = [
  "ammonia",
  "anyhow",
  "argon2 0.6.0",
- "assay",
  "async-compression",
  "async-trait",
  "axum",
@@ -2466,6 +2464,7 @@ dependencies = [
  "comrak",
  "croner",
  "figment",
+ "forgust-assay",
  "forgust-ci-config",
  "forgust-db",
  "forgust-reviewer",

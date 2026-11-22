@@ -20,7 +20,8 @@ forgust-storage.workspace = true
 forgust-ci-config.workspace = true
 # the report of the AI review job only: the job itself is its own image
 forgust-reviewer.workspace = true
-assay.workspace = true
+# the Smart View's engine, without its command
+forgust-assay.workspace = true
 anyhow.workspace = true
 thiserror.workspace = true
 async-trait.workspace = true

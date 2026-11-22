@@ -67,5 +67,3 @@ allow-wildcard-paths = true
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
-# assay, the Smart View's engine, lives in its own repository
-allow-org = { github = ["forgust-dev"] }
