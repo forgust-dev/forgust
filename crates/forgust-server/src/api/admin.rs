@@ -10,7 +10,7 @@ use utoipa::ToSchema;
 
 use super::Paging;
 use super::dto::UserDto;
-use crate::auth::Admin;
+use crate::auth::{Admin, Principal};
 use crate::error::{ApiError, ApiResult};
 use crate::services::{self, users};
 use crate::state::AppState;
@@ -375,6 +375,7 @@ const RUNNABLE: &[(&str, &str)] = &[
     ("measure_repositories", "Repository sizes for Storage"),
     ("reindex_code", "Code search: index every project again from its repository"),
     ("update_check", "Ask GitHub for the latest Forgust release (unless turned off in Settings)"),
+    ("mirror_vulnerability_dbs", "Copy Trivy's vulnerability databases into this server (when mirroring is on in Security scanning)"),
 ];
 
 #[derive(Serialize, ToSchema)]
@@ -719,6 +720,7 @@ pub async fn reset_two_factor(
     Admin(me, p): Admin,
     Path(id): Path<i64>,
 ) -> ApiResult<Json<serde_json::Value>> {
+    own_ways_in(&me, &p, id)?;
     let u = person(&state, id).await?;
     let mut tx = state.db.begin().await?;
     // security keys and passkeys too: whatever was lost may be among them
@@ -763,10 +765,11 @@ pub struct LinkIdentity {
 /// it themselves, from their settings).
 pub async fn link_identity(
     State(state): State<AppState>,
-    Admin(_, p): Admin,
+    Admin(me, p): Admin,
     Path(id): Path<i64>,
     Json(req): Json<LinkIdentity>,
 ) -> ApiResult<Json<serde_json::Value>> {
+    own_ways_in(&me, &p, id)?;
     let u = person(&state, id).await?;
     let subject = req.subject.trim();
     if !state.oidc.providers.contains_key(&req.provider) {
@@ -895,6 +898,18 @@ pub struct UpdateUser {
     pub email: Option<String>,
 }
 
+/// An administrator's own ways in (password, email, second factors, linked
+/// sign-in providers) change from their own browser session, like anyone's: a token made for the admin
+/// API must not be able to take the account over.
+fn own_ways_in(me: &forgust_db::users::User, p: &Principal, id: i64) -> ApiResult<()> {
+    if id == me.id && !matches!(p, Principal::User { scopes: None, .. }) {
+        return Err(ApiError::forbidden(
+            "your own password, email, two-factor authentication and sign-in providers change from a browser session, not with a token",
+        ));
+    }
+    Ok(())
+}
+
 pub async fn update_user(
     State(state): State<AppState>,
     Admin(me, p): Admin,
@@ -908,6 +923,9 @@ pub async fn update_user(
     req.state = req.state.filter(|s| *s != u.state);
     req.is_external = req.is_external.filter(|e| *e != u.is_external);
     req.email = req.email.filter(|e| !e.trim().eq_ignore_ascii_case(&u.email));
+    if req.email.is_some() || req.password.is_some() {
+        own_ways_in(&me, &p, id)?;
+    }
     // as the request leaves the account, before changing any of it
     if req.is_admin.unwrap_or(u.is_admin)
         && req.is_external.unwrap_or(u.is_external)
@@ -935,6 +953,7 @@ pub async fn update_user(
         forgust_db::users::set_state(&state.db, id, s).await?;
         if s == "blocked" {
             forgust_db::sessions::delete_for_user(&state.db, id).await?;
+            crate::ci::pipeline::cancel_jobs_of(&state, id).await?;
         }
         let action = if s == "blocked" { "user_blocked" } else { "user_unblocked" };
         services::audit(&state, &p, action, Some(("user", id)), json!({ "previous_state": u.state }), None).await;

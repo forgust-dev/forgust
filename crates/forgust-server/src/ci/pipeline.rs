@@ -54,7 +54,13 @@ pub struct Trigger<'a> {
 /// runners only, no project CI variables, never a ref's or commit's status (the
 /// database's `is_system_source` says the same).
 pub fn is_system(source: &str) -> bool {
-    matches!(source, crate::services::renovate::SOURCE | crate::services::scanning::SOURCE | crate::services::ai_review::SOURCE)
+    matches!(
+        source,
+        crate::services::renovate::SOURCE
+            | crate::services::scanning::SOURCE
+            | crate::services::ai_review::SOURCE
+            | crate::services::sbom::SOURCE
+    )
 }
 
 impl<'a> Trigger<'a> {
@@ -583,6 +589,7 @@ pub async fn process(state: &AppState, pipeline_id: i64) -> anyhow::Result<()> {
             tracing::warn!(pipeline_id, error = %e, "merge train not advanced");
         }
         crate::services::renovate::on_pipeline_finished(state, &pipeline, status).await;
+        crate::services::sbom::on_pipeline_finished(state, &pipeline, status).await;
         state.events.publish(Event::Pipeline { project_id: pipeline.project_id, pipeline_id, status: status.to_string() });
         crate::ci::hooks::pipeline(state, pipeline.project_id, pipeline_id).await;
         crate::ci::on_pipeline_status(state, &pipeline).await;
@@ -777,6 +784,21 @@ async fn cancel_downstream(state: &AppState, b: &Build, status: &str) -> anyhow:
         && let Some(down) = forgust_db::ci::downstream_of(&state.db, b.id).await?
     {
         Box::pin(cancel(state, down)).await?;
+    }
+    Ok(())
+}
+
+/// A blocked account's jobs stop: one running acts with its reach, one
+/// waiting would never be handed to a runner (`forgust_db::ci::claim`) and
+/// would hold its resource group. A job that cannot be canceled is logged, not
+/// a reason to keep the account open.
+pub async fn cancel_jobs_of(state: &AppState, user_id: i64) -> anyhow::Result<()> {
+    for id in forgust_db::ci::live_builds_of(&state.db, user_id).await? {
+        if let Some(b) = forgust_db::ci::build(&state.db, id).await?
+            && let Err(e) = cancel_job(state, &b).await
+        {
+            tracing::warn!(user = user_id, build = id, error = %e, "a blocked user's job was not canceled");
+        }
     }
     Ok(())
 }

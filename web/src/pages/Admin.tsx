@@ -3,7 +3,7 @@ import { AuditEvents } from "../components/AuditEvents";
 import { useState, type FormEvent } from "react";
 import { Route, Routes, useLocation } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, ApiError, enc, qs, timeAgo, type S } from "../api/client";
+import { api, ApiError, bytes, enc, qs, timeAgo, type S } from "../api/client";
 import { useProviders } from "../prefetch";
 import { useSession } from "../session";
 import { Avatar, Badge, Card, ErrorBox, Field, FilterTabs, NotFound, Q, SearchField, UserLink, useDebounced, useFormRun } from "../components/ui";
@@ -738,9 +738,58 @@ function SecurityScanningAdminForm({ initial, onSaved }: { initial: S["AdminScan
       <Field label="Timeout (minutes)">
         <input type="number" min={1} max={1440} value={Math.round(s.timeout_secs / 60)} onChange={(e) => setS({ ...s, timeout_secs: Number(e.target.value) * 60 })} />
       </Field>
+      <label className="check">
+        <input type="checkbox" checked={s.mirror_vulnerability_dbs} onChange={(e) => setS({ ...s, mirror_vulnerability_dbs: e.target.checked })} /> Keep Trivy's
+        databases on this server, and scan with them
+      </label>
+      <p className="small muted" style={{ margin: 0 }}>
+        Copied from the sources below every 6 hours (Admin &gt; Jobs runs it now), or imported from files with{" "}
+        <code>forgust admin import-vulnerability-db</code> where the server cannot reach them. Scans then need no access to ghcr.io.
+      </p>
+      <Field label="Vulnerability database source">
+        <input value={s.trivy_db_source} disabled={!s.mirror_vulnerability_dbs} onChange={(e) => setS({ ...s, trivy_db_source: e.target.value })} />
+      </Field>
+      <Field label="Java index source">
+        <input value={s.trivy_java_db_source} disabled={!s.mirror_vulnerability_dbs} onChange={(e) => setS({ ...s, trivy_java_db_source: e.target.value })} />
+      </Field>
+      <Field label="Infrastructure checks source">
+        <input value={s.trivy_checks_source} disabled={!s.mirror_vulnerability_dbs} onChange={(e) => setS({ ...s, trivy_checks_source: e.target.value })} />
+      </Field>
       <div>
         <button className="btn primary">Save</button>
       </div>
+      <Card title="Databases on this server">
+        {initial.mirrors.length === 0 ? (
+          <p className="small muted" style={{ margin: 0 }}>
+            None yet.
+          </p>
+        ) : (
+          <table className="table small">
+            <thead>
+              <tr>
+                <th>Database</th>
+                <th>From</th>
+                <th className="num">Size</th>
+                <th>Stored</th>
+              </tr>
+            </thead>
+            <tbody>
+              {initial.mirrors.map((m) => (
+                <tr key={m.name}>
+                  <td>
+                    <code title={m.digest}>
+                      {m.name}:{m.tag}
+                    </code>
+                  </td>
+                  <td className="ellipsis">{m.origin === "file" ? "a file" : m.origin}</td>
+                  <td className="num">{bytes(m.size)}</td>
+                  <td>{timeAgo(m.stored_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
       <Card title="Projects with open critical or high findings">
         {initial.exposed.length === 0 ? (
           <p className="small muted" style={{ margin: 0 }}>

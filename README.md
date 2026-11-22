@@ -92,7 +92,7 @@ Run the published image (amd64 and arm64) next to Postgres, or build your own wi
 ```yaml
 services:
   forgust:
-    image: ghcr.io/forgust-dev/forgust:0.5
+    image: ghcr.io/forgust-dev/forgust:0.6
     restart: unless-stopped
     read_only: true
     tmpfs: [/tmp]
@@ -177,7 +177,9 @@ volumes: { forgust-data: {}, db-data: {} }
 
 ### 🔐 Security
 - Built-in scanners (code, secrets, dependencies, containers, infrastructure as code)
-  with a Security tab, merge request checks and alerts
+  with a Security tab, merge request checks and alerts; their vulnerability databases
+  can live on the server, for installs without internet access
+- An SBOM (CycloneDX and SPDX) of each new tag, attached to its release
 - OIDC sign-in, passkeys, two-factor authentication (an authenticator app or security
   keys, with recovery codes), personal, project and deploy tokens
 - Strict CSP, an image proxy for Markdown images, rate limits
@@ -191,36 +193,64 @@ volumes: { forgust-data: {}, db-data: {} }
   be turned off)
 
 ### 🔌 Integrations
-- Import from GitLab and GitHub: repositories, merge requests, issues (confidential
-  ones stay confidential, internal notes internal), labels, members; a dry run first,
-  resumable
+- Import from GitLab, GitHub, Gitea and Forgejo, one project or a whole user or
+  organization: repositories, merge requests, issues (confidential ones stay
+  confidential, internal notes internal), labels, CI/CD variables, members; a dry run
+  first, resumable; optionally kept in sync afterwards
+- Repository mirrors, to or from any forge over http(s): pulled on a schedule (the
+  repository is then read-only here), or pushed after every change
 - Webhooks, also formatted for Slack, Discord, Matrix, Mattermost and Teams;
   confidential issues and internal comments only go to hooks that ask for their own
   events
 - A GitLab-compatible `/api/v4` subset, so Renovate and `glab` work
 - An MCP server for AI assistants, with OAuth sign-in
 
+### Importing projects
+
+| From | Self-hosted, oldest version | Access token |
+| --- | --- | --- |
+| GitLab (gitlab.com or self-managed) | 12.10 | `read_api`, `read_repository` |
+| GitHub (github.com or Enterprise Server) | Enterprise Server 3.9 | classic `repo`, or fine-grained read access to contents, issues, pull requests and metadata |
+| Gitea (gitea.com or self-hosted) | 1.22 | `read:repository`, `read:issue`, `read:user`, `read:organization` |
+| Forgejo (Codeberg or self-hosted) | 8.0 | the same as Gitea |
+
+A server that says an older version is refused before anything is read. These are the
+oldest versions with every API the importer uses; run a version the forge still
+maintains. Public projects import without a token. What each source cannot hand over
+(Actions secrets, GitHub's resolved threads, wikis, releases, packages) is listed by
+the dry run.
+
+A project's repository can also be mirrored (Settings > Repository > Mirroring):
+pulled from another repository every 15 minutes to once a day, its branches and tags
+replacing the project's (nobody can push, commit or merge there while it is a mirror),
+or pushed to up to ten others after every change, forced, with branches deleted here
+deleted there unless only protected branches are pushed. Issues, merge requests and
+LFS objects are not mirrored. Addresses on a private network are refused unless
+`features.imports_allow_local` is on.
+
 ## Performance
 
-Measured on an 8-vCPU development machine, p95 with one client, release build:
+Measured on a 12-vCPU development machine, p95 with one client, release build:
 
 | | |
 | --- | --- |
-| Repository tree, highlighted 2,000-line file, commit diff, blame | 7–11 ms |
-| Merge request page and first diff page of a 1,000-file merge request | 9 ms |
-| `ls-refs` with a prefix on a repository with 1M refs | 13 ms |
-| Code search in a 2,000-file repository (text one file has, text every file has) | 15–25 ms |
-| Code search in the Linux kernel, 97,000 files (plain text, a regular expression) | 40–250 ms |
+| Repository tree, highlighted 2,000-line file, commit diff, blame | 1–4 ms |
+| Merge request page and first diff page of a 1,000-file merge request | 1–5 ms |
+| Issue list and issue page in a project with 2,000 issues | 3–8 ms |
+| Search of projects, issues and merge requests by title, 2,000 issues | 12–24 ms |
+| `ls-refs` with a prefix on a repository with 1M refs | 3 ms |
+| Code search in a 2,000-file repository (text one file has, text every file has) | 9–20 ms |
+| Code search in the Linux kernel, 97,000 files (plain text, a regular expression) | 30–150 ms |
 | Pipeline created → job picked up by a runner | 24–40 ms |
 
-Pushing one branch to a 1M-ref repository is the one speed target still missed (7 s
+Pushing one branch to a 1M-ref repository is the one speed target still missed (3.1 s
 against 300 ms).
 
 ## Status
 
-Forgust is young (0.5) and built for private teams first. Not there yet: forks and
-merge requests from forks, wikis, snippets, package registries, push and pull
-mirroring, issue boards, system hooks, and SAML or LDAP sign-in.
+Forgust is young (0.6) and built for private teams first. Not there yet: forks and
+merge requests from forks, wikis, snippets, package registries, issue boards, system
+hooks, and SAML or LDAP sign-in.
 Code search covers each project's default branch, not other branches or tags.
 
 ## Tech stack

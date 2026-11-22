@@ -1,4 +1,4 @@
-//! Importing projects from GitLab and GitHub (ADR-0018).
+//! Importing projects from GitLab, GitHub, Gitea and Forgejo (ADR-0018).
 //!
 //! An import plans every project first (a dry run: counts and warnings), then
 //! imports them one at a time per import, each in its own background job. Every
@@ -6,6 +6,7 @@
 //! limit, restart) runs again and skips what is already there.
 
 pub mod client;
+pub mod gitea;
 pub mod github;
 pub mod gitlab;
 pub mod model;
@@ -48,29 +49,71 @@ pub struct Options {
     pub members: bool,
     /// Git LFS objects of the repository.
     pub lfs: bool,
+    /// Keep the repository in sync afterwards: a pull mirror of the source,
+    /// which keeps the token (off by default).
+    pub mirror: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { issues: true, merge_requests: true, labels: true, variables: true, protected_branches: true, members: true, lfs: true }
+        Options {
+            issues: true,
+            merge_requests: true,
+            labels: true,
+            variables: true,
+            protected_branches: true,
+            members: true,
+            lfs: true,
+            mirror: false,
+        }
     }
 }
 
 /// A connected source, after the URL check (ADR-0018: SSRF).
-pub async fn connect(state: &AppState, kind: &str, base_url: &str, token: &str) -> Result<Box<dyn Source>> {
+pub async fn connect(state: &AppState, kind: Kind, base_url: &str, token: &str) -> Result<Box<dyn Source>> {
     let allow_local = state.cfg.features.imports_allow_local;
+    let web = url::Url::parse(&with_slash(base_url)).map_err(|_| SourceError::Refused("invalid URL".into()))?;
+    let join = |p: &str| web.join(p).map_err(|_| SourceError::Refused("invalid URL".into()));
+    let api = match kind {
+        Kind::Gitlab => join("api/v4/")?,
+        Kind::Github => github::api_url(&web)?,
+        Kind::Gitea | Kind::Forgejo => join("api/v1/")?,
+    };
+    let (api, addrs) = client::checked_url(api.as_str(), allow_local).await?;
+    let token = token.trim();
+    Ok(match kind {
+        Kind::Gitlab => Box::new(gitlab::GitLab::new(web, api, addrs, token)?),
+        Kind::Github => Box::new(github::GitHub::new(api, addrs, token)?),
+        Kind::Gitea | Kind::Forgejo => Box::new(gitea::Gitea::new(kind, api, addrs, token)?),
+    })
+}
+
+/// What an access token on `kind` needs to read everything the import brings.
+pub fn token_scopes(kind: Kind) -> &'static str {
     match kind {
-        "gitlab" => {
-            let (url, addrs) = client::checked_url(&with_slash(base_url), allow_local).await?;
-            Ok(Box::new(gitlab::GitLab::new(url, addrs, token.trim())?))
-        }
-        "github" => {
-            let web = url::Url::parse(&with_slash(base_url)).map_err(|_| SourceError::Refused("invalid URL".into()))?;
-            let (api, addrs) = client::checked_url(github::api_url(&web)?.as_str(), allow_local).await?;
-            Ok(Box::new(github::GitHub::new(api, addrs, token.trim())?))
-        }
-        other => Err(SourceError::Refused(format!("unknown source `{other}`"))),
+        Kind::Gitlab => "read_api and read_repository",
+        Kind::Github => "repo (classic), or read access to contents, issues, pull requests and metadata (fine-grained)",
+        Kind::Gitea | Kind::Forgejo => "read:repository, read:issue, read:user and read:organization",
     }
+}
+
+/// Refuse a server older than the importer supports, when it says its version.
+pub async fn check_version(src: &dyn Source) -> Result<Option<ServerVersion>> {
+    let Some(v) = src.version().await else { return Ok(None) };
+    let min = v.kind.minimum();
+    if let Some(have) = parse_version(&v.raw)
+        && have < min
+    {
+        return Err(SourceError::Refused(format!(
+            "{} {} is too old: Forgust imports from {} {}.{} or later.",
+            v.kind.name(),
+            v.raw,
+            v.kind.name(),
+            min.major,
+            min.minor
+        )));
+    }
+    Ok(Some(v))
 }
 
 fn with_slash(u: &str) -> String {
@@ -79,28 +122,31 @@ fn with_slash(u: &str) -> String {
 }
 
 /// The project path in `input`: `group/project`, or a URL of the project on the
-/// source (`https://gitlab.com/group/project/-/tree/main`, `…/owner/repo.git`).
-pub fn project_path(source: &str, base_url: &str, input: &str) -> Option<String> {
+/// source (`https://gitlab.com/group/project/-/tree/main`, `…/owner/repo.git`,
+/// `https://git.example.com/gitea/owner/repo/src/branch/main` for an instance
+/// under a sub-path).
+pub fn project_path(kind: Kind, base_url: &str, input: &str) -> Option<String> {
     let input = input.trim();
     let path = match url::Url::parse(input) {
         Ok(u) if matches!(u.scheme(), "http" | "https") => {
             // only URLs on the forge being imported from
-            let base = url::Url::parse(base_url.trim()).ok()?;
+            let base = url::Url::parse(&with_slash(base_url)).ok()?;
             fn host(u: &url::Url) -> Option<&str> {
                 u.host_str().map(|h| h.trim_start_matches("www."))
             }
             if host(&u) != host(&base) {
                 return None;
             }
-            u.path().to_string()
+            let prefix = base.path().trim_end_matches('/');
+            u.path().strip_prefix(prefix).filter(|rest| rest.is_empty() || rest.starts_with('/'))?.to_string()
         }
         _ => input.to_string(),
     };
     let path = path.trim_matches('/');
-    // GitLab pages hang under `/-/`; GitHub's after owner/repo
+    // GitLab pages hang under `/-/`; elsewhere they follow owner/repo
     let path = path.split("/-/").next().unwrap_or(path);
     let segs: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
-    let segs: Vec<&str> = if source == "github" { segs.into_iter().take(2).collect() } else { segs };
+    let segs: Vec<&str> = if kind.nested() { segs } else { segs.into_iter().take(2).collect() };
     let mut out = segs.join("/");
     if let Some(s) = out.strip_suffix(".git") {
         out = s.to_string();
@@ -197,8 +243,9 @@ async fn run_job(state: &AppState, job: &ImportJob, last_attempt: bool) -> std::
     }
     let outcome = async {
         let token = token(state, &import).await?;
-        let src = connect(state, &import.source, &import.base_url, &token).await?;
-        let _notice = waiting_notice(state, row.id, &import.source, src.anonymous(), src.waiting());
+        let kind = Kind::parse(&import.source).ok_or_else(|| other(format!("unknown source `{}`", import.source)))?;
+        let src = connect(state, kind, &import.base_url, &token).await?;
+        let _notice = waiting_notice(state, row.id, kind, src.anonymous(), src.waiting());
         if job.plan {
             idb::set_project_status(&state.db, row.id, "planning", None).await.map_err(other)?;
             plan_project(state, &import, &row, src.as_ref()).await
@@ -242,13 +289,13 @@ async fn run_job(state: &AppState, job: &ImportJob, last_attempt: bool) -> std::
 fn waiting_notice(
     state: &AppState,
     row_id: i64,
-    source: &str,
+    kind: Kind,
     anonymous: bool,
     waiting: Option<tokio::sync::watch::Receiver<i64>>,
 ) -> Option<AbortOnDrop> {
     let mut waiting = waiting?;
     let db = state.db.clone();
-    let name = if source == "github" { "GitHub" } else { "GitLab" };
+    let name = kind.name();
     // wakes only when a wait starts or ends; ends with the source's client
     let task = tokio::spawn(async move {
         while waiting.changed().await.is_ok() {
@@ -450,6 +497,10 @@ impl<'a> Runner<'a> {
         for r in self.state.storage.refs(p.id, "refs/import/").await.map_err(other)? {
             let _ = self.state.storage.delete_ref(p.id, &r.name, None).await;
         }
+        if self.options.mirror {
+            let r = self.keep_in_sync(&p, &sp).await;
+            self.optional("Keeping the repository in sync", r)?;
+        }
         // keep the dry-run report, add what this run left out
         let mut report: Report = serde_json::from_value(self.row.report.clone()).unwrap_or_default();
         for w in self.warnings.drain(..) {
@@ -589,17 +640,38 @@ impl<'a> Runner<'a> {
         .map_err(api)
     }
 
+    // -------------------------------------------------------------- mirror
+
+    /// Make the project a pull mirror of the source, with the import's token.
+    async fn keep_in_sync(&mut self, p: &Project, sp: &SourceProject) -> Result<()> {
+        use forgust_db::project_mirrors as mdb;
+        if mdb::pulled_from(&self.state.db, p.id).await.map_err(other)?.is_some() {
+            return Ok(());
+        }
+        let url = services::repo_mirrors::checked(self.state, &sp.http_url).await.map_err(SourceError::Refused)?;
+        // the import's token, still sealed (none for a public project)
+        let sealed = if self.src.anonymous() { None } else { idb::token(&self.state.db, self.import.id).await.map_err(other)? };
+        let new = mdb::NewMirror {
+            project_id: p.id,
+            direction: "pull",
+            url: url.as_str(),
+            username: "",
+            token_enc: sealed.as_deref(),
+            only_protected: false,
+            trigger_pipelines: false,
+            interval_minutes: 60,
+            created_by: Some(self.import.user_id),
+        };
+        let id = services::repo_mirrors::add(self.state, &self.principal, new).await.map_err(api)?;
+        // just fetched: the next update comes at its turn
+        mdb::set_result(&self.state.db, id, None).await.map_err(other)
+    }
+
     // -------------------------------------------------------------- repository
 
-    /// The source repository's URL (checked) and git's settings for it (auth, pinned address).
+    /// The source repository's URL (checked) and git's settings for it.
     async fn git_remote(&self, sp: &SourceProject) -> Result<(url::Url, Vec<(String, String)>)> {
-        let (url, addrs) = client::checked_url(&sp.http_url, self.state.cfg.features.imports_allow_local).await?;
-        let mut cfg: Vec<(String, String)> = self.src.git_auth().into_iter().filter(|(k, _)| k != "http.curloptResolve").collect();
-        cfg.extend(gitlab::pin(&url, &addrs));
-        if let Some(bundle) = crate::tls::bundle_file().map_err(other)? {
-            cfg.push(("http.sslCAInfo".into(), bundle.display().to_string()));
-        }
-        Ok((url, cfg))
+        client::git_remote(&sp.http_url, self.state.cfg.features.imports_allow_local, self.src.git_auth()).await
     }
 
     async fn repository(&mut self, p: &Project, sp: &SourceProject) -> Result<()> {
@@ -1585,7 +1657,7 @@ mod tests {
 
     #[test]
     fn project_paths() {
-        let p = |s: &str, b: &str, i: &str| super::project_path(s, b, i);
+        let p = |s: &str, b: &str, i: &str| super::project_path(super::Kind::parse(s).unwrap(), b, i);
         assert_eq!(p("gitlab", "https://gitlab.com", "gitlab-org/cli").as_deref(), Some("gitlab-org/cli"));
         assert_eq!(
             p("gitlab", "https://gitlab.com", "https://gitlab.com/gitlab-org/sub/cli/-/tree/main").as_deref(),
@@ -1596,6 +1668,14 @@ mod tests {
         assert_eq!(p("gitlab", "https://gitlab.com", "https://evil.example/a/b"), None, "another host");
         assert_eq!(p("gitlab", "https://gitlab.com", "justone"), None);
         assert_eq!(p("gitlab", "https://gitlab.com", "a/../b"), None);
+        assert_eq!(
+            p("forgejo", "https://codeberg.org", "https://codeberg.org/forgejo/forgejo/src/branch/forgejo").as_deref(),
+            Some("forgejo/forgejo")
+        );
+        // an instance under a sub-path: its prefix is not part of the project
+        assert_eq!(p("gitea", "https://git.example.com/gitea/", "https://git.example.com/gitea/o/r/pulls/3").as_deref(), Some("o/r"));
+        assert_eq!(p("gitlab", "https://example.com/gitlab", "https://example.com/gitlab/g/sub/p/-/issues").as_deref(), Some("g/sub/p"));
+        assert_eq!(p("gitea", "https://git.example.com/gitea", "https://git.example.com/other/o/r"), None, "outside the instance");
     }
 
     #[test]

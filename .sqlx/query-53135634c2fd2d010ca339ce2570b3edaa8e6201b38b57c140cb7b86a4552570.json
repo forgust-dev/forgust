@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE project_mirrors SET last_update_at = now()\n         WHERE id IN (SELECT id FROM project_mirrors\n                      WHERE direction = 'pull' AND enabled\n                        AND (last_update_at IS NULL OR last_update_at < now() - make_interval(mins => interval_minutes))\n                      ORDER BY last_update_at NULLS FIRST LIMIT $1\n                      FOR UPDATE SKIP LOCKED)\n         RETURNING id, project_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "project_mirrors",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "project_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "project_mirrors",
+            "name": "project_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "53135634c2fd2d010ca339ce2570b3edaa8e6201b38b57c140cb7b86a4552570"
+}

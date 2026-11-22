@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT blob_digests, previous_blob_digests FROM vulnerability_db_mirrors WHERE name = $1 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "blob_digests",
+        "type_info": "TextArray",
+        "origin": {
+          "Table": {
+            "table": "vulnerability_db_mirrors",
+            "name": "blob_digests"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "previous_blob_digests",
+        "type_info": "TextArray",
+        "origin": {
+          "Table": {
+            "table": "vulnerability_db_mirrors",
+            "name": "previous_blob_digests"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "1db91e1c01a97503081eb4b0c2ca2483f022eb87e4c6eec58c0c87edbdf79bec"
+}

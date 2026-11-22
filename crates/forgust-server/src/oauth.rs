@@ -163,11 +163,11 @@ struct Registration {
 
 /// RFC 7591 dynamic registration: anyone may register a public client (it
 /// can do nothing until a person consents), a few an hour per address.
-async fn register(State(state): State<AppState>, ClientIp(ip): ClientIp, body: axum::body::Bytes) -> Response {
+async fn register(State(state): State<AppState>, ip: ClientIp, body: axum::body::Bytes) -> Response {
     static LIMITER: OnceLock<RateLimiter> = OnceLock::new();
     let limiter = LIMITER.get_or_init(|| RateLimiter::new(30, Duration::from_secs(3600)));
     // unknown clients share one budget
-    if !limiter.allow(&ip.map(|i| i.to_string()).unwrap_or_default()) {
+    if !limiter.allow(&ip.client().unwrap_or_default()) {
         return oauth_error(StatusCode::TOO_MANY_REQUESTS, "rate_limited", "too many registrations from this address");
     }
     let Ok(reg) = serde_json::from_slice::<Registration>(&body) else {
@@ -340,7 +340,11 @@ pub async fn authorize(
             &scopes,
             expires,
         )
-        .await?;
+        .await
+        // forgotten while the consent page was open (never used, a day old)
+        .map_err(|e| {
+            if forgust_db::is_foreign_key_violation(&e) { ApiError::bad("unknown client: register it again") } else { e.into() }
+        })?;
         services::audit(
             &state,
             &p,
@@ -376,11 +380,11 @@ fn token_name(client: &str) -> String {
 }
 
 /// `POST /oauth/token` (form-encoded): a code or a refresh token for tokens.
-async fn token(State(state): State<AppState>, ClientIp(ip): ClientIp, Form(f): Form<HashMap<String, String>>) -> Response {
+async fn token(State(state): State<AppState>, ip: ClientIp, Form(f): Form<HashMap<String, String>>) -> Response {
     static LIMITER: OnceLock<RateLimiter> = OnceLock::new();
     let limiter = LIMITER.get_or_init(|| RateLimiter::new(60, Duration::from_secs(60)));
     // unknown clients share one budget
-    if !limiter.allow(&ip.map(|i| i.to_string()).unwrap_or_default()) {
+    if !limiter.allow(&ip.client().unwrap_or_default()) {
         return oauth_error(StatusCode::TOO_MANY_REQUESTS, "rate_limited", "too many token requests from this address");
     }
     match token_grant(&state, &f).await {
@@ -474,6 +478,7 @@ async fn token_grant(state: &AppState, f: &HashMap<String, String>) -> Grant {
         .await
         .map_err(server_error)?,
     };
+    forgust_db::oauth::granted(&state.db, &client.client_id).await.map_err(server_error)?;
     let refresh = crypto::random_urlsafe(32);
     let refresh_expires = Utc::now() + chrono::Duration::days(REFRESH_DAYS);
     forgust_db::oauth::create_refresh(&state.db, &crypto::token_hash(&refresh), &client.client_id, user.id, &scopes, id, refresh_expires)

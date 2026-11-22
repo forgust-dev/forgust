@@ -656,6 +656,48 @@ a.dropdown-item:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+.choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+}
+.choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.choice:hover {
+  border-color: var(--border-strong);
+}
+.choice[data-checked] {
+  border-color: var(--accent);
+  background: var(--bg-subtle);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.choice[data-disabled] {
+  color: var(--text-faint);
+  cursor: default;
+}
+.choice:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.choice-label {
+  font-weight: 600;
+}
+.choice-hint {
+  color: var(--text-muted);
+  font-size: 12px;
+}
 label.field,
 div.field {
   display: flex;
@@ -2646,15 +2688,20 @@ kbd {
   gap: 10px;
   width: min(420px, calc(100vw - 32px));
 }
-.clone-downloads {
+.clone-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding-top: 10px;
   border-top: 1px solid var(--border);
 }
-.clone-downloads span {
+.clone-row > span {
   flex: 1;
+}
+/* five editors do not fit beside the label: it takes its own line */
+.clone-editors > span {
+  flex-basis: 100%;
 }
 @media (max-width: 900px) {
   .repo-layout {
@@ -6218,8 +6265,11 @@ a.milestone-chip:hover {
 
 /* ================================================================ imports */
 
+/* the form, the steps after it and the earlier imports share one column */
+.page.import-page {
+  max-width: 800px;
+}
 .import-card {
-  max-width: 760px;
   padding: 20px 22px;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -6367,6 +6417,32 @@ a.item.import-row:hover {
 @media (max-width: 760px) {
   .import-target input {
     width: 140px;
+  }
+  /* the path goes under the project's name, which keeps the width */
+  .import-pick > .item {
+    flex-wrap: wrap;
+  }
+  .import-pick .import-target {
+    flex-basis: 100%;
+    padding-left: 26px;
+  }
+}
+
+/* repository mirrors */
+.mirror-row {
+  flex-wrap: wrap;
+}
+.mirror-actions {
+  display: flex;
+  gap: 6px;
+}
+@media (max-width: 760px) {
+  .mirror-row > .grow {
+    flex-basis: calc(100% - 60px);
+  }
+  .mirror-actions {
+    flex-basis: 100%;
+    justify-content: flex-end;
   }
 }
 

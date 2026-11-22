@@ -195,6 +195,13 @@ pub const EVENTS: &[EventType] = &[
     ),
     e("renovate_host_rule_removed", ADMIN, P, &["id"], "A Renovate host rule was removed, from a project or (no target) the instance."),
     e("security_scanning_settings", ADMIN, NONE, &[], "Security scanning settings changed."),
+    e(
+        "vulnerability_db_stored",
+        ADMIN,
+        NONE,
+        &["name", "digest", "origin"],
+        "A new copy of one of Trivy's databases is served (principal `system`; `origin`: the upstream it came from, or `file`).",
+    ),
     // groups and projects
     e("group_created", SPACES, N, &["path"], "A group was created."),
     e("group_updated", SPACES, N, &["visibility", "previous_visibility"], "A group's name, description or visibility changed."),
@@ -221,8 +228,17 @@ pub const EVENTS: &[EventType] = &[
     e("project_archived", SPACES, P, &[], "A project was archived."),
     e("project_unarchived", SPACES, P, &[], "A project was unarchived."),
     e("project_deleted", SPACES, P, &["path"], "A project was deleted."),
-    e("import_started", SPACES, N, &["import", "source", "url", "projects"], "An import from GitLab or GitHub started."),
+    e("import_started", SPACES, N, &["import", "source", "url", "projects"], "An import from GitLab, GitHub, Gitea or Forgejo started."),
     e("pages_removed", SPACES, P, &[], "A project's Pages site was removed."),
+    e("mirror_added", SPACES, P, &["mirror", "direction", "url"], "A pull or push mirror of a project's repository was added."),
+    e(
+        "mirror_changed",
+        SPACES,
+        P,
+        &["mirror", "enabled", "only_protected", "trigger_pipelines", "interval_minutes", "credentials", "previous"],
+        "A repository mirror was paused, resumed, or its options or credentials changed.",
+    ),
+    e("mirror_removed", SPACES, P, &["mirror", "direction", "url"], "A repository mirror was removed."),
     // access and protections
     e(
         "member_set",
@@ -309,6 +325,8 @@ pub const EVENTS: &[EventType] = &[
         &["enabled", "projects"],
         "A group turned security scanning on or off for its projects.",
     ),
+    e("sbom_on_tags_enabled", BUILTIN, P, &[], "SBOMs on new tags turned on for the project (with security scanning)."),
+    e("sbom_on_tags_disabled", BUILTIN, P, &[], "SBOMs on new tags turned off for the project."),
     e("security_finding_dismissed", BUILTIN, P, &["finding", "reason"], "A security finding was dismissed."),
     e("security_finding_reopened", BUILTIN, P, &["finding"], "A dismissed security finding was reopened."),
     e("ai_review_enabled", BUILTIN, P, &[], "AI review turned on for the project."),

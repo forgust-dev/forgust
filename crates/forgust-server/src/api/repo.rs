@@ -485,9 +485,7 @@ pub async fn archive(
     let p = readable(&state, &v, &id).await?;
     let (git_ref, commit) = commit_of(&state, &p, q.git_ref.as_deref()).await?;
     let format = ArchiveFormat::from_ext(&q.format).ok_or_else(|| ApiError::bad("format must be tar.gz, tar or zip"))?;
-    let safe_ref: String =
-        git_ref.chars().map(|c| if c.is_ascii_alphanumeric() || c == '.' || c == '_' || c == '-' { c } else { '-' }).collect();
-    let prefix = format!("{}-{}", p.path, safe_ref);
+    let prefix = format!("{}-{}", p.path, crate::blob::ascii_name(&git_ref));
     let mut proc = state.storage.archive(p.id, &commit, format, &prefix).await?;
     crate::services::audit_repository_read(&state, &v, &p, "archive", ip.text().as_deref()).await;
     let stdout = std::mem::replace(&mut proc.stdout, Box::pin(tokio::io::empty()));

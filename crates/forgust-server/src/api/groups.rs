@@ -409,6 +409,7 @@ pub async fn revoke_bot(state: &AppState, principal: &Principal, source: members
     }
     members::remove(state, principal, source, bot.id).await?;
     forgust_db::users::set_state(&state.db, bot.id, "blocked").await?;
+    crate::ci::pipeline::cancel_jobs_of(state, bot.id).await?;
     services::audit(state, principal, "access_token_revoked", Some((source_type, source_id)), json!({ "bot": bot.username }), None).await;
     Ok(())
 }

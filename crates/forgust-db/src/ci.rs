@@ -450,7 +450,7 @@ pub async fn previous_status(e: impl PgExecutor<'_>, p: &Pipeline) -> Result<Opt
     sqlx::query_scalar!(
         "SELECT status FROM ci_pipelines
           WHERE project_id = $1 AND ref = $2 AND tag = $3 AND merge_request_id IS NOT DISTINCT FROM $4 AND id < $5
-            AND status IN ('success', 'failed') AND source NOT IN ('parent_pipeline', 'renovate', 'security')
+            AND status IN ('success', 'failed') AND source <> 'parent_pipeline' AND NOT is_system_source(source)
           ORDER BY id DESC LIMIT 1",
         p.project_id,
         p.git_ref,
@@ -891,6 +891,19 @@ pub async fn build(e: impl PgExecutor<'_>, id: i64) -> Result<Option<Build>> {
     .await
 }
 
+/// The jobs `user_id` started that hold or wait for a runner or a resource
+/// group (to cancel when the account is blocked): not the manual or delayed
+/// ones nobody started, which only someone else can run now.
+pub async fn live_builds_of(e: impl PgExecutor<'_>, user_id: i64) -> Result<Vec<i64>> {
+    sqlx::query_scalar!(
+        "SELECT id FROM ci_builds
+          WHERE user_id = $1 AND status IN ('waiting_for_resource', 'preparing', 'pending', 'running') ORDER BY id",
+        user_id
+    )
+    .fetch_all(e)
+    .await
+}
+
 /// The build row, locked for this transaction (state changes, trace appends).
 pub async fn build_for_update(c: &mut PgConnection, id: i64) -> Result<Option<Build>> {
     sqlx::query_as!(
@@ -1094,7 +1107,9 @@ pub async fn dequeue(e: impl PgExecutor<'_>, build_id: i64) -> Result<()> {
 
 /// Claim the oldest pending job this runner may run (ADR-0014): scope by
 /// runner kind, protected refs, and tags (a job's tags must all be on the
-/// runner; untagged jobs need `run_untagged`). Marks it running.
+/// runner; untagged jobs need `run_untagged`). Marks it running. A blocked
+/// user's jobs are canceled when they are blocked; one that slipped past
+/// that is handed to no runner, with its variables and tokens.
 pub async fn claim(c: &mut PgConnection, r: &Runner, manager_id: i64) -> Result<Option<Build>> {
     let id = sqlx::query_scalar!(
         "SELECT q.build_id FROM ci_pending_jobs q
@@ -1106,6 +1121,8 @@ pub async fn claim(c: &mut PgConnection, r: &Runner, manager_id: i64) -> Result<
            AND (NOT $4 OR q.protected)
            AND q.tags <@ $5
            AND ($6 OR cardinality(q.tags) > 0)
+           AND NOT EXISTS (SELECT 1 FROM ci_builds b JOIN users u ON u.id = b.user_id
+                            WHERE b.id = q.build_id AND u.state <> 'active')
          ORDER BY q.build_id
          LIMIT 1
          FOR UPDATE SKIP LOCKED",

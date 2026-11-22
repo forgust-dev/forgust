@@ -545,7 +545,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Check a token and list the projects it can import. */
+        /** Check the address and token, and say where projects can be listed from. */
         post: operations["connect"];
         delete?: never;
         options?: never;
@@ -562,8 +562,45 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** One project by path or URL, for public projects the token is not a member of. */
+        /**
+         * One project by path or URL (single imports, and public projects the token
+         *     is not a member of).
+         */
         post: operations["lookup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The projects of a user, group or organization on the source (bulk imports). */
+        post: operations["projects"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/imports/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The forges projects can be imported from, and the versions they need. */
+        get: operations["sources"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1423,6 +1460,60 @@ export interface paths {
         put: operations["update"];
         post?: never;
         delete: operations["delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/mirrors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list"];
+        put?: never;
+        /**
+         * Add a mirror; its first update starts at once. A pull mirror makes the
+         *     repository read-only and replaces its branches and tags with the source's.
+         */
+        post: operations["create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/mirrors/{mirror_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["update"];
+        post?: never;
+        /** Remove a mirror; a pull mirror's repository becomes writable again. */
+        delete: operations["delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/mirrors/{mirror_id}/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Update the mirror now instead of at its next turn. */
+        post: operations["update_now"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2912,6 +3003,8 @@ export interface components {
         AdminScanning: {
             /** @description Projects with open critical or high findings, most first. */
             exposed: components["schemas"]["ExposedProject"][];
+            /** @description Trivy's databases this server holds (`mirror_vulnerability_dbs`). */
+            mirrors: components["schemas"]["MirrorStatus"][];
             /**
              * Format: int64
              * @description Projects with scanning on.
@@ -3467,11 +3560,7 @@ export interface components {
             email: string;
         };
         ConnectBody: {
-            /** @description Only projects under this group (GitLab) or owner (GitHub). */
-            scope?: string;
-            search?: string;
-            /** @description `gitlab` (or `github`). */
-            source: string;
+            source: components["schemas"]["ImportSource"];
             /** @description Optional for public projects. */
             token?: string;
             /** @description The forge's address, e.g. https://gitlab.example.com. */
@@ -3479,9 +3568,15 @@ export interface components {
         };
         Connected: {
             name: string;
-            projects: components["schemas"]["SourceProject"][];
-            /** @description The token's user on the source. */
+            /**
+             * @description Where the token's user has projects: their own, then their groups or
+             *     organizations (none without a token).
+             */
+            namespaces: components["schemas"]["SourceNamespace"][];
+            /** @description The token's user on the source (empty without a token). */
             username: string;
+            /** @description What the server says it runs (`Forgejo 9.0.1`), when it says. */
+            version?: string | null;
         };
         Contributions: {
             /** @description Newest first. */
@@ -3528,7 +3623,7 @@ export interface components {
         CreateImportBody: {
             options?: components["schemas"]["Options"] | null;
             projects: components["schemas"]["ImportProjectBody"][];
-            source: string;
+            source: components["schemas"]["ImportSource"];
             /** Format: int64 */
             target_namespace_id: number;
             /** @description Optional for public projects. */
@@ -4109,6 +4204,11 @@ export interface components {
             /** @description Path under the target group; `sub/project` creates the subgroup. */
             target_path: string;
         };
+        /**
+         * @description The forges Forgust imports from.
+         * @enum {string}
+         */
+        ImportSource: "gitlab" | "github" | "gitea" | "forgejo";
         ImportUser: {
             email?: string | null;
             local_username?: string | null;
@@ -4498,7 +4598,7 @@ export interface components {
         LookupBody: {
             /** @description `group/project`, `owner/repo`, or the project's URL. */
             path: string;
-            source: string;
+            source: components["schemas"]["ImportSource"];
             token?: string;
             url: string;
         };
@@ -4725,6 +4825,61 @@ export interface components {
             state_event?: string | null;
             title?: string | null;
         };
+        Mirror: {
+            /** Format: date-time */
+            created_at: string;
+            /** Format: int64 */
+            created_by?: number | null;
+            /** @description `pull` or `push`. */
+            direction: string;
+            enabled: boolean;
+            /** Format: int64 */
+            id: number;
+            /**
+             * Format: int32
+             * @description Pull: minutes between updates.
+             */
+            interval_minutes: number;
+            last_error?: string | null;
+            /** Format: date-time */
+            last_success_at?: string | null;
+            /** Format: date-time */
+            last_update_at?: string | null;
+            /** @description Push: only protected branches, nothing deleted on the remote. */
+            only_protected: boolean;
+            /** Format: int64 */
+            project_id: number;
+            /** @description Pull: run pipelines for what arrives. */
+            trigger_pipelines: boolean;
+            url: string;
+            username: string;
+        };
+        MirrorChangeBody: {
+            enabled?: boolean | null;
+            /** Format: int32 */
+            interval_minutes?: number | null;
+            only_protected?: boolean | null;
+            token?: string | null;
+            trigger_pipelines?: boolean | null;
+            /** @description New credentials (the address never changes); an empty token removes them. */
+            username?: string | null;
+        };
+        MirrorDto: components["schemas"]["Mirror"] & {
+            /** @description Credentials are stored (never shown). */
+            has_token: boolean;
+        };
+        /** @description What admins see of a mirrored database. */
+        MirrorStatus: {
+            digest: string;
+            name: string;
+            /** @description The upstream reference it came from, or `file`. */
+            origin: string;
+            /** Format: int64 */
+            size: number;
+            /** Format: date-time */
+            stored_at: string;
+            tag: string;
+        };
         MrCount: {
             /** Format: int64 */
             closed: number;
@@ -4839,6 +4994,28 @@ export interface components {
             name: string;
             /** @description `http(s)://` or `ftp://`, or a file uploaded to this project. */
             url: string;
+        };
+        NewMirrorBody: {
+            /** @description `pull` (this repository follows the address) or `push`. */
+            direction: string;
+            /**
+             * Format: int32
+             * @description Pull: minutes between updates (15 to 10080, default 60).
+             */
+            interval_minutes?: number | null;
+            /** @description Push: only protected branches, nothing deleted on the remote. */
+            only_protected?: boolean;
+            /** @description A token or password; none for a public repository (pull). */
+            token?: string;
+            /** @description Pull: run pipelines for what arrives (as you). */
+            trigger_pipelines?: boolean;
+            /** @description The other repository's http(s) address, without credentials. */
+            url: string;
+            /**
+             * @description Sent with the token (`oauth2` when empty: GitLab, GitHub, Gitea and
+             *     Forgejo take a token as the password whatever the name).
+             */
+            username?: string;
         };
         NewPath: {
             path: string;
@@ -4997,6 +5174,12 @@ export interface components {
             members: boolean;
             /** @default true */
             merge_requests: boolean;
+            /**
+             * @description Keep the repository in sync afterwards: a pull mirror of the source,
+             *     which keeps the token (off by default).
+             * @default false
+             */
+            mirror: boolean;
             /** @default true */
             protected_branches: boolean;
             /**
@@ -5251,7 +5434,17 @@ export interface components {
             can_own: boolean;
             can_push: boolean;
             can_read_code: boolean;
+            /**
+             * @description May change the repository's branches, tags and files here: `can_push`,
+             *     unless the repository is a pull mirror.
+             */
+            can_write_repository: boolean;
             empty_repo: boolean;
+            /**
+             * @description The repository is a pull mirror of this address: its branches and tags
+             *     come from there, and are read-only here.
+             */
+            pull_mirror?: string | null;
             /** @description Older paths that still redirect here. */
             redirects: string[];
             storage_warning?: components["schemas"]["Warning"] | null;
@@ -5337,6 +5530,14 @@ export interface components {
             repository_bytes: number;
             /** Format: int64 */
             total_bytes: number;
+        };
+        ProjectsBody: {
+            /** @description A user, group or organization; empty: every project the token can read. */
+            owner?: string;
+            search?: string;
+            source: components["schemas"]["ImportSource"];
+            token?: string;
+            url: string;
         };
         ProtectBranch: {
             allow_deploy_keys?: boolean;
@@ -5780,6 +5981,8 @@ export interface components {
             enabled: boolean;
             /** Format: int32 */
             interval_hours?: number;
+            /** @description Left out: as it was. */
+            sbom_on_tags?: boolean | null;
             scanners: string[];
         };
         ScanningStatus: {
@@ -5797,6 +6000,8 @@ export interface components {
             next_run_at?: string | null;
             /** @description The runs are this person's (they turned scanning on). */
             run_as?: string | null;
+            /** @description An SBOM (CycloneDX and SPDX) on each new tag, attached to its release. */
+            sbom_on_tags: boolean;
             scanners: string[];
         };
         Schedule: {
@@ -5917,6 +6122,14 @@ export interface components {
              */
             max_concurrent: number;
             /**
+             * @description Keep Trivy's databases on this server (copied from the sources below
+             *     every 6 hours, or imported from files with `forgust admin
+             *     import-vulnerability-db`), and have the scans read them from here: for
+             *     installs that cannot or should not reach ghcr.io.
+             * @default false
+             */
+            mirror_vulnerability_dbs: boolean;
+            /**
              * @description Code: GitLab's Semgrep-based analyzer (MIT, GitLab's rules).
              * @default registry.gitlab.com/security-products/semgrep:5
              */
@@ -5937,11 +6150,21 @@ export interface components {
              * @default 3600
              */
             timeout_secs: number;
+            /** @default ghcr.io/aquasecurity/trivy-checks:1 */
+            trivy_checks_source: string;
+            /**
+             * @description Where the copies come from: `host/repository:tag`, as Trivy's own
+             *     `--db-repository` (`http://` in front for a registry without TLS).
+             * @default ghcr.io/aquasecurity/trivy-db:2
+             */
+            trivy_db_source: string;
             /**
              * @description Dependencies, containers, infrastructure as code: Trivy (Apache-2.0).
              * @default aquasec/trivy:0.57.1
              */
             trivy_image: string;
+            /** @default ghcr.io/aquasecurity/trivy-java-db:1 */
+            trivy_java_db_source: string;
         };
         SessionInfo: {
             /** @description Send back as `X-CSRF-Token` on POST/PUT/DELETE. */
@@ -6005,7 +6228,28 @@ export interface components {
             format: string;
             url: string;
         };
-        /** @description A project (GitLab) or repository (GitHub) on the source. */
+        SourceInfo: {
+            /** @description The public instance the form starts with. */
+            default_url: string;
+            id: components["schemas"]["ImportSource"];
+            /** @description The oldest self-hosted version imports work with (`17.0`). */
+            minimum_version: string;
+            name: string;
+            /** @description What the access token needs. */
+            token_scopes: string;
+        };
+        /**
+         * @description Where projects live on the source: a user's own, or a group (GitLab) or
+         *     organization's.
+         */
+        SourceNamespace: {
+            /** @description `user` or `group`. */
+            kind: string;
+            name: string;
+            /** @description The path to list it by: a username, `group/sub`, or an organization. */
+            path: string;
+        };
+        /** @description A project (GitLab) or repository (GitHub, Gitea, Forgejo) on the source. */
         SourceProject: {
             archived: boolean;
             default_branch?: string | null;
@@ -7590,6 +7834,48 @@ export interface operations {
             };
         };
     };
+    projects: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectsBody"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceProject"][];
+                };
+            };
+        };
+    };
+    sources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SourceInfo"][];
+                };
+            };
+        };
+    };
     show: {
         parameters: {
             query?: never;
@@ -8998,6 +9284,109 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MirrorDto"][];
+                };
+            };
+        };
+    };
+    create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewMirrorBody"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MirrorDto"][];
+                };
+            };
+        };
+    };
+    update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MirrorChangeBody"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MirrorDto"][];
+                };
+            };
+        };
+    };
+    delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MirrorDto"][];
+                };
+            };
+        };
+    };
+    update_now: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MirrorDto"][];
+                };
             };
         };
     };

@@ -493,6 +493,9 @@ pub async fn blob_key_status(e: impl PgExecutor<'_>, keys: &[String]) -> Result<
                OR (k LIKE 'registry/blobs/%'
                    AND EXISTS (SELECT 1 FROM registry_blobs b WHERE b.digest = split_part(k, '/', 3) || ':' || split_part(k, '/', 4)))
                OR (k LIKE 'registry/uploads/%' AND EXISTS (SELECT 1 FROM registry_uploads r WHERE r.id::text = split_part(k, '/', 3)))
+               OR (k LIKE 'mirrors/sha256/%'
+                   AND EXISTS (SELECT 1 FROM vulnerability_db_mirrors m
+                                WHERE 'sha256:' || split_part(k, '/', 3) = ANY (m.blob_digests || m.previous_blob_digests)))
                OR (k ~ '^avatars/user/[0-9]+\.png$'
                    AND EXISTS (SELECT 1 FROM users x WHERE x.id = substring(k FROM '([0-9]+)')::bigint AND x.avatar_at IS NOT NULL))
                OR (k ~ '^avatars/project/[0-9]+\.png$'

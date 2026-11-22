@@ -40,7 +40,12 @@ pub struct Uploaded {
 }
 
 pub fn full_path(u: &Upload) -> String {
-    format!("/-/project/{}/uploads/{}/{}", u.project_id, u.secret, encode(&u.filename))
+    path_of(u.project_id, &u.secret, &u.filename)
+}
+
+/// Where an upload is served: `/-/project/<id>/uploads/<secret>/<name>`.
+pub fn path_of(project_id: i64, secret: &str, filename: &str) -> String {
+    format!("/-/project/{project_id}/uploads/{secret}/{}", encode(filename))
 }
 
 use crate::blob::encode_segment as encode;
@@ -57,6 +62,13 @@ pub fn describe(u: &Upload) -> Uploaded {
         full_path: full,
         size: u.size,
     }
+}
+
+/// A new upload's secret and blob key.
+pub fn new_key(project_id: i64) -> (String, String) {
+    let secret = hex::encode(rand::random::<[u8; 16]>());
+    let key = format!("uploads/{project_id}/{secret}");
+    (secret, key)
 }
 
 /// A name safe to store and show: no directories, no control characters.
@@ -94,8 +106,7 @@ pub async fn store(state: &AppState, principal: &Principal, p: &Project, mut mul
         }
         let filename = clean_name(field.file_name().unwrap_or("file"));
         let content_type = mime_guess::from_path(&filename).first_or_octet_stream().essence_str().to_string();
-        let secret = hex::encode(rand::random::<[u8; 16]>());
-        let key = format!("uploads/{}/{secret}", p.id);
+        let (secret, key) = new_key(p.id);
         let size = match crate::blob::stream_field(&state.blobs, field, &key, limit).await {
             Ok(n) => n,
             Err(crate::blob::StreamError::TooLarge) => {
@@ -117,6 +128,7 @@ pub async fn store(state: &AppState, principal: &Principal, p: &Project, mut mul
                 content_type: &content_type,
                 blob_key: &key,
                 uploaded_by: user,
+                requires_code: false,
             },
         )
         .await?;
@@ -130,6 +142,10 @@ pub async fn store(state: &AppState, principal: &Principal, p: &Project, mut mul
 pub async fn serve(state: &AppState, principal: &Principal, p: &Project, secret: &str, name: &str) -> ApiResult<Response> {
     require_project(state, principal, ProjectAction::Read, p).await?;
     let u = forgust_db::releases::upload(&state.db, p.id, secret).await?.filter(|u| u.filename == name).ok_or(ApiError::NotFound)?;
+    // made from the code (a tag's SBOM): for those who read it
+    if u.requires_code && !crate::auth::authz::can_project(state, principal, ProjectAction::ReadCode, p).await? {
+        return Err(ApiError::NotFound);
+    }
     if let Some(r) = presigned(state, &u).await? {
         return Ok(r);
     }
@@ -218,6 +234,12 @@ pub async fn drain_deletions(state: &AppState) -> anyhow::Result<()> {
                     tracing::warn!(key = %k, error = %e, "blob of a deleted row not deleted");
                 }
                 tx.commit().await?;
+                continue;
+            }
+            // a mirrored database's blob named again by a newer copy stays
+            if let Some(hex) = k.strip_prefix("mirrors/sha256/")
+                && forgust_db::mirrors::names_blob(&state.db, &format!("sha256:{hex}")).await?
+            {
                 continue;
             }
             if let Err(e) = state.blobs.delete(&k).await {

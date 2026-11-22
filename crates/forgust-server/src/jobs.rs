@@ -27,6 +27,31 @@ macro_rules! payload_free {
     };
 }
 
+/// A task whose payload is `{ report }` (missing: true), queued once at a
+/// time (it replaces one still waiting) and not retried.
+macro_rules! reported {
+    ($name:ident) => {
+        impl<'de> Deserialize<'de> for $name {
+            fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+                let payload = serde_json::Value::deserialize(d)?;
+                Ok($name { report: payload.get("report").and_then(|r| r.as_bool()).unwrap_or(true) })
+            }
+        }
+
+        impl $name {
+            pub fn request(self) -> JobRequest {
+                JobRequest {
+                    task: Self::IDENTIFIER,
+                    payload: serde_json::to_value(&self).unwrap_or_default(),
+                    job_key: Some(Self::IDENTIFIER.into()),
+                    max_attempts: Some(1),
+                    ..Default::default()
+                }
+            }
+        }
+    };
+}
+
 pub const SCHEMA: &str = "graphile_worker";
 
 #[derive(Debug, Clone, Default)]
@@ -89,6 +114,10 @@ pub struct PostReceive {
     /// Who pushed (`kind:id`, see `Principal::encode`); pipelines run as them.
     #[serde(default)]
     pub principal: Option<String>,
+    /// A pull mirror brought the changes: `principal` runs its pipelines but
+    /// did not push them (no push events or webhook author for them).
+    #[serde(default)]
+    pub from_mirror: bool,
 }
 
 /// Where a pushed ref's new commits start: its old commit, or for a new ref
@@ -140,6 +169,16 @@ async fn push_commits(
 }
 
 impl PostReceive {
+    /// Someone pushed (git, or a change made here): pipelines run as them.
+    pub fn pushed(project_id: i64, updates: Vec<RefUpdate>, principal: String) -> PostReceive {
+        PostReceive { project_id, updates, principal: Some(principal), from_mirror: false }
+    }
+
+    /// A pull mirror brought the changes; pipelines run as `runs_as`, if anyone.
+    pub fn mirrored(project_id: i64, updates: Vec<RefUpdate>, runs_as: Option<String>) -> PostReceive {
+        PostReceive { project_id, updates, principal: runs_as, from_mirror: true }
+    }
+
     pub fn request(self) -> JobRequest {
         JobRequest {
             task: Self::IDENTIFIER,
@@ -175,9 +214,21 @@ impl PostReceive {
             {
                 tracing::warn!(project_id = self.project_id, error = %e, "releases of deleted tags not deleted");
             }
-            let who = pusher.as_ref().and_then(|p| p.user());
+            if !deleted_tags.is_empty() {
+                crate::services::sbom::on_tags_deleted(state, &p, &deleted_tags).await;
+            }
+            // tags new (by a push, in the browser, by a release) or moved: their SBOMs
+            let pushed_tags: Vec<(String, String)> = self
+                .updates
+                .iter()
+                .filter(|u| u.new != forgust_storage::ZERO_OID)
+                .filter_map(|u| u.name.strip_prefix("refs/tags/").map(|t| (t.to_string(), u.new.clone())))
+                .collect();
+            crate::services::sbom::on_tags_pushed(state, &p, &pushed_tags).await;
+            let author = pusher.as_ref().filter(|_| !self.from_mirror);
+            let who = author.and_then(|p| p.user());
             // the contributions calendar: a push event per branch or tag a person pushed
-            let person = pusher.as_ref().and_then(|p| p.direct_user());
+            let person = author.and_then(|p| p.direct_user());
             for u in &self.updates {
                 let from = if u.new == forgust_storage::ZERO_OID { None } else { push_base(state, &p, u).await };
                 let (commits, total) = push_commits(state, &p, u, from.as_deref()).await;
@@ -211,6 +262,10 @@ impl PostReceive {
             {
                 crate::code_search::indexer::queue(state, self.project_id).await;
             }
+        }
+        // push mirrors follow (a pull mirror's updates come through here too)
+        if let Err(e) = crate::services::repo_mirrors::after_push(state, self.project_id, &self.updates).await {
+            tracing::warn!(project_id = self.project_id, error = %e, "push mirrors not queued");
         }
         refresh_repository_size(state, self.project_id).await;
         let pushes = forgust_db::maintenance::record_push(&state.db, self.project_id).await?;
@@ -476,6 +531,7 @@ impl TaskHandler for Cleanup {
     async fn run(self, ctx: WorkerContext) -> impl IntoTaskHandlerResult {
         let state = ctx.get_ext::<AppState>().ok_or("no app state")?;
         forgust_db::sessions::delete_expired(&state.db).await.map_err(|e| e.to_string())?;
+        forgust_db::oauth::forget_unused(&state.db).await.map_err(|e| e.to_string())?;
         // memberships and shares that expired: their access ends now
         let mut conn = state.db.acquire().await.map_err(|e| e.to_string())?;
         let ended = forgust_db::members::expire(&mut conn).await.map_err(|e| e.to_string())?;
@@ -737,25 +793,7 @@ pub struct UpdateCheck {
     pub report: bool,
 }
 
-impl<'de> Deserialize<'de> for UpdateCheck {
-    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        let payload = serde_json::Value::deserialize(d)?;
-        Ok(UpdateCheck { report: payload.get("report").and_then(|r| r.as_bool()).unwrap_or(true) })
-    }
-}
-
-impl UpdateCheck {
-    /// Soon, once (it replaces one still waiting).
-    pub fn request(self) -> JobRequest {
-        JobRequest {
-            task: Self::IDENTIFIER,
-            payload: serde_json::to_value(&self).unwrap_or_default(),
-            job_key: Some(Self::IDENTIFIER.into()),
-            max_attempts: Some(1),
-            ..Default::default()
-        }
-    }
-}
+reported!(UpdateCheck);
 
 impl TaskHandler for UpdateCheck {
     const IDENTIFIER: &'static str = "update_check";
@@ -770,6 +808,40 @@ impl TaskHandler for UpdateCheck {
                 Ok(())
             }
             Ok(()) => Ok(()),
+        }
+    }
+}
+
+/// Copy Trivy's databases into the mirror (every 6 hours, when mirroring is
+/// turned on, or from Admin > Jobs; nothing while it is off).
+#[derive(Debug, Serialize)]
+pub struct MirrorVulnerabilityDbs {
+    /// Fail when a copy does (as [`UpdateCheck`]: scheduled runs log it).
+    pub report: bool,
+}
+
+reported!(MirrorVulnerabilityDbs);
+
+impl TaskHandler for MirrorVulnerabilityDbs {
+    const IDENTIFIER: &'static str = "mirror_vulnerability_dbs";
+
+    async fn run(self, ctx: WorkerContext) -> impl IntoTaskHandlerResult {
+        let state = ctx.get_ext::<AppState>().ok_or("no app state")?;
+        // one copy at a time, whichever worker runs it: the lock ends with
+        // its transaction, however the copy ends
+        let mut lock = state.db.begin().await.map_err(|e| e.to_string())?;
+        let got: bool = sqlx::query_scalar("SELECT pg_try_advisory_xact_lock(hashtextextended('mirror_vulnerability_dbs', 0))")
+            .fetch_one(&mut *lock)
+            .await
+            .map_err(|e| e.to_string())?;
+        if !got {
+            return Ok(());
+        }
+        let r = crate::services::vulnerability_dbs::sync(state).await;
+        drop(lock);
+        match r {
+            Err(e) if self.report => Err(format!("{e:#}")),
+            _ => Ok(()),
         }
     }
 }
@@ -801,9 +873,15 @@ pub async fn start_worker(state: AppState, concurrency: usize) -> anyhow::Result
         .define_job::<SendEmail>()
         .define_job::<CiSweep>()
         .define_job::<UpdateCheck>()
+        .define_job::<MirrorVulnerabilityDbs>()
+        .define_job::<crate::services::sbom::StoreSbom>()
         .define_job::<crate::services::auto_merge::AutoMergeCheck>()
         .define_job::<crate::import::ImportJob>()
-        .with_crontab("*/5 * * * * cleanup\n17 * * * * maintenance_sweep\n* * * * * ci_sweep\n43 */6 * * * update_check {report:false}")?
+        .define_job::<crate::services::repo_mirrors::MirrorUpdate>()
+        .define_job::<crate::services::repo_mirrors::MirrorSweep>()
+        .with_crontab(
+            "*/5 * * * * cleanup\n17 * * * * maintenance_sweep\n* * * * * ci_sweep\n43 */6 * * * update_check {report:false}\n29 */6 * * * mirror_vulnerability_dbs {report:false}\n*/5 * * * * mirror_sweep",
+        )?
         .listen_os_shutdown_signals(false)
         // a worker that stops answering (a restart, a crash) gives its jobs back
         // within minutes: else they stay locked to it for hours, and so does

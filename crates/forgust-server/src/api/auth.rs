@@ -202,29 +202,35 @@ async fn second_factor(
     second_step_allowed(&state, user_id)?;
     let user = forgust_db::users::find(&mut *tx, user_id).await?.ok_or(ApiError::Unauthorized)?;
     // wrong codes: 5 per 10 minutes per account; then the challenge is gone
-    // and the password is asked again
+    // and the password is asked again. Each answer is counted before it is
+    // checked (and given back when right): answers sent at once, on several
+    // challenges, share the limit too
     let acct = format!("totp|{}", user.id);
-    if state.totp_failures.exceeded(&acct) {
+    if !state.totp_failures.allow(&acct) {
         forgust_db::sessions::delete_challenge(&mut *tx, &hash).await?;
         tx.commit().await?;
         return Err(ApiError::forbidden("too many wrong codes: sign in again in a few minutes"));
     }
-    let ok = match factor {
-        // a secret still being set up is no second factor
-        Factor::Totp(code) => user.totp_enabled && session::verify_totp(&state, &mut tx, &user, code).await?,
-        Factor::Recovery(code) => {
-            user.two_factor() && forgust_db::recovery_codes::consume(&mut *tx, user.id, &session::recovery_code_hash(code)).await?
-        }
-        Factor::SecurityKey(answer) => {
-            // what the keys were asked to sign is answered once, right or wrong
-            forgust_db::webauthn::set_challenge_state(&mut *tx, &hash, None).await?;
-            security_key_signed(&state, &mut tx, &user, webauthn_state, answer).await?
-        }
-    };
+    let checked: ApiResult<bool> = async {
+        Ok(match factor {
+            // a secret still being set up is no second factor
+            Factor::Totp(code) => user.totp_enabled && session::verify_totp(&state, &mut tx, &user, code).await?,
+            Factor::Recovery(code) => {
+                user.two_factor() && forgust_db::recovery_codes::consume(&mut *tx, user.id, &session::recovery_code_hash(code)).await?
+            }
+            Factor::SecurityKey(answer) => {
+                // what the keys were asked to sign is answered once, right or wrong
+                forgust_db::webauthn::set_challenge_state(&mut *tx, &hash, None).await?;
+                security_key_signed(&state, &mut tx, &user, webauthn_state, answer).await?
+            }
+        })
+    }
+    .await;
+    // a check that could not be made (ours to fix) is no wrong answer
+    let ok = checked.inspect_err(|_| state.totp_failures.undo(&acct))?;
     if !ok {
         // a wrong answer changes nothing but what it used up
         tx.commit().await?;
-        state.totp_failures.allow(&acct);
         login_failed(&state, user.id, json!({ "reason": "second_factor", "method": factor.method() }), ip).await;
         return Err(ApiError::Unauthorized);
     }
@@ -234,6 +240,7 @@ async fn second_factor(
     };
     forgust_db::sessions::delete_challenge(&mut *tx, &hash).await?;
     tx.commit().await?;
+    state.totp_failures.undo(&acct);
     if let Some(left) = codes_left {
         recovery_code_used(&state, &user, left, ip.text().as_deref()).await;
     }
@@ -455,7 +462,7 @@ pub async fn passkey_finish(
     Json(req): Json<PasskeyFinish>,
 ) -> ApiResult<(CookieJar, Json<LoginResponse>)> {
     let rp = webauthn::of(&state)?;
-    if ip.text().is_some_and(|c| state.login_ip_failures.exceeded(&c)) {
+    if ip.client().is_some_and(|c| state.login_ip_failures.exceeded(&c)) {
         return Err(ApiError::forbidden("too many attempts, try again later"));
     }
     let refused = |user_id: Option<i64>| {
@@ -618,7 +625,7 @@ pub async fn register(
         return Err(ApiError::forbidden("sign-up is disabled; ask an administrator for an account"));
     }
     // each sign-up costs a password hash and sends an email
-    if !state.login_limiter.allow(&format!("register|{}", ip.text().unwrap_or_default())) {
+    if !state.login_limiter.allow(&format!("register|{}", ip.client().unwrap_or_default())) {
         return Err(ApiError::TooMany("too many sign-ups from this address; wait a minute".into()));
     }
     let mut tx = state.db.begin().await?;
@@ -723,6 +730,9 @@ async fn sync_from_provider(
         if let Some(e) = email {
             // the provider returned it as verified
             forgust_db::users::confirm_email(&state.db, user.id, e).await?;
+            // links sent to the old address prove nothing about this one
+            forgust_db::users::delete_tokens(&state.db, user.id, "email").await?;
+            forgust_db::users::delete_tokens(&state.db, user.id, "password_reset").await?;
         }
         if name.is_some() || email.is_some() {
             let details = json!({ "provider": provider_name, "name": name.is_some(), "email": email.is_some() });
@@ -1023,7 +1033,7 @@ pub async fn forgot_password(
         return Err(ApiError::bad("enter your username or email"));
     }
     // per client and per account: no flooding an inbox, no probing at speed
-    if !state.login_limiter.allow(&format!("forgot|{}", ip.text().unwrap_or_default()))
+    if !state.login_limiter.allow(&format!("forgot|{}", ip.client().unwrap_or_default()))
         || !state.login_failures.allow(&format!("forgot|{login}"))
     {
         return Err(ApiError::forbidden("too many attempts, try again later"));
@@ -1045,7 +1055,7 @@ pub async fn reset_password(
     ip: ClientIp,
     Json(req): Json<ResetPassword>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    if !state.login_limiter.allow(&format!("reset|{}", ip.text().unwrap_or_default())) {
+    if !state.login_limiter.allow(&format!("reset|{}", ip.client().unwrap_or_default())) {
         return Err(ApiError::TooMany("too many tries; wait a minute".into()));
     }
     let user = services::accounts::reset(&state, req.token.trim(), &req.password).await?;

@@ -1,7 +1,7 @@
 //! Forgust benchmark harness (ADR-0008).
 //!
-//! `seed` pushes a fixture repo into a project, `refs` adds N refs to a project's
-//! repo on disk (the 1M-ref fixture), `run` measures the targets under the single
+//! `fixture` writes a fixture repo, `issues` opens N issues in a project, `refs` adds
+//! N refs to a project's repo on disk (the 1M-ref fixture), `run` measures the targets under the single
 //! and concurrent profiles and compares p95 against a stored baseline.
 //!
 //! HTTP timings are measured by this client over loopback, a close proxy for the
@@ -44,6 +44,17 @@ enum Cmd {
         #[arg(long, default_value_t = 1_000_000)]
         count: usize,
     },
+    /// Open `count` issues in a project, for the issue and instance search targets.
+    Issues {
+        #[arg(long)]
+        url: String,
+        #[arg(long, env = "FORGUST_BENCH_TOKEN")]
+        token: String,
+        #[arg(long)]
+        project: String,
+        #[arg(long, default_value_t = 2000)]
+        count: usize,
+    },
     /// Measure the ADR-0008 targets.
     Run(Box<RunArgs>),
 }
@@ -71,6 +82,10 @@ struct RunArgs {
     /// Merge request `<project path>!<iid>` with ~1,000 changed files (optional).
     #[arg(long)]
     mr: Option<String>,
+    /// `--project` holds the issues of `forgust-bench issues`: time the issue list,
+    /// an issue and the instance search too.
+    #[arg(long)]
+    issues: bool,
     #[arg(long, default_value_t = 200)]
     iterations: usize,
     #[arg(long, default_value_t = 20)]
@@ -212,6 +227,28 @@ fn many_refs(repo: &Path, count: usize) -> Result<()> {
     Ok(())
 }
 
+/// Open `count` issues, 16 at a time. Every title has "Bench issue"; each has its
+/// own number, so a search can match all of them or one.
+async fn seed_issues(url: &str, token: &str, project: &str, count: usize) -> Result<()> {
+    use futures::StreamExt;
+    let client = reqwest::Client::new();
+    let api = format!("{url}/api/v1/projects/{}/issues", project.replace('/', "%2F"));
+    let mut posts = futures::stream::iter(0..count)
+        .map(|i| {
+            let body = serde_json::json!({
+                "title": format!("Bench issue {i:05}: the {} is slow", ["tree", "diff", "blame", "search", "pipeline"][i % 5]),
+                "description": format!("Seen in `src/file_{i:05}.rs`.\n\n- [ ] reproduce\n- [ ] fix"),
+            });
+            client.post(&api).header("private-token", token).json(&body).send()
+        })
+        .buffer_unordered(16);
+    while let Some(r) = posts.next().await {
+        r?.error_for_status()?;
+    }
+    println!("opened {count} issues in {project}");
+    Ok(())
+}
+
 struct Target {
     name: &'static str,
     path: String,
@@ -250,6 +287,7 @@ async fn run(a: RunArgs) -> Result<()> {
         .json()
         .await?;
     let sha = log[1]["id"].as_str().or(log[0]["id"].as_str()).context("project has no commits")?.to_string();
+    let base = log.as_array().and_then(|l| l.last()).and_then(|c| c["id"].as_str()).unwrap_or(&sha).to_string();
 
     // (name, path, ADR-0008 single-warm target, concurrent-warm target)
     let targets = vec![
@@ -289,9 +327,33 @@ async fn run(a: RunArgs) -> Result<()> {
             target_single: 100.0,
             target_concurrent: 250.0,
         },
+        // the "go to file" finder: every path of the repository
+        Target { name: "file_finder", path: format!("{api}/repository/files?ref={branch}"), target_single: 50.0, target_concurrent: 150.0 },
+        // the last commits of the branch compared with its head
+        Target {
+            name: "compare",
+            path: format!("{api}/repository/compare?from={base}&to={branch}"),
+            target_single: 100.0,
+            target_concurrent: 250.0,
+        },
+        Target { name: "mr_list", path: format!("{api}/merge_requests"), target_single: 100.0, target_concurrent: 250.0 },
     ];
 
     let mut targets = targets;
+    // issues, and the instance search (projects, issues and merge requests by
+    // title): a few of each for text every issue has, then one page of issues
+    // for text one issue has
+    if a.issues {
+        let search = format!("{}/api/v1/search", a.url);
+        for (name, path) in [
+            ("issue_list", format!("{api}/issues")),
+            ("issue_page", format!("{api}/issues/1")),
+            ("search_all", format!("{search}?q=bench%20issue")),
+            ("search_issues_rare", format!("{search}?q=issue%2001234&scope=issues")),
+        ] {
+            targets.push(Target { name, path, target_single: 100.0, target_concurrent: 250.0 });
+        }
+    }
     // code search in the fixture project: text one file has (the index narrows
     // 2,000 files to a few), and text every file has (a page of 20 files read)
     let code = format!("{}/api/v1/search/code?project_id={}", a.url, enc(&a.project));
@@ -508,6 +570,7 @@ async fn main() -> Result<()> {
     match Cli::parse().cmd {
         Cmd::Fixture { out, files, commits, lines } => fixture(&out, files, commits, lines),
         Cmd::Refs { repo, count } => many_refs(&repo, count),
+        Cmd::Issues { url, token, project, count } => seed_issues(&url, &token, &project, count).await,
         Cmd::Run(a) => run(*a).await,
     }
 }

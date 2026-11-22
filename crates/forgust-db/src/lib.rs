@@ -22,11 +22,13 @@ pub mod members;
 pub mod merge_requests;
 pub mod merge_trains;
 pub mod milestones;
+pub mod mirrors;
 pub mod namespaces;
 pub mod notifications;
 pub mod oauth;
 pub mod pages;
 pub mod people;
+pub mod project_mirrors;
 pub mod projects;
 pub mod protected_branches;
 pub mod push_rules;
@@ -129,6 +131,11 @@ pub mod visibility {
 }
 
 /// True when the error is a unique-constraint violation.
+/// The row a new one points to is gone (deleted meanwhile).
+pub fn is_foreign_key_violation(e: &sqlx::Error) -> bool {
+    matches!(e, sqlx::Error::Database(d) if d.code().as_deref() == Some("23503"))
+}
+
 pub fn is_unique_violation(e: &sqlx::Error) -> bool {
     matches!(e, sqlx::Error::Database(d) if d.code().as_deref() == Some("23505"))
 }

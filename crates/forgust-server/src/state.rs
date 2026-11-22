@@ -93,6 +93,13 @@ impl RateLimiter {
         self.hits.lock().unwrap().get(key).is_some_and(|(n, t)| t.elapsed() < self.window && *n >= self.max)
     }
 
+    /// Give back a hit `allow` counted (the attempt it guarded succeeded).
+    pub fn undo(&self, key: &str) {
+        if let Some((n, _)) = self.hits.lock().unwrap().get_mut(key) {
+            *n = n.saturating_sub(1);
+        }
+    }
+
     pub fn forget(&self, key: &str) {
         self.hits.lock().unwrap().remove(key);
     }
@@ -278,6 +285,16 @@ pub fn spawn_cache_invalidator(state: AppState) {
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
+
+    #[test]
+    fn a_hit_given_back_is_not_counted() {
+        let l = super::RateLimiter::new(2, Duration::from_secs(60));
+        assert!(l.allow("k"));
+        l.undo("k");
+        assert!(l.allow("k") && l.allow("k"));
+        assert!(!l.allow("k"), "three counted hits is one too many");
+        l.undo("nobody");
+    }
 
     use super::AuditThrottle;
 

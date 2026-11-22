@@ -13,6 +13,7 @@ import { usePref } from "../../shell/theme";
 import { columns, HBar, hsVar, htmlText, remeasure, useCharWidth, useHScroll, useWidth } from "../../components/hscroll";
 import { Markdown } from "../../components/Markdown";
 import { SignatureBadge, useSignatures } from "./Signatures";
+import { EDITORS } from "./editors";
 
 /** Resolve `<ref>/<path>` (refs may contain slashes) once per URL. */
 export function useResolved(ctx: Ctx, refAndPath: string) {
@@ -74,9 +75,10 @@ function RefCounts({ ctx }: { ctx: Ctx }) {
   );
 }
 
-/** Clone URLs (HTTPS or SSH) and archive downloads, in one menu. */
+/** Clone URLs (HTTPS or SSH), editors that clone them, and archive downloads, in one menu. */
 function CloneMenu({ ctx, gitRef }: { ctx: Ctx; gitRef: string }) {
   const [proto, setProto] = useState<"https" | "ssh">("https");
+  const url = proto === "https" ? ctx.p.http_url : ctx.p.ssh_url;
   return (
     <Popover
       label="Clone"
@@ -99,8 +101,19 @@ function CloneMenu({ ctx, gitRef }: { ctx: Ctx; gitRef: string }) {
             ]}
           />
         </div>
-        <CopyField value={proto === "https" ? ctx.p.http_url : ctx.p.ssh_url} />
-        <div className="clone-downloads">
+        <CopyField value={url} />
+        <div className="clone-row clone-editors">
+          <span className="muted small">Open in</span>
+          {EDITORS.map((e) => (
+            <a key={e.name} className="btn small" href={e.link(url)}>
+              <svg viewBox="0 0 24 24" width={13} height={13} fill="currentColor" aria-hidden="true">
+                <path d={e.logo} />
+              </svg>
+              {e.name}
+            </a>
+          ))}
+        </div>
+        <div className="clone-row">
           <span className="muted small">Download {gitRef}</span>
           <a className="btn small" href={`/api/v1${ctx.base}/archive${qs({ ref: gitRef, format: "zip" })}`}>
             <Download size={13} /> zip
@@ -281,7 +294,7 @@ function TreeView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
           <Search size={14} /> Go to file <kbd>t</kbd>
         </button>
         <CodeSearchBox ctx={ctx} path={res.path} />
-        {ctx.p.can_push && (
+        {ctx.p.can_write_repository && (
           <Link className="btn" to={`${ctx.web}/-/new/${res.ref}${res.path ? `/${res.path}` : ""}`} title="Create a file here" aria-label="New file">
             <FilePlus2 size={14} /> <span className="hide-narrow">New file</span>
           </Link>
@@ -509,12 +522,12 @@ function BlobView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
                     History
                   </Link>
                 </div>
-                {ctx.p.can_push && text && (
+                {ctx.p.can_write_repository && text && (
                   <Link className="icon-btn" to={`${ctx.web}/-/edit/${res.ref}/${res.path}`} title="Edit this file" aria-label="Edit this file">
                     <Pencil size={16} />
                   </Link>
                 )}
-                {ctx.p.can_push && (
+                {ctx.p.can_write_repository && (
                   <Link className="icon-btn" to={`${ctx.web}/-/delete/${res.ref}/${res.path}`} title="Delete this file" aria-label="Delete this file">
                     <Trash2 size={16} />
                   </Link>

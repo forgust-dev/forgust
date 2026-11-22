@@ -5,16 +5,16 @@
 //! does not tell resolved threads apart over REST, so threads import as open.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use async_trait::async_trait;
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD;
 use chrono::{DateTime, Utc};
 use serde::Deserialize;
 use url::Url;
 
-use super::client::Http;
+use super::client::{ByNumber, Http, basic_auth, by_number, number_of, urlencode};
+
+/// GitHub sorts repository-wide lists only when asked.
+const OLDEST_FIRST: &[(&str, &str)] = &[("sort", "created"), ("direction", "asc")];
 use super::model::*;
 use forgust_db::access::{DEVELOPER, GUEST, MAINTAINER, REPORTER};
 
@@ -26,13 +26,6 @@ pub struct GitHub {
     comments: tokio::sync::Mutex<HashMap<String, ByNumber<HComment>>>,
     /// Every review comment of a repository, by pull request number.
     review_comments: tokio::sync::Mutex<HashMap<String, ByNumber<HReviewComment>>>,
-}
-
-type ByNumber<T> = Arc<HashMap<i64, Vec<T>>>;
-
-/// The number at the end of an issue or pull request API URL.
-fn number_of(url: Option<&str>) -> Option<i64> {
-    url?.rsplit('/').next()?.parse().ok()
 }
 
 /// The API root for a GitHub web URL: api.github.com, or `/api/v3/` on Enterprise.
@@ -52,30 +45,6 @@ impl GitHub {
         Ok(GitHub { http, token: token.to_string(), comments: Default::default(), review_comments: Default::default() })
     }
 
-    /// A repository-wide list, oldest first, grouped by the item it belongs to;
-    /// fetched once (callers wait for the first one).
-    async fn by_number<T: serde::de::DeserializeOwned>(
-        &self,
-        cache: &tokio::sync::Mutex<HashMap<String, ByNumber<T>>>,
-        path: String,
-        number: fn(&T) -> Option<i64>,
-    ) -> Result<ByNumber<T>> {
-        let mut cache = cache.lock().await;
-        if let Some(hit) = cache.get(&path) {
-            return Ok(hit.clone());
-        }
-        let list: Vec<T> = self.http.all(&path, &[("sort", "created"), ("direction", "asc")]).await?;
-        let mut by: HashMap<i64, Vec<T>> = HashMap::new();
-        for item in list {
-            if let Some(n) = number(&item) {
-                by.entry(n).or_default().push(item);
-            }
-        }
-        let by = Arc::new(by);
-        cache.insert(path, by.clone());
-        Ok(by)
-    }
-
     /// Requests left this hour (`/rate_limit` itself is free); None when the
     /// server does not limit (Enterprise can turn it off).
     async fn quota_left(&self) -> Option<i64> {
@@ -84,7 +53,8 @@ impl GitHub {
     }
 
     async fn conversation(&self, p: &SourceProject) -> Result<ByNumber<HComment>> {
-        self.by_number(&self.comments, format!("{}/issues/comments", repo(p)), |c| number_of(c.issue_url.as_deref())).await
+        by_number(&self.http, &self.comments, format!("{}/issues/comments", repo(p)), OLDEST_FIRST, |c| number_of(c.issue_url.as_deref()))
+            .await
     }
 }
 
@@ -308,6 +278,16 @@ struct HBranch {
 }
 
 #[derive(Deserialize)]
+struct HOrg {
+    login: String,
+}
+
+#[derive(Deserialize)]
+struct HMeta {
+    installed_version: Option<String>,
+}
+
+#[derive(Deserialize)]
 struct HSearch {
     total_count: i64,
 }
@@ -322,15 +302,32 @@ impl Source for GitHub {
         Ok(self.http.get::<HUser>("user", &[]).await?.into())
     }
 
-    async fn list_projects(&self, scope: &str, search: &str) -> Result<Vec<SourceProject>> {
-        let scope = scope.trim().trim_matches('/');
-        let list: Vec<HRepo> = if scope.is_empty() {
-            self.http.all("user/repos", &[("affiliation", "owner,collaborator,organization_member"), ("sort", "full_name")]).await?
+    async fn version(&self) -> Option<ServerVersion> {
+        // github.com has no version; Enterprise Server says it in `meta`
+        if self.http.url("").ok()?.host_str() == Some("api.github.com") {
+            return None;
+        }
+        let m: HMeta = self.http.get_no_wait("meta", &[]).await.ok()?;
+        Some(ServerVersion { kind: Kind::Github, raw: m.installed_version? })
+    }
+
+    async fn groups(&self) -> Result<Vec<SourceNamespace>> {
+        let orgs: Vec<HOrg> = self.http.all("user/orgs", &[]).await?;
+        Ok(orgs.into_iter().map(|o| SourceNamespace { kind: "group".into(), name: o.login.clone(), path: o.login }).collect())
+    }
+
+    async fn list_projects(&self, owner: &str, search: &str) -> Result<Vec<SourceProject>> {
+        let owner = owner.trim().trim_matches('/');
+        let sort = ("sort", "full_name");
+        let list: Vec<HRepo> = if owner.is_empty() {
+            self.http.all("user/repos", &[("affiliation", "owner,collaborator,organization_member"), sort]).await?
+        } else if !self.anonymous() && self.whoami().await?.username.eq_ignore_ascii_case(owner) {
+            // `users/:me/repos` lists only public ones
+            self.http.all("user/repos", &[("affiliation", "owner"), sort]).await?
         } else {
-            match self.http.all(&format!("orgs/{scope}/repos"), &[("type", "all"), ("sort", "full_name")]).await {
-                Err(SourceError::NotFound(_)) => {
-                    self.http.all(&format!("users/{scope}/repos"), &[("type", "all"), ("sort", "full_name")]).await?
-                }
+            let owner = urlencode(owner);
+            match self.http.all(&format!("orgs/{owner}/repos"), &[("type", "all"), sort]).await {
+                Err(SourceError::NotFound(_)) => self.http.all(&format!("users/{owner}/repos"), &[("type", "all"), sort]).await?,
                 r => r?,
             }
         };
@@ -346,8 +343,7 @@ impl Source for GitHub {
         if self.token.is_empty() {
             return Vec::new();
         }
-        let basic = STANDARD.encode(format!("x-access-token:{}", self.token));
-        vec![("http.extraHeader".to_string(), format!("Authorization: Basic {basic}"))]
+        vec![basic_auth("x-access-token", &self.token)]
     }
 
     fn mr_ref_glob(&self) -> &'static str {
@@ -375,15 +371,7 @@ impl Source for GitHub {
         let list: Vec<HLabel> = self.http.all(&format!("{}/labels", repo(p)), &[]).await?;
         Ok(list
             .into_iter()
-            .map(|l| {
-                let c = l.color.trim_start_matches('#');
-                let color = if c.len() == 6 && c.chars().all(|ch| ch.is_ascii_hexdigit()) {
-                    format!("#{}", c.to_ascii_lowercase())
-                } else {
-                    "#6366f1".into()
-                };
-                SourceLabel { name: l.name, color, description: l.description.unwrap_or_default() }
-            })
+            .map(|l| SourceLabel { color: label_color(&l.color), name: l.name, description: l.description.unwrap_or_default() })
             .collect())
     }
 
@@ -486,50 +474,23 @@ impl Source for GitHub {
             }
             self.http.all::<HReview>(&format!("{}/pulls/{}/reviews", repo(p), mr.iid), &[]).await
         };
-        let review_comments =
-            self.by_number(&self.review_comments, format!("{}/pulls/comments", repo(p)), |c| number_of(c.pull_request_url.as_deref()));
+        let review_comments = by_number(&self.http, &self.review_comments, format!("{}/pulls/comments", repo(p)), OLDEST_FIRST, |c| {
+            number_of(c.pull_request_url.as_deref())
+        });
         let (comments, reviews, review_comments) = tokio::try_join!(self.conversation(p), reviews, review_comments)?;
         for c in comments.get(&mr.iid).into_iter().flatten() {
-            threads.push(SourceThread {
-                notes: vec![SourceNote {
-                    id: format!("c{}", c.id),
-                    author: user(c.user.clone()),
-                    body: c.body.clone().unwrap_or_default(),
-                    created_at: c.created_at,
-                    position: None,
-                    internal: false,
-                }],
-                resolved: false,
-            });
+            threads.push(SourceThread::single(
+                format!("c{}", c.id),
+                user(c.user.clone()),
+                c.body.clone().unwrap_or_default(),
+                c.created_at,
+            ));
         }
-        // review summaries with text
+        // review summaries with a verdict or text
         for r in reviews {
-            let body = r.body.unwrap_or_default();
-            let Some(at) = r.submitted_at else { continue };
-            let lead = match r.state.as_str() {
-                "APPROVED" => "Approved",
-                "CHANGES_REQUESTED" => "Requested changes",
-                _ => "",
-            };
-            if body.trim().is_empty() && lead.is_empty() {
-                continue;
+            if let (Some(at), Some(text)) = (r.submitted_at, review_summary(&r.state, r.body.as_deref().unwrap_or_default())) {
+                threads.push(SourceThread::single(format!("r{}", r.id), user(r.user), text, at));
             }
-            let text = match (lead.is_empty(), body.trim().is_empty()) {
-                (false, true) => format!("**{lead}**"),
-                (false, false) => format!("**{lead}:** {body}"),
-                _ => body,
-            };
-            threads.push(SourceThread {
-                notes: vec![SourceNote {
-                    id: format!("r{}", r.id),
-                    author: user(r.user),
-                    body: text,
-                    created_at: at,
-                    position: None,
-                    internal: false,
-                }],
-                resolved: false,
-            });
         }
         // review comments, grouped into threads by reply
         let mut roots: Vec<(i64, SourceThread)> = Vec::new();

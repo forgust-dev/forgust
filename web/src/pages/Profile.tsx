@@ -52,11 +52,13 @@ function ProfileForm() {
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     try {
+      // a link goes out for a new address only, not again for the one waiting
+      const sent = emailChanges;
       await api.put("/user", { name, email, current_password: password });
       setPassword("");
       const s = await api.get<S["SessionInfo"]>("/session");
       setSession(s);
-      setMsg(emailEnabled && s.user.unconfirmed_email ? `Saved. We sent a confirmation link to ${s.user.unconfirmed_email}.` : "Saved.");
+      setMsg(emailEnabled && sent && s.user.unconfirmed_email ? `Saved. We sent a confirmation link to ${s.user.unconfirmed_email}.` : "Saved.");
     } catch (err) {
       setError(err);
     }

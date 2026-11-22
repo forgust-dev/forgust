@@ -1,4 +1,4 @@
-//! Imports from GitLab and GitHub (M5, ADR-0018).
+//! Imports from GitLab, GitHub, Gitea and Forgejo (M5, ADR-0018).
 
 use std::collections::HashSet;
 
@@ -11,11 +11,10 @@ use utoipa::ToSchema;
 use crate::auth::authz::{GroupAction, require_group};
 use crate::auth::{Principal, SignedIn};
 use crate::error::{ApiError, ApiResult};
-use crate::import::model::{SourceError, SourceProject};
+use crate::import::model::{Kind, SourceError, SourceNamespace, SourceProject};
 use crate::import::{self, ImportJob, Options};
 use crate::state::AppState;
 
-const SOURCES: [&str; 2] = ["gitlab", "github"];
 const MAX_PROJECTS: usize = 300;
 
 fn source_error(e: SourceError) -> ApiError {
@@ -26,54 +25,117 @@ fn source_error(e: SourceError) -> ApiError {
     }
 }
 
+/// The source behind its checked address, with the token when given.
+async fn open(state: &AppState, kind: Kind, url: &str, token: &str) -> ApiResult<Box<dyn import::model::Source>> {
+    import::connect(state, kind, url, token).await.map_err(source_error)
+}
+
+/// The same, refused when it says it is older than the importer supports
+/// (asked once per form: connect, lookup and create).
+async fn open_checked(state: &AppState, kind: Kind, url: &str, token: &str) -> ApiResult<(Box<dyn import::model::Source>, Option<String>)> {
+    let src = open(state, kind, url, token).await?;
+    let version = import::check_version(src.as_ref()).await.map_err(source_error)?;
+    Ok((src, version.map(|v| format!("{} {}", v.kind.name(), v.raw))))
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct SourceInfo {
+    pub id: Kind,
+    pub name: &'static str,
+    /// The public instance the form starts with.
+    pub default_url: &'static str,
+    /// The oldest self-hosted version imports work with (`17.0`).
+    pub minimum_version: String,
+    /// What the access token needs.
+    pub token_scopes: &'static str,
+}
+
+/// The forges projects can be imported from, and the versions they need.
+#[utoipa::path(get, path = "/api/v1/imports/sources", responses((status = 200, body = [SourceInfo])), tag = "imports")]
+pub async fn sources(SignedIn(_, _p): SignedIn) -> Json<Vec<SourceInfo>> {
+    Json(
+        Kind::ALL
+            .into_iter()
+            .map(|k| SourceInfo {
+                id: k,
+                name: k.name(),
+                default_url: k.default_url(),
+                minimum_version: format!("{}.{}", k.minimum().major, k.minimum().minor),
+                token_scopes: import::token_scopes(k),
+            })
+            .collect(),
+    )
+}
+
 #[derive(Deserialize, ToSchema)]
 pub struct ConnectBody {
-    /// `gitlab` (or `github`).
-    pub source: String,
+    pub source: Kind,
     /// The forge's address, e.g. https://gitlab.example.com.
     pub url: String,
     /// Optional for public projects.
     #[serde(default)]
     pub token: String,
-    /// Only projects under this group (GitLab) or owner (GitHub).
-    #[serde(default)]
-    pub scope: String,
-    #[serde(default)]
-    pub search: String,
 }
 
 #[derive(Serialize, ToSchema)]
 pub struct Connected {
-    /// The token's user on the source.
+    /// The token's user on the source (empty without a token).
     pub username: String,
     pub name: String,
-    pub projects: Vec<SourceProject>,
+    /// What the server says it runs (`Forgejo 9.0.1`), when it says.
+    pub version: Option<String>,
+    /// Where the token's user has projects: their own, then their groups or
+    /// organizations (none without a token).
+    pub namespaces: Vec<SourceNamespace>,
 }
 
-/// Check a token and list the projects it can import.
+/// Check the address and token, and say where projects can be listed from.
 #[utoipa::path(post, path = "/api/v1/imports/connect", request_body = ConnectBody, responses((status = 200, body = Connected)), tag = "imports")]
 pub async fn connect(State(state): State<AppState>, SignedIn(_, _p): SignedIn, Json(req): Json<ConnectBody>) -> ApiResult<Json<Connected>> {
-    if !SOURCES.contains(&req.source.as_str()) {
-        return Err(ApiError::bad("source must be gitlab or github"));
-    }
-    let src = import::connect(&state, &req.source, &req.url, &req.token).await.map_err(source_error)?;
+    let (src, version) = open_checked(&state, req.source, &req.url, &req.token).await?;
     if req.token.trim().is_empty() {
-        // anonymous: public projects of a group or owner, or added by path
-        let projects = if req.scope.trim().is_empty() {
-            Vec::new()
-        } else {
-            src.list_projects(&req.scope, &req.search).await.map_err(source_error)?
-        };
-        return Ok(Json(Connected { username: String::new(), name: String::new(), projects }));
+        // anonymous: public projects of a user or group named by hand
+        return Ok(Json(Connected { username: String::new(), name: String::new(), version, namespaces: Vec::new() }));
     }
-    let me = src.whoami().await.map_err(source_error)?;
-    let projects = src.list_projects(&req.scope, &req.search).await.map_err(source_error)?;
-    Ok(Json(Connected { username: me.username, name: me.name, projects }))
+    let (me, groups) = tokio::try_join!(src.whoami(), src.groups()).map_err(source_error)?;
+    let mut namespaces = vec![SourceNamespace { kind: "user".into(), path: me.username.clone(), name: me.name.clone() }];
+    namespaces.extend(groups);
+    Ok(Json(Connected { username: me.username, name: me.name, version, namespaces }))
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct ProjectsBody {
+    pub source: Kind,
+    pub url: String,
+    #[serde(default)]
+    pub token: String,
+    /// A user, group or organization; empty: every project the token can read.
+    #[serde(default)]
+    pub owner: String,
+    #[serde(default)]
+    pub search: String,
+}
+
+/// The projects of a user, group or organization on the source (bulk imports).
+#[utoipa::path(post, path = "/api/v1/imports/projects", request_body = ProjectsBody, responses((status = 200, body = [SourceProject])), tag = "imports")]
+pub async fn projects(
+    State(state): State<AppState>,
+    SignedIn(_, _p): SignedIn,
+    Json(req): Json<ProjectsBody>,
+) -> ApiResult<Json<Vec<SourceProject>>> {
+    if req.token.trim().is_empty() && req.owner.trim().is_empty() {
+        return Err(ApiError::bad("without a token, name the user or group to list"));
+    }
+    let src = open(&state, req.source, &req.url, &req.token).await?;
+    match src.list_projects(&req.owner, &req.search).await {
+        Err(SourceError::NotFound(_)) => Err(ApiError::bad(format!("`{}` was not found on the source", req.owner.trim()))),
+        r => Ok(Json(r.map_err(source_error)?)),
+    }
 }
 
 #[derive(Deserialize, ToSchema)]
 pub struct LookupBody {
-    pub source: String,
+    pub source: Kind,
     pub url: String,
     #[serde(default)]
     pub token: String,
@@ -81,19 +143,17 @@ pub struct LookupBody {
     pub path: String,
 }
 
-/// One project by path or URL, for public projects the token is not a member of.
+/// One project by path or URL (single imports, and public projects the token
+/// is not a member of).
 #[utoipa::path(post, path = "/api/v1/imports/lookup", request_body = LookupBody, responses((status = 200, body = SourceProject)), tag = "imports")]
 pub async fn lookup(
     State(state): State<AppState>,
     SignedIn(_, _p): SignedIn,
     Json(req): Json<LookupBody>,
 ) -> ApiResult<Json<SourceProject>> {
-    if !SOURCES.contains(&req.source.as_str()) {
-        return Err(ApiError::bad("source must be gitlab or github"));
-    }
-    let path = import::project_path(&req.source, &req.url, &req.path)
-        .ok_or_else(|| ApiError::bad("give a path like group/project, or the project's URL"))?;
-    let src = import::connect(&state, &req.source, &req.url, &req.token).await.map_err(source_error)?;
+    let path = import::project_path(req.source, &req.url, &req.path)
+        .ok_or_else(|| ApiError::bad("give a path like owner/project, or the project's URL on this forge"))?;
+    let (src, _) = open_checked(&state, req.source, &req.url, &req.token).await?;
     match src.project(&path).await {
         Ok(p) => Ok(Json(p)),
         Err(SourceError::NotFound(_)) => Err(ApiError::bad(format!("`{path}` was not found, or is private and the token cannot read it"))),
@@ -111,7 +171,7 @@ pub struct ImportProjectBody {
 
 #[derive(Deserialize, ToSchema)]
 pub struct CreateImportBody {
-    pub source: String,
+    pub source: Kind,
     pub url: String,
     /// Optional for public projects.
     #[serde(default)]
@@ -156,9 +216,7 @@ pub async fn create(
     Json(req): Json<CreateImportBody>,
 ) -> ApiResult<Json<ImportDetail>> {
     let user = p0.direct_user().ok_or(ApiError::Unauthorized)?.clone();
-    if !SOURCES.contains(&req.source.as_str()) {
-        return Err(ApiError::bad("source must be gitlab or github"));
-    }
+    let source = req.source;
     if req.projects.is_empty() || req.projects.len() > MAX_PROJECTS {
         return Err(ApiError::bad(format!("choose between 1 and {MAX_PROJECTS} projects")));
     }
@@ -171,8 +229,8 @@ pub async fn create(
             return Err(ApiError::bad(format!("two projects would land on `{}`", p.target_path)));
         }
     }
-    // check the address and token now rather than in the background
-    let src = import::connect(&state, &req.source, &req.url, &req.token).await.map_err(source_error)?;
+    // check the address, version and token now rather than in the background
+    let (src, _) = open_checked(&state, source, &req.url, &req.token).await?;
     if !req.token.trim().is_empty() {
         src.whoami().await.map_err(source_error)?;
     }
@@ -185,7 +243,7 @@ pub async fn create(
         &mut *tx,
         idb::NewImport {
             user_id: user.id,
-            source: &req.source,
+            source: source.as_str(),
             base_url: base_url.as_str().trim_end_matches('/'),
             token_enc: &sealed,
             target_namespace_id: ns.id,
@@ -203,7 +261,7 @@ pub async fn create(
         &p0,
         "import_started",
         Some(("namespace", ns.id)),
-        serde_json::json!({ "import": id, "source": req.source, "url": base_url.as_str(), "projects": req.projects.len() }),
+        serde_json::json!({ "import": id, "source": source.as_str(), "url": base_url.as_str(), "projects": req.projects.len() }),
         None,
     )
     .await;
@@ -354,7 +412,8 @@ pub async fn retry(
         (None, false) => Some(String::new()),
     };
     if let Some(t) = token.as_ref().filter(|t| !t.is_empty()) {
-        let src = import::connect(&state, &import.source, &import.base_url, t).await.map_err(source_error)?;
+        let kind = Kind::parse(&import.source).ok_or(ApiError::NotFound)?;
+        let src = open(&state, kind, &import.base_url, t).await?;
         src.whoami().await.map_err(source_error)?;
     }
     let mut tx = state.db.begin().await?;

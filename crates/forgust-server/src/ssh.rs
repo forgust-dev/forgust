@@ -44,6 +44,8 @@ pub fn load_or_create_host_key(path: &Path) -> anyhow::Result<PrivateKey> {
 /// offer: each offer is looked up, and russh neither delays nor counts the
 /// offers it accepts.
 const MAX_AUTH_ATTEMPTS: usize = 10;
+/// One answer for a project that is missing and one the key cannot read.
+const NOT_FOUND: &str = "The project you were looking for could not be found or you don't have permission to view it.";
 
 pub async fn serve(state: AppState, listener: tokio::net::TcpListener) -> anyhow::Result<()> {
     let key = load_or_create_host_key(&state.cfg.server.data_dir.join("ssh_host_ed25519_key"))?;
@@ -80,6 +82,7 @@ impl russh::server::Server for SshServer {
             peer,
             offers: 0,
             principal: None,
+            key: None,
             channels: HashMap::new(),
         }
     }
@@ -98,6 +101,8 @@ pub struct Conn {
     /// Keys offered so far.
     offers: usize,
     principal: Option<Principal>,
+    /// The key that signed in (its fingerprint), looked up again for each command.
+    key: Option<String>,
     channels: HashMap<ChannelId, ChannelState>,
 }
 
@@ -146,17 +151,32 @@ impl Conn {
             self.send_error(&handle, channel, "not authenticated").await;
             return Ok(());
         };
+        // a connection outlives its sign-in: the key and the account as they
+        // are now, for each command (key removed or expired since, account
+        // blocked, no longer an administrator)
+        let key = match &self.key {
+            Some(fp) => forgust_db::ssh_keys::find_by_fingerprint(&self.state.db, fp).await?.filter(|k| k.for_auth()),
+            None => None,
+        };
+        let principal = match (key, principal) {
+            (Some(_), Principal::User { user, scopes }) => forgust_db::users::find(&self.state.db, user.id)
+                .await?
+                .filter(|u| u.is_active())
+                .map(|user| Principal::User { user, scopes }),
+            (Some(_), other) => Some(other),
+            (None, _) => None,
+        };
+        let Some(principal) = principal else {
+            self.principal = None;
+            self.send_error(&handle, channel, "not authenticated").await;
+            return Ok(());
+        };
         let Some((cmd, path)) = parse_command(&command) else {
             self.send_error(&handle, channel, "only git commands are supported").await;
             return Ok(());
         };
         let Some((project, moved)) = crate::git_http::find_project(&self.state, &path).await? else {
-            self.send_error(
-                &handle,
-                channel,
-                "The project you were looking for could not be found or you don't have permission to view it.",
-            )
-            .await;
+            self.send_error(&handle, channel, NOT_FOUND).await;
             return Ok(());
         };
 
@@ -187,7 +207,7 @@ impl Conn {
             } else if visible {
                 "You are not allowed to push code to this project."
             } else {
-                "The project you were looking for could not be found or you don't have permission to view it."
+                NOT_FOUND
             };
             if visible {
                 crate::services::audit_push_refused(&self.state, &principal, project.id, msg, "ssh", ip.as_deref()).await;
@@ -275,11 +295,20 @@ impl Conn {
         op: &str,
     ) -> anyhow::Result<()> {
         let write = op == "upload";
-        let ok = can_project(&self.state, principal, if write { ProjectAction::Push } else { ProjectAction::ReadCode }, project)
-            .await
-            .unwrap_or(false);
+        let action = if write { ProjectAction::Push } else { ProjectAction::ReadCode };
+        let ok = match can_project(&self.state, principal, action, project).await {
+            Ok(ok) => ok,
+            Err(crate::error::ApiError::TwoFactorRequired) => {
+                self.send_error(handle, channel, "two-factor authentication is required by this organization").await;
+                return Ok(());
+            }
+            Err(_) => false,
+        };
         if !ok {
-            self.send_error(handle, channel, "access denied").await;
+            // an upload refused on a project the key can read says so; a project
+            // it cannot read answers as a missing one
+            let readable = write && can_project(&self.state, principal, ProjectAction::ReadCode, project).await.unwrap_or(false);
+            self.send_error(handle, channel, if readable { "access denied" } else { NOT_FOUND }).await;
             return Ok(());
         }
         let token = crypto::random_token(crypto::prefix::LFS_SSH);
@@ -352,6 +381,7 @@ impl russh::server::Handler for Conn {
             ("deploy", _) => Some(Principal::DeployKey { key_id: k.id }),
             _ => None,
         };
+        self.key = self.principal.is_some().then_some(fp);
         Ok(if self.principal.is_some() { Auth::Accept } else { reject() })
     }
 
