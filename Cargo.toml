@@ -17,7 +17,7 @@ forgust-diff = { path = "crates/forgust-diff" }
 forgust-reviewer = { path = "crates/forgust-reviewer", default-features = false }
 forgust-ci-config = { path = "crates/forgust-ci-config" }
 # the Smart View's engine, in its own repository
-assay = { git = "https://github.com/forgust-dev/assay", rev = "96248b4bd62abf81eb3b830aa4ceb5c00e11fc17" }
+assay = { git = "https://github.com/forgust-dev/assay", rev = "383e716a0c0b3cc0d4daa3c9ff9761d57de7511e" }
 
 anyhow = "1"
 thiserror = "2"
