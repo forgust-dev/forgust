@@ -7863,6 +7863,10 @@ button.test-case-row:hover {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--bg-subtle);
+  /* its cards are drawn at its zoom (0.8 when it opens): their 1px border comes out under a pixel
+     wide, paler than a card's anywhere else, as if it had none. A shade darker makes up for it */
+  --card-line: var(--border-strong);
+  --card-line-hover: color-mix(in srgb, var(--border-strong) 75%, var(--text-faint));
 }
 .smart-frame .react-flow {
   --xy-edge-stroke: var(--border-strong);
@@ -7993,7 +7997,7 @@ button.test-case-row:hover {
   width: 204px;
   height: 92px;
   padding: 9px 11px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--card-line, var(--border));
   border-radius: var(--radius);
   background: var(--bg);
   box-shadow: var(--shadow);
@@ -8003,7 +8007,7 @@ button.test-case-row:hover {
   cursor: pointer;
 }
 .smart-card:hover {
-  border-color: var(--border-strong);
+  border-color: var(--card-line-hover, var(--border-strong));
 }
 .smart-card:focus-visible {
   outline: 2px solid var(--accent);
