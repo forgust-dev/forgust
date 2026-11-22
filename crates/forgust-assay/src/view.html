@@ -425,7 +425,8 @@ function details(b) {
     let s = `<section><h3>People to ask</h3><ul>`;
     for (const o of b.owners) s += `<li><span class="grow">${esc(o)}</span><span class="tag">declared</span></li>`;
     for (const p of b.people) {
-      s += `<li><span class="avatar" style="--h:${hue(p.name)};margin-left:0">${esc(initials(p.name))}</span><span class="grow" title="${esc(p.email)}">${esc(p.name)}</span><span class="meta">${p.commits} commit${p.commits === 1 ? "" : "s"} · ${esc(p.last)}</span></li>`;
+      const commits = Number.isFinite(Number(p.commits)) ? Number(p.commits) : 0;
+      s += `<li><span class="avatar" style="--h:${hue(p.name)};margin-left:0">${esc(initials(p.name))}</span><span class="grow" title="${esc(p.email)}">${esc(p.name)}</span><span class="meta">${commits} commit${commits === 1 ? "" : "s"} · ${esc(p.last)}</span></li>`;
     }
     s += `</ul>`;
     if (b.bus_factor === 1 && b.people.length) s += `<p class="note">Only one person made a fifth or more of its recent changes: worth sharing what they know.</p>`;
