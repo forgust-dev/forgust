@@ -185,6 +185,14 @@ async fn a_bad_download_keeps_the_copy_there_was(pool: sqlx::PgPool) {
     assert!(format!("{err:#}").contains("trivy-db"), "{err:#}");
     assert_eq!(current().await.digest, imported.digest, "the copy there was stays");
 
+    // one that answers with a blob the copy here serves: refused, that blob stays
+    let confused = upstream_serving(b"the real db".to_vec(), b"imported db".to_vec()).await;
+    point_at(format!("{}/aquasecurity/trivy-db:2", confused.base)).await;
+    assert!(forgust_server::services::vulnerability_dbs::sync(&srv.state).await.is_err());
+    assert_eq!(current().await.digest, imported.digest);
+    let r = reqwest::get(format!("{}/v2/admin/mirrors/trivy-db/blobs/{}", srv.base, sha(b"imported db"))).await.unwrap();
+    assert_eq!(r.status(), 200, "the blob the copy names is not deleted");
+
     // unreachable: the same
     point_at("http://127.0.0.1:9/aquasecurity/trivy-db:2".into()).await;
     assert!(forgust_server::services::vulnerability_dbs::sync(&srv.state).await.is_err());
@@ -199,6 +207,20 @@ async fn a_bad_download_keeps_the_copy_there_was(pool: sqlx::PgPool) {
     assert!(now.previous_blob_digests.contains(&sha(b"imported db")));
     let r = reqwest::get(format!("{}/v2/admin/mirrors/trivy-db/blobs/{}", srv.base, sha(b"imported db"))).await.unwrap();
     assert_eq!(r.status(), 200, "still served");
+
+    // a blob the store lost comes back at the next sync, upstream unchanged
+    let key = forgust_server::services::vulnerability_dbs::blob_key(&sha(b"the real db"));
+    srv.state.blobs.delete(&key).await.unwrap();
+    let before = good.downloads.load(Ordering::SeqCst);
+    forgust_server::services::vulnerability_dbs::sync(&srv.state).await.unwrap();
+    assert_eq!(good.downloads.load(Ordering::SeqCst), before + 1);
+    let after = current().await;
+    assert_eq!((after.digest, after.previous_blob_digests), (now.digest, now.previous_blob_digests), "the same copy, not a new one");
+    let r = reqwest::get(format!("{}/v2/admin/mirrors/trivy-db/blobs/{}", srv.base, sha(b"the real db"))).await.unwrap();
+    assert_eq!(r.status(), 200, "served again");
+    // nothing lost: nothing downloaded
+    forgust_server::services::vulnerability_dbs::sync(&srv.state).await.unwrap();
+    assert_eq!(good.downloads.load(Ordering::SeqCst), before + 1);
 }
 
 #[sqlx::test(migrator = "forgust_db::MIGRATOR")]
@@ -255,6 +277,10 @@ async fn sbom_job(srv: &TestServer, runner: &str) -> Option<Value> {
 
 /// Upload `archive` (a zip) as the job's artifacts, and pass.
 async fn finish(srv: &TestServer, job: &Value, archive: Option<Vec<u8>>) {
+    end(srv, job, archive, "success").await
+}
+
+async fn end(srv: &TestServer, job: &Value, archive: Option<Vec<u8>>, state: &str) {
     let http = reqwest::Client::new();
     if let Some(zip) = archive {
         let form = reqwest::multipart::Form::new().part("file", reqwest::multipart::Part::bytes(zip).file_name("artifacts.zip"));
@@ -269,7 +295,7 @@ async fn finish(srv: &TestServer, job: &Value, archive: Option<Vec<u8>>) {
     }
     let r = http
         .put(format!("{}/api/v4/jobs/{}", srv.base, job["id"]))
-        .json(&json!({ "token": job["token"], "state": "success", "exit_code": 0 }))
+        .json(&json!({ "token": job["token"], "state": state, "exit_code": if state == "success" { 0 } else { 1 } }))
         .send()
         .await
         .unwrap();
@@ -362,6 +388,9 @@ async fn tags_get_an_sbom_on_their_release(pool: sqlx::PgPool) {
     let v4 = guest.ok_get(&format!("/api/v4/projects/{p}/releases/v1.0")).await;
     assert!(!v4.to_string().contains("SBOM"), "{v4}");
     assert_eq!(guest.get_bytes(links[0].1.trim_start_matches(&srv.base)).await.0, 404, "nor its file");
+    let download = format!("/api/v4/projects/{p}/releases/v1.0/downloads/sbom.cdx.json");
+    assert_eq!(guest.get_bytes(&download).await.0, 404, "nor where it is");
+    assert_eq!(reporter.get_bytes(&download).await.0, 302);
     let seen = reporter.ok_get(&format!("/api/v1/projects/{p}/releases/v1.0")).await;
     assert_eq!(sbom_links(&seen).len(), 2, "who reads the code does");
     assert_eq!(reporter.get_bytes(links[0].1.trim_start_matches(&srv.base)).await.0, 200);
@@ -375,12 +404,25 @@ async fn tags_get_an_sbom_on_their_release(pool: sqlx::PgPool) {
     let release = owner.ok_get(&format!("/api/v1/projects/{p}/releases/v2.0")).await;
     assert_eq!(sbom_links(&release).len(), 2, "{release}");
 
-    // the same tag again at the same commit (deleted and pushed back): no second run
+    let kept = || async {
+        sqlx::query_scalar::<_, i64>("SELECT count(*) FROM uploads WHERE project_id = $1 AND requires_code")
+            .bind(p)
+            .fetch_one(&srv.state.db)
+            .await
+            .unwrap()
+    };
+    assert_eq!(kept().await, 4, "two files per tag");
+
+    // a deleted tag: its SBOM goes with it, files too; pushed back, it gets another
     must(git(&work, &["push", "-q", &url, ":refs/tags/v1.0"]).await);
     wait_jobs(&srv.state).await;
+    assert_eq!(kept().await, 2);
+    assert_eq!(owner.get_bytes(links[0].1.trim_start_matches(&srv.base)).await.0, 404);
     must(git(&work, &["push", "-q", &url, "v1.0"]).await);
     wait_jobs(&srv.state).await;
-    assert!(sbom_job(&srv, &runner).await.is_none());
+    let job = sbom_job(&srv, &runner).await.expect("an sbom job for the tag pushed back");
+    finish(&srv, &job, Some(sbom_zip(&srv.work_dir("z1b"), "v1.0").await)).await;
+    assert_eq!(kept().await, 4);
 
     // moved to another commit: the release made while its run is going gets
     // no SBOM of the old commit, then the new one once the run passed
@@ -399,6 +441,43 @@ async fn tags_get_an_sbom_on_their_release(pool: sqlx::PgPool) {
     assert_eq!(links.len(), 2, "{release}");
     let (_, body) = owner.get_bytes(links[0].1.trim_start_matches(&srv.base)).await;
     assert!(String::from_utf8_lossy(&body).contains("v1.0 again"));
+
+    // moved by a forced push, its release staying: the old commit's SBOM
+    // leaves the release at once, the new one joins it once its run passed
+    commit_file(&work, "CHANGELOG.md", "1.0 once more\n", "changelog again").await;
+    must(git(&work, &["tag", "-f", "-a", "v1.0", "-m", "one, once more"]).await);
+    must(git(&work, &["push", "-q", "-f", &url, "main", "v1.0"]).await);
+    wait_jobs(&srv.state).await;
+    let release = owner.ok_get(&format!("/api/v1/projects/{p}/releases/v1.0")).await;
+    assert!(sbom_links(&release).is_empty(), "not the SBOM of the commit it left: {release}");
+    assert_eq!(owner.get_bytes(links[0].1.trim_start_matches(&srv.base)).await.0, 404, "nor its file");
+    assert_eq!(kept().await, 2);
+    let job = sbom_job(&srv, &runner).await.expect("an sbom job for the tag forced elsewhere");
+    finish(&srv, &job, Some(sbom_zip(&srv.work_dir("z4"), "v1.0 once more").await)).await;
+    let release = owner.ok_get(&format!("/api/v1/projects/{p}/releases/v1.0")).await;
+    let links = sbom_links(&release);
+    assert_eq!(links.len(), 2, "{release}");
+    let (_, body) = owner.get_bytes(links[0].1.trim_start_matches(&srv.base)).await;
+    assert!(String::from_utf8_lossy(&body).contains("v1.0 once more"));
+    assert_eq!(kept().await, 4, "no file of a commit a tag left");
+
+    // a run that failed holds its tag and commit no longer: another may start
+    must(git(&work, &["tag", "v3.0"]).await);
+    must(git(&work, &["push", "-q", &url, "v3.0"]).await);
+    wait_jobs(&srv.state).await;
+    let job = sbom_job(&srv, &runner).await.expect("an sbom job");
+    let at = var(&job, "CI_COMMIT_SHA").unwrap();
+    assert!(forgust_db::security::claim_sbom(&srv.state.db, p, "v3.0", &at).await.unwrap().is_none(), "one run while it goes");
+    end(&srv, &job, None, "failed").await;
+    assert!(forgust_db::security::claim_sbom(&srv.state.db, p, "v3.0", &at).await.unwrap().is_some());
+
+    // SBOMs on tags turned off: the runs going on stop
+    must(git(&work, &["tag", "v4.0"]).await);
+    must(git(&work, &["push", "-q", &url, "v4.0"]).await);
+    wait_jobs(&srv.state).await;
+    let st = owner.ok_put(&scanning, json!({ "enabled": true, "scanners": ["sast"], "sbom_on_tags": false })).await;
+    assert_eq!(st["sbom_on_tags"], false, "{st}");
+    assert!(sbom_job(&srv, &runner).await.is_none(), "canceled with the setting");
 
     // SBOM runs are not scans: the scan settings' last run, if any, is a scan
     let last: Option<String> = sqlx::query_scalar(

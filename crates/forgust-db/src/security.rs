@@ -725,13 +725,21 @@ pub struct SbomFile {
 }
 
 /// Claim the SBOM run of `tag` at `sha`: `None` when one was claimed already
-/// (a retried post-receive, two paths creating the same tag).
+/// (a retried post-receive, two paths creating the same tag). A claim that
+/// came to nothing (no files, and no pipeline, or one that failed or was
+/// canceled) is taken over.
 pub async fn claim_sbom(e: impl PgExecutor<'_>, project_id: i64, tag: &str, sha: &str) -> Result<Option<i64>> {
     sqlx::query_scalar!(
-        "INSERT INTO tag_sboms (project_id, tag, sha) VALUES ($1, $2, $3) ON CONFLICT (project_id, tag, sha) DO NOTHING RETURNING id",
+        "INSERT INTO tag_sboms (project_id, tag, sha) VALUES ($1, $2, $3)
+         ON CONFLICT (project_id, tag, sha) DO UPDATE SET pipeline_id = NULL, created_at = now()
+          WHERE tag_sboms.cyclonedx_upload_id IS NULL AND tag_sboms.spdx_upload_id IS NULL
+            AND NOT EXISTS (SELECT 1 FROM ci_pipelines p
+                             WHERE p.id = tag_sboms.pipeline_id AND (p.status = 'success' OR p.status = ANY($4)))
+         RETURNING id",
         project_id,
         tag,
-        sha
+        sha,
+        ACTIVE as &[&str]
     )
     .fetch_optional(e)
     .await
@@ -758,8 +766,10 @@ pub async fn sbom_of_pipeline(e: impl PgExecutor<'_>, pipeline_id: i64) -> Resul
     .await
 }
 
-pub async fn sbom_files(e: impl PgExecutor<'_>, id: i64, cyclonedx_upload_id: i64, spdx_upload_id: i64) -> Result<()> {
-    sqlx::query!(
+/// Record the run's files: false when the run is no longer wanted (its tag
+/// moved or was deleted meanwhile).
+pub async fn sbom_files(e: impl PgExecutor<'_>, id: i64, cyclonedx_upload_id: i64, spdx_upload_id: i64) -> Result<bool> {
+    let r = sqlx::query!(
         "UPDATE tag_sboms SET cyclonedx_upload_id = $2, spdx_upload_id = $3 WHERE id = $1",
         id,
         cyclonedx_upload_id,
@@ -767,7 +777,36 @@ pub async fn sbom_files(e: impl PgExecutor<'_>, id: i64, cyclonedx_upload_id: i6
     )
     .execute(e)
     .await?;
-    Ok(())
+    Ok(r.rows_affected() > 0)
+}
+
+/// Forget the SBOMs of `tag` (all of them, or those of another commit than
+/// `keep_sha`), with their files (the `uploads_blob` trigger queues the
+/// blobs). Returns the pipelines of the runs forgotten.
+pub async fn drop_sboms(c: &mut sqlx::PgConnection, project_id: i64, tag: &str, keep_sha: Option<&str>) -> Result<Vec<i64>> {
+    let gone = sqlx::query!(
+        "DELETE FROM tag_sboms WHERE project_id = $1 AND tag = $2 AND ($3::text IS NULL OR sha <> $3)
+         RETURNING pipeline_id, cyclonedx_upload_id, spdx_upload_id",
+        project_id,
+        tag,
+        keep_sha
+    )
+    .fetch_all(&mut *c)
+    .await?;
+    let uploads: Vec<i64> = gone.iter().flat_map(|g| [g.cyclonedx_upload_id, g.spdx_upload_id]).flatten().collect();
+    sqlx::query!("DELETE FROM uploads WHERE project_id = $1 AND id = ANY($2)", project_id, &uploads).execute(&mut *c).await?;
+    Ok(gone.into_iter().filter_map(|g| g.pipeline_id).collect())
+}
+
+/// SBOM pipelines of a project not finished.
+pub async fn active_sbom_runs(e: impl PgExecutor<'_>, project_id: i64) -> Result<Vec<i64>> {
+    sqlx::query_scalar!(
+        "SELECT id FROM ci_pipelines WHERE source = 'sbom' AND project_id = $1 AND status = ANY($2)",
+        project_id,
+        ACTIVE as &[&str]
+    )
+    .fetch_all(e)
+    .await
 }
 
 /// Every file kept of the SBOMs of `tag`, at whatever commit.

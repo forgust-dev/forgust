@@ -86,6 +86,10 @@ pub async fn configure(state: &AppState, principal: &Principal, project: &Projec
     let owner = if c.enabled { Some(user.id) } else { before.as_ref().and_then(|s| s.user_id) };
     let had_sbom = before.as_ref().is_some_and(|s| s.sbom_on_tags);
     let sbom = c.sbom_on_tags.unwrap_or(had_sbom);
+    // SBOM runs going on stop with scanning, or with SBOMs on tags
+    if !c.enabled || (had_sbom && !sbom) {
+        super::sbom::cancel_runs(state, project.id).await.map_err(ApiError::Internal)?;
+    }
     sdb::save_scanning(
         &state.db,
         sdb::SaveScanning {

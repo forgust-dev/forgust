@@ -200,14 +200,17 @@ impl PostReceive {
             {
                 tracing::warn!(project_id = self.project_id, error = %e, "releases of deleted tags not deleted");
             }
-            // new tags (by a push, in the browser, by a release): their SBOMs
-            let created_tags: Vec<(String, String)> = self
+            if !deleted_tags.is_empty() {
+                crate::services::sbom::on_tags_deleted(state, &p, &deleted_tags).await;
+            }
+            // tags new (by a push, in the browser, by a release) or moved: their SBOMs
+            let pushed_tags: Vec<(String, String)> = self
                 .updates
                 .iter()
-                .filter(|u| u.old == forgust_storage::ZERO_OID && u.new != forgust_storage::ZERO_OID)
+                .filter(|u| u.new != forgust_storage::ZERO_OID)
                 .filter_map(|u| u.name.strip_prefix("refs/tags/").map(|t| (t.to_string(), u.new.clone())))
                 .collect();
-            crate::services::sbom::on_tags_created(state, &p, &created_tags).await;
+            crate::services::sbom::on_tags_pushed(state, &p, &pushed_tags).await;
             let who = pusher.as_ref().and_then(|p| p.user());
             // the contributions calendar: a push event per branch or tag a person pushed
             let person = pusher.as_ref().and_then(|p| p.direct_user());

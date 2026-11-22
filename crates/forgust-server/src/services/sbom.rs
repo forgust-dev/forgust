@@ -1,9 +1,10 @@
-//! SBOMs of tags: with security scanning and `sbom_on_tags` on, each new tag
-//! gets a built-in pipeline (source `sbom`: never a scan, never a status of
+//! SBOMs of tags: with security scanning and `sbom_on_tags` on, each tag
+//! pushed (new, or moved to another commit) gets a built-in pipeline (source `sbom`: never a scan, never a status of
 //! the tag) whose job writes a CycloneDX and an SPDX file with the scanners'
 //! Trivy. Once it passed, the files become uploads of the project (made from
 //! the code: for those who read it) and links of the tag's release, now or
-//! when the release is created.
+//! when the release is created. They last as long as the tag points to their
+//! commit: moved or deleted, its older SBOMs go, files and links.
 
 use anyhow::Context;
 use forgust_db::projects::Project;
@@ -27,7 +28,10 @@ const FILES: [(&str, &str, &str); 2] =
 
 /// The pipeline: one job, both formats (the mirror gives Java's index).
 pub fn job_config(cfg: &crate::config::SecurityScanningConfig, mirror: &super::vulnerability_dbs::TrivyMirror) -> String {
-    let run = |format: &str, file: &str| format!("trivy fs --config /dev/null --format {format} --output {file} --exit-code 0 .");
+    // neither run reads what the job itself wrote (Trivy 0.57 does not; a
+    // configured image may)
+    let skip = FILES.map(|(file, ..)| format!("--skip-files {file}")).join(" ");
+    let run = |format: &str, file: &str| format!("trivy fs --config /dev/null {skip} --format {format} --output {file} --exit-code 0 .");
     let extra = json!({
         "script": [run("cyclonedx", FILES[0].0), run("spdx-json", FILES[1].0)],
         // the server keeps its copies: these go soon
@@ -36,15 +40,66 @@ pub fn job_config(cfg: &crate::config::SecurityScanningConfig, mirror: &super::v
     json!({ JOB: super::scanning::trivy_job(cfg, mirror, json!({}), extra) }).to_string()
 }
 
-/// Tags a push created (`(name, the ref's new value)`): an SBOM run for each,
-/// the first few of a push, once per tag and commit.
-pub async fn on_tags_created(state: &AppState, project: &Project, tags: &[(String, String)]) {
+/// Tags a push created or moved (`(name, the ref's new value)`): the SBOMs
+/// of the commits they left go, and each gets an SBOM run, the first few of a
+/// push, once per tag and commit.
+pub async fn on_tags_pushed(state: &AppState, project: &Project, tags: &[(String, String)]) {
+    for (tag, sha) in tags {
+        if let Err(e) = forget(state, project, tag, Some(sha)).await {
+            tracing::warn!(project_id = project.id, tag, error = %format!("{e:#}"), "older SBOMs of the tag not removed");
+        }
+    }
     if tags.is_empty() || project.archived() {
         return;
     }
     if let Err(e) = start_all(state, project, tags).await {
-        tracing::warn!(project_id = project.id, error = %format!("{e:#}"), "SBOMs of new tags not started");
+        tracing::warn!(project_id = project.id, error = %format!("{e:#}"), "SBOMs of pushed tags not started");
     }
+}
+
+/// Tags deleted: their SBOMs go with them (their releases went already).
+pub async fn on_tags_deleted(state: &AppState, project: &Project, tags: &[String]) {
+    for tag in tags {
+        if let Err(e) = forget(state, project, tag, None).await {
+            tracing::warn!(project_id = project.id, tag, error = %format!("{e:#}"), "SBOMs of the deleted tag not removed");
+        }
+    }
+}
+
+/// Drop the SBOMs of `tag` (all, or those of another commit than `keep`):
+/// the release's links to them first (found by their files), then the runs
+/// and files; runs still going stop.
+async fn forget(state: &AppState, p: &Project, tag: &str, keep: Option<&str>) -> anyhow::Result<()> {
+    let files = sdb::sbom_files_of_tag(&state.db, p.id, tag).await?;
+    let stale: Vec<String> =
+        files.iter().filter(|f| keep != Some(f.sha.as_str())).map(|f| super::uploads::path_of(p.id, &f.secret, &f.filename)).collect();
+    if !stale.is_empty()
+        && let Some(release) = forgust_db::releases::find(&state.db, p.id, tag).await?
+    {
+        for l in forgust_db::releases::links(&state.db, &[release.id]).await? {
+            if stale.contains(&l.url) {
+                forgust_db::releases::delete_link(&state.db, release.id, l.id).await?;
+            }
+        }
+    }
+    let mut tx = state.db.begin().await?;
+    let pipelines = sdb::drop_sboms(&mut tx, p.id, tag, keep).await?;
+    tx.commit().await?;
+    let active = sdb::active_sbom_runs(&state.db, p.id).await?;
+    for id in pipelines.into_iter().filter(|id| active.contains(id)) {
+        if let Err(e) = crate::ci::pipeline::cancel(state, id).await {
+            tracing::warn!(pipeline_id = id, error = %format!("{e:#}"), "SBOM run of a tag that moved not canceled");
+        }
+    }
+    Ok(())
+}
+
+/// Stop a project's SBOM runs (scanning, or SBOMs on tags, turned off).
+pub async fn cancel_runs(state: &AppState, project_id: i64) -> anyhow::Result<()> {
+    for id in sdb::active_sbom_runs(&state.db, project_id).await? {
+        crate::ci::pipeline::cancel(state, id).await?;
+    }
+    Ok(())
 }
 
 async fn start_all(state: &AppState, project: &Project, tags: &[(String, String)]) -> anyhow::Result<()> {
@@ -163,7 +218,7 @@ async fn copy_files(state: &AppState, p: &Project, row: &sdb::TagSbom, pipeline_
             Ok(size) => stored.push((secret, key, size)),
             Err(err) => {
                 let _ = state.blobs.delete(&key).await;
-                forget(state, &stored).await;
+                discard(state, &stored).await;
                 return Err(err);
             }
         }
@@ -189,17 +244,21 @@ async fn copy_files(state: &AppState, p: &Project, row: &sdb::TagSbom, pipeline_
             .await?;
             ids.push(u.id);
         }
-        sdb::sbom_files(&mut *tx, row.id, ids[0], ids[1]).await?;
-        anyhow::Ok(tx.commit().await?)
+        // the tag moved or went while the files were copied: nothing is kept
+        if !sdb::sbom_files(&mut *tx, row.id, ids[0], ids[1]).await? {
+            return Ok(false);
+        }
+        tx.commit().await?;
+        anyhow::Ok(true)
     }
     .await;
-    if kept.is_err() {
-        forget(state, &stored).await;
+    if !matches!(kept, Ok(true)) {
+        discard(state, &stored).await;
     }
-    kept
+    kept.map(|_| ())
 }
 
-async fn forget(state: &AppState, stored: &[(String, String, u64)]) {
+async fn discard(state: &AppState, stored: &[(String, String, u64)]) {
     for (_, key, _) in stored {
         let _ = state.blobs.delete(key).await;
     }

@@ -241,6 +241,10 @@ pub async fn download_url(state: &AppState, principal: &Principal, p: &Project, 
     let r = find(state, principal, p, tag).await?;
     let path = format!("/{}", path.trim_start_matches('/'));
     let l = forgust_db::releases::link_by_path(&state.db, r.id, &path).await?.ok_or(ApiError::NotFound)?;
+    // a file made from the code (the tag's SBOM): as hidden here as in the release
+    if !sees_code(state, principal, p).await && !visible_links(state, p, false, &[r.id]).await?.iter().any(|v| v.id == l.id) {
+        return Err(ApiError::NotFound);
+    }
     Ok(absolute_url(state, &l.url))
 }
 

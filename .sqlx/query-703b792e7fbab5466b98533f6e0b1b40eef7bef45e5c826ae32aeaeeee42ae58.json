@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO tag_sboms (project_id, tag, sha) VALUES ($1, $2, $3) ON CONFLICT (project_id, tag, sha) DO NOTHING RETURNING id",
+  "query": "SELECT id FROM ci_pipelines WHERE source = 'sbom' AND project_id = $1 AND status = ANY($2)",
   "describe": {
     "columns": [
       {
@@ -9,7 +9,7 @@
         "type_info": "Int8",
         "origin": {
           "Table": {
-            "table": "tag_sboms",
+            "table": "ci_pipelines",
             "name": "id"
           }
         }
@@ -18,13 +18,12 @@
     "parameters": {
       "Left": [
         "Int8",
-        "Text",
-        "Text"
+        "TextArray"
       ]
     },
     "nullable": [
       false
     ]
   },
-  "hash": "e5d4b915e05ddc9dbd682e759c5be34e3210622346e8928e6b6c6bd1ff234c1b"
+  "hash": "703b792e7fbab5466b98533f6e0b1b40eef7bef45e5c826ae32aeaeeee42ae58"
 }

@@ -1,0 +1,54 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM tag_sboms WHERE project_id = $1 AND tag = $2 AND ($3::text IS NULL OR sha <> $3)\n         RETURNING pipeline_id, cyclonedx_upload_id, spdx_upload_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pipeline_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "tag_sboms",
+            "name": "pipeline_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "cyclonedx_upload_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "tag_sboms",
+            "name": "cyclonedx_upload_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "spdx_upload_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "tag_sboms",
+            "name": "spdx_upload_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "6b329c0468d1b5e417a06a994ea03828c6e85a5dc6841e1fe9daaf08112f759c"
+}

@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO tag_sboms (project_id, tag, sha) VALUES ($1, $2, $3)\n         ON CONFLICT (project_id, tag, sha) DO UPDATE SET pipeline_id = NULL, created_at = now()\n          WHERE tag_sboms.cyclonedx_upload_id IS NULL AND tag_sboms.spdx_upload_id IS NULL\n            AND NOT EXISTS (SELECT 1 FROM ci_pipelines p\n                             WHERE p.id = tag_sboms.pipeline_id AND (p.status = 'success' OR p.status = ANY($4)))\n         RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "tag_sboms",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b20e53316d2fb4de7d05d5e4848b7c462265259c0751f3e9e0f6d34022da1b4e"
+}
