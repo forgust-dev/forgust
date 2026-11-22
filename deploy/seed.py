@@ -4,7 +4,8 @@
     docker compose up -d --build && python3 deploy/seed.py
 
 Creates the first administrator, registers the compose runner, then users in every
-role, groups, projects with history (LFS, tags, releases), issues, merge requests in
+role, groups, projects with history (LFS, tags, releases; a monorepo for the Smart
+View), issues, merge requests in
 every state (review threads, suggestions, approvals, stacks, a conflict, a train),
 CI (artifacts, test reports, environments, services, child pipelines, registry
 images, schedules), webhooks, tokens and keys. Every user's password is PASSWORD.
@@ -617,7 +618,8 @@ def seed_shop(apis, ids, acme):
     r = Repo("shop", "alice", alice.token, "acme/shop")
     r.git("lfs", "install", "--local")
     r.git("lfs", "track", "*.png", "*.bin")
-    r.commit("alice", "Initial commit", {"README.md": "# Shop\n", ".gitignore": "__pycache__/\n.venv/\ndist/\n", ".gitattributes": (r.dir / ".gitattributes").read_text()})
+    r.commit("alice", "Initial commit", {"README.md": "# Shop\n", ".gitignore": "__pycache__/\n.venv/\ndist/\n", ".gitattributes": (r.dir / ".gitattributes").read_text(),
+                                         "pyproject.toml": '[project]\nname = "shop"\nversion = "1.0.0"\ndescription = "The Acme web shop: cart, pricing, checkout"\nrequires-python = ">=3.12"\n'})
     r.commit("carol", "Add the cart", {"shop/__init__.py": "", "shop/cart.py": CART_V1, "tests/__init__.py": "", "tests/test_cart.py": TEST_CART})
     r.commit("bob", "Add pricing with VAT", {"shop/pricing.py": PRICING, "tests/test_pricing.py": TEST_PRICING})
     r.commit("bob", "Add CI: build, tests, deploys", {".gitlab-ci.yml": SHOP_CI, "ci/run_tests.py": RUN_TESTS, "ci/lint.py": LINT,
@@ -866,6 +868,304 @@ def seed_others(apis, ids, acme, platform, partners, shop):
     return p["id"]
 
 
+# --------------------------------------------------------------------------- marketplace
+
+# A monorepo for the Smart View: a storefront and a back office on one API, the API's crates and
+# their schema, a worker and a search indexer, their images and services; each part with its CI
+# jobs (one failing), its owners, and a history of who changed it.
+MARKET_DESCRIPTION = "Acme's next shop, in one repository: open its Smart View to see the parts, what each needs and who to ask."
+
+MARKET_README = """# Marketplace
+
+The storefront (`apps/storefront`) and the back office (`apps/backoffice`) call the API
+(`services/api`), built on its crates (`crates/`). The order worker (`services/worker`) handles
+what happens after an order; the indexer (`services/indexer`) keeps search in step with the
+catalog.
+
+    docker compose up
+
+See [docs/architecture.md](docs/architecture.md).
+"""
+
+MARKET_CARGO = """[workspace]
+members = ["services/api", "crates/*"]
+resolver = "3"
+
+[workspace.dependencies]
+market-domain = { path = "crates/domain" }
+market-store = { path = "crates/store" }
+"""
+
+MARKET_COMPOSE = """# The whole marketplace on one machine: docker compose up
+services:
+  storefront:
+    build:
+      context: .
+      dockerfile: apps/storefront/Dockerfile
+    ports: ["3000:80"]
+    environment:
+      API_URL: http://api:8080
+  api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    depends_on: [db]
+    environment:
+      DATABASE_URL: postgres://market:market@db:5432/market
+      REDIS_URL: redis://cache:6379
+      AMQP_URL: amqp://market:market@queue:5672
+      SMTP_URL: smtp://mail:1025
+      S3_ENDPOINT: http://s3:9000
+  worker:
+    build: services/worker
+    depends_on: [queue]
+    environment:
+      AMQP_URL: amqp://market:market@queue:5672
+      DATABASE_URL: postgres://market:market@db:5432/market
+  indexer:
+    build: services/indexer
+    environment:
+      MEILI_URL: http://search:7700
+      DATABASE_URL: postgres://market:market@db:5432/market
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: market
+      POSTGRES_PASSWORD: market
+  cache:
+    image: valkey/valkey:8
+  queue:
+    image: rabbitmq:4-management
+  search:
+    image: getmeili/meilisearch:v1.15
+  mail:
+    image: axllent/mailpit:v1.27
+  s3:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: server /data
+"""
+
+MARKET_CI = """# Each part is tested and built when its files change (rules: changes, some
+# through extends): the Smart View shows each job on its part.
+stages: [test, build]
+
+default:
+  image: alpine:3.20
+
+.rust:
+  rules:
+    - changes: ["services/api/**/*", "crates/**/*", "Cargo.toml"]
+
+api-test:
+  stage: test
+  extends: .rust
+  script:
+    - echo "cargo test --workspace (demo)"
+
+schema-check:
+  stage: test
+  script:
+    - echo "the migrations apply to an empty database (demo)"
+  rules:
+    - changes: ["crates/store/migrations/**/*"]
+
+ui-test:
+  stage: test
+  script:
+    - echo "npm test -w packages/ui (demo)"
+  rules:
+    - changes: ["packages/ui/**/*"]
+
+worker-test:
+  stage: test
+  script:
+    - echo "go test ./... (demo)"
+    - 'echo "--- FAIL: TestRetryBackoff (0.02s)"'
+    - 'echo "    orders_test.go:18: backoff after 3 tries = 8s, want 4s"'
+    - exit 1
+  rules:
+    - changes: ["services/worker/**/*"]
+
+indexer-test:
+  stage: test
+  script:
+    - echo "pytest (demo)"
+  rules:
+    - changes: ["services/indexer/**/*"]
+
+api-image:
+  stage: build
+  extends: .rust
+  needs: [api-test]
+  script:
+    - echo "docker build -f services/api/Dockerfile . (demo)"
+
+storefront-build:
+  stage: build
+  needs: []
+  script:
+    - echo "npm run build -w apps/storefront (demo)"
+  rules:
+    - changes: ["apps/storefront/**/*", "packages/**/*"]
+
+backoffice-build:
+  stage: build
+  needs: []
+  script:
+    - echo "npm run build -w apps/backoffice (demo)"
+  rules:
+    - changes: ["apps/backoffice/**/*"]
+"""
+
+MARKET_ASSAY = """# The Smart View's corrections: names to read, and what no file says.
+version = 1
+
+[blocks.acme-storefront]
+name = "Storefront"
+
+[blocks.acme-backoffice]
+name = "Back office"
+
+[blocks.marketplace-api]
+name = "Marketplace API"
+referents = ["@alice"]
+
+[blocks.order-worker]
+name = "Order worker"
+
+[blocks.market-indexer]
+name = "Search indexer"
+
+# both apps call the API: no manifest says so
+[[links]]
+from = "acme-storefront"
+to = "marketplace-api"
+
+[[links]]
+from = "acme-backoffice"
+to = "marketplace-api"
+
+# a guess from compose's environment, confirmed
+[[links]]
+from = "api"
+to = "cache"
+kind = "connects"
+"""
+
+MARKET_CODEOWNERS = """# who reviews which part
+/apps/ @carol
+/packages/ @carol
+/services/api/ @bob
+/crates/ @bob
+/services/worker/ @frank
+/services/indexer/ @alice
+/docs/ @erin
+"""
+
+
+def market_package(name, description, deps=None, **extra):
+    return json.dumps({"name": name, "description": description, "private": True, "type": "module", **extra,
+                       **({"dependencies": deps} if deps else {})}, indent=2) + "\n"
+
+
+def market_history(r):
+    """The marketplace's history, over six months: each part mostly in one or two hands."""
+    r.day = 170
+    rust = lambda name, desc, deps="": f'[package]\nname = "{name}"\nversion = "0.1.0"\nedition = "2024"\ndescription = "{desc}"\n{deps}'
+    r.commit("alice", "Start the marketplace: a Cargo and an npm workspace", {
+        "README.md": MARKET_README, "Cargo.toml": MARKET_CARGO, ".gitignore": "target/\nnode_modules/\ndist/\n__pycache__/\n",
+        "package.json": json.dumps({"name": "marketplace", "private": True, "workspaces": ["apps/*", "packages/*"]}, indent=2) + "\n"})
+    r.commit("bob", "domain: products and prices", {
+        "crates/domain/Cargo.toml": rust("market-domain", "Products, carts and orders: the marketplace's types and rules"),
+        "crates/domain/src/lib.rs": "//! Products, carts and orders.\npub mod money;\n\npub struct Product {\n    pub sku: String,\n    pub name: String,\n    pub price: money::Cents,\n}\n",
+        "crates/domain/src/money.rs": "pub type Cents = i64;\n\npub fn with_vat(c: Cents, rate_pct: i64) -> Cents {\n    c + c * rate_pct / 100\n}\n"})
+    r.commit("bob", "store: the catalog's schema and queries", {
+        "crates/store/Cargo.toml": rust("market-store", "Postgres access for the API and the worker",
+                                        '\n[dependencies]\nmarket-domain.workspace = true\nsqlx = { version = "0.8", features = ["postgres", "runtime-tokio"] }\n'),
+        "crates/store/src/lib.rs": "//! Queries, over the schema in migrations/.\npub mod products;\n",
+        "crates/store/src/products.rs": "use market_domain::Product;\n\npub async fn all(_db: &sqlx::PgPool) -> Vec<Product> {\n    Vec::new()\n}\n",
+        "crates/store/migrations/0001_products.sql": "create table products (\n  sku text primary key,\n  name text not null,\n  price_cents bigint not null\n);\n"})
+    r.commit("bob", "api: the catalog routes", {
+        "services/api/Cargo.toml": rust("marketplace-api", "The HTTP API the storefront and the back office call",
+                                        '\n[dependencies]\naxum = "0.8"\ntokio = { version = "1", features = ["full"] }\nmarket-domain.workspace = true\nmarket-store.workspace = true\n'),
+        "services/api/src/main.rs": "mod routes;\n\n#[tokio::main]\nasync fn main() {\n    let app = routes::all();\n    let listener = tokio::net::TcpListener::bind(\"0.0.0.0:8080\").await.unwrap();\n    axum::serve(listener, app).await.unwrap();\n}\n",
+        "services/api/src/routes.rs": "use axum::{Router, routing::get};\n\npub fn all() -> Router {\n    Router::new().route(\"/products\", get(|| async { \"[]\" }))\n}\n"})
+    r.commit("carol", "ui: buttons and prices", {
+        "packages/ui/package.json": market_package("@acme/ui", "Buttons, forms and prices, shared by both apps", main="src/index.ts", peerDependencies={"react": "*"}),
+        "packages/ui/src/index.ts": "export { Button } from \"./Button\";\nexport { Price } from \"./Price\";\n",
+        "packages/ui/src/Button.tsx": "export function Button(props: { children: React.ReactNode; onClick?: () => void }) {\n  return <button className=\"btn\" {...props} />;\n}\n",
+        "packages/ui/src/Price.tsx": "export function Price({ cents }: { cents: number }) {\n  return <span className=\"price\">{(cents / 100).toFixed(2)} €</span>;\n}\n"})
+    r.commit("carol", "api-client: typed calls to the API", {
+        "packages/api-client/package.json": market_package("@acme/api-client", "The API's client, typed", main="src/index.ts"),
+        "packages/api-client/src/index.ts": "export type Product = { sku: string; name: string; price_cents: number };\n\nexport const products = (base: string): Promise<Product[]> => fetch(`${base}/products`).then((r) => r.json());\n"})
+    store_front = {"@acme/api-client": "*", "@acme/ui": "*", "react": "19.2.0", "react-dom": "19.2.0"}
+    r.commit("carol", "storefront: the catalog page", {
+        "apps/storefront/package.json": market_package("@acme/storefront", "The shop customers browse and buy in", store_front,
+                                                       scripts={"dev": "vite", "build": "vite build"}, devDependencies={"vite": "7.1.0"}),
+        "apps/storefront/index.html": "<!doctype html>\n<div id=\"root\"></div>\n<script type=\"module\" src=\"/src/main.tsx\"></script>\n",
+        "apps/storefront/src/main.tsx": "import { createRoot } from \"react-dom/client\";\nimport { Catalog } from \"./Catalog\";\n\ncreateRoot(document.getElementById(\"root\")!).render(<Catalog />);\n",
+        "apps/storefront/src/Catalog.tsx": "import { Price } from \"@acme/ui\";\n\nexport function Catalog() {\n  return <ul><li>Mug <Price cents={1200} /></li></ul>;\n}\n"})
+    r.commit("alice", "compose: run the whole marketplace locally", {"compose.yml": MARKET_COMPOSE})
+    r.commit("frank", "worker: consume order events", {
+        "services/worker/go.mod": "module github.com/acme/marketplace/order-worker\n\ngo 1.24\n\nrequire (\n\tgithub.com/jackc/pgx/v5 v5.7.5\n\tgithub.com/rabbitmq/amqp091-go v1.10.0\n)\n",
+        "services/worker/cmd/worker/main.go": "package main\n\nimport \"github.com/acme/marketplace/order-worker/internal/orders\"\n\nfunc main() {\n\torders.Consume()\n}\n",
+        "services/worker/internal/orders/orders.go": "package orders\n\n// Consume handles the order events from the queue.\nfunc Consume() {}\n"})
+    r.commit("bob", "store: orders", {"crates/store/migrations/0002_orders.sql": "create table orders (\n  id bigserial primary key,\n  created_at timestamptz not null default now()\n);\n",
+                                      "crates/store/src/orders.rs": "pub async fn place(_db: &sqlx::PgPool) {}\n",
+                                      "crates/store/src/lib.rs": "//! Queries, over the schema in migrations/.\npub mod orders;\npub mod products;\n"})
+    r.commit("carol", "storefront: the cart", {"apps/storefront/src/Cart.tsx": "import { Button, Price } from \"@acme/ui\";\n\nexport function Cart({ total }: { total: number }) {\n  return <aside>Total <Price cents={total} /> <Button>Order</Button></aside>;\n}\n"})
+    r.commit("bob", "api: orders", {"services/api/src/routes.rs": "use axum::{Router, routing::{get, post}};\n\npub fn all() -> Router {\n    Router::new()\n        .route(\"/products\", get(|| async { \"[]\" }))\n        .route(\"/orders\", post(|| async { \"{}\" }))\n}\n"})
+    r.commit("frank", "worker: retry with a backoff", {
+        "services/worker/internal/orders/retry.go": "package orders\n\nimport \"time\"\n\n// Backoff doubles from one second, after each failed try.\nfunc Backoff(tries int) time.Duration {\n\treturn time.Second << tries\n}\n",
+        "services/worker/internal/orders/orders_test.go": "package orders\n\nimport (\n\t\"testing\"\n\t\"time\"\n)\n\nfunc TestRetryBackoff(t *testing.T) {\n\tif got := Backoff(2); got != 4*time.Second {\n\t\tt.Fatalf(\"backoff after 3 tries = %v, want 4s\", got)\n\t}\n}\n"})
+    r.commit("alice", "indexer: keep search in step with the catalog", {
+        "services/indexer/pyproject.toml": '[project]\nname = "market-indexer"\nversion = "0.1.0"\ndescription = "Keeps the search index in step with the catalog"\nrequires-python = ">=3.12"\ndependencies = ["meilisearch>=0.31", "psycopg[binary]>=3.2"]\n\n[project.scripts]\nmarket-indexer = "indexer.main:run"\n',
+        "services/indexer/indexer/__init__.py": "",
+        "services/indexer/indexer/main.py": "\"\"\"Pushes the catalog to the search index.\"\"\"\n\n\ndef run():\n    print(\"indexed 0 products\")\n",
+        "services/indexer/tests/test_main.py": "from indexer.main import run\n\n\ndef test_runs():\n    run()\n"})
+    back_office = {"@acme/api-client": "*", "@acme/ui": "*", "react": "19.2.0", "react-dom": "19.2.0"}
+    r.commit("carol", "backoffice: the orders list", {
+        "apps/backoffice/package.json": market_package("@acme/backoffice", "Where the team manages products and orders", back_office,
+                                                       scripts={"dev": "vite", "build": "vite build"}, devDependencies={"vite": "7.1.0"}),
+        "apps/backoffice/src/main.tsx": "import { createRoot } from \"react-dom/client\";\nimport { Orders } from \"./Orders\";\n\ncreateRoot(document.getElementById(\"root\")!).render(<Orders />);\n",
+        "apps/backoffice/src/Orders.tsx": "export function Orders() {\n  return <table><tbody /></table>;\n}\n"})
+    r.commit("bob", "api: an image", {"services/api/Dockerfile": "FROM rust:1.90 AS build\nWORKDIR /src\nCOPY Cargo.toml ./\nCOPY crates crates\nCOPY services/api services/api\nRUN cargo build --release -p marketplace-api\n\nFROM debian:trixie-slim\nCOPY --from=build /src/target/release/marketplace-api /usr/local/bin/\nCMD [\"marketplace-api\"]\n"})
+    r.commit("carol", "storefront: an image", {"apps/storefront/Dockerfile": "FROM node:22-alpine AS build\nWORKDIR /src\nCOPY package.json ./\nCOPY packages packages\nCOPY apps/storefront apps/storefront\nRUN npm install && npm run build -w apps/storefront\n\nFROM nginx:1.27-alpine\nCOPY --from=build /src/apps/storefront/dist /usr/share/nginx/html\n"})
+    r.commit("frank", "worker: an image", {"services/worker/Dockerfile": "FROM golang:1.24-alpine AS build\nWORKDIR /src\nCOPY . .\nRUN go build -o /out/worker ./cmd/worker\n\nFROM alpine:3.20\nCOPY --from=build /out/worker /usr/local/bin/worker\nCMD [\"worker\"]\n"})
+    r.commit("alice", "indexer: an image", {"services/indexer/Dockerfile": "FROM python:3.13-slim\nWORKDIR /app\nCOPY . .\nRUN pip install --no-cache-dir .\nCMD [\"market-indexer\"]\n"})
+    r.commit("bob", "CI: test and build each part when it changes", {".gitlab-ci.yml": MARKET_CI})
+    r.commit("alice", "CODEOWNERS, and names for the Smart View", {"CODEOWNERS": MARKET_CODEOWNERS, "assay.toml": MARKET_ASSAY})
+    r.commit("erin", "docs: how the parts fit", {"docs/architecture.md": "# Architecture\n\nThe apps call the API; the API writes orders, the worker ships them, the indexer\nfeeds search. Open the project's Smart View for the map.\n"})
+    r.commit("frank", "worker: a dead-letter queue", {"services/worker/internal/orders/dead.go": "package orders\n\n// DeadLetter parks an event that failed too often.\nfunc DeadLetter() {}\n"})
+    r.commit("carol", "ui: dark mode colours", {"packages/ui/src/theme.css": ":root { --price: #1c1915; }\n@media (prefers-color-scheme: dark) { :root { --price: #f5f5f6; } }\n"})
+    r.commit("dave", "storefront: the cart total is right after a removal", {"apps/storefront/src/Cart.tsx": "import { Button, Price } from \"@acme/ui\";\n\nexport function Cart({ total }: { total: number }) {\n  return <aside>Total <Price cents={Math.max(0, total)} /> <Button>Order</Button></aside>;\n}\n"})
+    r.commit("bob", "store: order events", {"crates/store/migrations/0003_order_events.sql": "create table order_events (\n  order_id bigint not null references orders,\n  kind text not null,\n  at timestamptz not null default now()\n);\n"})
+    r.commit("frank", "worker: an email when an order ships", {"services/worker/internal/orders/mail.go": "package orders\n\n// Shipped mails the customer.\nfunc Shipped() {}\n"})
+    r.commit("carol", "backoffice: edit products", {"apps/backoffice/src/Products.tsx": "export function Products() {\n  return <form />;\n}\n"})
+    r.commit("alice", "api: a rate limit", {"services/api/src/limit.rs": "//! Requests per minute, per address.\npub const PER_MINUTE: u32 = 600;\n"})
+    r.commit("bob", "domain: discounts", {"crates/domain/src/discount.rs": "use crate::money::Cents;\n\npub fn percent_off(c: Cents, pct: i64) -> Cents {\n    c - c * pct / 100\n}\n",
+                                          "crates/domain/src/lib.rs": "//! Products, carts and orders.\npub mod discount;\npub mod money;\n\npub struct Product {\n    pub sku: String,\n    pub name: String,\n    pub price: money::Cents,\n}\n"})
+    r.commit("erin", "docs: the runbook", {"docs/runbook.md": "# Runbook\n\n- Orders stuck: look at the worker's dead-letter queue.\n- Search stale: run `market-indexer`.\n"})
+    r.commit("frank", "worker: metrics", {"services/worker/internal/orders/metrics.go": "package orders\n\n// Handled counts the events handled.\nvar Handled int\n"}, days_ago=9)
+    r.commit("dave", "storefront: search the catalog", {"apps/storefront/src/Search.tsx": "import { products } from \"@acme/api-client\";\n\nexport function Search() {\n  void products;\n  return <input type=\"search\" />;\n}\n"}, days_ago=6)
+    r.commit("alice", "indexer: a full reindex", {"services/indexer/indexer/main.py": "\"\"\"Pushes the catalog to the search index.\"\"\"\n\n\ndef run(full: bool = False):\n    print(\"indexed 0 products\" + (\" (full)\" if full else \"\"))\n"}, days_ago=4)
+    r.commit("bob", "api: health and readiness", {"services/api/src/health.rs": "pub async fn health() -> &'static str {\n    \"ok\"\n}\n"}, days_ago=2)
+    # the change the failing worker-test is about
+    r.commit("frank", "worker: back off faster", {"services/worker/internal/orders/retry.go": "package orders\n\nimport \"time\"\n\n// Backoff doubles from one second, after each failed try.\nfunc Backoff(tries int) time.Duration {\n\treturn time.Second << (tries + 1)\n}\n"}, days_ago=1)
+
+
+def seed_marketplace(apis, platform):
+    """acme/platform/marketplace: a monorepo to open in the Smart View."""
+    bob = apis["bob"]
+    log("acme/platform/marketplace: a monorepo for the Smart View")
+    p = bob.post("/projects", {"namespace_id": platform, "name": "Marketplace", "path": "marketplace", "visibility": "internal",
+                               "description": MARKET_DESCRIPTION})
+    r = Repo("marketplace", "bob", bob.token, "acme/platform/marketplace")
+    market_history(r)
+    r.push("main")
+    return p["id"]
+
+
 SECURITY_JOB = """
 # Demo security reports: canned GitLab-format reports, so the Security
 # tab has findings without running scanners. Turn on Settings > Security
@@ -1006,6 +1306,7 @@ def main():
     seed_keys(apis)
     shop, mrs, m_fix = seed_shop(apis, ids, acme)
     seed_others(apis, ids, acme, platform, partners, shop)
+    seed_marketplace(apis, platform)
     seed_admin_extras(apis, acme)
     seed_security(apis, shop)
     imp = seed_import(apis, imported)
@@ -1035,7 +1336,8 @@ def main():
   import     {'running, see Admin → Imports' if imp else 'skipped'}
 
 Try: review !{mrs['feature/discounts']} on acme/shop as alice, add !{mrs['chore/gitignore']} and !{mrs['docs/cart-merging']} to the merge train,
-play the production job, turn on Dependency updates in acme/platform/api.
+play the production job, turn on Dependency updates in acme/platform/api,
+open the Smart View of acme/platform/marketplace.
 """)
 
 
