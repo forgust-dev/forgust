@@ -2646,15 +2646,20 @@ kbd {
   gap: 10px;
   width: min(420px, calc(100vw - 32px));
 }
-.clone-downloads {
+.clone-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding-top: 10px;
   border-top: 1px solid var(--border);
 }
-.clone-downloads span {
+.clone-row > span {
   flex: 1;
+}
+/* five editors do not fit beside the label: it takes its own line */
+.clone-editors > span {
+  flex-basis: 100%;
 }
 @media (max-width: 900px) {
   .repo-layout {
