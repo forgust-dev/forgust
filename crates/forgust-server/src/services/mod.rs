@@ -28,6 +28,7 @@ pub mod quotas;
 pub mod refs;
 pub mod releases;
 pub mod renovate;
+pub mod repo_mirrors;
 pub mod repos;
 pub mod sbom;
 pub mod scanning;

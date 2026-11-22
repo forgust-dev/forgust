@@ -425,8 +425,8 @@ pub struct Features {
     /// comment's image would reach them: tests and closed setups only).
     #[serde(default)]
     pub image_proxy_allow_local: bool,
-    /// Let imports reach forges on private and loopback addresses (an in-house
-    /// GitLab). Off: SSRF, as for webhooks (ADR-0018).
+    /// Let imports and repository mirrors reach forges on private and loopback
+    /// addresses (an in-house GitLab). Off: SSRF, as for webhooks (ADR-0018).
     pub imports_allow_local: bool,
 }
 

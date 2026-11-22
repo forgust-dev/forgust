@@ -230,6 +230,15 @@ pub const EVENTS: &[EventType] = &[
     e("project_deleted", SPACES, P, &["path"], "A project was deleted."),
     e("import_started", SPACES, N, &["import", "source", "url", "projects"], "An import from GitLab, GitHub, Gitea or Forgejo started."),
     e("pages_removed", SPACES, P, &[], "A project's Pages site was removed."),
+    e("mirror_added", SPACES, P, &["mirror", "direction", "url"], "A pull or push mirror of a project's repository was added."),
+    e(
+        "mirror_changed",
+        SPACES,
+        P,
+        &["mirror", "enabled", "only_protected", "trigger_pipelines", "interval_minutes", "credentials", "previous"],
+        "A repository mirror was paused, resumed, or its options or credentials changed.",
+    ),
+    e("mirror_removed", SPACES, P, &["mirror", "direction", "url"], "A repository mirror was removed."),
     // access and protections
     e(
         "member_set",

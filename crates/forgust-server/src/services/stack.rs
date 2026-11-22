@@ -366,7 +366,7 @@ pub async fn after_merge(
 /// Rebase every open layer, bottom up, onto the branch below it. Stops at the
 /// first conflict. Returns how many branches moved.
 pub async fn rebase(state: &AppState, principal: &Principal, p: &Project, m: &MergeRequest) -> ApiResult<usize> {
-    require_project(state, principal, ProjectAction::Push, p).await?;
+    crate::services::repo_mirrors::require_write(state, principal, p).await?;
     let sid = m.stack_id.ok_or(ApiError::NotFound)?;
     crate::services::quotas::check_write(state, p.id, 0).await?;
     let _lock = state.repo_locks.get(p.id).read_owned().await;
@@ -403,7 +403,7 @@ pub async fn rebase(state: &AppState, principal: &Principal, p: &Project, m: &Me
     let moved = updates.len();
     if !updates.is_empty() {
         let mut tx = state.db.begin().await?;
-        state.jobs.enqueue(&mut tx, PostReceive { project_id: p.id, updates, principal: Some(principal.encode()) }.request()).await?;
+        state.jobs.enqueue(&mut tx, PostReceive::pushed(p.id, updates, principal.encode()).request()).await?;
         tx.commit().await?;
     }
     for x in &list {

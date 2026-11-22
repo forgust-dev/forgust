@@ -33,7 +33,7 @@ const STATUS_TEXT: Record<string, string> = {
   canceled: "Canceled",
 };
 
-const OPTION_LABELS: [keyof S["Options"], string, string][] = [
+const OPTION_LABELS: [Exclude<keyof S["Options"], "mirror">, string, string][] = [
   ["merge_requests", "Merge requests", "with their comments and review threads"],
   ["issues", "Issues", "with their comments"],
   ["labels", "Labels", ""],
@@ -43,7 +43,7 @@ const OPTION_LABELS: [keyof S["Options"], string, string][] = [
   ["members", "Members", "matched by email; Owners of the target group only"],
 ];
 
-const ALL_OPTIONS: S["Options"] = { issues: true, merge_requests: true, labels: true, lfs: true, variables: true, protected_branches: true, members: true };
+const ALL_OPTIONS: S["Options"] = { issues: true, merge_requests: true, labels: true, lfs: true, variables: true, protected_branches: true, members: true, mirror: false };
 
 /** Where an http(s) address points (`https://www.github.com/a/b` → github.com). */
 const parseUrl = (raw: string): { origin: string; host: string } | null => {
@@ -142,7 +142,7 @@ export function ImportPage() {
           </Field>
           <Field
             label="Access token"
-            hint={`Optional for public projects. Needs ${info?.token_scopes ?? "read access"}.${source === "github" ? " Without one, GitHub allows 60 requests an hour and the import waits for its limit." : ""} Kept encrypted, and erased when the import ends.`}
+            hint={`Optional for public projects. Needs ${info?.token_scopes ?? "read access"}.${source === "github" ? " Without one, GitHub allows 60 requests an hour and the import waits for its limit." : ""} Kept encrypted, and erased when the import ends (unless the repository is kept in sync).`}
           >
             <input type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} />
           </Field>
@@ -230,6 +230,13 @@ function BringAlong({ options, setOptions }: { options: S["Options"]; setOptions
           </label>
         ))}
       </div>
+      <label className="check">
+        <input type="checkbox" checked={options.mirror ?? false} onChange={(e) => setOptions({ ...options, mirror: e.target.checked })} /> Keep the repository in sync
+        <span className="faint small">
+          {" "}
+          · a pull mirror: its branches and tags keep following the source (read-only here), with the token kept for it. Issues and merge requests come over once.
+        </span>
+      </label>
     </Section>
   );
 }

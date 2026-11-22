@@ -2,7 +2,7 @@ import { Suspense, lazy, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { Archive, ArrowRight, BookOpen, Building2, CalendarDays, GitBranch, GitCommitHorizontal, Globe, Handshake, HardDrive, History as HistoryIcon, Lock, Scale, ShieldCheck, UserCheck, Users as UsersIcon } from "lucide-react";
+import { Archive, ArrowRight, BookOpen, Building2, CalendarDays, GitBranch, GitCommitHorizontal, Globe, Handshake, HardDrive, History as HistoryIcon, Lock, RefreshCw, Scale, ShieldCheck, UserCheck, Users as UsersIcon } from "lucide-react";
 import { api, bytes, qs, timeAgo, type S, encPath, refLink } from "../../api/client";
 import { StatusBadge } from "./ci/Status";
 import { fetchers, keys } from "../../prefetch";
@@ -154,7 +154,7 @@ export function ProjectPage({ id, fullPath, rest }: { id: number; fullPath: stri
                   {section === "tree" && <Tree ctx={ctx} refAndPath={tail} />}
                   {section === "blob" && <Blob ctx={ctx} refAndPath={tail} />}
                   {section === "blame" && <Blame ctx={ctx} refAndPath={tail} />}
-                  {(section === "edit" || section === "new" || section === "delete") && (p.can_push ? <EditFile ctx={ctx} refAndPath={tail} mode={section} /> : <NotFound />)}
+                  {(section === "edit" || section === "new" || section === "delete") && (p.can_write_repository ? <EditFile ctx={ctx} refAndPath={tail} mode={section} /> : <NotFound />)}
                   {section === "commits" && <Commits ctx={ctx} refAndPath={tail || ref} />}
                   {section === "commit" && <Commit ctx={ctx} sha={tail} />}
                   {section === "branches" && <Branches ctx={ctx} />}
@@ -264,6 +264,16 @@ function StorageBanner({ p }: { p: S["ProjectDetail"] }) {
   );
 }
 
+/** `github.com/owner/repo` from a repository's address. */
+const hostPath = (u: string) => {
+  try {
+    const x = new URL(u);
+    return `${x.host}${x.pathname.replace(/\.git$/, "")}`;
+  } catch {
+    return u;
+  }
+};
+
 function ProjectHeader({ p }: { p: S["ProjectDetail"] }) {
   const { user } = useSession();
   return (
@@ -276,6 +286,11 @@ function ProjectHeader({ p }: { p: S["ProjectDetail"] }) {
           {p.visibility[0].toUpperCase() + p.visibility.slice(1)}
         </span>
         {p.ref_format === "reftable" && <span className="pill">reftable</span>}
+        {p.pull_mirror && (
+          <span className="pill" title={`Its branches and tags come from ${p.pull_mirror}, and are read-only here`}>
+            <RefreshCw size={13} /> Mirror of {hostPath(p.pull_mirror)}
+          </span>
+        )}
         {p.archived && (
           <span className="pill warn" title={p.archived_at ? `Archived ${new Date(p.archived_at).toLocaleString()}` : undefined}>
             <Archive size={13} /> Archived

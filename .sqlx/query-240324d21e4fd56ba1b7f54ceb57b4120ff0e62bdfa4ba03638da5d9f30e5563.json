@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE project_mirrors SET last_update_at = now(), last_error = $2,\n                last_success_at = CASE WHEN $2::text IS NULL THEN now() ELSE last_success_at END\n         WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "240324d21e4fd56ba1b7f54ceb57b4120ff0e62bdfa4ba03638da5d9f30e5563"
+}
