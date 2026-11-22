@@ -290,10 +290,11 @@ function Canvas(props: CanvasProps) {
 function Flow({ lay, byId, jobs, chosen, near, select, room, panel }: CanvasProps) {
   const flow = useReactFlow();
   const arrow = useId();
-  // the frame's border takes 2px
+  // the frame's border takes 2px; its height: the graph's, within FRAME_MIN and FRAME_MAX
   const width = room - 2;
-  const zoom = Math.max(READABLE, Math.min(1, (width - 2 * MARGIN) / lay.width));
-  const height = Math.round(Math.max(FRAME_MIN, Math.min(FRAME_MAX * window.innerHeight, lay.height * zoom + 2 * MARGIN)));
+  const tallest = Math.max(FRAME_MIN, FRAME_MAX * window.innerHeight);
+  const zoom = Math.max(READABLE, Math.min(1, (width - 2 * MARGIN) / lay.width, (tallest - 2 * MARGIN) / lay.height));
+  const height = Math.round(Math.max(FRAME_MIN, Math.min(tallest, lay.height * zoom + 2 * MARGIN)));
   const fitsAcross = lay.width * zoom <= width - 2 * MARGIN;
   const fitsDown = lay.height * zoom <= height - 2 * MARGIN;
   // where the canvas opens: read once
@@ -403,7 +404,7 @@ function Flow({ lay, byId, jobs, chosen, near, select, room, panel }: CanvasProp
         <Controls showInteractive={false} position="bottom-left" />
         {/* beside the buttons: a graph from left to right is crowded on the right, not there */}
         {!(fitsAcross && fitsDown) && (
-          <MiniMap pannable zoomable position="bottom-left" style={{ width: 140, height: 90, marginLeft: 58 }} ariaLabel="Where the view is in the whole graph" />
+          <MiniMap pannable zoomable position="bottom-left" style={{ width: 120, height: 76, marginLeft: 58 }} ariaLabel="Where the view is in the whole graph" />
         )}
       </ReactFlow>
       {panel}
