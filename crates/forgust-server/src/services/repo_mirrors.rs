@@ -103,8 +103,31 @@ fn git_error(e: StorageError) -> String {
 /// Bring the source's branches and tags over: those gone there are deleted,
 /// then new and moved ones set (diverged ones too: the source wins), each in
 /// one transaction.
-/// Returns what changed.
-pub async fn pull(state: &AppState, p: &Project, m: &Mirror) -> Result<Vec<RefUpdate>, String> {
+/// Returns what changed here, and why the pull stopped when it failed: a
+/// failure midway (the deletions done, the rest refused) still changed refs,
+/// and those changes get their follow-up like any other.
+pub async fn pull(state: &AppState, p: &Project, m: &Mirror) -> (Vec<RefUpdate>, Result<(), String>) {
+    let before = match state.storage.ref_targets(p.id, &["refs/heads/", "refs/tags/"]).await {
+        Ok(refs) => refs.into_iter().collect::<HashMap<String, String>>(),
+        Err(e) => return (Vec::new(), Err(e.to_string())),
+    };
+    let outcome = apply_pull(state, p, m).await;
+    // what is here now, whatever happened
+    let after: HashMap<String, String> = match state.storage.ref_targets(p.id, &["refs/heads/", "refs/tags/"]).await {
+        Ok(refs) => refs.into_iter().collect(),
+        Err(e) => return (Vec::new(), outcome.and(Err(e.to_string()))),
+    };
+    let gone = before.iter().filter(|(name, _)| !after.contains_key(*name)).map(|(name, old)| (name, old.as_str(), ZERO_OID));
+    let set = after.iter().map(|(name, new)| (name, before.get(name).map(String::as_str).unwrap_or(ZERO_OID), new.as_str()));
+    let updates = gone
+        .chain(set)
+        .filter(|(_, old, new)| old != new)
+        .map(|(name, old, new)| RefUpdate { name: name.clone(), old: old.to_string(), new: new.to_string() })
+        .collect();
+    (updates, outcome)
+}
+
+async fn apply_pull(state: &AppState, p: &Project, m: &Mirror) -> Result<(), String> {
     let err = |e: StorageError| e.to_string();
     crate::services::quotas::check_write(state, p.id, 0).await.map_err(|e| e.to_string())?;
     let (url, cfg) = remote(state, m).await?;
@@ -121,8 +144,6 @@ pub async fn pull(state: &AppState, p: &Project, m: &Mirror) -> Result<Vec<RefUp
     };
     // a clean staging area: what a previous run left must not look like the source
     clear_staging().await?;
-    // what is here before the fetch: git may bring tags straight into
-    // refs/tags (auto-following), and those are changes too
     let before = refs(&["refs/heads/", "refs/tags/"]).await?;
     let refspecs = vec![format!("+refs/heads/*:{STAGING}heads/*"), format!("+refs/tags/*:{STAGING}tags/*")];
     st.fetch(p.id, url.as_str(), &refspecs, &cfg).await.map_err(git_error)?;
@@ -133,16 +154,15 @@ pub async fn pull(state: &AppState, p: &Project, m: &Mirror) -> Result<Vec<RefUp
         if !staged.keys().any(|n| n.starts_with("refs/heads/")) && before.keys().any(|n| n.starts_with("refs/heads/")) {
             return Err("the source has no branches: nothing was changed here".to_string());
         }
-        let now = refs(&["refs/heads/", "refs/tags/"]).await?;
-        let mut changes: Vec<RefChange> = now
+        let mut changes: Vec<RefChange> = before
             .iter()
             .filter(|(name, _)| !staged.contains_key(*name))
             .map(|(name, current)| RefChange { name: name.clone(), new: None, old: Some(current.clone()) })
             .collect();
-        changes.extend(staged.iter().filter(|(name, target)| now.get(*name) != Some(target)).map(|(name, target)| RefChange {
+        changes.extend(staged.iter().filter(|(name, target)| before.get(*name) != Some(target)).map(|(name, target)| RefChange {
             name: name.clone(),
             new: Some(target.clone()),
-            old: Some(now.get(name).cloned().unwrap_or_else(|| ZERO_OID.to_string())),
+            old: Some(before.get(name).cloned().unwrap_or_else(|| ZERO_OID.to_string())),
         }));
         if !changes.is_empty() {
             // what came must fit: past the quota, nothing is applied (the
@@ -160,14 +180,7 @@ pub async fn pull(state: &AppState, p: &Project, m: &Mirror) -> Result<Vec<RefUp
             st.transact_refs(p.id, &sets).await.map_err(err)?;
             follow_default_branch(state, p, &url, &cfg).await.map_err(|e| e.to_string())?;
         }
-        // what changed since before the fetch, auto-followed tags included
-        let gone = before.iter().filter(|(name, _)| !staged.contains_key(*name)).map(|(name, old)| (name, old.as_str(), ZERO_OID));
-        let set = staged.iter().map(|(name, new)| (name, before.get(name).map(String::as_str).unwrap_or(ZERO_OID), new.as_str()));
-        Ok(gone
-            .chain(set)
-            .filter(|(_, old, new)| old != new)
-            .map(|(name, old, new)| RefUpdate { name: name.clone(), old: old.to_string(), new: new.to_string() })
-            .collect())
+        Ok(())
     }
     .await;
     let _ = clear_staging().await;
@@ -208,6 +221,11 @@ pub async fn push(state: &AppState, p: &Project, m: &Mirror) -> Result<(), Strin
             }
         }
     } else {
+        // nothing here yet (a new project, or the wrong direction chosen):
+        // nothing to send, and pruning would delete every branch and tag there
+        if state.storage.ref_targets(p.id, &["refs/heads/"]).await.map_err(|e| e.to_string())?.is_empty() {
+            return Ok(());
+        }
         refspecs.push("+refs/heads/*:refs/heads/*".into());
     }
     state.storage.push(p.id, url.as_str(), &refspecs, &cfg, !m.only_protected).await.map_err(git_error)
@@ -270,15 +288,13 @@ pub async fn update(state: &AppState, mirror_id: i64) -> anyhow::Result<()> {
     }
     mdb::mark_attempt(&state.db, m.id).await?;
     let outcome = if m.direction == "pull" {
-        match pull(state, &p, &m).await {
-            Ok(updates) if !updates.is_empty() => {
-                let runs_as = pipelines_as(state, &p, &m).await.map(|p| p.encode());
-                let mut conn = state.db.acquire().await?;
-                state.jobs.enqueue(&mut conn, PostReceive::mirrored(p.id, updates, runs_as).request()).await?;
-                Ok(())
-            }
-            r => r.map(|_| ()),
+        let (updates, outcome) = pull(state, &p, &m).await;
+        if !updates.is_empty() {
+            let runs_as = pipelines_as(state, &p, &m).await.map(|p| p.encode());
+            let mut conn = state.db.acquire().await?;
+            state.jobs.enqueue(&mut conn, PostReceive::mirrored(p.id, updates, runs_as).request()).await?;
         }
+        outcome
     } else {
         push(state, &p, &m).await
     };

@@ -97,8 +97,10 @@ pub async fn create(
     if req.direction == "push" && existing.iter().filter(|m| m.direction == "push").count() >= MAX_PUSH_MIRRORS {
         return Err(ApiError::conflict(format!("a project has at most {MAX_PUSH_MIRRORS} push mirrors")));
     }
-    if existing.iter().any(|m| m.direction == req.direction && m.url == url.as_str()) {
-        return Err(ApiError::conflict("that mirror is already there"));
+    // in the other direction too: pushing to the address the repository is
+    // pulled from would undo there whatever landed since the last pull
+    if existing.iter().any(|m| m.url == url.as_str()) {
+        return Err(ApiError::conflict("that address is already a mirror of this repository"));
     }
     let sealed = match req.token.trim() {
         "" => None,

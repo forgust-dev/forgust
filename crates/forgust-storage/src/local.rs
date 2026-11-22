@@ -459,6 +459,9 @@ impl Storage for LocalStorage {
             "transfer.hideRefs=refs/forgust",
             "-c",
             "transfer.hideRefs=refs/pipelines",
+            // where a pull mirror's fetch lands before it is applied
+            "-c",
+            "transfer.hideRefs=refs/mirror",
         ]);
         // CI jobs fetch their pipeline's commit by id (`+<sha>:refs/pipelines/<id>`),
         // the tip of a hidden ref: allow wants of hidden ref tips (cheap, unlike
@@ -1328,7 +1331,9 @@ impl Storage for LocalStorage {
             return Err(StorageError::Invalid("bad refspec".into()));
         }
         let mut c = self.remote_git(repo, url, config).await?;
-        c.args(["fetch", "--quiet", "--no-write-fetch-head", "--no-auto-gc", "--"]).arg(url).args(refspecs);
+        // --no-tags: only what the refspecs name, where they say (git would
+        // else write the tags of the fetched history straight into refs/tags)
+        c.args(["fetch", "--quiet", "--no-tags", "--no-write-fetch-head", "--no-auto-gc", "--"]).arg(url).args(refspecs);
         let r = cli::run(c, 64 * 1024, Duration::from_secs(6 * 3600)).await;
         self.forget(repo);
         r.map(|_| ())

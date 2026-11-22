@@ -87,7 +87,8 @@ async fn a_pull_mirror_follows_its_source_and_is_read_only(pool: sqlx::PgPool) {
     wait_jobs(&srv.state).await;
     let project = forgust_db::projects::find(&srv.state.db, copy).await.unwrap().unwrap();
     let row = forgust_db::project_mirrors::find(&srv.state.db, m["id"].as_i64().unwrap()).await.unwrap().unwrap();
-    let updates = forgust_server::services::repo_mirrors::pull(&srv.state, &project, &row).await.unwrap();
+    let (updates, outcome) = forgust_server::services::repo_mirrors::pull(&srv.state, &project, &row).await;
+    outcome.unwrap();
     let names: Vec<&str> = updates.iter().map(|u| u.name.as_str()).collect();
     assert_eq!(names, ["refs/tags/v1.1"]);
 
@@ -186,10 +187,20 @@ async fn a_push_mirror_sends_every_change(pool: sqlx::PgPool) {
     let write = token(&owner, &["write_repository"]).await;
     let base = format!("/api/v1/projects/{src}");
     let target = format!("{}/acme/dst.git", srv.base);
-    owner.ok_post(&format!("{base}/mirrors"), json!({ "direction": "push", "url": target, "token": write })).await;
-
+    // the target already has branches, and nothing is here yet: an empty
+    // repository sends nothing, and above all deletes nothing there
     let work = srv.work_dir("src");
     seed_repo(&work).await;
+    let there = srv.http_url("olivia", "acme/dst");
+    must(git(&work, &["push", "-q", &there, "main", "main:keep"]).await);
+    owner.ok_post(&format!("{base}/mirrors"), json!({ "direction": "push", "url": target, "token": write })).await;
+    wait_jobs(&srv.state).await;
+    assert_eq!(branches(&owner.ok_get(&format!("/api/v1/projects/{dst}/repository/branches")).await), ["keep", "main"]);
+    assert!(mirror(&owner, src).await["last_error"].is_null());
+    // the same address in the other direction: refused (a push after each pull)
+    let (s, b) = owner.post(&format!("{base}/mirrors"), json!({ "direction": "pull", "url": target })).await;
+    assert_eq!(s, 409, "{b}");
+
     let url = srv.http_url("olivia", "acme/src");
     must(git(&work, &["push", "-q", &url, "main"]).await);
     must(git(&work, &["checkout", "-q", "-b", "feature"]).await);
