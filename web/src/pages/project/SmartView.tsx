@@ -1,8 +1,29 @@
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { AlertTriangle, X } from "lucide-react";
+import {
+  Background,
+  BackgroundVariant,
+  BaseEdge,
+  Controls,
+  EdgeLabelRenderer,
+  Handle,
+  MiniMap,
+  Position,
+  ReactFlow,
+  ReactFlowProvider,
+  getBezierPath,
+  useReactFlow,
+  type Edge as FlowEdge,
+  type EdgeProps,
+  type Node,
+  type NodeProps,
+} from "@xyflow/react";
+import "@xyflow/react/dist/base.css";
+import ELK from "elkjs/lib/elk.bundled.js";
+import type { ElkExtendedEdge, ElkNode } from "elkjs/lib/elk-api";
 import { api, qs, refLink, timeAgo, type S } from "../../api/client";
 import { Avatar, Empty, ListHead, Q, UserLink } from "../../components/ui";
 import { RefPicker } from "./Code";
@@ -13,16 +34,22 @@ type Block = S["MapBlock"];
 type Job = S["JobDto"];
 /** A link, or a block's parent holding it (`part`). */
 type Edge = { from: string; to: string; kind: S["MapLinkKind"] | "part"; inferred: boolean; via: string };
-type Box = { x: number; y: number };
 
-// a card, the gaps between columns and rows, the margin
+// a card, and the margin around what a block holds
 const W = 204;
 const H = 92;
-const GX = 52;
-const GY = 14;
-const PAD = 18;
-/** The canvas shrinks to fit the board down to this scale; below, it scrolls. */
-const MIN_SCALE = 0.75;
+const INSET = 12;
+/** Under this zoom the cards' text is too small to read: the graph overflows the frame instead,
+ *  from its start (what needs the rest, on the left), and pans. */
+const READABLE = 0.8;
+/** The frame is as tall as the graph at the zoom it opens at, within these (the most: a share of
+ *  the window's height). */
+const FRAME_MIN = 440;
+const FRAME_MAX = 0.72;
+/** Around the graph in the frame. */
+const MARGIN = 20;
+/** The details over the frame's right side (styles.css). */
+const PANEL = 340;
 /** Narrower than this (a phone), the blocks are a list: a graph would be mostly out of sight. */
 const LIST_BELOW = 560;
 
@@ -50,36 +77,48 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString
  *  the people to ask; `gitRef`: the branch, tag or commit shown (the default branch if none). */
 export function SmartView({ ctx, gitRef }: { ctx: Ctx; gitRef: string }) {
   const ref = gitRef || ctx.p.default_branch || "main";
-  const q = useQuery({ queryKey: ["map", ctx.p.id, ref], queryFn: () => api.get<S["RepoMap"]>(`${ctx.base}/map${qs({ ref })}`), staleTime: 30_000 });
+  // the map, and where its blocks go: laid out with it, so that the page comes in at once
+  const q = useQuery({
+    queryKey: ["map", ctx.p.id, ref],
+    queryFn: async () => {
+      const map = await api.get<S["RepoMap"]>(`${ctx.base}/map${qs({ ref })}`);
+      return { map, lay: await plan(map) };
+    },
+    staleTime: 30_000,
+  });
   return (
     <div className="stack smart-view">
       <ListHead title="Smart View" sub="The parts of this code, what each needs, and who to ask about them.">
         <RefPicker ctx={ctx} current={ref} path="" kind="smart_view" />
       </ListHead>
-      <Q q={q}>{(map) => <MapView ctx={ctx} gitRef={ref} map={map} />}</Q>
+      <Q q={q}>{({ map, lay }) => <MapView ctx={ctx} gitRef={ref} map={map} lay={lay} />}</Q>
     </div>
   );
 }
 
-function MapView({ ctx, gitRef, map }: { ctx: Ctx; gitRef: string; map: S["RepoMap"] }) {
+function MapView({ ctx, gitRef, map, lay }: { ctx: Ctx; gitRef: string; map: S["RepoMap"]; lay: Plan }) {
   const [params, setParams] = useSearchParams();
   const byId = useMemo(() => new Map(map.blocks.map((b) => [b.id, b])), [map]);
-  const lay = useMemo(() => layout(map), [map]);
   const jobs = useJobs(ctx, map.commit);
-  const [main, scale, room] = useScale(lay.width);
+  const [main, room] = useWidth();
   const list = room > 0 && room < LIST_BELOW;
+  // the graph on its canvas, once there is room for it
+  const framed = room >= LIST_BELOW && lay.graph.length > 0;
   const asked = params.get("block");
   const chosen = asked && byId.has(asked) ? asked : null;
-  const select = (id: string | null) =>
-    setParams(
-      (now) => {
-        const next = new URLSearchParams(now);
-        if (id) next.set("block", id);
-        else next.delete("block");
-        return next;
-      },
-      { replace: true },
-    );
+  const select = useCallback(
+    (id: string | null) =>
+      setParams(
+        (now) => {
+          const next = new URLSearchParams(now);
+          if (id) next.set("block", id);
+          else next.delete("block");
+          return next;
+        },
+        { replace: true },
+      ),
+    [setParams],
+  );
   useEffect(() => {
     if (!chosen) return;
     const close = (e: KeyboardEvent) => {
@@ -87,7 +126,7 @@ function MapView({ ctx, gitRef, map }: { ctx: Ctx; gitRef: string; map: S["RepoM
     };
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
-  });
+  }, [chosen, select]);
   // what is near the chosen block stays bright; the rest steps back
   const near = useMemo(() => {
     const s = new Set<string>();
@@ -118,9 +157,8 @@ function MapView({ ctx, gitRef, map }: { ctx: Ctx; gitRef: string; map: S["RepoM
       </Empty>
     );
   }
-  const card = (b: Block, style?: CSSProperties) => (
-    <BlockCard key={b.id} b={b} style={style} status={blockStatus(b, jobs)} chosen={chosen === b.id} dim={!!chosen && !near.has(b.id)} onSelect={() => select(b.id)} />
-  );
+  const card = (b: Block) => <BlockCard key={b.id} b={b} status={blockStatus(b, jobs)} chosen={chosen === b.id} dim={!!chosen && !near.has(b.id)} onSelect={() => select(b.id)} />;
+  const details = chosen ? <Details ctx={ctx} gitRef={gitRef} map={map} lay={lay} b={byId.get(chosen)!} jobs={jobs} select={select} /> : null;
   return (
     <>
       <div className="smart-bar">
@@ -129,90 +167,255 @@ function MapView({ ctx, gitRef, map }: { ctx: Ctx; gitRef: string; map: S["RepoM
         </span>
         {!list && <Legend />}
       </div>
-      <div className={`smart-layout${chosen ? " open" : ""}`}>
+      {/* the details: over the canvas when there is one, else beside the blocks */}
+      <div className={`smart-layout${details && room > 0 && !framed ? " open" : ""}`}>
         <div className="smart-main" ref={main}>
-          {lay.graph.length > 0 &&
-            (list ? (
-              <div className="smart-grid list">{lay.order.map((id) => card(byId.get(id)!))}</div>
-            ) : (
-              <Board lay={lay} scale={scale} chosen={chosen} onClear={() => select(null)} render={(id, style) => card(byId.get(id)!, style)} />
-            ))}
+          {framed && <Canvas key={lay.id} lay={lay} byId={byId} jobs={jobs} chosen={chosen} near={near} select={select} room={room} panel={details} />}
+          {list && lay.graph.length > 0 && <div className="smart-grid list">{lay.order.map((id) => card(byId.get(id)!))}</div>}
           {lay.loose.length > 0 && (
             <section className="smart-loose" aria-label="Not linked to other blocks">
               <h2>Not linked to other blocks</h2>
-              <div className={`smart-grid${list ? " list" : scale < 1 ? " scaled" : ""}`} style={{ "--scale": scale } as CSSProperties}>
-                {lay.loose.map((id) => card(byId.get(id)!))}
-              </div>
+              <div className={`smart-grid${list ? " list" : ""}`}>{lay.loose.map((id) => card(byId.get(id)!))}</div>
             </section>
           )}
           <Notes ctx={ctx} gitRef={gitRef} map={map} />
         </div>
-        {chosen && <Details ctx={ctx} gitRef={gitRef} map={map} lay={lay} b={byId.get(chosen)!} jobs={jobs} select={select} />}
+        {!framed && details}
       </div>
     </>
   );
 }
 
-/** The scale that fits a graph `width` wide in the element `ref` is put on (not below
- *  MIN_SCALE: the board scrolls instead), followed as it resizes. */
-function useScale(width: number): [(el: HTMLDivElement | null) => void, number, number] {
+/** The width of the element `ref` is put on, followed as it resizes; 0 until it is measured. */
+function useWidth(): [(el: HTMLDivElement | null) => void, number] {
   const [el, setEl] = useState<HTMLDivElement | null>(null);
-  const [room, setRoom] = useState(0);
+  const [width, setWidth] = useState(0);
   useLayoutEffect(() => {
     if (!el) return;
-    const measure = () => setRoom(el.clientWidth);
+    const measure = () => setWidth(el.clientWidth);
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
   }, [el]);
-  // the board's border takes 2px
-  return [setEl, room && width ? Math.max(MIN_SCALE, Math.min(1, (room - 2) / width)) : 1, room];
+  return [setEl, width];
 }
 
-/** The graph: the linked blocks in columns, from what needs to what is needed. */
-function Board({ lay, scale, chosen, onClear, render }: { lay: Layout; scale: number; chosen: string | null; onClear: () => void; render: (id: string, style: CSSProperties) => ReactNode }) {
-  const board = useRef<HTMLDivElement>(null);
-  const arrow = useId();
-  useEffect(() => {
-    if (chosen) board.current?.querySelector(`[data-id="${CSS.escape(chosen)}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  }, [chosen]);
+type CardData = { b: Block; status: string | null; chosen: boolean; dim: boolean; onSelect: () => void };
+type BlockNode = Node<CardData, "block">;
+type HolderNode = Node<CardData, "holder">;
+type LinkData = { e: Edge; mine: boolean; dim: boolean; tip: string };
+type LinkEdge = FlowEdge<LinkData, "link">;
+
+type CanvasProps = {
+  lay: Plan;
+  byId: Map<string, Block>;
+  jobs: Map<string, Job>;
+  chosen: string | null;
+  near: Set<string>;
+  select: (id: string | null) => void;
+  /** The width the frame takes. */
+  room: number;
+  /** The chosen block's details, over the frame's right side. */
+  panel: ReactNode;
+};
+
+/** The linked blocks on a canvas that pans and zooms, from what needs to what is needed; a block
+ *  drawn inside the one holding it. It opens at a zoom the cards read at: the whole graph when it
+ *  fits, else its start. */
+function Canvas(props: CanvasProps) {
   return (
-    <div className="smart-board" ref={board} onClick={onClear}>
-      <div className="smart-stage" style={{ width: lay.width * scale, height: lay.height * scale }}>
-        <div className="smart-canvas" style={{ width: lay.width, height: lay.height, transform: scale < 1 ? `scale(${scale})` : undefined }}>
-          <svg className="smart-edges" width={lay.width} height={lay.height} aria-hidden>
-            <defs>
-              {["", "-hl"].map((v) => (
-                <marker key={v} id={`${arrow}${v}`} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                  <path d="M0,1 L9,5 L0,9 z" className={`smart-arrow${v}`} />
-                </marker>
-              ))}
-            </defs>
-            {lay.edges.map((e) => {
-              const mine = !!chosen && (e.from === chosen || e.to === chosen);
-              const cls = [e.kind === "part" ? "part" : e.inferred ? "inferred" : "declared", mine ? "hl" : chosen ? "dim" : ""].join(" ");
-              return <path key={`${e.from}>${e.to}:${e.kind}`} d={path(e, lay)} className={cls} markerEnd={e.kind === "part" ? undefined : `url(#${arrow}${mine ? "-hl" : ""})`} />;
-            })}
-          </svg>
-          {lay.graph.map((id) => {
-            const p = lay.box.get(id)!;
-            return render(id, { left: p.x, top: p.y });
-          })}
-        </div>
-      </div>
+    <ReactFlowProvider>
+      <Flow {...props} />
+    </ReactFlowProvider>
+  );
+}
+
+function Flow({ lay, byId, jobs, chosen, near, select, room, panel }: CanvasProps) {
+  const flow = useReactFlow();
+  const arrow = useId();
+  // the frame's border takes 2px
+  const width = room - 2;
+  const zoom = Math.max(READABLE, Math.min(1, (width - 2 * MARGIN) / lay.width));
+  const height = Math.round(Math.max(FRAME_MIN, Math.min(FRAME_MAX * window.innerHeight, lay.height * zoom + 2 * MARGIN)));
+  const fitsAcross = lay.width * zoom <= width - 2 * MARGIN;
+  const fitsDown = lay.height * zoom <= height - 2 * MARGIN;
+  // where the canvas opens: read once
+  const [start] = useState(() => ({
+    zoom,
+    x: fitsAcross ? (width - lay.width * zoom) / 2 : MARGIN,
+    y: fitsDown ? (height - lay.height * zoom) / 2 : MARGIN,
+  }));
+
+  const nodes = useMemo<Node<CardData>[]>(
+    () =>
+      lay.graph.map((id) => {
+        const p = lay.at.get(id)!;
+        const b = byId.get(id)!;
+        return {
+          id,
+          type: lay.holders.has(id) ? "holder" : "block",
+          position: { x: p.x, y: p.y },
+          parentId: p.inside,
+          width: p.w,
+          height: p.h,
+          draggable: false,
+          selectable: false,
+          focusable: false,
+          data: { b, status: blockStatus(b, jobs), chosen: chosen === id, dim: !!chosen && !near.has(id), onSelect: () => select(id) },
+        };
+      }),
+    [lay, byId, jobs, chosen, near, select],
+  );
+  const edges = useMemo<LinkEdge[]>(
+    () =>
+      lay.drawn.map((e) => {
+        const mine = !!chosen && (e.from === chosen || e.to === chosen);
+        return {
+          id: `${e.from}>${e.to}:${e.kind}`,
+          source: e.from,
+          target: e.to,
+          type: "link",
+          selectable: false,
+          focusable: false,
+          markerEnd: e.kind === "part" ? undefined : `url(#${arrow}${mine ? "-hl" : ""})`,
+          data: { e, mine, dim: !!chosen && !mine, tip: tip(e, byId) },
+        };
+      }),
+    [lay, chosen, byId, arrow],
+  );
+
+  // a block chosen out of sight, or under the panel: brought to the middle of what is in view
+  useEffect(() => {
+    if (!chosen || !lay.at.has(chosen)) return;
+    const frame = requestAnimationFrame(() => {
+      const n = flow.getInternalNode(chosen);
+      if (!n) return;
+      // a block holding others: its card, at the top of its frame
+      const inset = lay.holders.has(chosen) ? INSET : 0;
+      const x = n.internals.positionAbsolute.x + inset;
+      const y = n.internals.positionAbsolute.y + inset;
+      const vp = flow.getViewport();
+      // the panel covers the frame's right side, unless it rises from the bottom (styles.css)
+      const free = window.matchMedia("(max-width: 900px)").matches ? width : width - PANEL - INSET;
+      const left = x * vp.zoom + vp.x;
+      const top = y * vp.zoom + vp.y;
+      if (left >= 0 && top >= 0 && left + W * vp.zoom <= free && top + H * vp.zoom <= height) return;
+      void flow.setViewport({ x: free / 2 - (x + W / 2) * vp.zoom, y: height / 2 - (y + H / 2) * vp.zoom, zoom: vp.zoom });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [chosen, lay, flow, width, height]);
+
+  return (
+    <div className="smart-frame" style={{ height }}>
+      <svg className="smart-defs" aria-hidden>
+        <defs>
+          {["", "-hl"].map((v) => (
+            <marker key={v} id={`${arrow}${v}`} viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0,1 L9,5 L0,9 z" className={`smart-arrow${v}`} />
+            </marker>
+          ))}
+        </defs>
+      </svg>
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={NODE_TYPES}
+        edgeTypes={EDGE_TYPES}
+        defaultViewport={start}
+        minZoom={0.2}
+        maxZoom={1.5}
+        zIndexMode="auto"
+        nodesDraggable={false}
+        nodesConnectable={false}
+        nodesFocusable={false}
+        edgesFocusable={false}
+        elementsSelectable={false}
+        // the page scrolls under the wheel; Ctrl (⌘) and the wheel, a pinch or the buttons zoom
+        zoomOnScroll={false}
+        preventScrolling={false}
+        zoomOnDoubleClick={false}
+        panActivationKeyCode={null}
+        selectionKeyCode={null}
+        multiSelectionKeyCode={null}
+        deleteKeyCode={null}
+        onPaneClick={() => select(null)}
+        // a click on a holder's frame, around what it holds (its card takes its own)
+        onNodeClick={(_, n) => select(n.id)}
+      >
+        <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
+        <Controls showInteractive={false} position="bottom-left" />
+        {/* beside the buttons: a graph from left to right is crowded on the right, not there */}
+        {!(fitsAcross && fitsDown) && (
+          <MiniMap pannable zoomable position="bottom-left" style={{ width: 140, height: 90, marginLeft: 58 }} ariaLabel="Where the view is in the whole graph" />
+        )}
+      </ReactFlow>
+      {panel}
     </div>
   );
 }
 
-function BlockCard({ b, style, status, chosen, dim, onSelect }: { b: Block; style?: CSSProperties; status: string | null; chosen: boolean; dim: boolean; onSelect: () => void }) {
+function BlockNodeView({ data }: NodeProps<BlockNode>) {
+  return (
+    <>
+      <Handle type="target" position={Position.Left} isConnectable={false} className="smart-handle" />
+      <BlockCard {...data} />
+      <Handle type="source" position={Position.Right} isConnectable={false} className="smart-handle" />
+    </>
+  );
+}
+
+/** A block holding others: its card at the top of a frame, what it holds inside. */
+function HolderNodeView({ data, width, height }: NodeProps<HolderNode>) {
+  const at = { top: INSET + H / 2 };
+  return (
+    <div className={`smart-holder${data.dim ? " dim" : ""}`} style={{ width, height }}>
+      <Handle type="target" position={Position.Left} isConnectable={false} className="smart-handle" style={at} />
+      <BlockCard {...data} />
+      <Handle type="source" position={Position.Right} isConnectable={false} className="smart-handle" style={at} />
+    </div>
+  );
+}
+
+/** A link: what it says on hover; on the chosen block's, its verb. */
+function LinkEdgeView({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, markerEnd, data }: EdgeProps<LinkEdge>) {
+  const [d, labelX, labelY] = getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
+  if (!data) return null;
+  const { e, mine, dim } = data;
+  const cls = [e.kind === "part" ? "part" : e.inferred ? "inferred" : "declared", mine ? "hl" : dim ? "dim" : ""].join(" ");
+  return (
+    <>
+      <title>{data.tip}</title>
+      <BaseEdge id={id} path={d} markerEnd={markerEnd} className={`smart-link ${cls}`} interactionWidth={16} />
+      {mine && e.kind !== "part" && (
+        <EdgeLabelRenderer>
+          <div className="smart-link-label" style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}>
+            {VERB[e.kind]}
+          </div>
+        </EdgeLabelRenderer>
+      )}
+    </>
+  );
+}
+
+const NODE_TYPES = { block: BlockNodeView, holder: HolderNodeView };
+const EDGE_TYPES = { link: LinkEdgeView };
+
+/** What a link says, in a sentence. */
+function tip(e: Edge, byId: Map<string, Block>) {
+  const name = (id: string) => (byId.has(id) ? title(byId.get(id)!) : id);
+  if (e.kind === "part") return `${name(e.to)} is part of ${name(e.from)}`;
+  return `${name(e.from)} ${VERB[e.kind]} ${name(e.to)}${e.via ? ` · ${e.via}` : ""}${e.inferred ? " (a guess)" : ""}`;
+}
+
+function BlockCard({ b, status, chosen, dim, onSelect }: CardData) {
   const [kind, color] = KIND[b.kind];
   const lang = b.languages[0];
   return (
     <button
       type="button"
       className={`smart-card${chosen ? " selected" : ""}${dim ? " dim" : ""}`}
-      style={{ ...style, "--k": color } as CSSProperties}
+      style={{ "--k": color } as CSSProperties}
       data-id={b.id}
       aria-pressed={chosen}
       onClick={(e) => {
@@ -252,7 +455,7 @@ function BlockCard({ b, style, status, chosen, dim, onSelect }: { b: Block; styl
   );
 }
 
-function Details({ ctx, gitRef, map, lay, b, jobs, select }: { ctx: Ctx; gitRef: string; map: S["RepoMap"]; lay: Layout; b: Block; jobs: Map<string, Job>; select: (id: string | null) => void }) {
+function Details({ ctx, gitRef, map, lay, b, jobs, select }: { ctx: Ctx; gitRef: string; map: S["RepoMap"]; lay: Plan; b: Block; jobs: Map<string, Job>; select: (id: string | null) => void }) {
   const byId = new Map(map.blocks.map((x) => [x.id, x]));
   const [kind, color] = KIND[b.kind];
   const go = (id: string) => (
@@ -501,105 +704,128 @@ function blockStatus(b: Block, jobs: Map<string, Job>): string | null {
   return mine[0].status;
 }
 
-/** `order`: the linked blocks column by column, top to bottom (a list's order). */
-type Layout = { edges: Edge[]; graph: string[]; order: string[]; loose: string[]; box: Map<string, Box>; ends: Map<string, number>; width: number; height: number };
+/** Where a block of the graph goes, inside the block holding it if any (`inside`), and its size. */
+type Placed = { x: number; y: number; w: number; h: number; inside?: string };
 
-/**
- * Columns: each block one right of the furthest block needing it (a link back is left out),
- * one nothing needs just before what it needs; in each column, ordered by where their
- * neighbours are. A block linked to none is left out of the graph (`loose`).
- */
-function layout(map: S["RepoMap"]): Layout {
-  const known = new Set(map.blocks.map((b) => b.id));
-  const edges: Edge[] = map.links.filter((l) => known.has(l.from) && known.has(l.to)).map((l) => ({ from: l.from, to: l.to, kind: l.kind, inferred: l.inferred, via: l.via }));
-  const linkedPair = (a: string, b: string) => map.links.some((l) => (l.from === a && l.to === b) || (l.from === b && l.to === a));
+type Plan = {
+  /** What the blocks and their links are, for the canvas to open again on a new one. */
+  id: string;
+  /** The links, and each block's parent holding it (`part`): for the details and what is near. */
+  edges: Edge[];
+  /** What the canvas draws as lines: the links, and the `part`s of the whole repository (a block
+   *  drawn inside the one holding it needs no line). */
+  drawn: Edge[];
+  /** The blocks of the graph, each after the one holding it; `order`: column by column, top to
+   *  bottom (a list's); `loose`: those linked to none. */
+  graph: string[];
+  order: string[];
+  loose: string[];
+  /** The blocks holding others, drawn as frames around them. */
+  holders: Set<string>;
+  at: Map<string, Placed>;
+  width: number;
+  height: number;
+};
+
+const elk = new ELK();
+
+/** In layers from left to right, what needs the rest first; a block holding others laid out with
+ *  what it holds, its card on top. */
+const LAYOUT = {
+  "elk.algorithm": "layered",
+  "elk.direction": "RIGHT",
+  "elk.hierarchyHandling": "INCLUDE_CHILDREN",
+  "elk.layered.spacing.nodeNodeBetweenLayers": "56",
+  "elk.spacing.nodeNode": "16",
+  "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
+  "elk.layered.considerModelOrder.strategy": "NODES_AND_EDGES",
+  "elk.padding": "[top=0,left=0,bottom=0,right=0]",
+};
+
+/** Where the blocks go. A block sits inside its parent (a crate's schema, an app's tool), unless
+ *  a link joins them already (an image built from the crate it lies in), or the parent is the
+ *  whole repository: then a dotted line says it. */
+async function plan(map: S["RepoMap"]): Promise<Plan> {
+  const byId = new Map(map.blocks.map((b) => [b.id, b]));
+  const links: Edge[] = map.links.filter((l) => byId.has(l.from) && byId.has(l.to)).map((l) => ({ from: l.from, to: l.to, kind: l.kind, inferred: l.inferred, via: l.via }));
+  const linked = (a: string, b: string) => links.some((e) => (e.from === a && e.to === b) || (e.from === b && e.to === a));
+  const inside = new Map<string, string>();
+  const lines: Edge[] = [];
   for (const b of map.blocks) {
-    if (b.parent && known.has(b.parent) && !linkedPair(b.parent, b.id)) edges.push({ from: b.parent, to: b.id, kind: "part", inferred: false, via: "" });
+    if (!b.parent || !byId.has(b.parent) || linked(b.parent, b.id)) continue;
+    const part: Edge = { from: b.parent, to: b.id, kind: "part", inferred: false, via: "" };
+    if (byId.get(b.parent)!.roots.some((r) => r.path === ".")) lines.push(part);
+    else inside.set(b.id, b.parent);
   }
-  const linked = new Set(edges.flatMap((e) => [e.from, e.to]));
-  const graph = map.blocks.filter((b) => linked.has(b.id)).map((b) => b.id);
-  const loose = map.blocks.filter((b) => !linked.has(b.id)).map((b) => b.id);
-  const ins = new Map(graph.map((id) => [id, [] as Edge[]]));
-  const outs = new Map(graph.map((id) => [id, [] as Edge[]]));
-  for (const e of edges) {
-    outs.get(e.from)!.push(e);
-    ins.get(e.to)!.push(e);
-  }
+  const edges = [...links, ...lines, ...[...inside].map(([child, parent]): Edge => ({ from: parent, to: child, kind: "part", inferred: false, via: "" }))];
+  const drawn = [...links, ...lines];
+  const inGraph = new Set(edges.flatMap((e) => [e.from, e.to]));
+  const loose = map.blocks.filter((b) => !inGraph.has(b.id)).map((b) => b.id);
+  const holders = new Set(inside.values());
+  const id = JSON.stringify([[...inGraph].sort(), drawn.map((e) => [e.from, e.to, e.kind]), [...inside]]);
+  const empty: Plan = { id, edges, drawn, graph: [], order: [], loose, holders, at: new Map(), width: 0, height: 0 };
+  if (!inGraph.size) return empty;
 
-  const layer = new Map<string, number>();
-  const visiting = new Set<string>();
-  const layerOf = (id: string): number => {
-    const have = layer.get(id);
-    if (have !== undefined) return have;
-    visiting.add(id);
-    let l = 0;
-    for (const e of ins.get(id)!) if (!visiting.has(e.from)) l = Math.max(l, layerOf(e.from) + 1);
-    visiting.delete(id);
-    layer.set(id, l);
-    return l;
+  // the blocks in ELK's tree: each inside the one holding it
+  const held = new Map<string, string[]>();
+  const top: string[] = [];
+  for (const b of map.blocks) {
+    if (!inGraph.has(b.id)) continue;
+    const p = inside.get(b.id);
+    if (p) held.set(p, [...(held.get(p) ?? []), b.id]);
+    else top.push(b.id);
+  }
+  const node = (id: string): ElkNode => {
+    const kids = held.get(id);
+    if (!kids) return { id, width: W, height: H };
+    return {
+      id,
+      children: kids.map(node),
+      layoutOptions: {
+        "elk.padding": `[top=${H + 2 * INSET},left=${INSET},bottom=${INSET},right=${INSET}]`,
+        "elk.nodeSize.constraints": "MINIMUM_SIZE",
+        "elk.nodeSize.minimum": `(${W + 2 * INSET},${H + 2 * INSET})`,
+      },
+    };
   };
-  graph.forEach(layerOf);
-  for (const id of graph) {
-    if (ins.get(id)!.length || !outs.get(id)!.length) continue;
-    layer.set(id, Math.max(0, Math.min(...outs.get(id)!.map((e) => layer.get(e.to)!)) - 1));
-  }
-  // columns left empty close up
-  const used = [...new Set(layer.values())].sort((a, b) => a - b);
-  const cols: string[][] = used.map(() => []);
-  for (const id of graph) cols[used.indexOf(layer.get(id)!)].push(id);
-  const rows = Math.max(0, ...cols.map((c) => c.length));
-
-  // a few sweeps each way, each block towards the mean place of its neighbours
-  const slot = new Map<string, number>();
-  const settle = () => cols.forEach((c) => c.forEach((id, i) => slot.set(id, i - (c.length - 1) / 2)));
-  settle();
-  const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
-  const order = (c: string[], key: (id: string) => number | null) => {
-    const k = new Map(c.map((id) => [id, key(id) ?? slot.get(id)!]));
-    c.sort((a, b) => k.get(a)! - k.get(b)!);
-    settle();
+  const root: ElkNode = { id: "root", layoutOptions: LAYOUT, children: top.map(node), edges: [] };
+  // a line goes in the deepest block holding both of its ends (else the root), as ELK wants it
+  const nodes = new Map<string, ElkNode>();
+  const index = (n: ElkNode) => {
+    nodes.set(n.id, n);
+    n.children?.forEach(index);
   };
-  for (let pass = 0; pass < 4; pass++) {
-    for (let l = 1; l < cols.length; l++) order(cols[l], (id) => mean(ins.get(id)!.map((e) => slot.get(e.from)!)));
-    for (let l = cols.length - 2; l >= 0; l--) order(cols[l], (id) => mean(outs.get(id)!.map((e) => slot.get(e.to)!)));
-  }
-  const box = new Map<string, Box>();
-  cols.forEach((c, l) => c.forEach((id, i) => box.set(id, { x: PAD + l * (W + GX), y: PAD + ((rows - c.length) / 2 + i) * (H + GY) })));
-
-  // the ends of the edges spread along each card's side, in the order of what is at their other end
-  const ends = new Map<string, number>();
-  const spread = (list: Edge[], side: string, other: (e: Edge) => string) => {
-    list.sort((a, b) => box.get(other(a))!.y - box.get(other(b))!.y);
-    list.forEach((e, i) => ends.set(`${side}:${e.from}>${e.to}`, (i - (list.length - 1) / 2) * Math.min(12, 48 / list.length)));
+  index(root);
+  const holding = (id: string) => {
+    const out: string[] = [];
+    for (let p = inside.get(id); p; p = inside.get(p)) out.push(p);
+    return out;
   };
-  for (const id of graph) {
-    const x = box.get(id)!.x;
-    spread(outs.get(id)!.filter((e) => box.get(e.to)!.x > x), "out", (e) => e.to);
-    spread(ins.get(id)!.filter((e) => box.get(e.from)!.x <= x), "in", (e) => e.from);
-  }
-  // room on the right for a link between two blocks of the last column
-  const width = cols.length ? PAD * 2 + cols.length * W + (cols.length - 1) * GX + 24 : 0;
-  const height = rows ? PAD * 2 + rows * H + (rows - 1) * GY : 0;
-  return { edges, graph, order: cols.flat(), loose, box, ends, width, height };
-}
+  drawn.forEach((e, i) => {
+    const around = new Set(holding(e.from));
+    const home = holding(e.to).find((p) => around.has(p)) ?? "root";
+    const line: ElkExtendedEdge = { id: `e${i}`, sources: [e.from], targets: [e.to] };
+    const n = nodes.get(home)!;
+    n.edges = [...(n.edges ?? []), line];
+  });
+  const done = await elk.layout(root);
 
-function path(e: Edge, lay: Layout) {
-  const a = lay.box.get(e.from)!;
-  const b = lay.box.get(e.to)!;
-  const y1 = a.y + H / 2 + (lay.ends.get(`out:${e.from}>${e.to}`) ?? 0);
-  const y2 = b.y + H / 2 + (lay.ends.get(`in:${e.from}>${e.to}`) ?? 0);
-  if (b.x > a.x) {
-    const x1 = a.x + W;
-    const x2 = b.x - 3;
-    const dx = Math.max(28, (x2 - x1) / 2);
-    return `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`;
-  }
-  if (b.x < a.x) {
-    const x1 = a.x;
-    const x2 = b.x + W + 3;
-    const dx = Math.max(28, (x1 - x2) / 2);
-    return `M${x1},${y1} C${x1 - dx},${y1} ${x2 + dx},${y2} ${x2},${y2}`;
-  }
-  const x = a.x + W;
-  return `M${x},${y1} C${x + 44},${y1} ${x + 44},${y2} ${x + 3},${y2}`;
+  const at = new Map<string, Placed>();
+  const graph: string[] = [];
+  const walk = (n: ElkNode, holder?: string) => {
+    for (const c of n.children ?? []) {
+      at.set(c.id, { x: c.x ?? 0, y: c.y ?? 0, w: c.width ?? W, h: c.height ?? H, inside: holder });
+      graph.push(c.id);
+      walk(c, c.id);
+    }
+  };
+  walk(done);
+  const abs = (id: string): { x: number; y: number } => {
+    const p = at.get(id)!;
+    if (!p.inside) return { x: p.x, y: p.y };
+    const o = abs(p.inside);
+    return { x: o.x + p.x, y: o.y + p.y };
+  };
+  const order = [...graph].sort((a, b) => abs(a).x - abs(b).x || abs(a).y - abs(b).y);
+  return { ...empty, graph, order, at, width: done.width ?? 0, height: done.height ?? 0 };
 }

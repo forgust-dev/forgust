@@ -7855,58 +7855,138 @@ button.test-case-row:hover {
   gap: 20px;
   min-width: 0;
 }
-.smart-board {
-  overflow-x: auto;
-  overflow-y: hidden;
+/* the canvas (React Flow): it pans and zooms. Its styles come with the page, after these: hence
+   `.smart-frame` in front of what overrides them */
+.smart-frame {
+  position: relative;
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--bg-subtle);
 }
-.smart-stage {
-  position: relative;
-  margin: 0 auto;
+.smart-frame .react-flow {
+  --xy-edge-stroke: var(--border-strong);
+  --xy-background-pattern-dots-color: var(--border-strong);
+  --xy-minimap-background-color: var(--bg);
+  --xy-minimap-mask-background-color: color-mix(in srgb, var(--bg-subtle) 72%, transparent);
+  --xy-minimap-node-background-color: var(--border-strong);
+  --xy-attribution-background-color: transparent;
 }
-.smart-canvas {
+.smart-defs {
   position: absolute;
-  top: 0;
-  left: 0;
-  transform-origin: 0 0;
+  width: 0;
+  height: 0;
 }
-.smart-edges {
-  position: absolute;
-  inset: 0;
-  overflow: visible;
+.smart-frame .smart-handle {
+  width: 1px;
+  min-width: 0;
+  height: 1px;
+  min-height: 0;
+  border: 0;
+  background: none;
+  opacity: 0;
   pointer-events: none;
 }
-.smart-edges path {
+/* a block holding others: its card on top, what it holds inside the frame */
+.smart-holder {
+  box-sizing: border-box;
+  padding: 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+}
+.smart-holder.dim {
+  border-color: var(--border);
+}
+.smart-frame .smart-link {
   fill: none;
   stroke: var(--border-strong);
   stroke-width: 1.5;
 }
-.smart-edges path.inferred {
+.smart-frame .smart-link.inferred {
   stroke-dasharray: 5 3;
 }
-.smart-edges path.part {
+.smart-frame .smart-link.part {
   stroke-dasharray: 2 3;
 }
-.smart-edges path.hl {
+.smart-frame .smart-link.hl {
   stroke: var(--accent);
   stroke-width: 2;
 }
-.smart-edges path.dim {
+.smart-frame .smart-link.dim {
   opacity: 0.3;
 }
-.smart-edges .smart-arrow {
+.smart-arrow {
   fill: var(--border-strong);
-  stroke: none;
 }
-.smart-edges .smart-arrow-hl {
+.smart-arrow-hl {
   fill: var(--accent);
-  stroke: none;
+}
+.smart-link-label {
+  position: absolute;
+  padding: 0 6px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--accent);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.smart-frame .react-flow__controls {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  box-shadow: var(--shadow);
+}
+.smart-frame .react-flow__controls-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.smart-frame .react-flow__controls-button:first-child {
+  border-top: 0;
+}
+.smart-frame .react-flow__controls-button:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.smart-frame .react-flow__controls-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.smart-frame .react-flow__controls-button svg {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+}
+.smart-frame .react-flow__minimap {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.smart-frame .react-flow__attribution {
+  padding: 2px 6px;
+  font-size: 10px;
+}
+.smart-frame .react-flow__attribution a {
+  color: var(--text-faint);
+  text-decoration: none;
 }
 .smart-card {
   --k: var(--text-faint);
-  position: absolute;
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -8026,9 +8106,6 @@ button.test-case-row:hover {
   flex-wrap: wrap;
   gap: 14px;
 }
-.smart-grid .smart-card {
-  position: relative;
-}
 /* a phone's: one block per line, all of its width */
 .smart-grid.list {
   flex-direction: column;
@@ -8036,10 +8113,6 @@ button.test-case-row:hover {
 }
 .smart-grid.list .smart-card {
   width: 100%;
-}
-/* the blocks linked to none, at the graph's scale */
-.smart-grid.scaled {
-  zoom: var(--scale);
 }
 .smart-notes {
   display: flex;
@@ -8169,6 +8242,19 @@ a.smart-root:hover {
   background: var(--warn-soft);
   color: var(--warn);
   font-size: 13px;
+}
+/* over the canvas, on its right side: the graph keeps its width */
+@media (min-width: 901px) {
+  .smart-frame > .smart-panel {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    bottom: 12px;
+    z-index: 6;
+    width: 340px;
+    max-height: none;
+    box-shadow: var(--shadow-pop);
+  }
 }
 @media (max-width: 900px) {
   .smart-layout.open {
