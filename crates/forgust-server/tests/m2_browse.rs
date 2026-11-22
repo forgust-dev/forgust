@@ -281,7 +281,10 @@ async fn smart_view_maps_blocks_links_and_people(pool: sqlx::PgPool) {
     must(git(&work, &["init", "-q", "-b", "main"]).await);
     for (path, text) in [
         ("Cargo.toml", "[workspace]\nmembers = [\"crates/*\"]\n"),
-        ("crates/api/Cargo.toml", "[package]\nname = \"api\"\ndescription = \"Serves the shop\"\n\n[dependencies]\naxum = \"0.8\"\ncore = { path = \"../core\" }\n"),
+        (
+            "crates/api/Cargo.toml",
+            "[package]\nname = \"api\"\ndescription = \"Serves the shop\"\n\n[dependencies]\naxum = \"0.8\"\ncore = { path = \"../core\" }\n",
+        ),
         ("crates/api/src/main.rs", "fn main() {}\n"),
         ("crates/core/Cargo.toml", "[package]\nname = \"core\"\n"),
         ("crates/core/src/lib.rs", "\n"),
