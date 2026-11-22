@@ -1,6 +1,6 @@
 # Smart View — vue intelligente du code pour une forge git
 
-Mis à jour le 2026-11-22
+Mis à jour le 2026-11-23
 
 ## L'idée
 
@@ -238,7 +238,7 @@ Peu chers une fois le socle en place, parce qu'ils réutilisent la carte fichier
 Forte valeur, mais coûteux ou dépendants d'autres briques : à lancer une fois le socle solide.
 
 - **Contrats entre blocs** : les interfaces (schéma d'API, schéma de BDD, événements) sont détectées et versionnées. Une PR qui casse un contrat montre les consommateurs touchés, même dans d'autres repos de l'org, et ouvre les PR d'adaptation chez eux. Énorme valeur, mais détecter les schémas dans tous les langages est difficile.
-- **Relier le code à la prod** : chaque bloc affiche ce qui se passe réellement en production (erreurs, latence, logs), et même les lignes de code les plus exécutées. À faire via choplog, qui fournirait les logs filtrés par bloc : presque un projet à part.
+- **Relier le code à la prod** : chaque bloc affiche ce qui se passe réellement en production (erreurs, latence, logs), et même les lignes de code les plus exécutées. À faire via un outil de logs, qui fournirait les logs filtrés par bloc : presque un projet à part.
 - **Agent IA par bloc** : il connaît le code, l'historique, les décisions et les règles du bloc. Il relit les PR qui le touchent, répond aux questions dans un chat limité au bloc et signale les écarts. Pour un changement multi-blocs, les agents concernés comparent leurs contraintes avant la revue humaine. La revue IA générique devient banale : la différence viendra du contexte par bloc, fourni par le socle.
 - **Blocs partagés entre repos** : un bloc peut être une lib utilisée par d'autres repos de l'org. La vue montre qui en dépend ailleurs.
 - **Mode incident** : pendant une panne, on sélectionne le bloc en cause, et la vue montre le dernier déploiement, les PR récentes, les référents disponibles et les blocs impactés en aval. Dépend du lien avec la prod.
