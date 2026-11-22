@@ -32,6 +32,9 @@ test("the Smart View maps the code into blocks and tells what each needs", async
     await expect(card("api")).toContainText("Rust crate · API");
     await expect(card("api")).toContainText("Serves the shop");
     await expect(card("db")).toContainText("postgres:17");
+    // what each is at a glance: its technology's logo, named on hover
+    await expect(card("api").locator(".smart-mark title")).toHaveText("Rust");
+    await expect(card("db").locator(".smart-mark title")).toHaveText("PostgreSQL");
     if (!isMobile(page)) await expect(page.getByRole("link", { name: "Smart View" }).first()).toBeVisible();
 
     // a block chosen: what it needs and what needs it, with the file that says so

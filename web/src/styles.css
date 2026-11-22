@@ -8033,12 +8033,23 @@ button.test-case-row:hover {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.smart-kind .dot {
+/* what a block is: its technology's logo, in its brand's colour, or an icon in its kind's */
+.smart-mark {
   flex: none;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--k);
+  width: 18px;
+  height: 18px;
+  color: var(--k);
+}
+.smart-mark.logo {
+  fill: var(--logo);
+}
+/* black or nearly (Rust's, Kafka's): the text's colour, light in the dark theme */
+.smart-mark.logo.dark {
+  fill: var(--text);
+}
+/* pale yellow (JavaScript's, ClickHouse's): a shade towards the text, to stand out on white */
+.smart-mark.logo.pale {
+  fill: color-mix(in srgb, var(--logo), var(--text) 25%);
 }
 .smart-flags {
   display: inline-flex;

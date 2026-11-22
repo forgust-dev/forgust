@@ -2,7 +2,26 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useState } fro
 import type { CSSProperties, ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
-import { AlertTriangle, X } from "lucide-react";
+import {
+  AlertTriangle,
+  AppWindow,
+  BookOpen,
+  Box,
+  Container,
+  Database,
+  DatabaseZap,
+  HardDrive,
+  Library,
+  ListEnd,
+  Mail,
+  Search,
+  Server,
+  SquareTerminal,
+  Table2,
+  Workflow,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import {
   Background,
   BackgroundVariant,
@@ -28,6 +47,7 @@ import { api, qs, refLink, timeAgo, type S } from "../../api/client";
 import { Avatar, Empty, ListHead, Q, UserLink } from "../../components/ui";
 import { RefPicker } from "./Code";
 import { StatusIcon, statusLabel } from "./ci/Status";
+import { LOGOS, type Brand, type Logo } from "./logos";
 import type { Ctx } from "./Project";
 
 type Block = S["MapBlock"];
@@ -78,6 +98,92 @@ const ROLE: Record<S["MapRole"], string> = {
   storage: "storage",
   mail: "mail",
 };
+/** A service whose image has no logo here: what it does. */
+const ROLE_ICON: Record<S["MapRole"], LucideIcon> = {
+  web: AppWindow,
+  api: Server,
+  cli: SquareTerminal,
+  library: Library,
+  database: Database,
+  cache: DatabaseZap,
+  queue: ListEnd,
+  search: Search,
+  storage: HardDrive,
+  mail: Mail,
+};
+/** The logo of a service's image, by the image's name: without its registry, owner, tag or digest. */
+const IMAGE_LOGO = new Map<string, Brand>([
+  ["postgres", "postgresql"],
+  ["postgresql", "postgresql"],
+  ["mysql", "mysql"],
+  ["mariadb", "mariadb"],
+  ["mongo", "mongodb"],
+  ["mongodb", "mongodb"],
+  ["redis", "redis"],
+  ["redis-stack", "redis"],
+  ["redis-stack-server", "redis"],
+  ["clickhouse", "clickhouse"],
+  ["clickhouse-server", "clickhouse"],
+  ["rabbitmq", "rabbitmq"],
+  ["kafka", "kafka"],
+  ["cp-kafka", "kafka"],
+  ["nats", "nats"],
+  ["elasticsearch", "elasticsearch"],
+  ["opensearch", "opensearch"],
+  ["meilisearch", "meilisearch"],
+  ["minio", "minio"],
+  ["nginx", "nginx"],
+  ["nginx-unprivileged", "nginx"],
+  ["traefik", "traefik"],
+  ["caddy", "caddy"],
+  ["gitlab-runner", "gitlab"],
+  ["gitlab-ce", "gitlab"],
+  ["gitlab-ee", "gitlab"],
+  ["grafana", "grafana"],
+  ["prometheus", "prometheus"],
+  ["node", "node"],
+  ["python", "python"],
+  ["golang", "go"],
+  ["rust", "rust"],
+]);
+/** What stands for a block: its technology's logo when it is known for sure (a crate's, an image's,
+ *  a service running a known image), else an icon of what it is. */
+function mark(b: Block): { logo: Logo } | { icon: LucideIcon } {
+  switch (b.kind) {
+    case "rust":
+    case "python":
+    case "go":
+    case "docker":
+      return { logo: LOGOS[b.kind] };
+    case "node": {
+      const code = b.languages[0]?.name;
+      return { logo: code === "TypeScript" ? LOGOS.typescript : code === "JavaScript" ? LOGOS.javascript : LOGOS.npm };
+    }
+    case "service": {
+      const known = b.image ? IMAGE_LOGO.get(b.image.replace(/@.*$/, "").split("/").pop()!.replace(/:.*$/, "").toLowerCase()) : undefined;
+      if (known) return { logo: LOGOS[known] };
+      return { icon: b.role ? ROLE_ICON[b.role] : Container };
+    }
+    case "migrations":
+      return { icon: Table2 };
+    case "ci":
+      return { icon: Workflow };
+    case "docs":
+      return { icon: BookOpen };
+    default:
+      return { icon: Box };
+  }
+}
+/** A logo too dark for the dark theme's cards, or too pale for the light theme's: drawn in, or
+ *  towards, the text's colour (styles.css). By WCAG's relative luminance. */
+function tone(hex: string) {
+  const [r, g, b] = [1, 3, 5].map((i) => {
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return lum < 0.05 ? " dark" : lum > 0.5 ? " pale" : "";
+}
 /** A phone's list, by what the blocks are: what runs first, the data last. */
 const GROUPS: [title: string, kinds: S["MapKind"][]][] = [
   ["Services", ["service"]],
@@ -465,6 +571,18 @@ function tip(e: Edge, byId: Map<string, Block>) {
   return `${name(e.from)} ${VERB[e.kind]} ${name(e.to)}${e.via ? ` · ${e.via}` : ""}${e.inferred ? " (a guess)" : ""}`;
 }
 
+/** A block's logo, its name on hover, or the icon of what it is, in its kind's colour (`mark`). */
+function Mark({ b }: { b: Block }) {
+  const m = mark(b);
+  if ("icon" in m) return <m.icon className="smart-mark" aria-hidden />;
+  return (
+    <svg className={`smart-mark logo${tone(m.logo.hex)}`} viewBox="0 0 24 24" style={{ "--logo": m.logo.hex } as CSSProperties} aria-hidden>
+      <title>{m.logo.title}</title>
+      <path d={m.logo.path} />
+    </svg>
+  );
+}
+
 function BlockCard({ b, status, chosen, dim, onSelect, links }: CardData) {
   const [kind, color] = KIND[b.kind];
   const lang = b.languages[0];
@@ -481,7 +599,7 @@ function BlockCard({ b, status, chosen, dim, onSelect, links }: CardData) {
       }}
     >
       <span className="smart-kind">
-        <i className="dot" />
+        <Mark b={b} />
         <span>{`${kind}${b.role ? ` · ${ROLE[b.role]}` : ""}`}</span>
         {(solo(b) || status) && (
           <span className="smart-flags">
@@ -550,7 +668,7 @@ function Details({ ctx, gitRef, map, lay, b, jobs, select }: { ctx: Ctx; gitRef:
     <aside className="side-card smart-panel" aria-label={`${title(b)}, details`}>
       <header>
         <div className="smart-kind" style={{ "--k": color } as CSSProperties}>
-          <i className="dot" />
+          <Mark b={b} />
           {kind}
           {b.role && ` · ${ROLE[b.role]}`}
           {b.configured && " · from assay.toml"}
