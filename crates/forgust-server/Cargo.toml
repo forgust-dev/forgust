@@ -1,5 +1,6 @@
 [package]
 name = "forgust-server"
+description = "The server: one binary for the API, the web app it serves, Git over HTTP and SSH, CI and the background jobs"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
