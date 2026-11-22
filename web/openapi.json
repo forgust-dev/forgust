@@ -2711,6 +2711,135 @@
         }
       }
     },
+    "/api/v1/projects/{id}/mirrors": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "operationId": "list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MirrorDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Add a mirror; its first update starts at once. A pull mirror makes the\nrepository read-only and replaces its branches and tags with the source's.",
+        "operationId": "create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewMirrorBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MirrorDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/mirrors/{mirror_id}": {
+      "put": {
+        "tags": [
+          "projects"
+        ],
+        "operationId": "update",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MirrorChangeBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MirrorDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Remove a mirror; a pull mirror's repository becomes writable again.",
+        "operationId": "delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MirrorDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/mirrors/{mirror_id}/update": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Update the mirror now instead of at its next turn.",
+        "operationId": "update_now",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MirrorDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{id}/notification_settings": {
       "get": {
         "tags": [
@@ -11114,6 +11243,150 @@
           }
         }
       },
+      "Mirror": {
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "direction",
+          "url",
+          "username",
+          "enabled",
+          "only_protected",
+          "trigger_pipelines",
+          "interval_minutes",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_by": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "direction": {
+            "type": "string",
+            "description": "`pull` or `push`."
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "interval_minutes": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Pull: minutes between updates."
+          },
+          "last_error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_success_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "last_update_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "only_protected": {
+            "type": "boolean",
+            "description": "Push: only protected branches, nothing deleted on the remote."
+          },
+          "project_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "trigger_pipelines": {
+            "type": "boolean",
+            "description": "Pull: run pipelines for what arrives."
+          },
+          "url": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        }
+      },
+      "MirrorChangeBody": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "interval_minutes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32"
+          },
+          "only_protected": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "token": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "trigger_pipelines": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "username": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "New credentials (the address never changes); an empty token removes them."
+          }
+        }
+      },
+      "MirrorDto": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Mirror"
+          },
+          {
+            "type": "object",
+            "required": [
+              "has_token"
+            ],
+            "properties": {
+              "has_token": {
+                "type": "boolean",
+                "description": "Credentials are stored (never shown)."
+              }
+            }
+          }
+        ]
+      },
       "MirrorStatus": {
         "type": "object",
         "description": "What admins see of a mirrored database.",
@@ -11567,6 +11840,47 @@
           "url": {
             "type": "string",
             "description": "`http(s)://` or `ftp://`, or a file uploaded to this project."
+          }
+        }
+      },
+      "NewMirrorBody": {
+        "type": "object",
+        "required": [
+          "direction",
+          "url"
+        ],
+        "properties": {
+          "direction": {
+            "type": "string",
+            "description": "`pull` (this repository follows the address) or `push`."
+          },
+          "interval_minutes": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Pull: minutes between updates (15 to 10080, default 60)."
+          },
+          "only_protected": {
+            "type": "boolean",
+            "description": "Push: only protected branches, nothing deleted on the remote."
+          },
+          "token": {
+            "type": "string",
+            "description": "A token or password; none for a public repository (pull)."
+          },
+          "trigger_pipelines": {
+            "type": "boolean",
+            "description": "Pull: run pipelines for what arrives (as you)."
+          },
+          "url": {
+            "type": "string",
+            "description": "The other repository's http(s) address, without credentials."
+          },
+          "username": {
+            "type": "string",
+            "description": "Sent with the token (`oauth2` when empty: GitLab, GitHub, Gitea and\nForgejo take a token as the password whatever the name)."
           }
         }
       },
