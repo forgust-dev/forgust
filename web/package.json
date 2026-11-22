@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
+    "licenses": "node scripts/licenses.mjs",
     "gen:api": "npm ci --prefix tools/gen-api --no-audit --no-fund --silent && tools/gen-api/node_modules/.bin/openapi-typescript openapi.json -o src/api/schema.d.ts",
     "e2e": "playwright test"
   },

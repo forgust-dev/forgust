@@ -278,6 +278,8 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
+      - name: Licenses of what ships (ADR-0007)
+        run: npm run licenses
       - name: Types from OpenAPI are committed
         run: npm run gen:api && git diff --exit-code src/api/schema.d.ts
       - run: npm run build
