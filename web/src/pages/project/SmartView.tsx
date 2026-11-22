@@ -66,11 +66,39 @@ const KIND: Record<S["MapKind"], [label: string, color: string]> = {
   other: ["Block", "#8a8178"],
 };
 const VERB: Record<S["MapLinkKind"], string> = { uses: "uses", builds: "builds", runs: "runs", depends_on: "depends on", connects: "connects to", calls: "calls" };
+const ROLE: Record<S["MapRole"], string> = {
+  web: "web",
+  api: "API",
+  cli: "CLI",
+  library: "library",
+  database: "database",
+  cache: "cache",
+  queue: "queue",
+  search: "search",
+  storage: "storage",
+  mail: "mail",
+};
+/** A phone's list, by what the blocks are: what runs first, the data last. */
+const GROUPS: [title: string, kinds: S["MapKind"][]][] = [
+  ["Services", ["service"]],
+  ["Images", ["docker"]],
+  ["Code", ["rust", "node", "python", "go"]],
+  ["Schemas", ["migrations"]],
+  ["CI and docs", ["ci", "docs"]],
+  ["Other", ["other"]],
+];
+/** That one person knows a block only says something once it changed this many times. */
+const SOLO_FROM = 5;
+const solo = (b: Block) => b.bus_factor === 1 && b.people.reduce((n, p) => n + p.commits, 0) >= SOLO_FROM;
+const SOLO = "Only one person made a fifth or more of its recent changes";
 
 /** A block's title: its name, but its id when the name is only its path (an image, a schema). */
 const title = (b: Block) => (b.name === b.roots[0]?.path ? b.id : b.name);
+const where = (path: string) => (path === "." ? "whole repository" : path);
 const place = (b: Block) =>
-  b.roots.length ? b.roots[0].path + (b.roots.length > 1 ? ` +${b.roots.length - 1}` : "") : (b.image?.replace(/@sha256:[0-9a-f]+$/, "") ?? b.manifests.map((m) => m.path).join(", "));
+  b.roots.length
+    ? where(b.roots[0].path) + (b.roots.length > 1 ? ` +${b.roots.length - 1}` : "")
+    : (b.image?.replace(/@sha256:[0-9a-f]+$/, "") ?? b.manifests.map((m) => m.path).join(", "));
 const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
 
 /** The project's code as blocks (what is built, run or deployed apart), what each needs, and
@@ -157,27 +185,54 @@ function MapView({ ctx, gitRef, map, lay }: { ctx: Ctx; gitRef: string; map: S["
       </Empty>
     );
   }
-  const card = (b: Block) => <BlockCard key={b.id} b={b} status={blockStatus(b, jobs)} chosen={chosen === b.id} dim={!!chosen && !near.has(b.id)} onSelect={() => select(b.id)} />;
+  const card = (b: Block, links?: string) => (
+    <BlockCard key={b.id} b={b} status={blockStatus(b, jobs)} chosen={chosen === b.id} dim={!!chosen && !near.has(b.id)} onSelect={() => select(b.id)} links={links} />
+  );
   const details = chosen ? <Details ctx={ctx} gitRef={gitRef} map={map} lay={lay} b={byId.get(chosen)!} jobs={jobs} select={select} /> : null;
+  const alone = map.blocks.filter(solo).length;
+  // a phone's list: what each needs, what uses it and what holds it, since no line shows it
+  const counts = (id: string) => {
+    const mine = (e: Edge) => e.kind !== "part";
+    const needs = lay.edges.filter((e) => e.from === id && mine(e)).length;
+    const usedBy = lay.edges.filter((e) => e.to === id && mine(e)).length;
+    const holder = lay.edges.find((e) => e.to === id && e.kind === "part")?.from;
+    const holds = lay.edges.filter((e) => e.from === id && e.kind === "part").length;
+    const said = [needs && `needs ${needs}`, usedBy && `used by ${usedBy}`, holder && `part of ${title(byId.get(holder)!)}`, holds && `contains ${holds}`].filter(Boolean);
+    return said.length ? said.join(" · ") : "not linked to other blocks";
+  };
+  const rank = new Map([...lay.order, ...lay.loose].map((id, i) => [id, i]));
   return (
     <>
       <div className="smart-bar">
         <span>
           {plural(map.blocks.length, "block")} · {plural(map.links.length, "link")} · {plural(map.unassigned, "file")} in no block
+          {alone > 0 && <span title={SOLO}> · {plural(alone, "block")} known by one person</span>}
         </span>
-        {!list && <Legend />}
+        {!list && lay.drawn.length > 0 && <Legend />}
       </div>
+      <p className="smart-guide">{framed && "From left to right: what runs, what it is built from, the code, its data. "}Choose a block to see what it needs and who to ask.</p>
       {/* the details: over the canvas when there is one, else beside the blocks */}
       <div className={`smart-layout${details && room > 0 && !framed ? " open" : ""}`}>
         <div className="smart-main" ref={main}>
           {framed && <Canvas key={lay.id} lay={lay} byId={byId} jobs={jobs} chosen={chosen} near={near} select={select} room={room} panel={details} />}
-          {list && lay.graph.length > 0 && <div className="smart-grid list">{lay.order.map((id) => card(byId.get(id)!))}</div>}
-          {lay.loose.length > 0 && (
-            <section className="smart-loose" aria-label="Not linked to other blocks">
-              <h2>Not linked to other blocks</h2>
-              <div className={`smart-grid${list ? " list" : ""}`}>{lay.loose.map((id) => card(byId.get(id)!))}</div>
-            </section>
-          )}
+          {list
+            ? GROUPS.map(([group, kinds]) => {
+                const here = map.blocks.filter((b) => kinds.includes(b.kind)).sort((a, b) => rank.get(a.id)! - rank.get(b.id)!);
+                return (
+                  here.length > 0 && (
+                    <section key={group} className="smart-group" aria-label={group}>
+                      <h2>{group}</h2>
+                      <div className="smart-grid list">{here.map((b) => card(b, counts(b.id)))}</div>
+                    </section>
+                  )
+                );
+              })
+            : lay.loose.length > 0 && (
+                <section className="smart-group" aria-label="Not linked to other blocks">
+                  <h2>Not linked to other blocks</h2>
+                  <div className="smart-grid">{lay.loose.map((id) => card(byId.get(id)!))}</div>
+                </section>
+              )}
           <Notes ctx={ctx} gitRef={gitRef} map={map} />
         </div>
         {!framed && details}
@@ -201,7 +256,8 @@ function useWidth(): [(el: HTMLDivElement | null) => void, number] {
   return [setEl, width];
 }
 
-type CardData = { b: Block; status: string | null; chosen: boolean; dim: boolean; onSelect: () => void };
+/** `links`: what it needs and what uses it, in words (a phone's list, which draws no line). */
+type CardData = { b: Block; status: string | null; chosen: boolean; dim: boolean; onSelect: () => void; links?: string };
 type BlockNode = Node<CardData, "block">;
 type HolderNode = Node<CardData, "holder">;
 type LinkData = { e: Edge; mine: boolean; dim: boolean; tip: string };
@@ -408,7 +464,7 @@ function tip(e: Edge, byId: Map<string, Block>) {
   return `${name(e.from)} ${VERB[e.kind]} ${name(e.to)}${e.via ? ` · ${e.via}` : ""}${e.inferred ? " (a guess)" : ""}`;
 }
 
-function BlockCard({ b, status, chosen, dim, onSelect }: CardData) {
+function BlockCard({ b, status, chosen, dim, onSelect, links }: CardData) {
   const [kind, color] = KIND[b.kind];
   const lang = b.languages[0];
   return (
@@ -425,11 +481,11 @@ function BlockCard({ b, status, chosen, dim, onSelect }: CardData) {
     >
       <span className="smart-kind">
         <i className="dot" />
-        <span>{`${kind}${b.role ? ` · ${b.role}` : ""}`}</span>
-        {(b.bus_factor === 1 || status) && (
+        <span>{`${kind}${b.role ? ` · ${ROLE[b.role]}` : ""}`}</span>
+        {(solo(b) || status) && (
           <span className="smart-flags">
-            {b.bus_factor === 1 && (
-              <span className="smart-solo" title="One person made most of its recent changes">
+            {solo(b) && (
+              <span className="smart-solo" title={SOLO}>
                 1 person
               </span>
             )}
@@ -443,6 +499,7 @@ function BlockCard({ b, status, chosen, dim, onSelect }: CardData) {
       </span>
       <span className="smart-name">{title(b)}</span>
       <span className="smart-place">{place(b)}</span>
+      {links && <span className="smart-links">{links}</span>}
       <span className="smart-foot">
         {b.files > 0 && <span className="smart-files">{`${plural(b.files, "file")}${lang ? ` · ${lang.name}` : ""}`}</span>}
         <span className="smart-people">
@@ -487,7 +544,7 @@ function Details({ ctx, gitRef, map, lay, b, jobs, select }: { ctx: Ctx; gitRef:
         <div className="smart-kind" style={{ "--k": color } as CSSProperties}>
           <i className="dot" />
           {kind}
-          {b.role && ` · ${b.role}`}
+          {b.role && ` · ${ROLE[b.role]}`}
           {b.configured && " · from assay.toml"}
         </div>
         <button type="button" className="icon-btn" aria-label="Close" title="Close (Esc)" onClick={() => select(null)}>
@@ -498,7 +555,7 @@ function Details({ ctx, gitRef, map, lay, b, jobs, select }: { ctx: Ctx; gitRef:
         <h2>{title(b)}</h2>
         {b.roots.map((r) => (
           <Link key={r.path} className="smart-root" to={at(r)}>
-            {r.path === "." ? "/" : r.path}
+            {where(r.path)}
           </Link>
         ))}
         {b.image && <div className="smart-root">{b.image}</div>}
@@ -544,7 +601,7 @@ function Details({ ctx, gitRef, map, lay, b, jobs, select }: { ctx: Ctx; gitRef:
               </li>
             ))}
           </ul>
-          {b.bus_factor === 1 && b.people.length > 0 && <p className="smart-note">One person made most of its recent changes: worth sharing what they know.</p>}
+          {solo(b) && <p className="smart-note">{SOLO}: worth sharing what they know.</p>}
           {b.people.length > 0 && <p className="muted small">From the commits of the last {plural(map.days, "day")}.</p>}
         </section>
       )}
@@ -558,14 +615,14 @@ function Details({ ctx, gitRef, map, lay, b, jobs, select }: { ctx: Ctx; gitRef:
           </li>
         ))}
       </EdgeList>
-      <EdgeList title="Holds">
+      <EdgeList title="Contains">
         {holds.map((e) => (
           <li key={e.to}>
             <span className="grow">{go(e.to)}</span>
           </li>
         ))}
       </EdgeList>
-      <EdgeList title="Needed by">
+      <EdgeList title="Used by">
         {neededBy.map((e) => (
           <li key={`${e.from}:${e.kind}`}>
             <span className="grow">
@@ -641,18 +698,20 @@ function Notes({ ctx, gitRef, map }: { ctx: Ctx; gitRef: string; map: S["RepoMap
   return (
     <div className="smart-notes">
       {map.unassigned > 0 && (
-        <p>
-          {plural(map.unassigned, "file is", "files are")} in no block:{" "}
-          {map.unassigned_sample.map((f, i) => (
-            <span key={f}>
-              {i > 0 && ", "}
-              <Link to={refLink(ctx.web, "blob", gitRef, f)}>
-                <code>{f}</code>
-              </Link>
-            </span>
-          ))}
-          {map.unassigned > map.unassigned_sample.length && ", …"}
-        </p>
+        <details className="smart-unassigned">
+          <summary>{plural(map.unassigned, "file is", "files are")} in no block</summary>
+          <p>
+            {map.unassigned_sample.map((f, i) => (
+              <span key={f}>
+                {i > 0 && ", "}
+                <Link to={refLink(ctx.web, "blob", gitRef, f)}>
+                  <code>{f}</code>
+                </Link>
+              </span>
+            ))}
+            {map.unassigned > map.unassigned_sample.length && ", …"}
+          </p>
+        </details>
       )}
       {map.warnings.length > 0 && (
         <div>

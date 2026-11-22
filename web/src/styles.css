@@ -8093,7 +8093,7 @@ button.test-case-row:hover {
   font-size: 9px;
   box-shadow: 0 0 0 2px var(--bg);
 }
-.smart-loose h2 {
+.smart-group h2 {
   margin: 0 0 10px;
   font-size: 12px;
   font-weight: 600;
@@ -8113,6 +8113,23 @@ button.test-case-row:hover {
 }
 .smart-grid.list .smart-card {
   width: 100%;
+  height: auto;
+  min-height: 92px;
+}
+.smart-links {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.smart-guide {
+  margin: -8px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.smart-unassigned summary {
+  cursor: pointer;
+}
+.smart-unassigned p {
+  margin: 6px 0 0;
 }
 .smart-notes {
   display: flex;

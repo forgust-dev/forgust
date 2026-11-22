@@ -29,7 +29,7 @@ test("the Smart View maps the code into blocks and tells what each needs", async
     await expect(page.getByText("5 blocks · 4 links · 3 files in no block")).toBeVisible();
     const card = (id: string) => page.locator(`.smart-card[data-id="${id}"]`);
     for (const id of ["app", "db", "image", "api", "core"]) await expect(card(id)).toBeVisible();
-    await expect(card("api")).toContainText("Rust crate · api");
+    await expect(card("api")).toContainText("Rust crate · API");
     await expect(card("db")).toContainText("postgres:17");
     if (!isMobile(page)) await expect(page.getByRole("link", { name: "Smart View" }).first()).toBeVisible();
 
