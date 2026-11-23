@@ -167,39 +167,47 @@ pub async fn load(state: &AppState, p: &Project, commit: &str) -> ApiResult<Opti
     Ok(None)
 }
 
+/// The people an owner reference names (`@user`, `@group/sub`: its members,
+/// or a verified email): those active, with at least the Developer role on
+/// the project.
+pub(crate) async fn people(state: &AppState, p: &Project, r: &str) -> ApiResult<Vec<forgust_db::users::User>> {
+    let mut ids: Vec<i64> = Vec::new();
+    if let Some(name) = r.strip_prefix('@') {
+        if let Some(u) = forgust_db::users::find_by_username(&state.db, name).await? {
+            ids.push(u.id);
+        } else {
+            let mut conn = state.db.acquire().await?;
+            if let Some(hit) = forgust_db::routes::lookup(&mut conn, name).await?
+                && hit.source_type == "namespace"
+            {
+                ids = forgust_db::members::group_member_ids_with_ancestors(&state.db, hit.source_id).await?;
+            }
+        }
+    } else if let Some(u) = forgust_db::users::find_by_email(&state.db, r).await?
+        && u.email_verified()
+    {
+        ids.push(u.id);
+    }
+    let mut out = Vec::new();
+    for u in forgust_db::users::find_many(&state.db, &ids).await? {
+        let level = if u.is_admin {
+            forgust_db::access::OWNER
+        } else {
+            forgust_db::authz::project_level(&state.db, u.id, p.id).await?.unwrap_or(0)
+        };
+        if u.is_active() && level >= forgust_db::access::DEVELOPER {
+            out.push(u);
+        }
+    }
+    Ok(out)
+}
+
 /// Owner references → usernames of people with at least the Developer role
 /// on the project.
 async fn resolve(state: &AppState, p: &Project, refs: &BTreeSet<String>) -> ApiResult<BTreeMap<String, Vec<String>>> {
     let mut out = BTreeMap::new();
     for r in refs {
-        let mut ids: Vec<i64> = Vec::new();
-        if let Some(name) = r.strip_prefix('@') {
-            if let Some(u) = forgust_db::users::find_by_username(&state.db, name).await? {
-                ids.push(u.id);
-            } else {
-                let mut conn = state.db.acquire().await?;
-                if let Some(hit) = forgust_db::routes::lookup(&mut conn, name).await?
-                    && hit.source_type == "namespace"
-                {
-                    ids = forgust_db::members::group_member_ids_with_ancestors(&state.db, hit.source_id).await?;
-                }
-            }
-        } else if let Some(u) = forgust_db::users::find_by_email(&state.db, r).await?
-            && u.email_verified()
-        {
-            ids.push(u.id);
-        }
-        let mut names = Vec::new();
-        for u in forgust_db::users::find_many(&state.db, &ids).await? {
-            let level = if u.is_admin {
-                forgust_db::access::OWNER
-            } else {
-                forgust_db::authz::project_level(&state.db, u.id, p.id).await?.unwrap_or(0)
-            };
-            if u.is_active() && level >= forgust_db::access::DEVELOPER {
-                names.push(u.username);
-            }
-        }
+        let mut names: Vec<String> = people(state, p, r).await?.into_iter().map(|u| u.username).collect();
         names.sort();
         out.insert(r.clone(), names);
     }

@@ -28,6 +28,8 @@ pub struct BotStatus {
     pub commands: Vec<String>,
     /// The labels it puts on merge requests, by the rules on the default branch.
     pub label_rules: BotLabelRules,
+    /// It asks for the review of merge requests (`[reviewers]` on the default branch).
+    pub reviewers: bool,
 }
 
 #[derive(Serialize, ToSchema, Default)]
@@ -61,6 +63,7 @@ async fn status_of(state: &AppState, p: &forgust_db::projects::Project) -> ApiRe
         config_error,
         commands: svc::parse::Kind::ALL.iter().map(|k| k.name().to_string()).collect(),
         label_rules,
+        reviewers: rules.reviewers.is_some(),
     })
 }
 

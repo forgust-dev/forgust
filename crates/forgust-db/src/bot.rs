@@ -122,3 +122,52 @@ pub async fn set_auto_labels(conn: &mut sqlx::PgConnection, merge_request_id: i6
     .await?;
     Ok(())
 }
+
+// ----------------------------------------------------------------- reviewers
+
+/// Mark the merge request as looked at for reviewers; false when it already was.
+pub async fn claim_review(e: impl PgExecutor<'_>, merge_request_id: i64) -> Result<bool> {
+    let n = sqlx::query!("INSERT INTO merge_request_bot_reviews (merge_request_id) VALUES ($1) ON CONFLICT DO NOTHING", merge_request_id)
+        .execute(e)
+        .await?
+        .rows_affected();
+    Ok(n > 0)
+}
+
+/// When the bot last chose each of `user_ids` in the project (those never chosen are left out).
+pub async fn review_turns(e: impl PgExecutor<'_>, project_id: i64, user_ids: &[i64]) -> Result<Vec<(i64, chrono::DateTime<chrono::Utc>)>> {
+    Ok(sqlx::query!("SELECT user_id, picked_at FROM bot_review_turns WHERE project_id = $1 AND user_id = ANY ($2)", project_id, user_ids)
+        .fetch_all(e)
+        .await?
+        .into_iter()
+        .map(|r| (r.user_id, r.picked_at))
+        .collect())
+}
+
+pub async fn took_review_turn(e: impl PgExecutor<'_>, project_id: i64, user_ids: &[i64]) -> Result<()> {
+    sqlx::query!(
+        "INSERT INTO bot_review_turns (project_id, user_id, picked_at) SELECT $1, u, clock_timestamp() FROM unnest($2::bigint[]) AS u
+         ON CONFLICT (project_id, user_id) DO UPDATE SET picked_at = clock_timestamp()",
+        project_id,
+        user_ids
+    )
+    .execute(e)
+    .await?;
+    Ok(())
+}
+
+/// How many open merge requests of the project each of `user_ids` is asked to
+/// review (those with none are left out).
+pub async fn review_loads(e: impl PgExecutor<'_>, project_id: i64, user_ids: &[i64]) -> Result<Vec<(i64, i64)>> {
+    Ok(sqlx::query!(
+        r#"SELECT r.user_id, count(*) AS "n!" FROM merge_request_reviewers r JOIN merge_requests m ON m.id = r.merge_request_id
+            WHERE m.project_id = $1 AND m.state = 'opened' AND r.user_id = ANY ($2) GROUP BY r.user_id"#,
+        project_id,
+        user_ids
+    )
+    .fetch_all(e)
+    .await?
+    .into_iter()
+    .map(|r| (r.user_id, r.n))
+    .collect())
+}

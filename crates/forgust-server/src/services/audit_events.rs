@@ -329,6 +329,14 @@ pub const EVENTS: &[EventType] = &[
         &["merge_request", "added", "removed"],
         "The Forgust bot labeled a merge request by the rules of `.forgust/bot.toml` (changed paths, size, the title's type).",
     ),
+    e(
+        "bot_reviewers",
+        BUILTIN,
+        P,
+        &["merge_request", "reviewers", "code_owners"],
+        "The Forgust bot asked for the review of a merge request by the `[reviewers]` rules of `.forgust/bot.toml`: `reviewers` are \
+         the usernames it chose, `code_owners` those of them who own a changed file.",
+    ),
     e("ai_review_enabled", BUILTIN, P, &[], "AI review turned on for the project."),
     e("ai_review_disabled", BUILTIN, P, &[], "AI review turned off for the project."),
     e("ai_review_requested", BUILTIN, P, &["merge_request", "pipeline_id"], "An AI review of a merge request was asked for."),

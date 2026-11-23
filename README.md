@@ -169,6 +169,9 @@ volumes: { forgust-data: {}, db-data: {} }
 - The bot labels merge requests by the same file's rules: the paths they
   change, their size (`size/XS` … `size/XL`) and the type of their title
   (`fix: …`)
+- And it asks for reviews: the code owners of the changed files first, then
+  people or groups in turn (or whoever has the fewest reviews open), skipping
+  those listed as away
 
 ### ⚙️ CI/CD
 - Pipelines with stages and `needs` graphs, live logs, artifacts, JUnit test reports

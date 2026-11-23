@@ -13,6 +13,7 @@ test("forgust bot: turn on, a command in a comment, turn off", async ({ page }) 
     await expect(section.getByText("@forgust-bot joined the project")).toBeVisible();
     // no `[labels]` rules in the repository yet
     await expect(section.getByText("It labels no merge request yet.")).toBeVisible();
+    await expect(section.getByText("It asks nobody to review yet.")).toBeVisible();
     await page.goto(`${web}/-/members`);
     await expect(page.getByText("forgust-bot").first()).toBeVisible();
 

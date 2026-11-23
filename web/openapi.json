@@ -6434,7 +6434,8 @@
           "username",
           "config_path",
           "commands",
-          "label_rules"
+          "label_rules",
+          "reviewers"
         ],
         "properties": {
           "available": {
@@ -6465,6 +6466,10 @@
           "label_rules": {
             "$ref": "#/components/schemas/BotLabelRules",
             "description": "The labels it puts on merge requests, by the rules on the default branch."
+          },
+          "reviewers": {
+            "type": "boolean",
+            "description": "It asks for the review of merge requests (`[reviewers]` on the default branch)."
           },
           "username": {
             "type": "string",

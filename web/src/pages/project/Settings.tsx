@@ -172,6 +172,11 @@ function BotForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S["BotStatus"];
         {botLabels(initial.label_rules)} Rules under <code>[labels]</code> in <code>{initial.config_path}</code> label merge requests by
         the paths they change, by their size and by the type of their title (<code>fix: …</code>).
       </p>
+      <p className="small muted" style={{ margin: 0 }}>
+        {initial.reviewers ? "It asks for the review of merge requests." : "It asks nobody to review yet."} Rules under{" "}
+        <code>[reviewers]</code> have it ask the code owners of the changed files, then people or groups in turn, when a merge request is
+        ready.
+      </p>
       <div>
         <button className="btn primary" disabled={save.isPending || enabled === initial.enabled}>
           Save

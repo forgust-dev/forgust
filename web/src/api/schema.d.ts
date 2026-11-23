@@ -3273,6 +3273,8 @@ export interface components {
             enabled: boolean;
             /** @description The labels it puts on merge requests, by the rules on the default branch. */
             label_rules: components["schemas"]["BotLabelRules"];
+            /** @description It asks for the review of merge requests (`[reviewers]` on the default branch). */
+            reviewers: boolean;
             /** @description The account that carries out the commands. */
             username: string;
         };

@@ -364,3 +364,85 @@ async fn labels_on_merge_requests(pool: sqlx::PgPool) {
     dev.ok_put(&mr, json!({ "title": "fix: the guide" })).await;
     assert_eq!(names(&dev.ok_get(&mr).await["labels"], "name"), vec!["code", "mine", "size/M"]);
 }
+
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn reviewers_on_merge_requests(pool: sqlx::PgPool) {
+    let srv = TestServer::start(pool).await;
+    let (owner, dev, _rep, org, proj, work) = setup(&srv).await;
+    let base = format!("/api/v1/projects/{proj}");
+    for name in ["amy", "bob", "cyd"] {
+        srv.user(name, false).await;
+        owner.ok_post(&format!("/api/v1/groups/{org}/members"), json!({ "username": name, "access_level": "developer" })).await;
+    }
+    owner.ok_put(&format!("{base}/bot"), json!({ "enabled": true })).await;
+    assert_eq!(owner.ok_get(&format!("{base}/bot")).await["reviewers"], false);
+    // docs belong to amy; everything else goes round the group, bob being away
+    commit_file(&work, "CODEOWNERS", "/docs/ @amy\n", "owners").await;
+    commit_file(&work, ".forgust/bot.toml", "[reviewers]\nfrom = [\"@acme\"]\naway = [\"@bob\"]\n", "reviewer rules").await;
+    must(git(&work, &["push", "-q", &srv.http_url("olivia", REPO), "main"]).await);
+    wait_jobs(&srv.state).await;
+    assert_eq!(owner.ok_get(&format!("{base}/bot")).await["reviewers"], true);
+
+    let mut n = 0;
+    let mut open = async |file: &str, title: &str, extra: Value| -> String {
+        n += 1;
+        let branch = format!("feature/r{n}");
+        must(git(&work, &["checkout", "-q", "-b", &branch, "main"]).await);
+        commit_file(&work, file, "x\n", title).await;
+        must(git(&work, &["push", "-q", &srv.http_url("dave", REPO), &branch]).await);
+        wait_jobs(&srv.state).await;
+        let mut body = json!({ "source_branch": branch, "title": title });
+        body.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        dev.ok_post(&format!("{base}/merge_requests"), body).await;
+        format!("{base}/merge_requests/{n}")
+    };
+    let reviewers = async |mr: &str| names(&dev.ok_get(mr).await["reviewers"], "username");
+
+    // the code owner of what changed, asked by the bot
+    let mr = open("docs/a.md", "Docs", json!({})).await;
+    assert_eq!(reviewers(&mr).await, vec!["amy"]);
+    let notes = dev.ok_get(&format!("{mr}/notes")).await;
+    assert!(notes.as_array().unwrap().iter().any(|n| n["author_username"] == BOT && n["body"] == "requested review from @amy"), "{notes}");
+    let audit = srv.audit_events("bot_reviewers").await;
+    assert_eq!(audit[0].2, json!({ "merge_request": 1, "reviewers": ["amy"], "code_owners": ["amy"] }));
+
+    // no owner: each in turn (never the author, nor who is away); amy had hers
+    let mut asked = Vec::new();
+    for i in 0..4 {
+        let mr = open(&format!("src/f{i}.rs"), &format!("Code {i}"), json!({})).await;
+        asked.extend(reviewers(&mr).await);
+    }
+    assert_eq!(asked, vec!["cyd", "olivia", "amy", "cyd"]);
+
+    // a draft waits until it is ready; once only: a reviewer taken off stays off
+    let mr = open("src/draft.rs", "Draft: later", json!({})).await;
+    assert!(reviewers(&mr).await.is_empty());
+    dev.ok_put(&mr, json!({ "title": "Later" })).await;
+    assert_eq!(reviewers(&mr).await, vec!["olivia"]);
+    dev.ok_put(&mr, json!({ "reviewer_ids": [] })).await;
+    dev.ok_put(&mr, json!({ "draft": true })).await;
+    dev.ok_put(&mr, json!({ "draft": false })).await;
+    assert!(reviewers(&mr).await.is_empty());
+
+    // whoever the author asked counts: nobody is added
+    let cyd = srv.user_id("cyd").await;
+    let mr = open("src/own.rs", "Own choice", json!({ "draft": true })).await;
+    dev.ok_put(&mr, json!({ "reviewer_ids": [cyd] })).await;
+    dev.ok_put(&mr, json!({ "draft": false })).await;
+    assert_eq!(reviewers(&mr).await, vec!["cyd"]);
+
+    // two of them, the fewest open reviews first: bob (back) has none, olivia 1, amy 2, cyd 3
+    commit_file(
+        &work,
+        ".forgust/bot.toml",
+        "[reviewers]\ncount = 2\ncode_owners = false\nfrom = [\"@acme\"]\npick = \"least_loaded\"\n",
+        "by load",
+    )
+    .await;
+    must(git(&work, &["checkout", "-q", "main"]).await);
+    must(git(&work, &["merge", "-q", "--ff-only", "feature/r7"]).await);
+    must(git(&work, &["push", "-q", &srv.http_url("olivia", REPO), "main"]).await);
+    wait_jobs(&srv.state).await;
+    let mr = open("docs/b.md", "By load", json!({})).await;
+    assert_eq!(reviewers(&mr).await, vec!["bob", "olivia"]);
+}

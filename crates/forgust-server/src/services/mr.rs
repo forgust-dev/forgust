@@ -142,6 +142,7 @@ pub async fn create(state: &AppState, principal: &Principal, p: &Project, req: C
         tracing::warn!(project_id = p.id, iid = mr.iid, error = %e, "merge request pipeline not created");
     }
     super::bot::labels::on_merge_request(state, p, &mr).await;
+    super::bot::reviewers::on_merge_request(state, p, &mr).await;
     Ok(mr)
 }
 
@@ -212,6 +213,10 @@ pub async fn update_details(state: &AppState, principal: &Principal, p: &Project
         on_push(state, p.id, &[crate::jobs::RefUpdate { old: head.clone(), new: head, name: format!("refs/heads/{}", m.source_branch) }])
             .await
             .map_err(ApiError::Internal)?;
+    }
+    if m.draft && !draft {
+        // ready: the bot asks for its review, if it has not yet
+        super::bot::reviewers::on_merge_request(state, p, m).await;
     }
     if title != m.title || retarget {
         // another type in the title, or the rules of another branch

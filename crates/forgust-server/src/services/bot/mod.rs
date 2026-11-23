@@ -17,11 +17,13 @@
 //! reads its own comments.
 //!
 //! It also labels merge requests by the same file's `[labels]` rules
-//! ([`labels`]).
+//! ([`labels`]) and asks for their review by its `[reviewers]` rules
+//! ([`reviewers`]).
 
 pub mod config;
 pub mod labels;
 pub mod parse;
+pub mod reviewers;
 
 use forgust_db::access::{DEVELOPER, REPORTER};
 use forgust_db::issues::Issue;

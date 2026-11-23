@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO bot_review_turns (project_id, user_id, picked_at) SELECT $1, u, clock_timestamp() FROM unnest($2::bigint[]) AS u\n         ON CONFLICT (project_id, user_id) DO UPDATE SET picked_at = clock_timestamp()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "67680dfb38205b8b05fc211ee31cba30434b5be1b5de857a66fbb9895a87985b"
+}

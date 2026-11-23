@@ -24,6 +24,14 @@
 //! [labels.title]            # the title's conventional-commit type
 //! feat = "feature"
 //! fix = "bug"
+//!
+//! # who the bot asks to review a merge request, once, when it is ready
+//! [reviewers]
+//! count = 1                 # how many (1-5); those already asked count
+//! code_owners = true        # owners of the changed files first
+//! from = ["@acme/backend", "@alice"]   # then these people and groups' members
+//! pick = "round_robin"      # whose turn it is, or "least_loaded": the fewest open reviews
+//! away = ["@bob"]           # never asked
 //! ```
 //!
 //! `allow` takes `anyone` (who can comment), `author` (of the issue or merge
@@ -105,11 +113,35 @@ impl LabelRules {
     }
 }
 
+/// How one of several possible reviewers is chosen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Pick {
+    /// Whoever was asked longest ago.
+    #[default]
+    RoundRobin,
+    /// Whoever has the fewest open merge requests to review here.
+    LeastLoaded,
+}
+
+/// Who the bot asks to review a merge request.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReviewerRules {
+    pub count: usize,
+    pub code_owners: bool,
+    /// `@user` and `@group/sub`, as written.
+    pub from: Vec<String>,
+    pub pick: Pick,
+    /// Usernames.
+    pub away: Vec<String>,
+}
+
 /// The rules of a project; the default is what applies with no file.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct BotConfig {
     commands: BTreeMap<Kind, CommandRule>,
     pub labels: LabelRules,
+    /// None: the bot asks nobody.
+    pub reviewers: Option<ReviewerRules>,
 }
 
 impl BotConfig {
@@ -125,6 +157,51 @@ struct RawConfig {
     commands: BTreeMap<String, RawRule>,
     #[serde(default)]
     labels: RawLabels,
+    reviewers: Option<RawReviewers>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RawReviewers {
+    enabled: Option<bool>,
+    count: Option<usize>,
+    code_owners: Option<bool>,
+    #[serde(default)]
+    from: Vec<String>,
+    pick: Option<String>,
+    #[serde(default)]
+    away: Vec<String>,
+}
+
+/// At most this many reviewers asked by the bot, and entries of `from` and `away`.
+const MAX_REVIEWERS: usize = 5;
+const MAX_NAMES: usize = 50;
+
+fn reviewers(raw: Option<RawReviewers>) -> Result<Option<ReviewerRules>, String> {
+    let Some(raw) = raw.filter(|r| r.enabled.unwrap_or(true)) else { return Ok(None) };
+    let count = raw.count.unwrap_or(1);
+    if !(1..=MAX_REVIEWERS).contains(&count) {
+        return Err(format!("`[reviewers]`: `count` is 1 to {MAX_REVIEWERS}"));
+    }
+    let pick = match raw.pick.as_deref() {
+        None | Some("round_robin") => Pick::RoundRobin,
+        Some("least_loaded") => Pick::LeastLoaded,
+        Some(other) => return Err(format!("`[reviewers]`: `pick` is round_robin or least_loaded, not `{other}`")),
+    };
+    for (key, list) in [("from", &raw.from), ("away", &raw.away)] {
+        if list.len() > MAX_NAMES {
+            return Err(format!("`[reviewers]`: `{key}` takes at most {MAX_NAMES} names"));
+        }
+        if let Some(bad) = list.iter().find(|n| n.len() < 2 || !n.starts_with('@') || n.contains(char::is_whitespace)) {
+            return Err(format!("`[reviewers]`: `{key}` takes `@user` or `@group/subgroup`, not `{bad}`"));
+        }
+    }
+    let code_owners = raw.code_owners.unwrap_or(true);
+    if !code_owners && raw.from.is_empty() {
+        return Err("`[reviewers]`: nobody to ask (`code_owners = false` and no `from`)".into());
+    }
+    let away = raw.away.iter().map(|n| n[1..].to_string()).collect();
+    Ok(Some(ReviewerRules { count, code_owners, from: raw.from, pick, away }))
 }
 
 #[derive(Deserialize, Default)]
@@ -225,7 +302,7 @@ pub fn parse(text: &str) -> Result<BotConfig, String> {
         }
         commands.insert(kind, CommandRule { enabled: rule.enabled.unwrap_or(true), allow });
     }
-    Ok(BotConfig { commands, labels: labels(raw.labels)? })
+    Ok(BotConfig { commands, labels: labels(raw.labels)?, reviewers: reviewers(raw.reviewers)? })
 }
 
 #[cfg(test)]
@@ -266,6 +343,20 @@ mod tests {
     }
 
     #[test]
+    fn reviewer_rules() {
+        assert_eq!(parse("").unwrap().reviewers, None);
+        assert_eq!(parse("[reviewers]\nenabled = false").unwrap().reviewers, None);
+        let d = ReviewerRules { count: 1, code_owners: true, from: vec![], pick: Pick::RoundRobin, away: vec![] };
+        assert_eq!(parse("[reviewers]").unwrap().reviewers, Some(d));
+        let r = parse("[reviewers]\ncount = 2\ncode_owners = false\nfrom = [\"@acme/backend\", \"@alice\"]\npick = \"least_loaded\"\naway = [\"@bob\"]")
+            .unwrap()
+            .reviewers
+            .unwrap();
+        assert_eq!((r.count, r.code_owners, r.pick), (2, false, Pick::LeastLoaded));
+        assert_eq!((r.from, r.away), (vec!["@acme/backend".to_string(), "@alice".to_string()], vec!["bob".to_string()]));
+    }
+
+    #[test]
     fn mistakes_are_named() {
         for (text, says) in [
             ("[commands.lable]\nallow = []", "no `/lable` command"),
@@ -278,6 +369,10 @@ mod tests {
             ("[labels.paths]\ndocs = [\"/\"]", "is not a pattern"),
             ("[labels.size]\nxs = 50", "must grow"),
             ("[labels.title]\n\"feat!\" = \"x\"", "is not a type"),
+            ("[reviewers]\ncount = 0", "`count` is 1 to 5"),
+            ("[reviewers]\npick = \"random\"", "not `random`"),
+            ("[reviewers]\nfrom = [\"alice\"]", "not `alice`"),
+            ("[reviewers]\ncode_owners = false", "nobody to ask"),
             ("[commands", "invalid"),
         ] {
             let e = parse(text).unwrap_err();
