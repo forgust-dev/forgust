@@ -100,10 +100,24 @@ const KIND: Record<S["MapKind"], [label: string, color: string]> = {
   migrations: ["Schema", "#8a5cd0"],
   docker: ["Image", "#2f6fe0"],
   service: ["Service", "#6b7a86"],
+  helm: ["Helm chart", "#3a4bb0"],
+  kubernetes: ["Kubernetes", "#326ce5"],
+  ansible: ["Ansible", "#c43c3c"],
+  terraform: ["Terraform module", "#7b4fba"],
+  pulumi: ["Pulumi project", "#9b3c94"],
   ci: ["CI", "#b8901a"],
   docs: ["Docs", "#8a8178"],
   other: ["Block", "#8a8178"],
 };
+/** What a block is, as its card says it: its kind, or what its manifest makes it (a role, a
+ *  collection of roles). */
+function kindName(b: Block): string {
+  if (b.kind === "ansible") {
+    if (b.manifests.some((m) => /(^|\/)galaxy\.yml$/.test(m.path))) return "Ansible collection";
+    if (b.roots.some((r) => /(^|\/)roles\/[^/]+$/.test(r.path))) return "Ansible role";
+  }
+  return KIND[b.kind][0];
+}
 const VERB: Record<S["MapLinkKind"], string> = { uses: "uses", builds: "builds", runs: "runs", depends_on: "depends on", connects: "connects to", calls: "calls" };
 const ROLE: Record<S["MapRole"], string> = {
   web: "web",
@@ -173,6 +187,11 @@ function mark(b: Block): { logo: Logo } | { icon: LucideIcon } {
     case "python":
     case "go":
     case "docker":
+    case "helm":
+    case "kubernetes":
+    case "ansible":
+    case "terraform":
+    case "pulumi":
       return { logo: LOGOS[b.kind] };
     case "node": {
       const code = b.languages[0]?.name;
@@ -207,6 +226,7 @@ function tone(hex: string) {
 const GROUPS: [title: string, kinds: S["MapKind"][]][] = [
   ["Services", ["service"]],
   ["Images", ["docker"]],
+  ["Infrastructure", ["helm", "kubernetes", "ansible", "terraform", "pulumi"]],
   ["Code", ["rust", "node", "python", "go"]],
   ["Schemas", ["migrations"]],
   ["CI and docs", ["ci", "docs"]],
@@ -313,7 +333,7 @@ function findBlocks(map: S["RepoMap"], lay: Plan, words: string): string[] {
   const score = (b: Block) => {
     const name = [b.id, b.name];
     const about = [...name, b.description ?? "", ...b.roots.map((r) => r.path), b.image ?? ""];
-    return has(name) ? 0 : has(about) ? 1 : has([...about, KIND[b.kind][0], b.role ? ROLE[b.role] : ""]) ? 2 : -1;
+    return has(name) ? 0 : has(about) ? 1 : has([...about, kindName(b), b.role ? ROLE[b.role] : ""]) ? 2 : -1;
   };
   return map.blocks
     .map((b) => ({ id: b.id, score: score(b) }))
@@ -451,8 +471,8 @@ function MapView({ ctx, gitRef, map, lay, found, words }: { ctx: Ctx; gitRef: st
   if (!map.blocks.length) {
     return (
       <Empty>
-        No blocks found. They come from manifests: <code>Cargo.toml</code>, <code>package.json</code>, <code>pyproject.toml</code>, <code>go.mod</code>, a <code>Dockerfile</code>, a compose file or a CI configuration. An <code>assay.toml</code> at the top
-        of the repository can declare others.
+        No blocks found. They come from manifests: <code>Cargo.toml</code>, <code>package.json</code>, <code>pyproject.toml</code>, <code>go.mod</code>, a <code>Dockerfile</code>, a compose file, a Helm chart, Kubernetes manifests,
+        Ansible roles, Terraform modules, a Pulumi project or a CI configuration. An <code>assay.toml</code> at the top of the repository can declare others.
       </Empty>
     );
   }
@@ -859,7 +879,7 @@ function Mark({ b }: { b: Block }) {
 }
 
 function BlockCard({ b, status, waits, chosen, dim, onSelect, links }: CardData) {
-  const [kind, color] = KIND[b.kind];
+  const [kind, color] = [kindName(b), KIND[b.kind][1]];
   const lang = b.languages[0];
   return (
     <button
@@ -939,7 +959,7 @@ type DetailsProps = {
 
 function Details({ ctx, gitRef, map, lay, b, jobs, pipeline, waits, chain, setChain, select, me, fix }: DetailsProps) {
   const byId = new Map(map.blocks.map((x) => [x.id, x]));
-  const [kind, color] = KIND[b.kind];
+  const [kind, color] = [kindName(b), KIND[b.kind][1]];
   // once it scrolls, a line parts the name, which stays, from what goes under it
   const [scrolled, setScrolled] = useState(false);
   const ci = useRef<HTMLElement>(null);

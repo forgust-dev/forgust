@@ -4676,7 +4676,7 @@ export interface components {
             roots: components["schemas"]["MapPath"][];
         };
         /** @enum {string} */
-        MapKind: "rust" | "node" | "python" | "go" | "docker" | "service" | "migrations" | "ci" | "docs" | "other";
+        MapKind: "rust" | "node" | "python" | "go" | "docker" | "service" | "helm" | "kubernetes" | "ansible" | "terraform" | "pulumi" | "migrations" | "ci" | "docs" | "other";
         MapLanguage: {
             /** @description `#rrggbb`, as the repository's language bar shows it; none for prose and data (JSON…). */
             color?: string | null;
@@ -4686,7 +4686,10 @@ export interface components {
         /** @description `from` needs `to`. */
         MapLink: {
             from: string;
-            /** @description A guess (a service's environment names the other as a host), not declared. */
+            /**
+             * @description A guess (a service's environment names the other as a host, a chart or a manifest names
+             *     an image by its name), not declared.
+             */
             inferred: boolean;
             kind: components["schemas"]["MapLinkKind"];
             to: string;

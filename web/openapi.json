@@ -10935,6 +10935,11 @@
           "go",
           "docker",
           "service",
+          "helm",
+          "kubernetes",
+          "ansible",
+          "terraform",
+          "pulumi",
           "migrations",
           "ci",
           "docs",
@@ -10980,7 +10985,7 @@
           },
           "inferred": {
             "type": "boolean",
-            "description": "A guess (a service's environment names the other as a host), not declared."
+            "description": "A guess (a service's environment names the other as a host, a chart or a manifest names\nan image by its name), not declared."
           },
           "kind": {
             "$ref": "#/components/schemas/MapLinkKind"

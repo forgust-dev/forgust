@@ -113,6 +113,11 @@ pub enum MapKind {
     Go,
     Docker,
     Service,
+    Helm,
+    Kubernetes,
+    Ansible,
+    Terraform,
+    Pulumi,
     Migrations,
     Ci,
     Docs,
@@ -179,7 +184,8 @@ pub struct MapLink {
     pub from: String,
     pub to: String,
     pub kind: MapLinkKind,
-    /// A guess (a service's environment names the other as a host), not declared.
+    /// A guess (a service's environment names the other as a host, a chart or a manifest names
+    /// an image by its name), not declared.
     pub inferred: bool,
     /// The file that says so.
     pub via: String,
@@ -597,6 +603,11 @@ fn kind(k: forgust_assay::Kind) -> MapKind {
         forgust_assay::Kind::Go => MapKind::Go,
         forgust_assay::Kind::Docker => MapKind::Docker,
         forgust_assay::Kind::Service => MapKind::Service,
+        forgust_assay::Kind::Helm => MapKind::Helm,
+        forgust_assay::Kind::Kubernetes => MapKind::Kubernetes,
+        forgust_assay::Kind::Ansible => MapKind::Ansible,
+        forgust_assay::Kind::Terraform => MapKind::Terraform,
+        forgust_assay::Kind::Pulumi => MapKind::Pulumi,
         forgust_assay::Kind::Migrations => MapKind::Migrations,
         forgust_assay::Kind::Ci => MapKind::Ci,
         forgust_assay::Kind::Docs => MapKind::Docs,
