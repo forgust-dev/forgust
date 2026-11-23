@@ -38,6 +38,17 @@ pub enum Kind {
     Docker,
     /// A service of a compose file.
     Service,
+    /// A Helm chart.
+    Helm,
+    /// Kubernetes manifests: a Kustomize folder with its bases and overlays, or a folder of
+    /// manifests.
+    Kubernetes,
+    /// Ansible: a role, a collection, or the playbooks around roles.
+    Ansible,
+    /// A Terraform (or OpenTofu) module.
+    Terraform,
+    /// A Pulumi project.
+    Pulumi,
     /// A database's schema, as its migrations.
     Migrations,
     /// The CI: its configuration files.
@@ -141,7 +152,8 @@ pub enum LinkKind {
     Uses,
     /// An image is built from a block's files.
     Builds,
-    /// A service runs an image built in the repository.
+    /// A service runs an image built in the repository; so does what deploys it (a chart,
+    /// manifests, a playbook, infrastructure code), by the image's name: a guess.
     Runs,
     /// A service starts after another (compose `depends_on`).
     DependsOn,

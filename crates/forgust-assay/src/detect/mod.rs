@@ -1,18 +1,25 @@
 //! Finding the blocks. Each detector reads the manifests of one kind and adds blocks, the
-//! links it reads (to a block named by its path or its package name, which another
-//! detector may find), and the CI jobs with the paths they run for.
+//! links it reads (to a block named by its path, its package name or its image's, which
+//! another detector may find), and the CI jobs with the paths they run for.
 
+mod ansible;
 mod cargo;
 mod ci;
 mod compose;
 mod docker;
 mod docs;
 mod go;
+mod helm;
+mod kubernetes;
 mod migrations;
 mod node;
+mod pulumi;
 mod python;
+mod terraform;
 
 use std::collections::{HashMap, HashSet};
+
+use serde_json::Value;
 
 pub(crate) use docker::is_dockerfile;
 
@@ -35,6 +42,9 @@ pub(crate) struct Draft {
     pub package: Option<String>,
     /// A Cargo package's binaries, for a build naming one (`cargo build --bin x`).
     pub bins: Vec<String>,
+    /// For an image: the names it may be pulled by (its folder's, its package's, the compose
+    /// services building it), for what deploys it to name it (a chart's values, a manifest).
+    pub aliases: Vec<String>,
 }
 
 impl Draft {
@@ -51,6 +61,7 @@ impl Draft {
             image: None,
             package: None,
             bins: Vec::new(),
+            aliases: Vec::new(),
         }
     }
 }
@@ -71,6 +82,9 @@ pub(crate) enum To {
     /// The draft of this key (an image), else what this folder holds (compose `build`: its
     /// Dockerfile, else its context).
     Image { image: String, context: String },
+    /// The image of the repository pulled by this reference (`registry.example.com/shop/api:1.2`):
+    /// the one whose folder, package or compose service has its name (`api`).
+    ImageNamed(String),
 }
 
 pub(crate) struct Pending {
@@ -175,13 +189,19 @@ impl<'a> Ctx<'a> {
 }
 
 /// Whether a detector reads this file's text: a manifest, a Dockerfile, a compose file, a CI
-/// configuration.
+/// configuration, a chart, Kubernetes manifests, Ansible's roles and playbooks, Terraform's
+/// modules, a Pulumi project.
 pub(crate) fn reads(path: &str) -> bool {
     let name = file_name(path);
     matches!(name, "Cargo.toml" | "package.json" | "pyproject.toml" | "go.mod")
         || docker::is_dockerfile(name)
         || compose::is_compose(name)
         || ci::reads(path)
+        || helm::reads(path)
+        || kubernetes::reads(path)
+        || ansible::reads(path)
+        || terraform::reads(path)
+        || pulumi::reads(path)
 }
 
 /// Every detector, over the files of a repository (`name`) and the text of those [`reads`]
@@ -195,6 +215,12 @@ pub(crate) fn detect<'a>(name: &'a str, files: &'a [String], texts: &'a HashMap<
     migrations::detect(&mut cx);
     docker::detect(&mut cx);
     compose::detect(&mut cx);
+    helm::detect(&mut cx);
+    kubernetes::detect(&mut cx);
+    ansible::detect(&mut cx);
+    terraform::detect(&mut cx);
+    // after the packages: a Pulumi program is no package, though it has a package.json
+    pulumi::detect(&mut cx);
     ci::detect(&mut cx);
     docs::detect(&mut cx);
     cx
@@ -230,6 +256,54 @@ pub(crate) fn join(dir: &str, rel: &str) -> String {
 /// A manifest's description, unless it says nothing.
 pub(crate) fn described(s: Option<&str>) -> Option<String> {
     s.map(str::trim).filter(|s| !s.is_empty()).map(str::to_string)
+}
+
+/// The name of an image reference, without its registry, owner, tag or digest
+/// (`registry:5000/shop/api:1.2@sha256:…` is `api`), as an id; none when a variable or a
+/// template stands for it (`${IMAGE}`, `{{ image }}`).
+pub(crate) fn image_name(reference: &str) -> Option<String> {
+    let path = reference.split('@').next().unwrap_or(reference);
+    let last = path.rsplit('/').next().unwrap_or(path);
+    let name = last.split(':').next().unwrap_or(last).trim();
+    if name.is_empty() || name.contains(['$', '{', '}', ' ']) {
+        return None;
+    }
+    Some(slug(name))
+}
+
+/// The images a document names: the values of its `image` keys (a container's), or of keys
+/// ending so (a Pulumi stack's `app:apiImage`), and Helm's `image: { registry, repository }`.
+pub(crate) fn images_in(v: &Value) -> Vec<String> {
+    fn walk(v: &Value, out: &mut Vec<String>) {
+        match v {
+            Value::Object(m) => {
+                for (k, v) in m {
+                    let k = k.to_ascii_lowercase();
+                    if k == "image" || (k.ends_with("image") && v.is_string()) {
+                        let found = match v {
+                            Value::String(s) => Some(s.clone()),
+                            Value::Object(o) => o.get("repository").or_else(|| o.get("name")).and_then(Value::as_str).map(|r| {
+                                o.get("registry").and_then(Value::as_str).map(|g| format!("{g}/{r}")).unwrap_or_else(|| r.to_string())
+                            }),
+                            _ => None,
+                        };
+                        if let Some(image) = found {
+                            if !out.contains(&image) {
+                                out.push(image);
+                            }
+                            continue;
+                        }
+                    }
+                    walk(v, out);
+                }
+            }
+            Value::Array(items) => items.iter().for_each(|i| walk(i, out)),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    walk(v, &mut out);
+    out
 }
 
 /// A name as an id: lower case letters and digits, dashes between words.
@@ -275,5 +349,23 @@ mod tests {
         assert_eq!(literal_prefix("web/app*"), "web");
         assert_eq!(literal_prefix("**/*.rs"), "");
         assert_eq!(literal_prefix("Dockerfile"), "Dockerfile");
+    }
+
+    #[test]
+    fn image_references() {
+        assert_eq!(image_name("registry.example.com:5000/shop/api:1.2@sha256:00ff").as_deref(), Some("api"));
+        assert_eq!(image_name("Shop_Worker").as_deref(), Some("shop-worker"));
+        assert_eq!(image_name("{{ registry }}/shop/api:{{ version }}").as_deref(), Some("api"), "only its name counts");
+        assert_eq!(image_name("${IMAGE}"), None);
+        assert_eq!(image_name("{{ image }}"), None);
+        let doc = crate::yaml::parse(
+            "api:\n  image:\n    registry: ghcr.io\n    repository: shop/api\n    tag: \"1.2\"\n  imagePullPolicy: Always\n\
+             spec:\n  containers:\n    - image: shop/worker:3\n    - image: shop/worker:3\nconfig:\n  shop:jobImage: shop/indexer\n  replicas: 2\n",
+        )
+        .unwrap();
+        // in the order of the document's keys, which serde_json may sort
+        let mut found = images_in(&doc);
+        found.sort();
+        assert_eq!(found, ["ghcr.io/shop/api", "shop/indexer", "shop/worker:3"]);
     }
 }

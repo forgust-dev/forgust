@@ -2,7 +2,7 @@
 //! blocks whose files it copies into the image.
 
 use super::{Ctx, Draft, To, dir_of, file_name, join, literal_prefix, slug};
-use crate::model::{Certainty, Kind, LinkKind};
+use crate::model::{Certainty, Kind, LinkKind, depth, holds};
 
 /// Whether a file is a Dockerfile, by its name. `Dockerfile.dockerignore` is none: it is the
 /// ignore file of the Dockerfile beside it.
@@ -35,6 +35,11 @@ pub(super) fn detect(cx: &mut Ctx) {
                 slug(n.trim_end_matches(".Dockerfile").trim_end_matches(".dockerfile").trim_start_matches("Dockerfile."))
             ),
         };
+        // the names it may be pulled by: its folder's (the repository's, at the top), its own
+        // (`api.Dockerfile`), the package's whose folder holds it
+        d.aliases.push(cx.folder_name(&dir));
+        d.aliases.extend(d.want_id.strip_prefix("image-").map(str::to_string));
+        d.aliases.extend(package_names(cx, &dir));
         d.roots.push(path.to_string());
         for ignore in [join(&dir, ".dockerignore"), format!("{path}.dockerignore")] {
             if cx.exists(&ignore) && !d.roots.contains(&ignore) {
@@ -75,6 +80,22 @@ pub(super) fn detect(cx: &mut Ctx) {
             }
         }
     }
+}
+
+/// The names of the package whose folder holds `dir` (the deepest): its own and its manifest's,
+/// without an npm scope or a Go module's path (`@shop/web` is `web`).
+fn package_names(cx: &Ctx, dir: &str) -> Vec<String> {
+    let package = |k: Kind| matches!(k, Kind::Rust | Kind::Node | Kind::Python | Kind::Go);
+    let holder = cx
+        .drafts
+        .iter()
+        .filter(|d| package(d.kind))
+        .filter_map(|d| d.roots.iter().filter(|r| holds(r, dir)).map(|r| depth(r)).max().map(|at| (d, at)))
+        .max_by_key(|(_, at)| *at)
+        .map(|(d, _)| d);
+    let Some(d) = holder else { return Vec::new() };
+    let short = |n: &str| n.rsplit('/').next().unwrap_or(n).to_string();
+    std::iter::once(short(&d.name)).chain(d.package.as_deref().map(short)).collect()
 }
 
 /// The label OCI gives an image's description by.

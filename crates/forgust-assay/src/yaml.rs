@@ -1,4 +1,5 @@
-//! YAML (compose files, CI configurations) read into JSON values, which the detectors walk.
+//! YAML (compose files, CI configurations, charts, manifests, playbooks) read into JSON values,
+//! which the detectors walk.
 
 use saphyr::{Scalar, Yaml};
 use serde_json::{Map, Number, Value};
@@ -6,6 +7,12 @@ use serde_json::{Map, Number, Value};
 /// The first document of `source`; YAML merge keys (`<<`) applied, tags dropped. A key given
 /// twice keeps its last value, as most YAML readers of these files do.
 pub fn parse(source: &str) -> Result<Value, String> {
+    Ok(parse_all(source)?.into_iter().next().unwrap_or(Value::Null))
+}
+
+/// Every document of `source`, as [`parse`] reads the first: Kubernetes manifests put several
+/// in a file, a `---` between each.
+pub fn parse_all(source: &str) -> Result<Vec<Value>, String> {
     let mut parser = saphyr_parser::Parser::new_from_str(source);
     let mut loader = saphyr::YamlLoader::default();
     loader.allow_duplicate_keys(true);
@@ -13,7 +20,7 @@ pub fn parse(source: &str) -> Result<Value, String> {
     if let Some(e) = loader.error() {
         return Err(e.to_string());
     }
-    Ok(loader.into_documents().first().map(convert).unwrap_or(Value::Null))
+    Ok(loader.into_documents().iter().map(convert).collect())
 }
 
 fn convert(y: &Yaml) -> Value {
@@ -97,5 +104,13 @@ mod tests {
         assert_eq!(v["services"]["db"]["ports"][0], 5432);
         // YAML 1.2: `on` is a key like any other (GitHub workflows)
         assert_eq!(v["on"], "push");
+    }
+
+    #[test]
+    fn reads_every_document() {
+        let docs = parse_all("kind: Service\n---\nkind: Deployment\n").unwrap();
+        assert_eq!(docs.len(), 2);
+        assert_eq!(docs[1]["kind"], "Deployment");
+        assert_eq!(parse("kind: Service\n---\nkind: Deployment\n").unwrap()["kind"], "Service", "the first");
     }
 }

@@ -464,3 +464,181 @@ fn guesses_roles() {
         ]
     );
 }
+
+/// What deploys a repository's images: a chart and the library chart it uses, Kustomize's base
+/// and overlay, a folder of manifests, Ansible's playbooks and roles, Terraform's modules and a
+/// Pulumi program, each running the images it names; from a folder, and as a forge hands it over.
+#[test]
+fn maps_what_deploys() {
+    let all: Vec<(&str, &str)> = vec![
+        ("services/api/Cargo.toml", "[package]\nname = \"shop-api\"\nversion = \"0.1.0\"\n"),
+        ("services/api/src/main.rs", "fn main() {}\n"),
+        ("services/api/Dockerfile", "FROM rust:1.90\nCOPY services/api /src\n"),
+        ("apps/web/package.json", "{\"name\": \"@shop/web\"}\n"),
+        ("apps/web/Dockerfile", "FROM nginx\nCOPY apps/web /usr/share/nginx/html\n"),
+        ("services/worker/go.mod", "module example.com/shop/order-worker\n\ngo 1.24\n"),
+        ("services/worker/Dockerfile", "FROM golang:1.24\nCOPY . .\n"),
+        ("compose.yml", "services:\n  worker:\n    build: services/worker\n    image: registry.example.com/shop/jobs\n"),
+        (
+            "deploy/helm/shop/Chart.yaml",
+            "apiVersion: v2\nname: shop\ndescription: The shop on Kubernetes\nversion: 1.0.0\ndependencies:\n  - name: common\n    version: 1.x\n    repository: file://../common\n  - name: redis\n    version: 20.x\n    repository: https://charts.bitnami.com/bitnami\n",
+        ),
+        (
+            "deploy/helm/shop/values.yaml",
+            "api:\n  image:\n    repository: registry.example.com/shop/api\n    tag: \"1.2\"\nweb:\n  image: registry.example.com/shop/web:2.0\nredis:\n  image:\n    registry: docker.io\n    repository: bitnami/redis\n",
+        ),
+        (
+            "deploy/helm/shop/templates/deployment.yaml",
+            "spec:\n  template:\n    spec:\n      containers:\n        - image: {{ .Values.api.image.repository }}\n",
+        ),
+        ("deploy/helm/common/Chart.yaml", "apiVersion: v2\nname: common\ntype: library\nversion: 1.0.0\n"),
+        (
+            "deploy/k8s/base/kustomization.yaml",
+            "resources:\n  - worker.yaml\nimages:\n  - name: registry.example.com/shop/order-worker\n    newTag: \"1.4\"\n",
+        ),
+        (
+            "deploy/k8s/base/worker.yaml",
+            "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: worker\nspec:\n  template:\n    spec:\n      containers:\n        - name: worker\n          image: registry.example.com/shop/order-worker:1.3\n",
+        ),
+        ("deploy/k8s/overlays/prod/kustomization.yaml", "resources:\n  - ../../base\npatches:\n  - path: replicas.yaml\n"),
+        (
+            "deploy/k8s/overlays/prod/replicas.yaml",
+            "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: worker\nspec:\n  replicas: 3\n",
+        ),
+        (
+            "ops/manifests/web.yaml",
+            "apiVersion: v1\nkind: Service\nmetadata:\n  name: web\n---\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: web\nspec:\n  template:\n    spec:\n      containers:\n        - image: registry.example.com/shop-web:2\n        - image: redis:7\n",
+        ),
+        ("ops/manifests/notes.yaml", "owner: ops\n"),
+        ("deploy/ansible/ansible.cfg", "[defaults]\ninventory = inventory\n"),
+        ("deploy/ansible/inventory/production.ini", "[db]\ndb1.example.com\n"),
+        (
+            "deploy/ansible/site.yml",
+            "- hosts: db\n  roles: [postgres]\n- hosts: jobs\n  tasks:\n    - community.docker.docker_container:\n        name: api\n        image: \"registry.example.com/shop/api:{{ api_version }}\"\n",
+        ),
+        ("deploy/ansible/roles/base/tasks/main.yml", "- ansible.builtin.apt:\n    name: [curl]\n"),
+        ("deploy/ansible/roles/postgres/tasks/main.yml", "- ansible.builtin.apt:\n    name: postgresql-17\n"),
+        (
+            "deploy/ansible/roles/postgres/meta/main.yml",
+            "galaxy_info:\n  description: PostgreSQL, with its backups\ndependencies:\n  - role: base\n",
+        ),
+        ("deploy/ansible/roles/postgres/defaults/main.yml", "postgres_version: 17\n"),
+        (
+            "infra/terraform/main.tf",
+            "module \"network\" {\n  source = \"./modules/network\"\n}\n\nmodule \"vpc\" {\n  source = \"terraform-aws-modules/vpc/aws\"\n}\n\nresource \"google_cloud_run_v2_service\" \"api\" {\n  template {\n    containers {\n      image = \"registry.example.com/shop/api:1.2\"\n    }\n  }\n}\n",
+        ),
+        ("infra/terraform/modules/network/main.tf", "variable \"cidr\" {}\n"),
+        ("infra/terraform/.terraform/modules/vpc/main.tf", "variable \"name\" {}\n"),
+        ("infra/pulumi/Pulumi.yaml", "name: shop-jobs\nruntime: nodejs\ndescription: The nightly jobs\n"),
+        (
+            "infra/pulumi/Pulumi.prod.yaml",
+            "config:\n  shop-jobs:workerImage: registry.example.com/shop/jobs:1.0\n  shop-jobs:replicas: 2\n",
+        ),
+        ("infra/pulumi/package.json", "{\"name\": \"shop-jobs\", \"dependencies\": {\"@pulumi/pulumi\": \"^3\"}}\n"),
+        ("infra/pulumi/index.ts", "import * as pulumi from \"@pulumi/pulumi\";\n"),
+        (".gitlab-ci.yml", "helm-lint:\n  script: [helm lint]\n  rules:\n    - changes: [\"deploy/helm/**/*\"]\n"),
+    ];
+    let map = forgust_assay::map(&repo("shop", &all), &Options { people: false, days: None }).unwrap();
+    assert!(map.warnings.is_empty(), "a chart's templates are not read: {:?}", map.warnings);
+    let block = |id: &str| {
+        map.blocks
+            .iter()
+            .find(|b| b.id == id)
+            .unwrap_or_else(|| panic!("no {id} in {:?}", map.blocks.iter().map(|b| &b.id).collect::<Vec<_>>()))
+    };
+    let kinds: Vec<(&str, Kind)> =
+        map.blocks.iter().filter(|b| b.kind as u8 >= Kind::Helm as u8 && b.kind != Kind::Ci).map(|b| (b.id.as_str(), b.kind)).collect();
+    assert_eq!(
+        kinds,
+        [
+            ("common", Kind::Helm),
+            ("shop", Kind::Helm),
+            ("k8s", Kind::Kubernetes),
+            ("manifests", Kind::Kubernetes),
+            ("base", Kind::Ansible),
+            ("postgres", Kind::Ansible),
+            ("ansible", Kind::Ansible),
+            ("terraform", Kind::Terraform),
+            ("network", Kind::Terraform),
+            ("shop-jobs", Kind::Pulumi),
+        ]
+    );
+
+    // the chart: described, using the library chart beside it, running the images its values name
+    assert_eq!(block("shop").description.as_deref(), Some("The shop on Kubernetes"));
+    assert_eq!(block("common").role, Some(Role::Library));
+    assert_eq!(link(&map, "shop", "common"), Some((LinkKind::Uses, Certainty::Declared)));
+    assert_eq!(link(&map, "shop", "image-api"), Some((LinkKind::Runs, Certainty::Inferred)), "by the folder it is built in");
+    assert_eq!(link(&map, "shop", "image-web"), Some((LinkKind::Runs, Certainty::Inferred)));
+    assert_eq!(block("shop").jobs, ["helm-lint"], "a job on the folder of charts");
+    assert_eq!(block("common").jobs, ["helm-lint"]);
+
+    // Kustomize: the base and its overlay, one block; a folder of manifests, another
+    assert_eq!(block("k8s").roots, ["deploy/k8s"]);
+    assert_eq!(block("k8s").manifests, ["deploy/k8s/base/kustomization.yaml", "deploy/k8s/overlays/prod/kustomization.yaml"]);
+    assert_eq!(link(&map, "k8s", "image-worker"), Some((LinkKind::Runs, Certainty::Inferred)), "by its Go module's name");
+    assert_eq!(block("manifests").roots, ["ops/manifests"]);
+    assert_eq!(link(&map, "manifests", "image-web"), Some((LinkKind::Runs, Certainty::Inferred)), "shop-web, in the repository shop");
+
+    // Ansible: the playbooks hold the roles, a role uses the one it depends on
+    assert_eq!(block("ansible").manifests, ["deploy/ansible/ansible.cfg", "deploy/ansible/site.yml"]);
+    assert_eq!(block("postgres").parent.as_deref(), Some("ansible"));
+    assert_eq!(block("postgres").role, Some(Role::Database));
+    assert_eq!(block("postgres").description.as_deref(), Some("PostgreSQL, with its backups"));
+    assert_eq!(link(&map, "postgres", "base"), Some((LinkKind::Uses, Certainty::Declared)));
+    assert_eq!(link(&map, "ansible", "image-api"), Some((LinkKind::Runs, Certainty::Inferred)), "its tag templated, its name not");
+
+    // Terraform: the module it calls of the repository, not the registry's nor the downloaded ones
+    assert_eq!(block("network").parent.as_deref(), Some("terraform"));
+    assert_eq!(link(&map, "terraform", "network"), Some((LinkKind::Uses, Certainty::Declared)));
+    assert_eq!(link(&map, "terraform", "image-api"), Some((LinkKind::Runs, Certainty::Inferred)));
+    assert!(map.blocks.iter().all(|b| b.roots.iter().all(|r| !r.contains(".terraform"))));
+
+    // Pulumi: the program stands for its npm package, and runs what its stack names
+    assert!(map.blocks.iter().all(|b| b.kind != Kind::Node || b.id == "shop-web"), "no npm package for the program");
+    assert_eq!(block("shop-jobs").description.as_deref(), Some("The nightly jobs"));
+    assert_eq!(block("shop-jobs").files, 4);
+    assert_eq!(link(&map, "shop-jobs", "image-worker"), Some((LinkKind::Runs, Certainty::Inferred)), "by the image compose gives it");
+
+    // nothing else guessed: a third-party image is none of the repository's
+    let guessed: Vec<(&str, &str)> =
+        map.links.iter().filter(|l| l.certainty == Certainty::Inferred).map(|l| (l.from.as_str(), l.to.as_str())).collect();
+    assert_eq!(
+        guessed,
+        [
+            ("ansible", "image-api"),
+            ("k8s", "image-worker"),
+            ("manifests", "image-web"),
+            ("shop", "image-api"),
+            ("shop", "image-web"),
+            ("shop-jobs", "image-worker"),
+            ("terraform", "image-api"),
+        ]
+    );
+
+    // as a forge hands it over: what it reads, and the same map
+    for path in [
+        "deploy/helm/shop/values.yaml",
+        "deploy/k8s/base/worker.yaml",
+        "deploy/ansible/roles/postgres/meta/main.yml",
+        "infra/terraform/main.tf",
+    ] {
+        assert!(forgust_assay::reads(path), "{path}");
+    }
+    for path in [
+        "deploy/helm/shop/templates/deployment.yaml",
+        "deploy/ansible/roles/postgres/defaults/main.yml",
+        "infra/terraform/.terraform/modules/vpc/main.tf",
+    ] {
+        assert!(!forgust_assay::reads(path), "{path}");
+    }
+    let snapshot = Snapshot {
+        name: "shop".to_string(),
+        files: all.iter().map(|(p, _)| p.to_string()).collect(),
+        texts: all.iter().filter(|(p, _)| forgust_assay::reads(p)).map(|(p, t)| (p.to_string(), t.to_string())).collect(),
+        ..Snapshot::default()
+    };
+    let handed = forgust_assay::map_snapshot(&snapshot).unwrap();
+    assert_eq!(handed.links, map.links);
+    assert_eq!(handed.blocks.iter().map(|b| &b.id).collect::<Vec<_>>(), map.blocks.iter().map(|b| &b.id).collect::<Vec<_>>());
+}

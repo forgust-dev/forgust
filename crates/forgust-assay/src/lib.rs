@@ -1,6 +1,6 @@
 //! assay maps a repository into blocks: what can be built, run or deployed apart (a package,
-//! an image, a service, a database's schema, the CI, the docs), the links between them, and
-//! the people who know them. It reads manifests, so it runs on any repository, on any forge;
+//! an image, a service, a database's schema, a chart, infrastructure code, the CI, the docs),
+//! the links between them, and the people who know them. It reads manifests, so it runs on any repository, on any forge;
 //! forgust's Smart View shows what it finds. See docs/smart-view.md.
 //!
 //! ```no_run
@@ -125,10 +125,18 @@ pub fn map_snapshot(s: &Snapshot) -> anyhow::Result<RepoMap> {
     let mut npm: HashMap<String, String> = HashMap::new();
     // a Cargo package's id → its name and its binaries'
     let mut cargo_names: HashMap<String, Vec<String>> = HashMap::new();
+    // a name an image may be pulled by → the images'
+    let mut images: HashMap<String, Vec<String>> = HashMap::new();
     let mut blocks = Vec::new();
     for d in drafts {
         let id = unique(&d.want_id, d.kind, &mut taken);
         id_of.insert(d.key, id.clone());
+        for a in d.aliases.iter().map(|a| detect::slug(a)) {
+            let ids = images.entry(a).or_default();
+            if !ids.contains(&id) {
+                ids.push(id.clone());
+            }
+        }
         match (d.kind, d.package) {
             (Kind::Node, Some(p)) => {
                 npm.insert(p, id.clone());
@@ -185,6 +193,7 @@ pub fn map_snapshot(s: &Snapshot) -> anyhow::Result<RepoMap> {
                 Some(id) => gone.follow(id).into_iter().collect(),
                 None => within(&blocks, context, false),
             },
+            To::ImageNamed(reference) => pulled(&images, reference, &s.name).iter().filter_map(|id| gone.follow(id)).collect(),
         };
         for to in targets.into_iter().filter(|t| *t != from) {
             push_link(&mut links, Link { from: from.clone(), to, kind: p.kind, certainty: p.certainty, via: p.via.clone() });
@@ -233,7 +242,15 @@ pub(crate) fn push_link(links: &mut Vec<Link>, l: Link) {
     }
 }
 
-/// Packages first, then what runs them, then the rest.
+/// The images a reference may pull (`registry.example.com/shop/api:1.2`): those named `api`;
+/// else, for `shop-api` in the repository `shop`, those named `api`.
+fn pulled<'a>(images: &'a HashMap<String, Vec<String>>, reference: &str, repository: &str) -> &'a [String] {
+    let Some(name) = detect::image_name(reference) else { return &[] };
+    let short = name.strip_prefix(&format!("{}-", detect::slug(repository))).map(str::to_string);
+    images.get(&name).or_else(|| short.and_then(|s| images.get(&s))).map(Vec::as_slice).unwrap_or_default()
+}
+
+/// Packages first, then what runs them, what deploys them, then the rest.
 fn order(k: Kind) -> u8 {
     match k {
         Kind::Rust => 0,
@@ -243,9 +260,14 @@ fn order(k: Kind) -> u8 {
         Kind::Migrations => 4,
         Kind::Docker => 5,
         Kind::Service => 6,
-        Kind::Ci => 7,
-        Kind::Docs => 8,
-        Kind::Other => 9,
+        Kind::Helm => 7,
+        Kind::Kubernetes => 8,
+        Kind::Ansible => 9,
+        Kind::Terraform => 10,
+        Kind::Pulumi => 11,
+        Kind::Ci => 12,
+        Kind::Docs => 13,
+        Kind::Other => 14,
     }
 }
 
@@ -257,6 +279,11 @@ fn kind_name(k: Kind) -> &'static str {
         Kind::Go => "go",
         Kind::Docker => "docker",
         Kind::Service => "service",
+        Kind::Helm => "helm",
+        Kind::Kubernetes => "kubernetes",
+        Kind::Ansible => "ansible",
+        Kind::Terraform => "terraform",
+        Kind::Pulumi => "pulumi",
         Kind::Migrations => "migrations",
         Kind::Ci => "ci",
         Kind::Docs => "docs",
@@ -284,10 +311,16 @@ fn is_package(k: Kind) -> bool {
     matches!(k, Kind::Rust | Kind::Node | Kind::Python | Kind::Go)
 }
 
+/// What deploys: a chart, manifests, playbooks, infrastructure code.
+fn deploys(k: Kind) -> bool {
+    matches!(k, Kind::Helm | Kind::Kubernetes | Kind::Ansible | Kind::Terraform | Kind::Pulumi)
+}
+
 /// The block holding `path` (the deepest root), else the packages under it, when it is a
-/// folder of them (`COPY crates crates`). Images only when `images`.
-fn within(blocks: &[Block], path: &str, images: bool) -> Vec<String> {
-    let candidates = || blocks.iter().filter(|b| b.kind != Kind::Service && (images || b.kind != Kind::Docker));
+/// folder of them (`COPY crates crates`). For a job's paths (`job`), images count too, and so
+/// does a folder of what deploys (`deploy/helm/**`: its charts).
+fn within(blocks: &[Block], path: &str, job: bool) -> Vec<String> {
+    let candidates = || blocks.iter().filter(|b| b.kind != Kind::Service && (job || b.kind != Kind::Docker));
     let mut best: Option<(&Block, usize)> = None;
     for b in candidates() {
         for r in &b.roots {
@@ -298,7 +331,10 @@ fn within(blocks: &[Block], path: &str, images: bool) -> Vec<String> {
     }
     match best {
         Some((b, _)) => vec![b.id.clone()],
-        None => candidates().filter(|b| is_package(b.kind) && b.roots.iter().any(|r| holds(path, r))).map(|b| b.id.clone()).collect(),
+        None => candidates()
+            .filter(|b| (is_package(b.kind) || (job && deploys(b.kind))) && b.roots.iter().any(|r| holds(path, r)))
+            .map(|b| b.id.clone())
+            .collect(),
     }
 }
 

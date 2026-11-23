@@ -12,7 +12,7 @@ Elle répond à la vraie question qu'on se pose en arrivant sur un repo : « c'e
 
 - **Deux idées en une** : elle combine la carte du savoir (qui connaît quoi) et la visite guidée du repo dans une seule vue concrète.
 - **Deux publics** : le nouveau venu comprend le projet, l'équipe sait qui solliciter.
-- **Détection largement automatique** : `Dockerfile`, `docker-compose`, `Cargo.toml`, `package.json`, dossiers de migrations, etc.
+- **Détection largement automatique** : `Dockerfile`, `docker-compose`, `Cargo.toml`, `package.json`, dossiers de migrations, charts Helm, manifestes Kubernetes, rôles Ansible, modules Terraform, projets Pulumi, etc.
 
 ## Pièges à anticiper
 
@@ -46,17 +46,22 @@ Un bloc est une partie du repo qu'on construit, fait tourner ou déploie à part
 | `migrations` | un dossier `migrations` (Rails : `db/migrate`) | ce dossier |
 | `docker` | un `Dockerfile` (`Containerfile`, `x.Dockerfile`, `Dockerfile.x`) | le fichier et son `.dockerignore` |
 | `service` | un service d'un fichier compose, hors piles de test (`tests/`, `e2e/`, `compose.test.yml`) | aucune : seul le compose le déclare |
+| `helm` | un `Chart.yaml` | son dossier |
+| `kubernetes` | un dossier Kustomize (`kustomization.yaml`), avec les bases et overlays dont il part ou qui partent de lui ; un dossier de manifestes (`k8s/`, `kubernetes/`, `kube/`, `manifests/`) qu'aucun chart ni dossier Kustomize ne contient | le dossier qui les contient tous ; le plus haut dossier de manifestes |
+| `ansible` | un rôle (`roles/<nom>/`, avec son `tasks/main.yml` ou son `meta/main.yml`), une collection (`galaxy.yml`), les playbooks autour des rôles (le dossier d'`ansible.cfg`, sinon celui qui contient `roles/`) | son dossier |
+| `terraform` | un dossier de fichiers `.tf` (ou `.tofu`) : un module | son dossier |
+| `pulumi` | un `Pulumi.yaml` ; il remplace le paquet que fait son dossier (`package.json`, `pyproject.toml`, `go.mod`) : c'est un programme, pas une bibliothèque | son dossier |
 | `ci` | `.gitlab-ci.yml`, `.github/workflows/` et les autres CI connues | ces fichiers |
 | `docs` | le dossier `docs/` de la racine | ce dossier |
 | `other` | déclaré dans `assay.toml` | ses `paths` |
 
 - **Un fichier appartient au bloc dont la racine est la plus profonde** parmi celles qui le contiennent : les migrations de `forgust-db` vont au bloc du schéma, le reste de la crate à la crate. Un bloc imbriqué nomme son `parent`. Les fichiers hors de tout bloc (README, LICENSE, manifeste du workspace…) sont comptés à part.
-- **Exclus par défaut** : les dossiers `fixtures`, `testdata`, `vendor`, `node_modules`, `third_party`, et le cache `.sqlx`. Ce sont des données de test qui ressemblent à de vrais projets, du code d'autres gens, ou des fichiers générés.
+- **Exclus par défaut** : les dossiers `fixtures`, `testdata`, `vendor`, `node_modules`, `third_party`, `.terraform`, et le cache `.sqlx`. Ce sont des données de test qui ressemblent à de vrais projets, du code d'autres gens (les modules que Terraform télécharge), ou des fichiers générés.
 - **L'identifiant** (`id`) est le nom du paquet ou du service en minuscules et tirets (`forgust-server`, `db`). C'est `image` pour le Dockerfile de la racine et `<dossier parent>-migrations` pour un schéma. En cas de doublon, le type s'ajoute (`api-service` à côté de la crate `api`). Il reste stable tant que le nom ne change pas : c'est lui qu'utilisent `assay.toml` et la forge.
 - **Le rôle** (`role`) est une supposition, qu'`assay.toml` corrige :
   - pour un paquet, d'après son manifeste : `web` (React, Vue, Svelte, Vite, Leptos…), `api` (axum, actix-web, express, fastapi, gin…), `cli` (un binaire sans serveur web : `src/main.rs`, `bin`, `[project.scripts]`, `main.go` ou `cmd/`), `library` (ce qu'un autre importe : un paquet Rust ou Go sans binaire, un paquet npm qui a un `main` ou des `exports`, un projet Python qui a un `[build-system]`). Sans indice, pas de rôle : un outil npm qui n'a que des scripts, une app Python ;
-  - pour un service, d'après son image : `database`, `cache`, `queue`, `search`, `storage`, `mail`.
-- **La description** (`description`) dit en une ligne à quoi sert le bloc : celle de son manifeste (`description` de Cargo, npm ou pyproject, le label `org.opencontainers.image.description` d'un Dockerfile), ou celle qu'`assay.toml` lui donne, par exemple à un service compose ou à un module Go, qui n'en ont pas.
+  - pour un service, d'après son image : `database`, `cache`, `queue`, `search`, `storage`, `mail`. Un rôle Ansible l'a d'après son nom (`postgres` installe une base) et un chart de type `library` est une `library`.
+- **La description** (`description`) dit en une ligne à quoi sert le bloc : celle de son manifeste (`description` de Cargo, npm, pyproject, d'un chart ou d'un projet Pulumi, le `meta/main.yml` d'un rôle Ansible, le label `org.opencontainers.image.description` d'un Dockerfile), ou celle qu'`assay.toml` lui donne, par exemple à un service compose ou à un module Go, qui n'en ont pas.
 
 ### Les liens
 
@@ -66,9 +71,9 @@ Un lien va de celui qui a besoin vers celui dont il a besoin. Il porte le fichie
 
 | Type | Lu dans |
 | --- | --- |
-| `uses` | une dépendance Cargo par chemin ou de workspace (pas les dev-dependencies), une dépendance npm vers un paquet du repo |
+| `uses` | une dépendance Cargo par chemin ou de workspace (pas les dev-dependencies), une dépendance npm vers un paquet du repo, la dépendance `file://` d'un chart, celle d'un rôle Ansible (`meta/main.yml`), un module Terraform qui appelle un module du repo (`source = "./modules/network"`) |
 | `builds` | les `COPY` et `ADD` d'un Dockerfile ; parmi les paquets Cargo copiés, seulement ceux que nomme son `cargo build -p` ou `--bin`, s'il en nomme : les autres ne sont là que pour que le workspace se résolve, ou comme dépendances, que `uses` montre déjà |
-| `runs` | le `build` d'un service compose |
+| `runs` | le `build` d'un service compose ; supposé : une image que nomment les values d'un chart, des manifestes Kubernetes ou les `images` d'un dossier Kustomize, des tâches Ansible, Terraform (`image = "…"`) ou la configuration d'une stack Pulumi, rapprochée par son nom de l'image construite dans le repo (`registry.example.com/shop/api:1.2` : celle dont le dossier du Dockerfile, le paquet ou le service compose s'appelle `api`) |
 | `depends_on` | le `depends_on` d'un service compose |
 | `connects` (supposé) | l'environnement d'un service qui nomme un autre service comme hôte : dans une adresse (`postgres://app@db:5432`, `host=db`), ou comme valeur d'une variable d'hôte (`REDIS_HOST=redis`) ; jamais comme valeur d'une autre variable (`POSTGRES_USER=forgust`) |
 | `calls` | `assay.toml` : ce qu'aucun fichier ne dit, comme une app web qui appelle une API |
@@ -87,7 +92,7 @@ Les appels à l'exécution (Web → API, API → file de messages) ne se lisent 
 
 Forgust n'a pas de format de CI à lui : il lit `.gitlab-ci.yml`, un sous-ensemble de GitLab CI (ADR-0003), et refuse les mots-clés qu'il ne connaît pas. Une clé `block:` casserait donc la compatibilité avec GitLab. Le lien vient plutôt de deux sources :
 
-1. **Les `rules: changes` des jobs** (ou `only: changes`), que Forgust gère déjà, y compris ceux qu'un job hérite par `extends:` : un job qui ne tourne que sur `crates/forgust-server/**` appartient au bloc `forgust-server`. Pour GitHub ou Forgejo, ce sont les filtres `paths` du workflow.
+1. **Les `rules: changes` des jobs** (ou `only: changes`), que Forgust gère déjà, y compris ceux qu'un job hérite par `extends:` : un job qui ne tourne que sur `crates/forgust-server/**` appartient au bloc `forgust-server`. Pour GitHub ou Forgejo, ce sont les filtres `paths` du workflow. Un job sur un dossier de charts ou de modules (`deploy/helm/**`) va à chacun d'eux.
 2. **`assay.toml`**, sinon : `jobs = ["rust-*", "web-build"]` sur le bloc, par nom ou par motif.
 
 Les blocs restent définis à un seul endroit, et la CI reste telle quelle.
@@ -214,7 +219,7 @@ La page **Smart View** d'un projet, sous Code (`/-/smart_view/<branche, tag ou c
 
 À construire en premier, dans cet ordre. Si la détection est mauvaise, tout le reste devient faux : c'est là que l'effort doit aller.
 
-1. Détection des blocs par les manifestes (Dockerfile, docker-compose, Cargo.toml, package.json, migrations…). **Fait** dans assay.
+1. Détection des blocs par les manifestes (Dockerfile, docker-compose, Cargo.toml, package.json, migrations…). **Fait** dans assay, ainsi que ce qui déploie : charts Helm, Kubernetes (Kustomize, manifestes), Ansible, Terraform, Pulumi.
 2. Fichier de surcharge `assay.toml`. **Fait**.
 3. Graphe des flux entre blocs : qui appelle quoi (Web → API → BDD → file de messages). **Fait** pour ce que disent les manifestes et compose ; les appels à l'exécution se déclarent dans `assay.toml`.
 4. Référents tirés de l'historique git (git blame plus tard) et des revues, avec un badge bus factor quand une seule personne connaît un bloc. **Fait** pour l'historique, CODEOWNERS, les référents déclarés et les revues des MR fusionnées, que Forgust ajoute.

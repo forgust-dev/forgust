@@ -4,7 +4,7 @@
 
 use serde_json::Value;
 
-use super::{Ctx, Draft, To, dir_of, docker, file_name, join};
+use super::{Ctx, Draft, To, dir_of, docker, file_name, image_name, join};
 use crate::model::{Certainty, Kind, LinkKind, Role};
 use crate::yaml;
 
@@ -80,6 +80,11 @@ pub(super) fn detect(cx: &mut Ctx) {
             };
             if let Some((context, dockerfile)) = build {
                 let image = docker::key(&join(&context, dockerfile));
+                // what the image it builds may be pulled by: the service's name, the image it names
+                if let Some(d) = cx.drafts.iter_mut().find(|d| d.key == image) {
+                    d.aliases.push(name.clone());
+                    d.aliases.extend(svc.get("image").and_then(Value::as_str).and_then(image_name));
+                }
                 cx.link(&key, To::Image { image, context }, LinkKind::Runs, Certainty::Declared, path);
             }
             let deps: Vec<String> = match svc.get("depends_on") {
@@ -102,7 +107,8 @@ pub(super) fn detect(cx: &mut Ctx) {
 }
 
 /// What an image is, from its name: `registry:5000/library/postgres:17-alpine` is a database.
-fn role(image: &str) -> Option<Role> {
+/// So is what installs one (an Ansible role named `postgres`).
+pub(super) fn role(image: &str) -> Option<Role> {
     let name = image.rsplit('/').next().unwrap_or(image);
     let name = name.split([':', '@']).next().unwrap_or(name).to_ascii_lowercase();
     ROLES.iter().find(|(_, names)| names.iter().any(|n| name.contains(n))).map(|(r, _)| *r)

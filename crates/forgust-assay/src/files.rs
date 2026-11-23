@@ -9,7 +9,8 @@ use std::sync::LazyLock;
 use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
 
 /// Left out of every map, on top of assay.toml's `exclude`: test data that looks like real
-/// projects, others' code, and generated caches (sqlx's queries).
+/// projects, others' code (the modules Terraform downloads), and generated caches (sqlx's
+/// queries).
 pub const DEFAULT_EXCLUDES: &[&str] = &[
     "**/node_modules/**",
     "**/vendor/**",
@@ -17,6 +18,7 @@ pub const DEFAULT_EXCLUDES: &[&str] = &[
     "**/fixtures/**",
     "**/__fixtures__/**",
     "**/testdata/**",
+    "**/.terraform/**",
     "**/test-data/**",
     "/.sqlx/",
 ];

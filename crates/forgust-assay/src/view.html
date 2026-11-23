@@ -196,7 +196,9 @@ const W = 220, H = 96, GX = 72, GY = 16, PAD = 28;
 const MIN_SCALE = 0.72;
 const KIND = {
   rust: ["Rust crate", "#c0581f"], node: ["npm package", "#4f9a3a"], python: ["Python project", "#3d7ab8"], go: ["Go module", "#1a9bb5"],
-  migrations: ["Schema", "#8a5cd0"], docker: ["Image", "#2f6fe0"], service: ["Service", "#6b7a86"], ci: ["CI", "#b8901a"], docs: ["Docs", "#8a8178"], other: ["Block", "#8a8178"],
+  migrations: ["Schema", "#8a5cd0"], docker: ["Image", "#2f6fe0"], service: ["Service", "#6b7a86"], helm: ["Helm chart", "#3a4bb0"],
+  kubernetes: ["Kubernetes", "#326ce5"], ansible: ["Ansible", "#c43c3c"], terraform: ["Terraform module", "#7b4fba"], pulumi: ["Pulumi project", "#9b3c94"],
+  ci: ["CI", "#b8901a"], docs: ["Docs", "#8a8178"], other: ["Block", "#8a8178"],
 };
 const VERB = { uses: "uses", builds: "builds", runs: "runs", depends_on: "depends on", connects: "connects to", calls: "calls", contains: "holds" };
 const LANG = ["#c0581f", "#3d7ab8", "#4f9a3a", "#8a5cd0", "#b8901a", "#6b7a86"];
@@ -366,7 +368,7 @@ const notes = [];
 if (map.unassigned.files) notes.push(`Files in no block: ${map.unassigned.sample.map((f) => `<code>${esc(f)}</code>`).join(", ")}${map.unassigned.files > map.unassigned.sample.length ? ", …" : ""}`);
 for (const w of map.warnings ?? []) notes.push(`Not read: <code>${esc(w)}</code>`);
 document.getElementById("notes").innerHTML = notes.map((n) => `<p>${n}</p>`).join("");
-if (!map.blocks.length) document.getElementById("board").insertAdjacentHTML("afterbegin", `<p class="empty">No block found: no manifest assay knows (Cargo.toml, package.json, a Dockerfile, a compose file…).</p>`);
+if (!map.blocks.length) document.getElementById("board").insertAdjacentHTML("afterbegin", `<p class="empty">No block found: no manifest assay knows (Cargo.toml, package.json, a Dockerfile, a compose file, a chart, Terraform…).</p>`);
 
 // a block chosen: its links stand out, the rest steps back, its details show
 const panel = document.getElementById("panel");
