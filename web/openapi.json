@@ -2267,6 +2267,26 @@
         }
       }
     },
+    "/api/v1/projects/{id}/merge_requests/{iid}/blocks": {
+      "get": {
+        "tags": [
+          "merge_requests"
+        ],
+        "summary": "The blocks of the Smart View a merge request changes, mapped at its latest version's head.",
+        "operationId": "mr_blocks",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MrBlocks"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{id}/merge_requests/{iid}/code_owners": {
       "get": {
         "tags": [
@@ -3925,6 +3945,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/RepoMap"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/repository/map/block": {
+      "get": {
+        "tags": [
+          "repository"
+        ],
+        "summary": "The block of the Smart View a file or folder is in. A commit of the history is answered from\nthe default branch's map: a map per commit browsed would cost more than it tells.",
+        "operationId": "path_block",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PathBlock"
                 }
               }
             }
@@ -10773,6 +10813,7 @@
           "jobs",
           "owners",
           "people",
+          "reviewers",
           "configured"
         ],
         "properties": {
@@ -10857,6 +10898,13 @@
               "$ref": "#/components/schemas/MapPerson"
             },
             "description": "Who changed it lately, most commits first: people to ask, never a score."
+          },
+          "reviewers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapReviewer"
+            },
+            "description": "Who reviewed its changes in the merge requests merged lately, most reviews first."
           },
           "role": {
             "oneOf": [
@@ -11000,6 +11048,33 @@
               "null"
             ],
             "description": "Their account, by their verified email."
+          }
+        }
+      },
+      "MapReviewer": {
+        "type": "object",
+        "description": "Someone who reviewed a block's changes: approved, reviewed or commented a merge request that\nchanged it, not as its author.",
+        "required": [
+          "username",
+          "name",
+          "reviews",
+          "last"
+        ],
+        "properties": {
+          "last": {
+            "type": "string",
+            "description": "The day of the latest (`YYYY-MM-DD`)."
+          },
+          "name": {
+            "type": "string"
+          },
+          "reviews": {
+            "type": "integer",
+            "description": "The merge requests they reviewed there, within the days of history read.",
+            "minimum": 0
+          },
+          "username": {
+            "type": "string"
           }
         }
       },
@@ -11698,6 +11773,58 @@
           },
           "tag": {
             "type": "string"
+          }
+        }
+      },
+      "MrBlock": {
+        "type": "object",
+        "required": [
+          "block",
+          "files"
+        ],
+        "properties": {
+          "block": {
+            "$ref": "#/components/schemas/MapBlock"
+          },
+          "files": {
+            "type": "integer",
+            "description": "Its files the merge request changes.",
+            "minimum": 0
+          }
+        }
+      },
+      "MrBlocks": {
+        "type": "object",
+        "description": "The blocks a merge request changes, with who knows them.",
+        "required": [
+          "commit",
+          "blocks",
+          "unassigned",
+          "suggested_reviewers"
+        ],
+        "properties": {
+          "blocks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MrBlock"
+            },
+            "description": "The most changed first."
+          },
+          "commit": {
+            "type": "string",
+            "description": "What was mapped: the head of its latest version (empty before it has one)."
+          },
+          "suggested_reviewers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserBrief"
+            },
+            "description": "Who knows these blocks and could review it: its blocks' owners, then their reviewers, then\nwho changed them; not its author nor a reviewer yet."
+          },
+          "unassigned": {
+            "type": "integer",
+            "description": "How many of its changed files are in no block.",
+            "minimum": 0
           }
         }
       },
@@ -12855,6 +12982,29 @@
           "options": {
             "type": "object",
             "description": "Options for `navigator.credentials.get` (WebAuthn)."
+          }
+        }
+      },
+      "PathBlock": {
+        "type": "object",
+        "description": "The block a path is in.",
+        "required": [
+          "ref"
+        ],
+        "properties": {
+          "block": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MapBlock"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ref": {
+            "type": "string",
+            "description": "The ref whose map it is: the branch or tag asked, else the default branch."
           }
         }
       },
@@ -14457,6 +14607,7 @@
           "unassigned",
           "unassigned_sample",
           "warnings",
+          "config_file",
           "truncated",
           "days"
         ],
@@ -14477,6 +14628,10 @@
               "null"
             ],
             "description": "Why assay.toml could not be read: nothing is mapped until it is fixed."
+          },
+          "config_file": {
+            "type": "boolean",
+            "description": "The repository has an assay.toml at its top (corrections go there, else in a new one)."
           },
           "days": {
             "type": "integer",

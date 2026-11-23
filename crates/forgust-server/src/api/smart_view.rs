@@ -4,13 +4,18 @@
 //! manifests and the history read here through the storage: a bare repository has no
 //! working copy for it to read.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
+use axum::Json;
 use axum::extract::{Path, Query, State};
 use axum::response::Response;
+use bytes::Bytes;
+use chrono::{DateTime, Utc};
+use forgust_db::merge_requests::{self as mrdb, MergeRequest};
 use forgust_db::people as pdb;
 use forgust_db::projects::Project;
-use serde::Serialize;
+use futures::{StreamExt, stream};
+use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use super::repo::{RefPath, cached, commit_of, readable};
@@ -26,10 +31,19 @@ const MAX_TEXTS: usize = 2_000;
 const MAX_TEXT: u64 = 1 << 20;
 /// The commits that tell who knows a block, at most: the latest.
 const MAX_COMMITS: usize = 5_000;
+/// The merged merge requests whose reviewers count, at most: the latest; their changes are read
+/// a few at a time.
+const MAX_REVIEWED: i64 = 300;
+const DIFFS_AT_ONCE: usize = 8;
+/// The reviewers shown per block.
+const SHOWN_REVIEWERS: usize = 5;
+/// Who a merge request is suggested to: at most two per block, and five in all.
+const SUGGESTED_PER_BLOCK: usize = 2;
+const MAX_SUGGESTED: usize = 5;
 const SYMLINK: u32 = 0o120000;
 
 /// The map of a commit: its blocks, the links between them, and who knows each.
-#[derive(Serialize, ToSchema)]
+#[derive(Serialize, Deserialize, ToSchema)]
 pub struct RepoMap {
     /// The commit mapped.
     pub commit: String,
@@ -44,6 +58,8 @@ pub struct RepoMap {
     pub warnings: Vec<String>,
     /// Why assay.toml could not be read: nothing is mapped until it is fixed.
     pub config_error: Option<String>,
+    /// The repository has an assay.toml at its top (corrections go there, else in a new one).
+    pub config_file: bool,
     /// So many files or commits that only the first files, or the latest commits, were read.
     pub truncated: bool,
     /// The days of history that tell who knows a block.
@@ -51,7 +67,7 @@ pub struct RepoMap {
 }
 
 /// A part of the repository built, run or deployed apart.
-#[derive(Serialize, ToSchema)]
+#[derive(Serialize, Deserialize, ToSchema, Clone)]
 pub struct MapBlock {
     /// Stable while its name is: what assay.toml names it by.
     pub id: String,
@@ -80,13 +96,15 @@ pub struct MapBlock {
     pub owners: Vec<String>,
     /// Who changed it lately, most commits first: people to ask, never a score.
     pub people: Vec<MapPerson>,
+    /// Who reviewed its changes in the merge requests merged lately, most reviews first.
+    pub reviewers: Vec<MapReviewer>,
     /// How many people made at least a fifth of its recent commits: 1, only one knows it.
     pub bus_factor: Option<usize>,
     /// Declared by assay.toml rather than found.
     pub configured: bool,
 }
 
-#[derive(Serialize, ToSchema, Clone, Copy)]
+#[derive(Serialize, Deserialize, ToSchema, Clone, Copy)]
 #[serde(rename_all = "snake_case")]
 pub enum MapKind {
     Rust,
@@ -101,7 +119,7 @@ pub enum MapKind {
     Other,
 }
 
-#[derive(Serialize, ToSchema, Clone, Copy)]
+#[derive(Serialize, Deserialize, ToSchema, Clone, Copy)]
 #[serde(rename_all = "snake_case")]
 pub enum MapRole {
     Web,
@@ -117,14 +135,14 @@ pub enum MapRole {
 }
 
 /// A path of the repository: `.` is its top.
-#[derive(Serialize, ToSchema)]
+#[derive(Serialize, Deserialize, ToSchema, Clone)]
 pub struct MapPath {
     pub path: String,
     /// A folder, not a file.
     pub dir: bool,
 }
 
-#[derive(Serialize, ToSchema)]
+#[derive(Serialize, Deserialize, ToSchema, Clone)]
 pub struct MapLanguage {
     pub name: String,
     pub files: usize,
@@ -132,7 +150,7 @@ pub struct MapLanguage {
     pub color: Option<String>,
 }
 
-#[derive(Serialize, ToSchema)]
+#[derive(Serialize, Deserialize, ToSchema, Clone)]
 pub struct MapPerson {
     pub name: String,
     /// Their account, by their verified email.
@@ -143,8 +161,20 @@ pub struct MapPerson {
     pub last: String,
 }
 
+/// Someone who reviewed a block's changes: approved, reviewed or commented a merge request that
+/// changed it, not as its author.
+#[derive(Serialize, Deserialize, ToSchema, Clone)]
+pub struct MapReviewer {
+    pub username: String,
+    pub name: String,
+    /// The merge requests they reviewed there, within the days of history read.
+    pub reviews: usize,
+    /// The day of the latest (`YYYY-MM-DD`).
+    pub last: String,
+}
+
 /// `from` needs `to`.
-#[derive(Serialize, ToSchema)]
+#[derive(Serialize, Deserialize, ToSchema, Clone)]
 pub struct MapLink {
     pub from: String,
     pub to: String,
@@ -155,7 +185,7 @@ pub struct MapLink {
     pub via: String,
 }
 
-#[derive(Serialize, ToSchema, Clone, Copy)]
+#[derive(Serialize, Deserialize, ToSchema, Clone, Copy)]
 #[serde(rename_all = "snake_case")]
 pub enum MapLinkKind {
     Uses,
@@ -176,8 +206,155 @@ pub async fn map(
 ) -> ApiResult<Response> {
     let p = readable(&state, &v, &id).await?;
     let (_, commit) = commit_of(&state, &p, q.git_ref.as_deref()).await?;
-    let key = ResponseCache::key(p.id, "map", &[&commit]);
-    cached(&state, key, || build(&state, &p, commit.clone())).await
+    cached(&state, map_key(&p, &commit), || build(&state, &p, commit.clone())).await
+}
+
+fn map_key(p: &Project, commit: &str) -> String {
+    ResponseCache::key(p.id, "map", &[commit])
+}
+
+/// The map of a commit, kept as the Smart View's page has it: what the other answers read.
+async fn map_at(state: &AppState, p: &Project, commit: &str) -> ApiResult<RepoMap> {
+    let key = map_key(p, commit);
+    if let Some(b) = state.cache.get(&key).await
+        && let Ok(m) = serde_json::from_slice(&b)
+    {
+        return Ok(m);
+    }
+    let m = build(state, p, commit.to_string()).await?;
+    let b = Bytes::from(serde_json::to_vec(&m).map_err(|e| ApiError::Internal(e.into()))?);
+    state.cache.put(key, b).await;
+    Ok(m)
+}
+
+/// The block a path is in: the one whose root holds it the deepest, as assay finds it.
+fn block_of<'a>(map: &'a RepoMap, path: &str) -> Option<&'a MapBlock> {
+    let holds = |root: &str| root == "." || path == root || path.strip_prefix(root).is_some_and(|rest| rest.starts_with('/'));
+    let depth = |root: &str| if root == "." { 0 } else { root.len() };
+    let mut best: Option<(&MapBlock, usize)> = None;
+    for b in &map.blocks {
+        for r in b.roots.iter().filter(|r| holds(&r.path)) {
+            if best.is_none_or(|(_, d)| depth(&r.path) > d) {
+                best = Some((b, depth(&r.path)));
+            }
+        }
+    }
+    best.map(|(b, _)| b)
+}
+
+/// The blocks a merge request changes, with who knows them.
+#[derive(Serialize, ToSchema)]
+pub struct MrBlocks {
+    /// What was mapped: the head of its latest version (empty before it has one).
+    pub commit: String,
+    /// The most changed first.
+    pub blocks: Vec<MrBlock>,
+    /// How many of its changed files are in no block.
+    pub unassigned: usize,
+    /// Who knows these blocks and could review it: its blocks' owners, then their reviewers, then
+    /// who changed them; not its author nor a reviewer yet.
+    pub suggested_reviewers: Vec<pdb::UserBrief>,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct MrBlock {
+    pub block: MapBlock,
+    /// Its files the merge request changes.
+    pub files: usize,
+}
+
+/// The blocks of the Smart View a merge request changes, mapped at its latest version's head.
+#[utoipa::path(get, path = "/api/v1/projects/{id}/merge_requests/{iid}/blocks", responses((status = 200, body = MrBlocks)), tag = "merge_requests")]
+pub async fn mr_blocks(
+    State(state): State<AppState>,
+    Viewer(v): Viewer,
+    Path((id, iid)): Path<(String, i64)>,
+) -> ApiResult<Json<MrBlocks>> {
+    let p = readable(&state, &v, &id).await?;
+    let mr = mrdb::find(&state.db, p.id, iid).await?.ok_or(ApiError::NotFound)?;
+    let Some(diff) = mrdb::latest_diff(&state.db, mr.id).await? else {
+        return Ok(Json(MrBlocks { commit: String::new(), blocks: Vec::new(), unassigned: 0, suggested_reviewers: Vec::new() }));
+    };
+    let map = map_at(&state, &p, &diff.head_sha).await?;
+    let changed = state.storage.changed_paths(p.id, None, &diff.base_sha, &diff.head_sha).await?;
+    let mut files: HashMap<&str, usize> = HashMap::new();
+    let mut unassigned = 0;
+    for path in &changed {
+        match block_of(&map, path) {
+            Some(b) => *files.entry(b.id.as_str()).or_default() += 1,
+            None => unassigned += 1,
+        }
+    }
+    let mut blocks: Vec<MrBlock> =
+        map.blocks.iter().filter_map(|b| files.get(b.id.as_str()).map(|n| MrBlock { block: b.clone(), files: *n })).collect();
+    blocks.sort_by_key(|t| std::cmp::Reverse(t.files));
+    let suggested_reviewers = suggest(&state, &p, &mr, &blocks).await?;
+    Ok(Json(MrBlocks { commit: diff.head_sha, blocks, unassigned, suggested_reviewers }))
+}
+
+/// Who could review a merge request changing `blocks` (the most changed first): each block's
+/// declared owners, then who reviewed it, then who changed it, two a block and five in all. Not
+/// its author nor a reviewer yet, and only who could be asked: active, Reporter here or up.
+async fn suggest(state: &AppState, p: &Project, mr: &MergeRequest, blocks: &[MrBlock]) -> ApiResult<Vec<pdb::UserBrief>> {
+    let asked: HashSet<i64> = pdb::mr_reviewers(&state.db, &[mr.id]).await?.into_iter().map(|(_, r)| r.user.id).collect();
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut out = Vec::new();
+    for t in blocks {
+        let b = &t.block;
+        let names: Vec<String> = b
+            .owners
+            .iter()
+            .filter_map(|o| o.strip_prefix('@').map(str::to_string))
+            .chain(b.reviewers.iter().map(|r| r.username.clone()))
+            .chain(b.people.iter().filter_map(|x| x.username.clone()))
+            .collect();
+        let mut here = 0;
+        for name in names {
+            if here == SUGGESTED_PER_BLOCK || out.len() == MAX_SUGGESTED {
+                break;
+            }
+            if !seen.insert(name.to_lowercase()) {
+                continue;
+            }
+            // a group, someone gone, a bot, or someone who cannot review here
+            let Some(u) = forgust_db::users::find_by_username(&state.db, &name).await? else { continue };
+            if Some(u.id) == mr.author_id || asked.contains(&u.id) || !u.is_active() || u.user_type != "human" {
+                continue;
+            }
+            if forgust_db::authz::project_level(&state.db, u.id, p.id).await?.unwrap_or(0) < forgust_db::access::REPORTER {
+                continue;
+            }
+            out.push(pdb::UserBrief { id: u.id, username: u.username, name: u.name });
+            here += 1;
+        }
+    }
+    Ok(out)
+}
+
+/// The block a path is in.
+#[derive(Serialize, ToSchema)]
+pub struct PathBlock {
+    /// The ref whose map it is: the branch or tag asked, else the default branch.
+    #[serde(rename = "ref")]
+    pub git_ref: String,
+    pub block: Option<MapBlock>,
+}
+
+/// The block of the Smart View a file or folder is in. A commit of the history is answered from
+/// the default branch's map: a map per commit browsed would cost more than it tells.
+#[utoipa::path(get, path = "/api/v1/projects/{id}/repository/map/block", responses((status = 200, body = PathBlock)), tag = "repository")]
+pub async fn path_block(
+    State(state): State<AppState>,
+    Viewer(v): Viewer,
+    Path(id): Path<String>,
+    Query(q): Query<RefPath>,
+) -> ApiResult<Json<PathBlock>> {
+    let p = readable(&state, &v, &id).await?;
+    let asked = q.git_ref.filter(|r| !(r.len() >= 7 && r.len() <= 40 && r.bytes().all(|b| b.is_ascii_hexdigit())));
+    let (git_ref, commit) = commit_of(&state, &p, asked.as_deref()).await?;
+    let map = map_at(&state, &p, &commit).await?;
+    let path = q.path.trim_matches('/');
+    Ok(Json(PathBlock { git_ref, block: block_of(&map, if path.is_empty() { "." } else { path }).cloned() }))
 }
 
 async fn build(state: &AppState, p: &Project, commit: String) -> ApiResult<RepoMap> {
@@ -192,6 +369,7 @@ async fn build(state: &AppState, p: &Project, commit: String) -> ApiResult<RepoM
     let days = forgust_assay::history_days(&texts);
     let since = chrono::Utc::now().timestamp() - i64::from(days) * 86_400;
     let (log, log_cut) = state.storage.log_paths(p.id, &commit, since, MAX_COMMITS).await?;
+    let config_file = blobs.iter().any(|b| b.path == forgust_assay::CONFIG_FILE);
     let snapshot = forgust_assay::Snapshot {
         name: p.path.clone(),
         commit: Some(commit.clone()),
@@ -212,6 +390,7 @@ async fn build(state: &AppState, p: &Project, commit: String) -> ApiResult<RepoM
         unassigned_sample: Vec::new(),
         warnings: Vec::new(),
         config_error: None,
+        config_file,
         truncated: files_cut || log_cut,
         days,
     };
@@ -223,8 +402,17 @@ async fn build(state: &AppState, p: &Project, commit: String) -> ApiResult<RepoM
         }
     };
     let accounts = accounts(state, &map).await;
+    let left_out = opted_out(state, &snapshot).await;
+    let mut reviewed = reviewers(state, p, &map, days, &left_out).await;
     let files: HashSet<&str> = snapshot.files.iter().map(String::as_str).collect();
-    out.blocks = map.blocks.into_iter().map(|b| block(b, &accounts, &files)).collect();
+    out.blocks = map
+        .blocks
+        .into_iter()
+        .map(|b| {
+            let reviewers = reviewed.remove(&b.id).unwrap_or_default();
+            block(b, &accounts, reviewers, &files)
+        })
+        .collect();
     out.links = map
         .links
         .into_iter()
@@ -259,7 +447,118 @@ async fn accounts(state: &AppState, map: &forgust_assay::RepoMap) -> HashMap<Str
     }
 }
 
-fn block(b: forgust_assay::Block, accounts: &HashMap<String, String>, files: &HashSet<&str>) -> MapBlock {
+/// The accounts of who opted out (assay.toml's `[people] exclude`), left out of the reviewers as
+/// assay leaves them out of the people: by an address of theirs, or by a name or an address their
+/// commits bear. Best effort.
+async fn opted_out(state: &AppState, s: &forgust_assay::Snapshot) -> HashSet<String> {
+    let Some(config) = s.texts.get(forgust_assay::CONFIG_FILE).and_then(|t| forgust_assay::Config::parse(t).ok()) else {
+        return HashSet::new();
+    };
+    let exclude = &config.people.exclude;
+    if exclude.is_empty() {
+        return HashSet::new();
+    }
+    let mut emails: HashSet<String> = exclude.iter().filter(|x| x.contains('@')).map(|x| x.to_lowercase()).collect();
+    for c in s.history.iter().flatten() {
+        if exclude.iter().any(|x| x.eq_ignore_ascii_case(&c.name) || x.eq_ignore_ascii_case(&c.email)) {
+            emails.insert(c.email.to_lowercase());
+        }
+    }
+    match pdb::usernames_by_email(&state.db, &emails.into_iter().collect::<Vec<_>>()).await {
+        Ok(rows) => rows.into_iter().map(|(_, u)| u.to_lowercase()).collect(),
+        Err(e) => {
+            tracing::warn!(error = %e, "who opted out of the map's reviewers not read");
+            HashSet::new()
+        }
+    }
+}
+
+/// A merged merge request's latest version, and who reviewed it: username, name, when.
+struct Reviewed {
+    base: String,
+    head: String,
+    by: Vec<(String, String, DateTime<Utc>)>,
+}
+
+/// Someone's reviews of a block: how many, and the latest.
+struct Tally {
+    name: String,
+    reviews: usize,
+    last: DateTime<Utc>,
+}
+
+/// Who reviewed each block's changes, by its id: who took part in the merge requests merged within
+/// the days of history (the latest `MAX_REVIEWED`) that changed its files, but who opted out
+/// (`left_out`). Best effort: a merge request whose changes cannot be read is left out.
+async fn reviewers(
+    state: &AppState,
+    p: &Project,
+    map: &forgust_assay::RepoMap,
+    days: u32,
+    left_out: &HashSet<String>,
+) -> HashMap<String, Vec<MapReviewer>> {
+    let since = Utc::now() - chrono::Duration::days(i64::from(days));
+    let rows = match mrdb::reviewed_since(&state.db, p.id, since, MAX_REVIEWED).await {
+        Ok(rows) => rows,
+        Err(e) => {
+            tracing::warn!(error = %e, "the map's reviewers not read");
+            return HashMap::new();
+        }
+    };
+    // each merge request's latest version, and who reviewed it when
+    let mut mrs: BTreeMap<i64, Reviewed> = BTreeMap::new();
+    for r in rows.into_iter().filter(|r| !left_out.contains(&r.username.to_lowercase())) {
+        mrs.entry(r.mr_id)
+            .or_insert_with(|| Reviewed { base: r.base_sha, head: r.head_sha, by: Vec::new() })
+            .by
+            .push((r.username, r.name, r.at));
+    }
+    // the paths each changed, a few at a time (each read owns its ends: a stream's closure that
+    // borrowed them would not be Send for every lifetime)
+    let storage = &state.storage;
+    let reads: Vec<_> = mrs
+        .iter()
+        .map(|(id, mr)| {
+            let (id, base, head) = (*id, mr.base.clone(), mr.head.clone());
+            async move { (id, storage.changed_paths(p.id, None, &base, &head).await.unwrap_or_default()) }
+        })
+        .collect();
+    let changed: Vec<(i64, Vec<String>)> = stream::iter(reads).buffer_unordered(DIFFS_AT_ONCE).collect().await;
+    // block → username → their reviews there
+    let mut per: HashMap<String, HashMap<String, Tally>> = HashMap::new();
+    for (id, paths) in changed {
+        let blocks: HashSet<&str> = paths.iter().filter_map(|path| map.block_of(path)).map(|b| b.id.as_str()).collect();
+        for (username, name, at) in &mrs[&id].by {
+            for b in &blocks {
+                let e = per.entry(b.to_string()).or_default().entry(username.clone()).or_insert(Tally {
+                    name: name.clone(),
+                    reviews: 0,
+                    last: *at,
+                });
+                e.reviews += 1;
+                e.last = e.last.max(*at);
+            }
+        }
+    }
+    per.into_iter()
+        .map(|(b, people)| {
+            let mut list: Vec<MapReviewer> = people
+                .into_iter()
+                .map(|(username, t)| MapReviewer {
+                    username,
+                    name: t.name,
+                    reviews: t.reviews,
+                    last: t.last.format("%Y-%m-%d").to_string(),
+                })
+                .collect();
+            list.sort_by(|a, b| b.reviews.cmp(&a.reviews).then_with(|| b.last.cmp(&a.last)).then_with(|| a.username.cmp(&b.username)));
+            list.truncate(SHOWN_REVIEWERS);
+            (b, list)
+        })
+        .collect()
+}
+
+fn block(b: forgust_assay::Block, accounts: &HashMap<String, String>, reviewers: Vec<MapReviewer>, files: &HashSet<&str>) -> MapBlock {
     let paths = |list: Vec<String>| list.into_iter().map(|path| MapPath { dir: !files.contains(path.as_str()), path }).collect();
     MapBlock {
         id: b.id,
@@ -284,6 +583,7 @@ fn block(b: forgust_assay::Block, accounts: &HashMap<String, String>, files: &Ha
             .into_iter()
             .map(|p| MapPerson { username: accounts.get(&p.email.to_lowercase()).cloned(), name: p.name, commits: p.commits, last: p.last })
             .collect(),
+        reviewers,
         bus_factor: b.bus_factor,
         configured: b.source == forgust_assay::Source::Configured,
     }

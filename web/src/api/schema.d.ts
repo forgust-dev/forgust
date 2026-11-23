@@ -1201,6 +1201,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/merge_requests/{iid}/blocks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The blocks of the Smart View a merge request changes, mapped at its latest version's head. */
+        get: operations["mr_blocks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/merge_requests/{iid}/code_owners": {
         parameters: {
             query?: never;
@@ -2108,6 +2125,26 @@ export interface paths {
         };
         /** The Smart View of a ref (without one, the default branch), kept per commit. */
         get: operations["map"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/repository/map/block": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The block of the Smart View a file or folder is in. A commit of the history is answered from
+         *     the default branch's map: a map per commit browsed would cost more than it tells.
+         */
+        get: operations["path_block"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4632,6 +4669,8 @@ export interface components {
             parent?: string | null;
             /** @description Who changed it lately, most commits first: people to ask, never a score. */
             people: components["schemas"]["MapPerson"][];
+            /** @description Who reviewed its changes in the merge requests merged lately, most reviews first. */
+            reviewers: components["schemas"]["MapReviewer"][];
             role?: components["schemas"]["MapRole"] | null;
             /** @description The folders or files whose files are its own. */
             roots: components["schemas"]["MapPath"][];
@@ -4670,6 +4709,18 @@ export interface components {
             name: string;
             /** @description Their account, by their verified email. */
             username?: string | null;
+        };
+        /**
+         * @description Someone who reviewed a block's changes: approved, reviewed or commented a merge request that
+         *     changed it, not as its author.
+         */
+        MapReviewer: {
+            /** @description The day of the latest (`YYYY-MM-DD`). */
+            last: string;
+            name: string;
+            /** @description The merge requests they reviewed there, within the days of history read. */
+            reviews: number;
+            username: string;
         };
         /** @enum {string} */
         MapRole: "web" | "api" | "cli" | "library" | "database" | "cache" | "queue" | "search" | "storage" | "mail";
@@ -4879,6 +4930,25 @@ export interface components {
             /** Format: date-time */
             stored_at: string;
             tag: string;
+        };
+        MrBlock: {
+            block: components["schemas"]["MapBlock"];
+            /** @description Its files the merge request changes. */
+            files: number;
+        };
+        /** @description The blocks a merge request changes, with who knows them. */
+        MrBlocks: {
+            /** @description The most changed first. */
+            blocks: components["schemas"]["MrBlock"][];
+            /** @description What was mapped: the head of its latest version (empty before it has one). */
+            commit: string;
+            /**
+             * @description Who knows these blocks and could review it: its blocks' owners, then their reviewers, then
+             *     who changed them; not its author nor a reviewer yet.
+             */
+            suggested_reviewers: components["schemas"]["UserBrief"][];
+            /** @description How many of its changed files are in no block. */
+            unassigned: number;
         };
         MrCount: {
             /** Format: int64 */
@@ -5265,6 +5335,12 @@ export interface components {
             ceremony: string;
             /** @description Options for `navigator.credentials.get` (WebAuthn). */
             options: Record<string, never>;
+        };
+        /** @description The block a path is in. */
+        PathBlock: {
+            block?: components["schemas"]["MapBlock"] | null;
+            /** @description The ref whose map it is: the branch or tag asked, else the default branch. */
+            ref: string;
         };
         PathCommit: {
             commit?: components["schemas"]["CommitInfo"] | null;
@@ -5786,6 +5862,8 @@ export interface components {
             commit: string;
             /** @description Why assay.toml could not be read: nothing is mapped until it is fixed. */
             config_error?: string | null;
+            /** @description The repository has an assay.toml at its top (corrections go there, else in a new one). */
+            config_file: boolean;
             /**
              * Format: int32
              * @description The days of history that tell who knows a block.
@@ -8885,6 +8963,25 @@ export interface operations {
             };
         };
     };
+    mr_blocks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MrBlocks"];
+                };
+            };
+        };
+    };
     code_owners: {
         parameters: {
             query?: never;
@@ -10401,6 +10498,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RepoMap"];
+                };
+            };
+        };
+    };
+    path_block: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PathBlock"];
                 };
             };
         };

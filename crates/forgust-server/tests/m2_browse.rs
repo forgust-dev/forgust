@@ -352,6 +352,98 @@ async fn smart_view_maps_blocks_links_and_people(pool: sqlx::PgPool) {
     assert_eq!(other.get(&base).await.0, 404);
 }
 
+/// The Smart View and merge requests: the blocks one changes and who could review it, then, once
+/// merged, its reviewer among the people to ask. And the block of a file or a folder.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn smart_view_follows_merge_requests(pool: sqlx::PgPool) {
+    let srv = TestServer::start(pool).await;
+    let owner = srv.user("olivia", false).await;
+    let dev = srv.user("dave", false).await;
+    let (org, _sub, p) = org_project(&owner).await;
+    owner.ok_post(&format!("/api/v1/groups/{org}/members"), json!({ "username": "dave", "access_level": "developer" })).await;
+    let work = srv.work_dir("map-mr");
+    must(git(&work, &["init", "-q", "-b", "main"]).await);
+    for (path, text) in [
+        ("Cargo.toml", "[workspace]\nmembers = [\"crates/*\"]\n"),
+        ("crates/api/Cargo.toml", "[package]\nname = \"api\"\n\n[dependencies]\ncore = { path = \"../core\" }\n"),
+        ("crates/api/src/main.rs", "fn main() {}\n"),
+        ("crates/core/Cargo.toml", "[package]\nname = \"core\"\n"),
+        ("crates/core/src/lib.rs", "\n"),
+        ("README.md", "# Demo\n"),
+    ] {
+        std::fs::create_dir_all(work.join(path).parent().unwrap()).unwrap();
+        std::fs::write(work.join(path), text).unwrap();
+    }
+    must(git(&work, &["add", "."]).await);
+    // Olivia made it, under her verified address
+    must(
+        git_env(&work, &["commit", "-q", "-m", "first"], &[("GIT_AUTHOR_NAME", "Olivia"), ("GIT_AUTHOR_EMAIL", "olivia@example.com")])
+            .await,
+    );
+    let url = srv.http_url("olivia", "acme/platform/api");
+    must(git(&work, &["push", "-q", &url, "main"]).await);
+    wait_jobs(&srv.state).await;
+    let map = format!("/api/v1/projects/{p}/repository/map");
+    assert_eq!(owner.ok_get(&map).await["config_file"], false);
+
+    // the block of a file, of a folder; a commit of the history is answered from the default branch
+    let block = |rev: &str, path: &str| format!("{map}/block?ref={rev}&path={path}");
+    let b = owner.ok_get(&block("main", "crates/api/src/main.rs")).await;
+    assert_eq!((&b["ref"], &b["block"]["id"]), (&json!("main"), &json!("api")));
+    assert_eq!(owner.ok_get(&block("main", "crates/core")).await["block"]["id"], "core");
+    assert!(owner.ok_get(&block("main", "README.md")).await["block"].is_null());
+    let head = owner.ok_get(&map).await["commit"].as_str().unwrap().to_string();
+    let old = owner.ok_get(&block(&head, "crates/api")).await;
+    assert_eq!((&old["ref"], &old["block"]["id"]), (&json!("main"), &json!("api")));
+
+    // Dave changes the API: the block it touches, and who knows it to review it, not him
+    must(git(&work, &["checkout", "-q", "-b", "feature/hello"]).await);
+    std::fs::write(work.join("crates/api/src/main.rs"), "fn main() { println!(\"hello\"); }\n").unwrap();
+    must(
+        git_env(&work, &["commit", "-q", "-am", "say hello"], &[("GIT_AUTHOR_NAME", "Dave"), ("GIT_AUTHOR_EMAIL", "dave@example.com")])
+            .await,
+    );
+    must(git(&work, &["push", "-q", &srv.http_url("dave", "acme/platform/api"), "feature/hello"]).await);
+    dev.ok_post(&format!("/api/v1/projects/{p}/merge_requests"), json!({ "source_branch": "feature/hello", "title": "Say hello" })).await;
+    let mr = format!("/api/v1/projects/{p}/merge_requests/1");
+    let touched = dev.ok_get(&format!("{mr}/blocks")).await;
+    let blocks: Vec<(&str, i64)> =
+        touched["blocks"].as_array().unwrap().iter().map(|t| (t["block"]["id"].as_str().unwrap(), t["files"].as_i64().unwrap())).collect();
+    assert_eq!(blocks, [("api", 1)], "{touched}");
+    assert_eq!(touched["unassigned"], 0);
+    let suggested: Vec<&str> = touched["suggested_reviewers"].as_array().unwrap().iter().map(|u| u["username"].as_str().unwrap()).collect();
+    assert_eq!(suggested, ["olivia"]);
+    assert_eq!(srv.user("mallory", false).await.get(&format!("{mr}/blocks")).await.0, 404);
+
+    // Olivia approves it and merges it: she has reviewed the API
+    owner.ok_post(&format!("{mr}/approve"), json!({})).await;
+    let st = owner.ok_get(&format!("{mr}/merge_status")).await;
+    owner.ok_post(&format!("{mr}/merge"), json!({ "method": "merge", "sha": st["head_sha"] })).await;
+    let after = owner.ok_get(&map).await;
+    let of = |id: &str| after["blocks"].as_array().unwrap().iter().find(|b| b["id"] == id).unwrap();
+    let reviewers: Vec<(&str, i64)> = of("api")["reviewers"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| (r["username"].as_str().unwrap(), r["reviews"].as_i64().unwrap()))
+        .collect();
+    assert_eq!(reviewers, [("olivia", 1)], "{after}");
+    assert!(of("core")["reviewers"].as_array().unwrap().is_empty(), "the merge request did not change it");
+
+    // Olivia opts out by her name: she is left out of who changed it and of who reviewed it
+    must(git(&work, &["checkout", "-q", "main"]).await);
+    must(git(&work, &["pull", "-q", "--ff-only", &url, "main"]).await);
+    std::fs::write(work.join("assay.toml"), "[people]\nexclude = [\"Olivia\"]\n").unwrap();
+    must(git(&work, &["add", "assay.toml"]).await);
+    must(git(&work, &["commit", "-q", "-m", "leave Olivia out"]).await);
+    must(git(&work, &["push", "-q", &url, "main"]).await);
+    let out = owner.ok_get(&map).await;
+    assert_eq!(out["config_file"], true);
+    let api = out["blocks"].as_array().unwrap().iter().find(|b| b["id"] == "api").unwrap();
+    assert!(api["reviewers"].as_array().unwrap().is_empty(), "{api}");
+    assert!(api["people"].as_array().unwrap().iter().all(|x| x["name"] != "Olivia"), "{api}");
+}
+
 /// The last commit of each tree entry, and size / language stats.
 #[sqlx::test(migrator = "forgust_db::MIGRATOR")]
 async fn tree_last_commits_and_repo_stats(pool: sqlx::PgPool) {
