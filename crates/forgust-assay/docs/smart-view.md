@@ -193,13 +193,21 @@ La page **Smart View** d'un projet, sous Code (`/-/smart_view/<branche, tag ou c
 - les personnes sont reliées à leur compte par leur adresse vérifiée, et leurs adresses ne quittent pas le serveur ;
 - chaque bloc montre l'état de ses jobs dans le dernier pipeline du commit, et un job cassé allume le bloc ;
 - les racines, manifestes, fichiers qui disent un lien, comptes et jobs sont des liens ; un `assay.toml` illisible s'affiche en haut de la page avec son erreur ;
-- sur téléphone, les blocs forment une liste : un graphe y serait surtout hors de l'écran.
+- sur téléphone, les blocs forment une liste : un graphe y serait surtout hors de l'écran ;
+- un champ « Find a block » cherche un bloc par son nom, ce à quoi il sert, son dossier ou ce qu'il est : les blocs trouvés restent allumés, Entrée choisit le suivant et l'amène à l'écran (sur téléphone, la liste ne garde qu'eux) ;
+- le panneau d'un bloc dit ce qu'un changement atteint (« If it changes ») : tout ce qui en dépend, directement ou par d'autres, avec leurs personnes et leurs jobs ; « Light them up » allume la chaîne sur la carte et la cadre ;
+- il montre aussi le pipeline du bloc : le dernier pipeline du commit, et pour chaque job son étape, sa durée et son log. Un bloc dont un job a cassé met en attente ceux qui en dépendent, marqués d'un sablier ;
+- une merge request montre les blocs qu'elle touche, leurs personnes à contacter, et propose en un clic leurs référents comme relecteurs : les propriétaires déclarés, puis ceux qui relisent le bloc, puis ceux qui le changent, sauf son auteur, ses relecteurs et qui n'a pas le rôle Reporter. La Smart View de la MR (`?mr=`) allume ces blocs, et à la demande ce qui en dépend ;
+- les pages d'un fichier ou d'un dossier disent le bloc où il est et à qui demander, un lien vers son panneau (pour un commit de l'historique, la carte de la branche par défaut sert : une carte par commit parcouru coûterait trop) ;
+- ceux qui ont relu les MR fusionnées dans les jours d'historique (approbation, revue ou commentaire, pas leur auteur ni un bot, ni une note interne) comptent parmi les personnes à contacter : « 3 commits · 2 reviews ». `[people] exclude` les retire aussi, par une adresse à eux ou par un nom ou une adresse de leurs commits ;
+- qui peut committer corrige la carte depuis le panneau : « Rename or describe », « Merge into… », « Not a block », « I know it », et « Leave me out » sur sa propre ligne. Chacun ouvre l'éditeur sur `assay.toml` (ou un nouveau) avec la correction écrite, à relire avant de la committer ici ou dans une MR ; seules les lignes concernées changent ;
+- à l'ouverture, aucun bloc n'est caché sous les boutons de zoom ni sous la mini-carte : le graphe se décale, ou le cadre grandit.
 
 ### Pas encore fait
 
 - Les `include:` de `.gitlab-ci.yml` ne sont pas suivis : leurs jobs se rattachent par `assay.toml`.
 - Les dépendances internes des projets Python et Go ne sont pas lues : seuls les blocs le sont.
-- Les référents ne tiennent compte ni de `git blame` (qui a écrit les lignes actuelles) ni des revues, que seule la forge connaît.
+- Les référents ne tiennent pas compte de `git blame` (qui a écrit les lignes actuelles).
 - Un service compose n'a pas de personnes, puisqu'il n'a pas de fichiers à lui.
 
 ## Priorité 1 — Le socle
@@ -209,9 +217,9 @@ La page **Smart View** d'un projet, sous Code (`/-/smart_view/<branche, tag ou c
 1. Détection des blocs par les manifestes (Dockerfile, docker-compose, Cargo.toml, package.json, migrations…). **Fait** dans assay.
 2. Fichier de surcharge `assay.toml`. **Fait**.
 3. Graphe des flux entre blocs : qui appelle quoi (Web → API → BDD → file de messages). **Fait** pour ce que disent les manifestes et compose ; les appels à l'exécution se déclarent dans `assay.toml`.
-4. Référents tirés de l'historique git (git blame plus tard) et des revues, avec un badge bus factor quand une seule personne connaît un bloc. **Fait** pour l'historique, CODEOWNERS et les référents déclarés ; les revues viendront de la forge.
-5. Impact sur les PR : les blocs touchés s'allument et leurs référents sont proposés comme relecteurs. À faire dans Forgust, avec `block_of` d'assay.
-6. Lien job → bloc dans la CI, sans changer son format, avec pipeline et statut par bloc (détail ci-dessous). **Fait** pour le statut : assay rattache les jobs aux blocs, et la Smart View de Forgust montre l'état de chacun dans le dernier pipeline du commit. Le pipeline complet par bloc (étapes, durée, blocs en attente) reste à faire.
+4. Référents tirés de l'historique git (git blame plus tard) et des revues, avec un badge bus factor quand une seule personne connaît un bloc. **Fait** pour l'historique, CODEOWNERS, les référents déclarés et les revues des MR fusionnées, que Forgust ajoute.
+5. Impact sur les PR : les blocs touchés s'allument et leurs référents sont proposés comme relecteurs. **Fait** dans Forgust : la MR liste ses blocs et propose leurs référents, sa Smart View les allume.
+6. Lien job → bloc dans la CI, sans changer son format, avec pipeline et statut par bloc (détail ci-dessous). **Fait** : assay rattache les jobs aux blocs, et la Smart View de Forgust montre pour chacun le dernier pipeline du commit, l'étape, la durée et le log de ses jobs, et met en attente ce qui dépend d'un bloc cassé.
 
 L'impact sur les PR est la brique qui apporte de la valeur au quotidien, pas seulement à l'onboarding.
 
@@ -221,7 +229,7 @@ L'impact sur les PR est la brique qui apporte de la valeur au quotidien, pas seu
 
 Peu chers une fois le socle en place, parce qu'ils réutilisent la carte fichiers → blocs et le graphe.
 
-- **Simulation d'impact** : on demande « si je change le schéma de la table `users`, qu'est-ce qui casse ? ». C'est le calcul de l'impact sur les PR, mais sans PR : la vue liste les blocs, tests, référents et repos touchés avant qu'une ligne soit écrite.
+- **Simulation d'impact** : on demande « si je change le schéma de la table `users`, qu'est-ce qui casse ? ». C'est le calcul de l'impact sur les PR, mais sans PR : la vue liste les blocs, tests, référents et repos touchés avant qu'une ligne soit écrite. **Première version faite** : « If it changes » donne la chaîne des blocs qui dépendent d'un bloc, avec leurs personnes et leurs jobs ; il manque les tests et les autres repos.
 - **Règles entre blocs** : déclarer par exemple « le Web ne doit pas appeler la BDD directement », et la CI bloque une PR qui viole la règle. L'idée la plus sous-estimée, parce qu'elle garde la vue juste dans le temps.
 - **Issues et PR classées par bloc** : chaque issue est rattachée à un ou plusieurs blocs, automatiquement ou à la main. On voit la dette et les bugs ouverts par zone du code.
 - **Santé par bloc** : statut CI, couverture de tests, dépendances obsolètes, issues ouvertes. Deux onglets en plus :
