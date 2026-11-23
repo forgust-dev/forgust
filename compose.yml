@@ -78,7 +78,7 @@ services:
       - s3-data:/data
 
   mail:
-    image: axllent/mailpit:v1.33.1@sha256:aef2aacc11f075ec0fb6874275ee4a421e688e11a96ebb296134d1735c7761ce
+    image: axllent/mailpit:v1.34.0@sha256:23a2ef85bc50853ab3093645d1d64679afd8887e89da5e48a88940c172591a4e
     restart: unless-stopped
     ports:
       - "8027:8025"
@@ -98,7 +98,7 @@ services:
 
   # CI: a stock gitlab-runner (docker executor), registered by deploy/seed.py
   runner:
-    image: gitlab/gitlab-runner:v19.5.3
+    image: gitlab/gitlab-runner:v19.6.0
     restart: unless-stopped
     depends_on: [forgust]
     volumes:
