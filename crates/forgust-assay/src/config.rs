@@ -28,6 +28,23 @@ pub struct Config {
     pub links: Vec<LinkConfig>,
     #[serde(default)]
     pub people: PeopleConfig,
+    /// What blocks must not need: checked on the map, each link breaking one reported.
+    #[serde(default)]
+    pub rules: Vec<RuleConfig>,
+}
+
+/// `from` must not need `deny`. Both name blocks by id or glob of ids (`acme-*`), by
+/// `role:<role>` or by `kind:<kind>`.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RuleConfig {
+    pub from: Vec<String>,
+    pub deny: Vec<String>,
+    /// Why, in a line: said with what breaks it.
+    pub why: Option<String>,
+    /// Guesses break it too (`connects`, `runs` by an image's name); else only declared links.
+    #[serde(default)]
+    pub guesses: bool,
 }
 
 #[derive(Debug, Default, Deserialize)]

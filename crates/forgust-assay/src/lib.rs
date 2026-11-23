@@ -24,13 +24,14 @@ mod lang;
 pub mod model;
 mod people;
 pub mod report;
+mod rules;
 mod view;
 mod yaml;
 
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
-pub use config::{BlockConfig, Config, FILE as CONFIG_FILE, LinkConfig, PeopleConfig};
+pub use config::{BlockConfig, Config, FILE as CONFIG_FILE, LinkConfig, PeopleConfig, RuleConfig};
 use detect::{Job, To, literal_prefix};
 pub use files::Patterns;
 pub use model::*;
@@ -240,7 +241,8 @@ pub fn map_snapshot(s: &Snapshot) -> anyhow::Result<RepoMap> {
     }
 
     links.sort_by(|a, b| (&a.from, &a.to, a.kind as u8).cmp(&(&b.from, &b.to, b.kind as u8)));
-    Ok(RepoMap { schema: SCHEMA, commit: s.commit.clone(), blocks, links, unassigned, warnings })
+    let violations = rules::check(&config.rules, &blocks, &links, &mut warnings);
+    Ok(RepoMap { schema: SCHEMA, commit: s.commit.clone(), blocks, links, unassigned, warnings, violations })
 }
 
 /// Adds a link, unless the same one (ends and kind) is there; a declared one replaces a guess.

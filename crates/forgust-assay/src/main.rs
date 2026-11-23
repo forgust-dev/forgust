@@ -46,6 +46,13 @@ enum Command {
         #[arg(long)]
         name: Option<String>,
     },
+    /// Check the rules of assay.toml (`[[rules]]`): print the links that break one, and fail
+    /// if any does (a CI job's step)
+    Check {
+        /// The repository's folder
+        #[arg(default_value = ".")]
+        path: PathBuf,
+    },
     /// Write the map of a repository as a page to look at: one HTML file, which opens offline
     View {
         /// The repository's folder
@@ -82,6 +89,19 @@ fn main() -> anyhow::Result<()> {
             let report = forgust_assay::report::report(&path, &forgust_assay::Options { name, ..Default::default() })?;
             std::fs::write(&out, serde_json::to_vec(&report)?)?;
             println!("{}", out.display());
+        }
+        Command::Check { path } => {
+            let map = forgust_assay::map(&path, &forgust_assay::Options { people: false, days: None, name: None })?;
+            let rules = forgust_assay::Config::load(&path)?.rules.len();
+            for w in &map.warnings {
+                eprintln!("warning: {w}");
+            }
+            if map.violations.is_empty() {
+                println!("{} kept", plural(rules, "rule"));
+                return Ok(());
+            }
+            print!("{}", violations(&map));
+            std::process::exit(1);
         }
         Command::View { path, out, open, no_people, days } => {
             let map = forgust_assay::map(&path, &forgust_assay::Options { people: !no_people, days, name: None })?;
@@ -169,6 +189,10 @@ fn summary(map: &RepoMap) -> String {
         ));
     }
     out.push('\n');
+    if !map.violations.is_empty() {
+        out.push('\n');
+        out.push_str(&violations(map));
+    }
     if !map.warnings.is_empty() {
         out.push_str(&format!("\n{} warnings\n", map.warnings.len()));
         for w in &map.warnings {
@@ -176,6 +200,21 @@ fn summary(map: &RepoMap) -> String {
         }
     }
     out
+}
+
+/// The links that break a rule, one a line, under how many.
+fn violations(map: &RepoMap) -> String {
+    let mut out = format!("{} breaking a rule\n", plural(map.violations.len(), "link"));
+    for v in &map.violations {
+        let guess = if v.certainty == Certainty::Inferred { " (a guess)" } else { "" };
+        let why = v.why.as_deref().map(|w| format!(": {w}")).unwrap_or_default();
+        out.push_str(&format!("  {} {} {}{guess}, in {}: rule {}{why}\n", v.from, json_name(&v.kind), v.to, v.via, v.rule));
+    }
+    out
+}
+
+fn plural(n: usize, one: &str) -> String {
+    format!("{n} {one}{}", if n == 1 { "" } else { "s" })
 }
 
 /// An enum's name as the JSON gives it.
