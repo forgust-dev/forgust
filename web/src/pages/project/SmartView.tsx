@@ -1,27 +1,35 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useState } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties, ReactNode, Ref } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   AlertTriangle,
   AppWindow,
+  ArrowLeft,
+  ArrowRight,
   BookOpen,
   Box,
+  Boxes,
   Container,
   Database,
   DatabaseZap,
+  FileCode,
+  FileText,
   GitPullRequest,
   HardDrive,
   Hourglass,
   Library,
   ListEnd,
   Mail,
+  Pencil,
   Search,
   Server,
   SquareTerminal,
   Table2,
+  Users,
   Workflow,
   X,
+  Zap,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -460,8 +468,10 @@ function MapView({ ctx, gitRef, map, lay, found, words }: { ctx: Ctx; gitRef: st
       links={links}
     />
   );
+  // a block chosen from another's details opens at its top
   const details = chosen ? (
     <Details
+      key={chosen}
       ctx={ctx}
       map={map}
       lay={lay}
@@ -930,61 +940,192 @@ type DetailsProps = {
 function Details({ ctx, gitRef, map, lay, b, jobs, pipeline, waits, chain, setChain, select, me, fix }: DetailsProps) {
   const byId = new Map(map.blocks.map((x) => [x.id, x]));
   const [kind, color] = KIND[b.kind];
+  // once it scrolls, a line parts the name, which stays, from what goes under it
+  const [scrolled, setScrolled] = useState(false);
+  const ci = useRef<HTMLElement>(null);
   const go = (id: string) => (
     <button type="button" className="smart-go" onClick={() => select(id)}>
       {byId.get(id) ? title(byId.get(id)!) : id}
     </button>
   );
   const at = (p: S["MapPath"]) => (p.dir ? refLink(ctx.web, "tree", gitRef, p.path === "." ? undefined : p.path) : refLink(ctx.web, "blob", gitRef, p.path));
-  // the file that says so, by its name (its path on hover); a guess says so
-  const said = (e: Edge) => (
-    <>
-      {e.inferred && <span className="smart-tag">a guess</span>}
-      {e.via && (
-        <Link className="meta" to={refLink(ctx.web, "blob", gitRef, e.via)} title={e.via}>
-          {e.via.split("/").pop()}
+  // a block in a list: its mark and name, then what the link is, whether it is a guess, and the file that says so
+  const row = (id: string, what?: string, e?: Edge) => (
+    <li key={`${id}:${e?.kind ?? ""}`}>
+      <RowMark b={byId.get(id)} />
+      <span className="grow">{go(id)}</span>
+      {what && <span className="meta">{what}</span>}
+      {e?.inferred && <span className="smart-tag">a guess</span>}
+      {e?.via && (
+        <Link className="smart-via" to={refLink(ctx.web, "blob", gitRef, e.via)} title={`From ${e.via}`} aria-label={`From ${e.via}`}>
+          <FileText size={13} aria-hidden />
         </Link>
       )}
-    </>
+    </li>
   );
+  const verb = (e: Edge) => (e.kind === "part" ? undefined : VERB[e.kind]);
   const needs = lay.edges.filter((e) => e.from === b.id && e.kind !== "part");
   const holds = lay.edges.filter((e) => e.from === b.id && e.kind === "part");
   const neededBy = lay.edges.filter((e) => e.to === b.id && e.kind !== "part");
-  // the reviews of who changed it go on their line; the others who reviewed it, after
+  // where it is: its image, its folders or files, and the manifest it was found in (by its name, in one of them)
+  const spots = [
+    ...(b.image ? [<span key="image">{b.image}</span>] : []),
+    ...b.roots.map((r) => (
+      <Link key={r.path} to={at(r)}>
+        {where(r.path)}
+      </Link>
+    )),
+    ...b.manifests
+      .filter((m) => !b.roots.some((r) => r.path === m.path))
+      .map((m) => {
+        const r = b.roots.find((r) => r.dir && r.path !== "." && m.path.startsWith(`${r.path}/`));
+        return (
+          <Link key={m.path} to={at(m)} title={`Found in ${m.path}`}>
+            {r ? m.path.slice(r.path.length + 1) : m.path}
+          </Link>
+        );
+      }),
+  ];
+  const own = blockStatus(b, jobs);
+  // the people to ask: those named for it first, on the line of their commits or reviews when they made some
   const reviews = new Map(b.reviewers.map((r) => [r.username, r]));
   const committers = new Set(b.people.flatMap((p) => (p.username ? [p.username] : [])));
   const onlyReviewed = b.reviewers.filter((r) => !committers.has(r.username));
+  const named = new Set(b.owners.flatMap((o) => (o.startsWith("@") ? [o.slice(1).toLowerCase()] : [])));
+  const isNamed = (username?: string | null) => !!username && named.has(username.toLowerCase());
+  const active = new Set([...committers, ...onlyReviewed.map((r) => r.username)].map((u) => u.toLowerCase()));
   const isMe = (username?: string | null) => !!me && !!username && username.toLowerCase() === me.toLowerCase();
+  const declared = (
+    <span className="smart-tag" title="Named in CODEOWNERS or assay.toml">
+      declared
+    </span>
+  );
+  const person = (p: Block["people"][number]) => {
+    // who changed it and reviewed it too: both, by the latest
+    const r = p.username ? reviews.get(p.username) : undefined;
+    const last = r && r.last > p.last ? r.last : p.last;
+    return (
+      <li key={`p:${p.name}`}>
+        <Avatar name={p.name} username={p.username} />
+        <span className="grow">
+          <span className="smart-line">
+            {p.username ? <UserLink username={p.username}>{p.name}</UserLink> : p.name}
+            {isNamed(p.username) && declared}
+          </span>
+          <span className="smart-sub">
+            <span title={last}>
+              {plural(p.commits, "commit")}
+              {r && ` · ${plural(r.reviews, "review")}`} · {timeAgo(last)}
+            </span>
+            {fix && isMe(p.username) && (
+              <>
+                {" · "}
+                <button type="button" className="smart-me" title="Leave yourself out of the people to ask, under all your names and addresses" onClick={() => fix({ kind: "exclude", who: p.name })}>
+                  Leave me out
+                </button>
+              </>
+            )}
+          </span>
+        </span>
+      </li>
+    );
+  };
+  const reviewer = (r: Block["reviewers"][number]) => (
+    <li key={`r:${r.username}`}>
+      <Avatar name={r.name || r.username} username={r.username} />
+      <span className="grow">
+        <span className="smart-line">
+          <UserLink username={r.username}>{r.name || r.username}</UserLink>
+          {isNamed(r.username) && declared}
+        </span>
+        <span className="smart-sub" title={r.last}>
+          {plural(r.reviews, "review")} · {timeAgo(r.last)}
+        </span>
+      </span>
+    </li>
+  );
+  // named, without a commit or a review in the window
+  const owner = (o: string) => {
+    const handle = o.startsWith("@") ? o.slice(1) : null;
+    return (
+      <li key={`o:${o}`}>
+        <Avatar name={handle ?? o} username={handle && !handle.includes("/") ? handle : undefined} />
+        <span className="grow">
+          <span className="smart-line">
+            {handle ? <Link to={`/${handle}`}>{o}</Link> : o}
+            {declared}
+          </span>
+        </span>
+      </li>
+    );
+  };
+  const people = [
+    ...b.people.filter((p) => isNamed(p.username)).map(person),
+    ...onlyReviewed.filter((r) => isNamed(r.username)).map(reviewer),
+    ...b.owners.filter((o) => !(o.startsWith("@") && active.has(o.slice(1).toLowerCase()))).map(owner),
+    ...b.people.filter((p) => !isNamed(p.username)).map(person),
+    ...onlyReviewed.filter((r) => !isNamed(r.username)).map(reviewer),
+  ];
   const total = b.languages.reduce((n, l) => n + l.files, 0) || 1;
   const langs = b.languages.slice(0, 5);
   const pct = (n: number) => Math.max(1, Math.round((100 * n) / total));
   return (
-    <aside className="side-card smart-panel" aria-label={`${title(b)}, details`}>
-      <header>
-        <div className="smart-kind" style={{ "--k": color } as CSSProperties}>
-          <Mark b={b} />
-          {kind}
-          {b.role && ` · ${ROLE[b.role]}`}
-          {b.configured && " · from assay.toml"}
+    <aside className={`side-card smart-panel${scrolled ? " scrolled" : ""}`} aria-label={`${title(b)}, details`} onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}>
+      <header className="smart-panel-head" style={{ "--k": color } as CSSProperties}>
+        <Mark b={b} />
+        <div className="grow">
+          <h2>{title(b)}</h2>
+          <div className="smart-panel-kind">
+            {kind}
+            {b.role && ` · ${ROLE[b.role]}`}
+            {b.configured && " · from assay.toml"}
+          </div>
         </div>
         <button type="button" className="icon-btn" aria-label="Close" title="Close (Esc)" onClick={() => select(null)}>
           <X size={14} />
         </button>
       </header>
-      <div>
-        <h2>{title(b)}</h2>
+      <div className="smart-intro">
         {b.description && <p className="smart-about">{b.description}</p>}
-        {b.roots.map((r) => (
-          <Link key={r.path} className="smart-root" to={at(r)}>
-            {where(r.path)}
-          </Link>
-        ))}
-        {b.image && <div className="smart-root">{b.image}</div>}
+        {spots.length > 0 && (
+          <div className="smart-where">
+            {spots.flatMap((s, i) =>
+              i
+                ? [
+                    <span key={`sep${i}`} className="sep" aria-hidden>
+                      ·
+                    </span>,
+                    s,
+                  ]
+                : [s],
+            )}
+          </div>
+        )}
         {b.parent && <div className="muted small">Part of {go(b.parent)}</div>}
+        {own && (
+          <div className="smart-states">
+            <button
+              type="button"
+              className={`smart-state ${own}`}
+              title="See its jobs"
+              onClick={() => ci.current?.scrollIntoView({ block: "start", behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" })}
+            >
+              <span aria-hidden>
+                <StatusIcon status={own} size={13} />
+              </span>
+              CI {statusLabel(own)}
+            </button>
+          </div>
+        )}
+        {waits && (
+          <p className="smart-note smart-waits">
+            <Hourglass size={14} aria-hidden />
+            <span>Waits on {go(waits)}, whose jobs failed.</span>
+          </p>
+        )}
       </div>
       {b.files > 0 && (
-        <section>
-          <h3>{plural(b.files, "file")}</h3>
+        <Part icon={FileCode} title="Files" count={b.files}>
           <div className="lang-bar" role="img" aria-label={langs.map((l) => `${l.name} ${pct(l.files)}%`).join(", ")}>
             {langs.map((l) => (
               <span key={l.name} style={{ flexGrow: l.files, background: l.color ?? "var(--text-faint)" }} title={`${l.name} ${pct(l.files)}%`} />
@@ -998,105 +1139,21 @@ function Details({ ctx, gitRef, map, lay, b, jobs, pipeline, waits, chain, setCh
               </span>
             ))}
           </div>
-        </section>
+        </Part>
       )}
-      {(b.owners.length > 0 || b.people.length > 0 || b.reviewers.length > 0) && (
-        <section>
-          <h3>People to ask</h3>
-          <ul>
-            {b.owners.map((o) => (
-              <li key={o}>
-                <span className="grow">{o.startsWith("@") ? <Link to={`/${o.slice(1)}`}>{o}</Link> : o}</span>
-                <span className="smart-tag" title="CODEOWNERS or assay.toml">
-                  declared
-                </span>
-              </li>
-            ))}
-            {b.people.map((p) => {
-              // who changed it and reviewed it too: both, by the latest
-              const r = p.username ? reviews.get(p.username) : undefined;
-              const last = r && r.last > p.last ? r.last : p.last;
-              return (
-                <li key={p.name}>
-                  <Avatar name={p.name} username={p.username} />
-                  <span className="grow">
-                    {p.username ? <UserLink username={p.username}>{p.name}</UserLink> : p.name}
-                    {fix && isMe(p.username) && (
-                      <>
-                        <br />
-                        <button type="button" className="smart-me" title="Leave yourself out of the people to ask, under all your names and addresses" onClick={() => fix({ kind: "exclude", who: p.name })}>
-                          Leave me out
-                        </button>
-                      </>
-                    )}
-                  </span>
-                  <span className="meta" title={last}>
-                    {plural(p.commits, "commit")}
-                    {r && ` · ${plural(r.reviews, "review")}`} · {timeAgo(last)}
-                  </span>
-                </li>
-              );
-            })}
-            {onlyReviewed.map((r) => (
-              <li key={`review:${r.username}`}>
-                <Avatar name={r.name || r.username} username={r.username} />
-                <span className="grow">
-                  <UserLink username={r.username}>{r.name || r.username}</UserLink>
-                </span>
-                <span className="meta" title={r.last}>
-                  {plural(r.reviews, "review")} · {timeAgo(r.last)}
-                </span>
-              </li>
-            ))}
-          </ul>
+      {people.length > 0 && (
+        <Part icon={Users} title="People to ask" count={people.length}>
+          <ul>{people}</ul>
           {solo(b) && <p className="smart-note">{SOLO}: worth sharing what they know.</p>}
           {(b.people.length > 0 || b.reviewers.length > 0) && (
             <p className="muted small">
               From the {b.reviewers.length > 0 ? "commits and reviews" : "commits"} of the last {plural(map.days, "day")}.
             </p>
           )}
-        </section>
+        </Part>
       )}
-      <EdgeList title="Needs">
-        {needs.map((e) => (
-          <li key={`${e.to}:${e.kind}`}>
-            <span className="grow">
-              {e.kind !== "part" && VERB[e.kind]} {go(e.to)}
-            </span>
-            {said(e)}
-          </li>
-        ))}
-      </EdgeList>
-      <EdgeList title="Contains">
-        {holds.map((e) => (
-          <li key={e.to}>
-            <span className="grow">{go(e.to)}</span>
-          </li>
-        ))}
-      </EdgeList>
-      <EdgeList title="Used by">
-        {neededBy.map((e) => (
-          <li key={`${e.from}:${e.kind}`}>
-            <span className="grow">
-              {go(e.from)} {e.kind !== "part" && VERB[e.kind]} it
-            </span>
-            {said(e)}
-          </li>
-        ))}
-      </EdgeList>
-      <Impact b={b} lay={lay} byId={byId} chain={chain} setChain={setChain} go={go} />
-      {(b.jobs.length > 0 || waits) && (
-        <section>
-          <h3>CI</h3>
-          {pipeline && b.jobs.length > 0 && (
-            <p className="smart-pipeline">
-              <Link to={`${ctx.web}/-/pipelines/${pipeline.iid}`}>Pipeline #{pipeline.iid}</Link>{" "}
-              <span className="muted">
-                · {statusLabel(pipeline.status)} · {timeAgo(pipeline.created_at)}
-              </span>
-            </p>
-          )}
-          {waits && <p className="smart-note">Waits on {go(waits)}, whose jobs failed.</p>}
+      {b.jobs.length > 0 && (
+        <Part icon={Workflow} title="CI" count={b.jobs.length} at={ci}>
           <ul>
             {b.jobs.map((name) => {
               const j = jobs.get(name);
@@ -1111,22 +1168,30 @@ function Details({ ctx, gitRef, map, lay, b, jobs, pipeline, waits, chain, setCh
               );
             })}
           </ul>
-        </section>
+          {pipeline && (
+            <p className="muted small">
+              From <Link to={`${ctx.web}/-/pipelines/${pipeline.iid}`}>pipeline #{pipeline.iid}</Link>
+              {` · ${statusLabel(pipeline.status)}${pipeline.status === "failed" && own !== "failed" ? " on other jobs" : ""} · ${timeAgo(pipeline.created_at)}`}
+            </p>
+          )}
+        </Part>
       )}
-      {b.manifests.length > 0 && (
-        <section>
-          <h3>Found in</h3>
-          <ul>
-            {b.manifests.map((m) => (
-              <li key={m.path}>
-                <Link className="grow smart-root" to={at(m)}>
-                  {m.path}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
+      {needs.length > 0 && (
+        <Part icon={ArrowRight} title="Needs" count={needs.length}>
+          <ul>{needs.map((e) => row(e.to, verb(e), e))}</ul>
+        </Part>
       )}
+      {holds.length > 0 && (
+        <Part icon={Boxes} title="Contains" count={holds.length}>
+          <ul>{holds.map((e) => row(e.to))}</ul>
+        </Part>
+      )}
+      {neededBy.length > 0 && (
+        <Part icon={ArrowLeft} title="Used by" count={neededBy.length}>
+          <ul>{neededBy.map((e) => row(e.from, verb(e), e))}</ul>
+        </Part>
+      )}
+      <Impact b={b} lay={lay} byId={byId} usedBy={new Set(neededBy.map((e) => e.from))} chain={chain} setChain={setChain} go={go} />
       {fix && <Fix key={b.id} b={b} map={map} me={me} fix={fix} />}
     </aside>
   );
@@ -1148,7 +1213,12 @@ function Fix({ b, map, me, fix }: { b: Block; map: S["RepoMap"]; me?: string; fi
   const toggle = (what: "rename" | "merge") => setOpen(open === what ? null : what);
   return (
     <section className="smart-fix">
-      <h3>Correct the map</h3>
+      <div className="smart-part-head">
+        <h3>
+          <Pencil size={14} aria-hidden />
+          Correct the map
+        </h3>
+      </div>
       <div className="row">
         <button type="button" className={`btn small${open === "rename" ? " on" : ""}`} aria-expanded={open === "rename"} onClick={() => toggle("rename")}>
           Rename or describe
@@ -1212,33 +1282,54 @@ function Fix({ b, map, me, fix }: { b: Block; map: S["RepoMap"]; me?: string; fi
   );
 }
 
-/** What a change to the block reaches: all that depends on it, through others too, who knows
- *  each and their CI jobs; lit up on the map when asked. */
-function Impact({ b, lay, byId, chain, setChain, go }: { b: Block; lay: Plan; byId: Map<string, Block>; chain: boolean; setChain: (on: boolean) => void; go: (id: string) => ReactNode }) {
+/** What a change to the block reaches: what uses it (listed above it), then what holds it and
+ *  what all those reach in turn, who knows each and their CI jobs; lit up on the map when asked. */
+function Impact({
+  b,
+  lay,
+  byId,
+  usedBy,
+  chain,
+  setChain,
+  go,
+}: {
+  b: Block;
+  lay: Plan;
+  byId: Map<string, Block>;
+  usedBy: Set<string>;
+  chain: boolean;
+  setChain: (on: boolean) => void;
+  go: (id: string) => ReactNode;
+}) {
   const deps = dependents(lay.edges, [b.id]);
   if (!deps.size) return null;
-  // those it reaches through others: the ones "Used by" does not list
-  const far = [...deps].filter((d): d is [string, string] => d[1] !== null);
+  // reached straight from it, not using it: what holds it
+  const more = [...deps].filter(([id]) => !usedBy.has(id));
   const jobs = [...new Set([...deps.keys()].flatMap((id) => byId.get(id)?.jobs ?? []))];
+  const name = (id: string) => (byId.has(id) ? title(byId.get(id)!) : id);
+  const reach = `It reaches ${plural(deps.size, "block")}`;
   return (
-    <section className="smart-impact">
-      <div className="smart-impact-head">
-        <h3>If it changes</h3>
+    <Part
+      icon={Zap}
+      title="If it changes"
+      className="smart-impact"
+      action={
         <button type="button" className={`btn small${chain ? " on" : ""}`} aria-pressed={chain} onClick={() => setChain(!chain)}>
           Light them up
         </button>
-      </div>
-      <p>
-        {plural(deps.size, "block")} {deps.size === 1 ? "depends" : "depend"} on it{far.length > 0 && `, ${far.length} of them through others`}.
-      </p>
-      {far.length > 0 && (
+      }
+    >
+      <p className="smart-lead">{!usedBy.size ? `${reach}:` : more.length ? `${reach}: those that use it, and these:` : `${reach}: those that use it.`}</p>
+      {more.length > 0 && (
         <ul>
-          {far.map(([id, through]) => {
+          {more.map(([id, through]) => {
             const d = byId.get(id);
             return (
               <li key={id}>
+                <RowMark b={d} />
                 <span className="grow">
-                  {go(id)} <span className="muted">through {byId.has(through) ? title(byId.get(through)!) : through}</span>
+                  <span className="smart-line">{go(id)}</span>
+                  <span className="smart-sub">{through ? `through ${name(through)}` : "holds it"}</span>
                 </span>
                 {d && d.people.length > 0 && (
                   <span className="smart-people">
@@ -1252,18 +1343,57 @@ function Impact({ b, lay, byId, chain, setChain, go }: { b: Block; lay: Plan; by
           })}
         </ul>
       )}
-      {jobs.length > 0 && <p className="muted small">Their CI jobs: {jobs.join(", ")}</p>}
+      {jobs.length > 0 && (
+        <p className="smart-jobs">
+          <span>Their CI jobs:</span>
+          {jobs.map((j) => (
+            <code key={j}>{j}</code>
+          ))}
+        </p>
+      )}
+    </Part>
+  );
+}
+
+/** A part of the details: its heading, with an icon and how many it lists, and an action. */
+function Part({
+  icon: Icon,
+  title: heading,
+  count,
+  action,
+  className,
+  at,
+  children,
+}: {
+  icon: LucideIcon;
+  title: string;
+  count?: number;
+  action?: ReactNode;
+  className?: string;
+  at?: Ref<HTMLElement>;
+  children: ReactNode;
+}) {
+  return (
+    <section className={className} ref={at}>
+      <div className="smart-part-head">
+        <h3>
+          <Icon size={14} aria-hidden />
+          {heading}
+          {count != null && <span className="smart-count">{count.toLocaleString()}</span>}
+        </h3>
+        {action}
+      </div>
+      {children}
     </section>
   );
 }
 
-function EdgeList({ title, children }: { title: string; children: ReactNode[] }) {
-  if (!children.length) return null;
+/** A block's mark in a list of the details, in its kind's colour. */
+function RowMark({ b }: { b?: Block }) {
   return (
-    <section>
-      <h3>{title}</h3>
-      <ul>{children}</ul>
-    </section>
+    <span className="smart-row-mark" style={b ? ({ "--k": KIND[b.kind][1] } as CSSProperties) : undefined} aria-hidden>
+      {b && <Mark b={b} />}
+    </span>
   );
 }
 
