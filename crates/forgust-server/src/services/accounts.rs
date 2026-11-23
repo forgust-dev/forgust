@@ -161,7 +161,7 @@ pub async fn confirm(state: &AppState, token: &str, signed_in: Option<i64>) -> A
     if email.eq_ignore_ascii_case(&user.email) {
         udb::set_email_verified(&mut *tx, user.id).await?;
     } else if user.unconfirmed_email.as_deref().is_some_and(|u| u.eq_ignore_ascii_case(&email)) {
-        match forgust_db::user_emails::taken_by(&mut *tx, &email).await? {
+        match forgust_db::user_emails::reserved_by(&mut *tx, &email).await? {
             Some(o) if o == user.id => return Err(ApiError::conflict("this address is in your other addresses: remove it there first")),
             Some(_) => return Err(ApiError::conflict("this address is now used by another account")),
             None => {}

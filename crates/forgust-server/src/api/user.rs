@@ -70,7 +70,7 @@ pub async fn update_me(
     paths::validate_name(&req.name)?;
     paths::validate_email(email)?;
     if changes {
-        match forgust_db::user_emails::taken_by(&state.db, email).await? {
+        match forgust_db::user_emails::reserved_by(&state.db, email).await? {
             Some(id) if id == u.id => return Err(ApiError::conflict("this address is in your other addresses: remove it there first")),
             Some(_) => return Err(ApiError::conflict("email is already in use")),
             None => {}

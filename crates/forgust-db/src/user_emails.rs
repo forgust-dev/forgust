@@ -58,8 +58,10 @@ pub async fn find_by_email(e: impl PgExecutor<'_>, user_id: i64, email: &str) ->
     .await
 }
 
-/// Add an address, confirmed already when `confirmed_by` says how. Taken
-/// (by anyone, as their own or an extra address): a unique violation.
+/// Add an address, confirmed already when `confirmed_by` says how. Someone's
+/// own address, one confirmed by another account (when this one is confirmed)
+/// or one in the account's list already: a unique violation. Confirmed, it
+/// drops the other accounts' unconfirmed listings of it.
 pub async fn insert(e: impl PgExecutor<'_>, user_id: i64, email: &str, confirmed_by: Option<&str>) -> Result<UserEmail> {
     sqlx::query_as!(
         UserEmail,
@@ -74,7 +76,9 @@ pub async fn insert(e: impl PgExecutor<'_>, user_id: i64, email: &str, confirmed
     .await
 }
 
-/// Confirm it (`by`: link, admin or auto). False: it was already, or is gone.
+/// Confirm it (`by`: link, admin or auto), dropping the other accounts'
+/// unconfirmed listings of it. False: it was already, or is gone. Someone's
+/// own address or confirmed by another account meanwhile: a unique violation.
 pub async fn confirm(e: impl PgExecutor<'_>, id: i64, by: &str) -> Result<bool> {
     let n = sqlx::query!("UPDATE user_emails SET confirmed_at = now(), confirmed_by = $2 WHERE id = $1 AND confirmed_at IS NULL", id, by)
         .execute(e)
@@ -94,12 +98,14 @@ pub async fn delete(e: impl PgExecutor<'_>, user_id: i64, id: i64) -> Result<Opt
     .await
 }
 
-/// Whose address `email` is, confirmed or not, as their own or an extra one.
-pub async fn taken_by(e: impl PgExecutor<'_>, email: &str) -> Result<Option<i64>> {
+/// Whose address `email` is: their own (confirmed or not) or a confirmed extra
+/// one. An unconfirmed extra address is nobody's yet: several accounts may
+/// list it, and it goes when someone takes it.
+pub async fn reserved_by(e: impl PgExecutor<'_>, email: &str) -> Result<Option<i64>> {
     sqlx::query_scalar!(
         r#"SELECT id AS "id!" FROM users WHERE lower(email) = lower($1)
            UNION ALL
-           SELECT user_id FROM user_emails WHERE lower(email) = lower($1)
+           SELECT user_id FROM user_emails WHERE lower(email) = lower($1) AND confirmed_at IS NOT NULL
            LIMIT 1"#,
         email
     )

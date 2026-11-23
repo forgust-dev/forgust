@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id AS \"id!\" FROM users WHERE lower(email) = lower($1)\n           UNION ALL\n           SELECT user_id FROM user_emails WHERE lower(email) = lower($1) AND confirmed_at IS NOT NULL\n           LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "caf7dea1ceb91f334b16d18b6f78dbe3d1915e172c4f29eb04be45c2921ad3b2"
+}

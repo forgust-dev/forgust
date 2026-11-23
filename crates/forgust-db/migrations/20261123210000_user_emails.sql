@@ -1,6 +1,8 @@
 -- More addresses per account: commits, imported people and signed commits
--- match any confirmed one, like the account's own. An address belongs to one
--- account, confirmed or not, as its own or as an extra one.
+-- match any confirmed one, like the account's own. A confirmed address
+-- belongs to one account, as its own or as an extra one; an unconfirmed one
+-- reserves nothing (anyone could list someone else's address and lock them
+-- out): several accounts may list it until one of them confirms it.
 CREATE TABLE user_emails (
     id            bigserial   PRIMARY KEY,
     user_id       bigint      NOT NULL REFERENCES users (id) ON DELETE CASCADE,
@@ -12,28 +14,50 @@ CREATE TABLE user_emails (
     created_at    timestamptz NOT NULL DEFAULT now(),
     CHECK ((confirmed_at IS NULL) = (confirmed_by IS NULL))
 );
-CREATE UNIQUE INDEX user_emails_email_idx ON user_emails (lower(email));
-CREATE INDEX user_emails_user_idx ON user_emails (user_id);
+CREATE UNIQUE INDEX user_emails_email_idx ON user_emails (lower(email)) WHERE confirmed_at IS NOT NULL;
+CREATE UNIQUE INDEX user_emails_user_email_idx ON user_emails (user_id, lower(email));
 
--- No address in both tables: an account's own address is nobody's extra
--- one (theirs included: it is their address already), and the reverse. The
--- lock on the address makes two saves of it at once wait for each other.
+-- An account's own address is nobody's extra one (theirs included: it is
+-- their address already), confirmed: refused; unconfirmed: dropped, with its
+-- links. The lock on the address makes two saves of it at once wait for each
+-- other.
+CREATE FUNCTION users_email_reserved() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP = 'UPDATE' AND lower(NEW.email) = lower(OLD.email) THEN
+        RETURN NEW;
+    END IF;
+    PERFORM pg_advisory_xact_lock(hashtextextended('email:' || lower(NEW.email), 0));
+    IF EXISTS (SELECT 1 FROM user_emails WHERE lower(email) = lower(NEW.email) AND confirmed_at IS NOT NULL) THEN
+        RAISE EXCEPTION 'email is already in use' USING ERRCODE = 'unique_violation';
+    END IF;
+    DELETE FROM user_emails WHERE lower(email) = lower(NEW.email);
+    DELETE FROM user_tokens WHERE purpose = 'extra_email' AND lower(email) = lower(NEW.email);
+    RETURN NEW;
+END $$;
+CREATE TRIGGER users_email_reserved BEFORE INSERT OR UPDATE OF email ON users
+    FOR EACH ROW EXECUTE FUNCTION users_email_reserved();
+
+-- An extra address is nobody's own one, and confirmed by one account at
+-- most: confirming it drops the other accounts' unconfirmed listings of it,
+-- with their links.
 CREATE FUNCTION user_emails_reserved() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
     PERFORM pg_advisory_xact_lock(hashtextextended('email:' || lower(NEW.email), 0));
-    IF TG_TABLE_NAME = 'users' THEN
-        IF EXISTS (SELECT 1 FROM user_emails WHERE lower(email) = lower(NEW.email)) THEN
+    IF EXISTS (SELECT 1 FROM users WHERE lower(email) = lower(NEW.email)) THEN
+        RAISE EXCEPTION 'email is already in use' USING ERRCODE = 'unique_violation';
+    END IF;
+    IF NEW.confirmed_at IS NOT NULL THEN
+        IF EXISTS (SELECT 1 FROM user_emails WHERE lower(email) = lower(NEW.email) AND confirmed_at IS NOT NULL AND id <> NEW.id) THEN
             RAISE EXCEPTION 'email is already in use' USING ERRCODE = 'unique_violation';
         END IF;
-    ELSIF EXISTS (SELECT 1 FROM users WHERE lower(email) = lower(NEW.email)) THEN
-        RAISE EXCEPTION 'email is already in use' USING ERRCODE = 'unique_violation';
+        DELETE FROM user_emails WHERE lower(email) = lower(NEW.email) AND user_id <> NEW.user_id;
+        DELETE FROM user_tokens WHERE purpose = 'extra_email' AND lower(email) = lower(NEW.email) AND user_id <> NEW.user_id;
     END IF;
     RETURN NEW;
 END $$;
-CREATE TRIGGER users_email_reserved BEFORE INSERT OR UPDATE OF email ON users
-    FOR EACH ROW EXECUTE FUNCTION user_emails_reserved();
-CREATE TRIGGER user_emails_reserved BEFORE INSERT OR UPDATE OF email ON user_emails
+CREATE TRIGGER user_emails_reserved BEFORE INSERT OR UPDATE OF email, confirmed_at ON user_emails
     FOR EACH ROW EXECUTE FUNCTION user_emails_reserved();
 
 -- Links for an extra address (`email`: which one).

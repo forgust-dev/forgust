@@ -5,7 +5,11 @@
 //! once when the instance trusts its people's addresses (the
 //! `auto_confirm_emails` setting, only while sign-up is closed: with open
 //! sign-up anyone could claim someone's address and become their code
-//! owner). An address is one account's only, confirmed or not.
+//! owner). A confirmed address is one account's only. An unconfirmed one
+//! reserves nothing: else anyone could list a colleague's address and keep
+//! them from signing up, or signing in through single sign-on, with it.
+//! Several accounts may list it; it leaves their lists when another account
+//! confirms it or takes it as its own.
 
 use chrono::{Duration, Utc};
 use forgust_db::user_emails::{self as edb, UserEmail};
@@ -37,17 +41,27 @@ pub async fn confirmed_as_added(state: &AppState, user: &User) -> ApiResult<Opti
     Ok((s.auto_confirm_emails && !s.signup_enabled && user.email_verified()).then_some("auto"))
 }
 
-/// Refused when `email` is somebody's already (`user`'s included), as their
-/// own address or an extra one, confirmed or not.
+/// Refused when `email` is somebody's already (`user`'s included: their own
+/// address, or a confirmed extra one), or in `user`'s list already. Another
+/// account's unconfirmed listing of it is no reason.
 pub async fn check_free(state: &AppState, user: &User, email: &str) -> ApiResult<()> {
-    match edb::taken_by(&state.db, email).await? {
-        None => Ok(()),
+    match edb::reserved_by(&state.db, email).await? {
         Some(id) if id == user.id && email.eq_ignore_ascii_case(&user.email) => {
             Err(ApiError::conflict("this is your account's own address already"))
         }
         Some(id) if id == user.id => Err(ApiError::conflict("this address is in your list already")),
         Some(_) => Err(ApiError::conflict("email is already in use")),
+        None if edb::find_by_email(&state.db, user.id, email).await?.is_some() => {
+            Err(ApiError::conflict("this address is in your list already"))
+        }
+        None => Ok(()),
     }
+}
+
+/// A confirmation refused by the database: the address became someone's own,
+/// or another account confirmed it, since it was listed.
+fn taken_meanwhile(e: sqlx::Error) -> ApiError {
+    if forgust_db::is_unique_violation(&e) { ApiError::conflict("email is already in use") } else { e.into() }
 }
 
 /// Add `email` to `user`'s addresses: confirmed at once as `confirmed_by`
@@ -59,9 +73,7 @@ pub async fn add(state: &AppState, by: &Principal, user: &User, email: &str, con
         return Err(ApiError::bad(format!("an account has {MAX_PER_ACCOUNT} other addresses at most: remove one first")));
     }
     check_free(state, user, email).await?;
-    let row = edb::insert(&state.db, user.id, email, confirmed_by)
-        .await
-        .map_err(|e| if forgust_db::is_unique_violation(&e) { ApiError::conflict("email is already in use") } else { e.into() })?;
+    let row = edb::insert(&state.db, user.id, email, confirmed_by).await.map_err(taken_meanwhile)?;
     super::audit(state, by, "email_added", Some(("user", user.id)), json!({ "email_id": row.id, "confirmed_by": confirmed_by }), None)
         .await;
     if row.confirmed_at.is_none() {
@@ -112,7 +124,7 @@ pub async fn confirm_by_admin(state: &AppState, by: &Principal, user: &User, id:
         return Err(ApiError::conflict("this address is already confirmed"));
     }
     let mut tx = state.db.begin().await?;
-    edb::confirm(&mut *tx, row.id, "admin").await?;
+    edb::confirm(&mut *tx, row.id, "admin").await.map_err(taken_meanwhile)?;
     edb::delete_tokens(&mut *tx, user.id, &row.email).await?;
     tx.commit().await?;
     super::audit(state, by, "email_confirmed", Some(("user", user.id)), json!({ "by": "administrator", "email_id": row.id }), None).await;
@@ -123,7 +135,7 @@ pub async fn confirm_by_admin(state: &AppState, by: &Principal, user: &User, id:
 /// checked who is signed in). None: the account no longer has it.
 pub async fn confirm_by_link(e: &mut sqlx::PgConnection, user: &User, email: &str) -> ApiResult<Option<UserEmail>> {
     let Some(row) = edb::find_by_email(&mut *e, user.id, email).await? else { return Ok(None) };
-    edb::confirm(&mut *e, row.id, "link").await?;
+    edb::confirm(&mut *e, row.id, "link").await.map_err(taken_meanwhile)?;
     Ok(Some(row))
 }
 

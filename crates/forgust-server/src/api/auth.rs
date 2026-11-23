@@ -720,7 +720,7 @@ async fn sync_from_provider(
             identity.email.as_deref().filter(|e| !e.eq_ignore_ascii_case(&user.email) && services::paths::validate_email(e).is_ok());
         // another account's, or one of this account's other addresses
         if let Some(e) = email
-            && forgust_db::user_emails::taken_by(&state.db, e).await?.is_some()
+            && forgust_db::user_emails::reserved_by(&state.db, e).await?.is_some()
         {
             tracing::warn!(user = user.id, provider = provider_name, "the provider's email is already in use: kept the old one");
             email = None;
@@ -870,9 +870,11 @@ async fn finish_sign_in(
                 Some(e) => forgust_db::users::find_by_email(&state.db, e).await?,
                 None => None,
             };
-            // one of an account's other addresses: never linked by (only its own address is)
+            // one of an account's other addresses, confirmed: never linked by (only its own
+            // address is). An unconfirmed listing of it holds back nobody: it is dropped
+            // when the account is created with it.
             let other_address = match (&by_email, &identity.email) {
-                (None, Some(e)) => forgust_db::user_emails::taken_by(&state.db, e).await?.is_some(),
+                (None, Some(e)) => forgust_db::user_emails::reserved_by(&state.db, e).await?.is_some(),
                 _ => false,
             };
             let user = match by_email {
@@ -887,7 +889,7 @@ async fn finish_sign_in(
                 }
                 None if other_address => {
                     return Err(ApiError::forbidden(format!(
-                        "an account uses this email as one of its other addresses: sign in to it with your password, then link {} under Your settings > Password & 2FA",
+                        "an account confirmed this email as one of its other addresses: if it is yours, sign in to it with your password, then link {} under Your settings > Password & 2FA",
                         provider.display_name
                     )));
                 }

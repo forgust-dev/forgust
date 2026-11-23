@@ -62,23 +62,13 @@ async fn without_email_an_administrator_confirms_them(pool: sqlx::PgPool) {
     let links: i64 = sqlx::query_scalar("SELECT count(*) FROM user_tokens").fetch_one(&srv.state.db).await.unwrap();
     assert_eq!(links, 0);
 
-    // it is hers, confirmed or not: nobody else takes it, in any way
-    assert_eq!(bob.post("/api/v1/user/emails", json!({ "email": "ALICE@work.example" })).await.0, 409);
-    let (code, body) =
-        bob.put("/api/v1/user", json!({ "name": "Bob", "email": "alice@work.example", "current_password": password("bob") })).await;
+    // unconfirmed, it is nobody's yet: someone else may list it too
+    let bobs = bob.ok_post("/api/v1/user/emails", json!({ "email": "ALICE@work.example" })).await;
+    assert!(bobs["confirmed_at"].is_null(), "{bobs}");
+    // but not twice in a list, nor anyone's own address an extra one
+    let (code, body) = alice.post("/api/v1/user/emails", json!({ "email": "Alice@Work.example" })).await;
     assert_eq!(code, 409, "{body}");
-    assert_eq!(admin.post("/api/v1/admin/users", json!({ "username": "carol", "email": "alice@work.example" })).await.0, 409);
-    settings(&admin, true, false).await;
-    let (code, body) = Client::new(&srv.base)
-        .post("/api/v1/auth/register", json!({ "username": "mallory", "email": "alice@work.example", "password": "mallory-password-1" }))
-        .await;
-    assert_eq!(code, 409, "{body}");
-    settings(&admin, false, false).await;
-    // nor is it her own address while it is in her list, nor anyone's own one an extra
-    let (code, body) =
-        alice.put("/api/v1/user", json!({ "name": "Alice", "email": "alice@work.example", "current_password": password("alice") })).await;
-    assert_eq!(code, 409, "{body}");
-    assert!(body["message"].as_str().unwrap().contains("other addresses"), "{body}");
+    assert!(body["message"].as_str().unwrap().contains("in your list already"), "{body}");
     assert_eq!(alice.post("/api/v1/user/emails", json!({ "email": "bob@example.com" })).await.0, 409);
     assert_eq!(alice.post("/api/v1/user/emails", json!({ "email": "alice@example.com" })).await.0, 409);
     assert_eq!(alice.post("/api/v1/user/emails", json!({ "email": "not an address" })).await.0, 400);
@@ -104,6 +94,25 @@ async fn without_email_an_administrator_confirms_them(pool: sqlx::PgPool) {
     assert_eq!(*target, Some(aid));
     assert_eq!(details["email_id"], eid);
     assert!(!details.to_string().contains("work.example"), "{details}");
+
+    // confirmed, it is hers: bob's listing of it went, and nobody else takes it, in any way
+    assert_eq!(bob.ok_get("/api/v1/user/emails").await.as_array().unwrap().len(), 0);
+    assert_eq!(bob.post("/api/v1/user/emails", json!({ "email": "ALICE@work.example" })).await.0, 409);
+    let (code, body) =
+        bob.put("/api/v1/user", json!({ "name": "Bob", "email": "alice@work.example", "current_password": password("bob") })).await;
+    assert_eq!(code, 409, "{body}");
+    assert_eq!(admin.post("/api/v1/admin/users", json!({ "username": "carol", "email": "alice@work.example" })).await.0, 409);
+    settings(&admin, true, false).await;
+    let (code, body) = Client::new(&srv.base)
+        .post("/api/v1/auth/register", json!({ "username": "mallory", "email": "alice@work.example", "password": "mallory-password-1" }))
+        .await;
+    assert_eq!(code, 409, "{body}");
+    settings(&admin, false, false).await;
+    // nor is it her own address while it is in her list
+    let (code, body) =
+        alice.put("/api/v1/user", json!({ "name": "Alice", "email": "alice@work.example", "current_password": password("alice") })).await;
+    assert_eq!(code, 409, "{body}");
+    assert!(body["message"].as_str().unwrap().contains("other addresses"), "{body}");
 
     // an administrator's own: confirmed as they add it (they answer for it), with their password
     let (code, body) = admin.post("/api/v1/user/emails", json!({ "email": "root@work.example" })).await;
@@ -242,4 +251,63 @@ async fn a_reset_that_takes_an_account_back_drops_them(pool: sqlx::PgPool) {
     assert_eq!(linked(&srv, "squatter@example.org").await, None);
     let left: i64 = sqlx::query_scalar("SELECT count(*) FROM user_emails").fetch_one(&srv.state.db).await.unwrap();
     assert_eq!(left, 0);
+}
+
+/// Listing an address that is not yours holds back nobody: its owner still
+/// confirms it, signs up with it, gets an account made with it or moves their
+/// own address to it, and the squatter's listing (and link) goes.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn an_unconfirmed_address_holds_back_nobody(pool: sqlx::PgPool) {
+    let srv = TestServer::start(pool).await;
+    let admin = srv.user("root", true).await;
+    let mallory = srv.user("mallory", false).await;
+    let bob = srv.user("bob", false).await;
+    let extra_links = |email: &'static str| {
+        let db = srv.state.db.clone();
+        async move {
+            sqlx::query_scalar::<_, i64>("SELECT count(*) FROM user_tokens WHERE purpose = 'extra_email' AND lower(email) = $1")
+                .bind(email)
+                .fetch_one(&db)
+                .await
+                .unwrap()
+        }
+    };
+
+    // both list bob's work address; he opens his link: the address is his, mallory's listing and link go
+    mallory.ok_post("/api/v1/user/emails", json!({ "email": "bob@corp.example" })).await;
+    wait_jobs(&srv.state).await;
+    let squat = link_token(&last_mail_to(&srv, "bob@corp.example").unwrap().body, "verify-email");
+    bob.ok_post("/api/v1/user/emails", json!({ "email": "Bob@Corp.example" })).await;
+    wait_jobs(&srv.state).await;
+    let token = link_token(&last_mail_to(&srv, "Bob@Corp.example").unwrap().body, "verify-email");
+    bob.ok_post("/api/v1/auth/email/confirm", json!({ "token": token })).await;
+    assert_eq!(linked(&srv, "bob@corp.example").await.as_deref(), Some("bob"));
+    assert_eq!(mallory.ok_get("/api/v1/user/emails").await.as_array().unwrap().len(), 0);
+    assert_eq!(mallory.post("/api/v1/auth/email/confirm", json!({ "token": squat })).await.0, 400);
+    assert_eq!(extra_links("bob@corp.example").await, 0);
+
+    // an administrator makes carol's account with the address mallory listed
+    mallory.ok_post("/api/v1/user/emails", json!({ "email": "carol@corp.example" })).await;
+    admin.ok_post("/api/v1/admin/users", json!({ "username": "carol", "email": "carol@corp.example" })).await;
+    assert_eq!(mallory.ok_get("/api/v1/user/emails").await.as_array().unwrap().len(), 0);
+    assert_eq!(extra_links("carol@corp.example").await, 0);
+
+    // dave signs up with his
+    mallory.ok_post("/api/v1/user/emails", json!({ "email": "dave@corp.example" })).await;
+    settings(&admin, true, false).await;
+    let (code, body) = Client::new(&srv.base)
+        .post("/api/v1/auth/register", json!({ "username": "dave", "email": "dave@corp.example", "password": "dave-password-1" }))
+        .await;
+    assert_eq!(code, 200, "{body}");
+    assert_eq!(mallory.ok_get("/api/v1/user/emails").await.as_array().unwrap().len(), 0);
+
+    // bob moves his own address to one mallory listed: it moves once confirmed
+    mallory.ok_post("/api/v1/user/emails", json!({ "email": "bob@home.example" })).await;
+    bob.ok_put("/api/v1/user", json!({ "name": "Bob", "email": "bob@home.example", "current_password": password("bob") })).await;
+    wait_jobs(&srv.state).await;
+    let moved = link_token(&last_mail_to(&srv, "bob@home.example").unwrap().body, "verify-email");
+    bob.ok_post("/api/v1/auth/email/confirm", json!({ "token": moved })).await;
+    assert_eq!(bob.ok_get("/api/v1/user").await["email"], "bob@home.example");
+    assert_eq!(mallory.ok_get("/api/v1/user/emails").await.as_array().unwrap().len(), 0);
+    assert_eq!(extra_links("bob@home.example").await, 0);
 }

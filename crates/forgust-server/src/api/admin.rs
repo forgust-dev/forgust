@@ -971,7 +971,7 @@ pub async fn update_user(
             return Err(ApiError::bad("bots have no address of their own"));
         }
         services::paths::validate_email(email)?;
-        if !email.eq_ignore_ascii_case(&u.email) && forgust_db::user_emails::taken_by(&state.db, email).await? == Some(u.id) {
+        if !email.eq_ignore_ascii_case(&u.email) && forgust_db::user_emails::reserved_by(&state.db, email).await? == Some(u.id) {
             return Err(ApiError::conflict("this is one of their other addresses: remove it from there first"));
         }
         services::accounts::set_email(&state, &p, &u, email, true).await?;
@@ -1110,7 +1110,7 @@ pub async fn confirm_user_email(
 }
 
 /// Remove one of someone's addresses (one they should not hold, or that
-/// holds back its owner from adding it).
+/// holds back its owner: a confirmed one is nobody else's).
 pub async fn remove_user_email(
     State(state): State<AppState>,
     Admin(_, p): Admin,
