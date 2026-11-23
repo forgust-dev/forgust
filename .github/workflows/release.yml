@@ -2,9 +2,11 @@ name: Release
 
 # Pushing a tag vX.Y.Z publishes ghcr.io/forgust-dev/forgust:X.Y.Z (and X.Y,
 # latest) and, under the same version, the AI review job's image
-# ghcr.io/forgust-dev/forgust-reviewer (crates/forgust-reviewer), each for amd64
-# and arm64, then opens a draft GitHub release with notes grouped from the
-# commit subjects since the last tag (.github/release-notes.sh).
+# ghcr.io/forgust-dev/forgust-reviewer (crates/forgust-reviewer) and assay's,
+# which maps a repository in CI, ghcr.io/forgust-dev/forgust-assay
+# (crates/forgust-assay), each for amd64 and arm64, then opens a draft GitHub
+# release with notes grouped from the commit subjects since the last tag
+# (.github/release-notes.sh).
 # The image carries an SBOM and BuildKit provenance, is scanned for known
 # vulnerabilities before it gets its tags, and is signed: a build provenance
 # attestation that `gh attestation verify` checks (see SECURITY.md).
@@ -45,7 +47,7 @@ jobs:
     strategy:
       matrix:
         arch: [amd64, arm64]
-        image: [forgust, forgust-reviewer]
+        image: [forgust, forgust-reviewer, forgust-assay]
         include:
           - arch: amd64
             runner: ubuntu-latest
@@ -61,6 +63,11 @@ jobs:
             title: Forgust reviewer
             description: The AI review job of Forgust
             smoke: forgust-review --version
+          - image: forgust-assay
+            dockerfile: crates/forgust-assay/Dockerfile
+            title: Forgust assay
+            description: The Smart View's engine of Forgust, to map a repository in CI
+            smoke: assay --version
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -125,7 +132,7 @@ jobs:
     strategy:
       matrix:
         arch: [amd64, arm64]
-        image: [forgust, forgust-reviewer]
+        image: [forgust, forgust-reviewer, forgust-assay]
     runs-on: ubuntu-latest
     permissions:
       packages: read
@@ -164,6 +171,8 @@ jobs:
             description: A fast, self-hosted code forge written in Rust
           - image: forgust-reviewer
             description: The AI review job of Forgust
+          - image: forgust-assay
+            description: The Smart View's engine of Forgust, to map a repository in CI
     runs-on: ubuntu-latest
     env:
       IMAGE: ${{ format('ghcr.io/{0}/{1}', github.repository_owner, matrix.image) }}
@@ -248,7 +257,7 @@ jobs:
           exclude=$([[ "$GITHUB_REF_NAME" == *-* ]] || echo "--exclude=*-*")
           prev=$(git describe --tags --abbrev=0 --match 'v*' $exclude "$GITHUB_REF_NAME^" 2>/dev/null || true)
           {
-            echo "Images: \`docker pull $REGISTRY/forgust:$version\`, and the AI review job's \`$REGISTRY/forgust-reviewer:$version\`"
+            echo "Images: \`docker pull $REGISTRY/forgust:$version\`, the AI review job's \`$REGISTRY/forgust-reviewer:$version\`, and assay's \`$REGISTRY/forgust-assay:$version\`"
             echo
             .github/release-notes.sh "$prev" "$GITHUB_REF_NAME"
             if [ -n "$prev" ]; then

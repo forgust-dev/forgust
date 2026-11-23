@@ -1,7 +1,7 @@
 name: Image scan
 
 # Vulnerabilities are published after an image is released: every week, scan
-# `latest` of both images (their OS packages and the crates in the binaries);
+# `latest` of each image (their OS packages and the crates in the binaries);
 # findings show in the repository's Security tab.
 on:
   schedule:
@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: [forgust, forgust-reviewer]
+        image: [forgust, forgust-reviewer, forgust-assay]
     runs-on: ubuntu-latest
     env:
       IMAGE: ${{ format('ghcr.io/{0}/{1}', github.repository_owner, matrix.image) }}

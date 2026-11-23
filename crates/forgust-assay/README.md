@@ -17,6 +17,27 @@ assay map [PATH] [--text | --pretty] [--no-people] [--days N]
 
 `assay view` writes one HTML file (`<repository>.assay.html` by default), its map inside and nothing to fetch: the blocks as cards, from what needs to what is needed, left to right; a block clicked shows its links, its languages and the people to ask.
 
+## The image
+
+`ghcr.io/forgust-dev/forgust-assay`, released with Forgust under the same version, maps a repository in any CI. It is Alpine, `git`, the system's certificate authorities and the `assay` command, running as user 10001; git reads a clone of another user's all the same. It has no entrypoint, because GitLab Runner's Docker executor runs a job's script through a shell. Its default command prints the summary of the folder mounted at `/repo`:
+
+```sh
+docker run --rm -v "$PWD:/repo" ghcr.io/forgust-dev/forgust-assay:0.6.0
+```
+
+A job of Forgust or GitLab that keeps the page of the map. The whole history tells who knows each block: a shallow clone only knows its last commits.
+
+```yaml
+smart-view:
+  image: ghcr.io/forgust-dev/forgust-assay:0.6.0
+  variables:
+    GIT_DEPTH: 0
+  script:
+    - assay view -o smart-view.html
+  artifacts:
+    paths: [smart-view.html]
+```
+
 ## What it finds
 
 | Block (`kind`) | Found from | Its files |
@@ -113,6 +134,9 @@ let map = forgust_assay::map_snapshot(&snapshot)?;
 
 ```sh
 cargo test -p forgust-assay
+docker build -f crates/forgust-assay/Dockerfile -t forgust-assay:local .
 ```
+
+CI builds the image on main when what it is built from changes, and checks that it maps a clone of another user's, as its user.
 
 The integration tests write small repositories (a Cargo workspace, an npm one, Dockerfiles, compose services, a GitLab CI, CODEOWNERS, assay.toml; charts, Kustomize, manifests, Ansible, Terraform and Pulumi deploying the images) with a git history, and map them; then map the same one as a forge hands it over, and smaller ones for what assay.toml corrects and for the roles assay guesses.
