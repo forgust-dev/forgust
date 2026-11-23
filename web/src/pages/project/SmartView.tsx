@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   AlertTriangle,
   AppWindow,
@@ -10,7 +10,9 @@ import {
   Container,
   Database,
   DatabaseZap,
+  GitPullRequest,
   HardDrive,
+  Hourglass,
   Library,
   ListEnd,
   Mail,
@@ -45,8 +47,12 @@ import ELK from "elkjs/lib/elk.bundled.js";
 import type { ElkExtendedEdge, ElkNode } from "elkjs/lib/elk-api";
 import { api, qs, refLink, timeAgo, type S } from "../../api/client";
 import { Avatar, Empty, ListHead, Q, UserLink } from "../../components/ui";
+import { Select } from "../../components/controls";
+import { useSession } from "../../session";
+import type { AssayEdit } from "./assayToml";
+import { blockTitle } from "./blocks";
 import { RefPicker } from "./Code";
-import { StatusIcon, statusLabel } from "./ci/Status";
+import { StatusIcon, duration, statusLabel } from "./ci/Status";
 import { LOGOS, type Brand, type Logo } from "./logos";
 import type { Ctx } from "./Project";
 
@@ -70,6 +76,11 @@ const FRAME_MAX = 0.72;
 const MARGIN = 20;
 /** The details over the frame's right side (styles.css). */
 const PANEL = 340;
+/** The frame's bottom-left corner, which the zoom buttons take (React Flow's 15px margin, then
+ *  30 by 86px: styles.css), and the minimap beside them (122px wide, 58px from the corner), with
+ *  a few pixels around: where the canvas opens, no block is under them. */
+const CORNER = { w: 15 + 30 + 8, h: 15 + 86 + 8 };
+const CORNER_MAP = { w: 15 + 58 + 122 + 8, h: 15 + 86 + 8 };
 /** Narrower than this (a phone), the blocks are a list: a graph would be mostly out of sight. */
 const LIST_BELOW = 560;
 
@@ -199,7 +210,7 @@ const solo = (b: Block) => b.bus_factor === 1 && b.people.reduce((n, p) => n + p
 const SOLO = "Only one person made a fifth or more of its recent changes";
 
 /** A block's title: its name, but its id when the name is only its path (an image, a schema). */
-const title = (b: Block) => (b.name === b.roots[0]?.path ? b.id : b.name);
+const title = blockTitle;
 const where = (path: string) => (path === "." ? "whole repository" : path);
 const place = (b: Block) =>
   b.roots.length
@@ -220,39 +231,139 @@ export function SmartView({ ctx, gitRef }: { ctx: Ctx; gitRef: string }) {
     },
     staleTime: 30_000,
   });
+  const [params, setParams] = useSearchParams();
+  const [words, setWords] = useState("");
+  // the blocks the words find, in the order the graph shows them
+  const found = useMemo(() => (q.data && words.trim() ? findBlocks(q.data.map, q.data.lay, words) : null), [q.data, words]);
+  // Enter: the next block found is chosen, and brought into view
+  const next = () => {
+    if (!found?.length) return;
+    const at = found.indexOf(params.get("block") ?? "");
+    const id = found[(at + 1) % found.length];
+    setParams(
+      (now) => {
+        const n = new URLSearchParams(now);
+        n.set("block", id);
+        return n;
+      },
+      { replace: true },
+    );
+  };
   return (
     <div className="stack smart-view">
       <ListHead title="Smart View" sub="The parts of this code, what each needs, and who to ask about them.">
+        {!!q.data?.map.blocks.length && <FindBlock value={words} onChange={setWords} found={found?.length ?? 0} onNext={next} />}
         <RefPicker ctx={ctx} current={ref} path="" kind="smart_view" />
       </ListHead>
-      <Q q={q}>{({ map, lay }) => <MapView ctx={ctx} gitRef={ref} map={map} lay={lay} />}</Q>
+      <Q q={q}>{({ map, lay }) => <MapView ctx={ctx} gitRef={ref} map={map} lay={lay} found={found} words={words} />}</Q>
     </div>
   );
 }
 
-function MapView({ ctx, gitRef, map, lay }: { ctx: Ctx; gitRef: string; map: S["RepoMap"]; lay: Plan }) {
+/** Words that find blocks by their name, what they are for, where they are or what they are. */
+function FindBlock({ value, onChange, found, onNext }: { value: string; onChange: (v: string) => void; found: number; onNext: () => void }) {
+  return (
+    <label className="search-field smart-find">
+      <Search size={14} aria-hidden />
+      <input
+        type="search"
+        value={value}
+        placeholder="Find a block"
+        aria-label="Find a block"
+        aria-description="Enter chooses the next one"
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            onNext();
+          } else if (e.key === "Escape" && value) {
+            // the words go, not the block chosen
+            e.preventDefault();
+            onChange("");
+          }
+        }}
+      />
+      {value.trim() && (
+        <span className="smart-find-count" aria-live="polite">
+          {found ? plural(found, "block") : "none"}
+        </span>
+      )}
+    </label>
+  );
+}
+
+/** The blocks with all of `words` in their id, name, description, roots, image or kind: those
+ *  named so first, then those for or at it, then those that are it; each in the graph's order
+ *  (left to right, top to bottom, then those linked to none). */
+function findBlocks(map: S["RepoMap"], lay: Plan, words: string): string[] {
+  const want = words.toLowerCase().split(/\s+/).filter(Boolean);
+  const rank = new Map([...lay.order, ...lay.loose].map((id, i) => [id, i]));
+  const has = (parts: string[]) => {
+    const text = parts.join(" ").toLowerCase();
+    return want.every((w) => text.includes(w));
+  };
+  const score = (b: Block) => {
+    const name = [b.id, b.name];
+    const about = [...name, b.description ?? "", ...b.roots.map((r) => r.path), b.image ?? ""];
+    return has(name) ? 0 : has(about) ? 1 : has([...about, KIND[b.kind][0], b.role ? ROLE[b.role] : ""]) ? 2 : -1;
+  };
+  return map.blocks
+    .map((b) => ({ id: b.id, score: score(b) }))
+    .filter((x) => x.score >= 0)
+    .sort((a, b) => a.score - b.score || (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0))
+    .map((x) => x.id);
+}
+
+/** What depends on `ids`, directly or through others, nearest first, each with the block of the
+ *  chain it needs (none when it needs one of `ids` itself). A block holding another changes with
+ *  it: a crate with its schema. */
+function dependents(edges: Edge[], ids: string[]): Map<string, string | null> {
+  const users = new Map<string, string[]>();
+  for (const e of edges) users.set(e.to, [...(users.get(e.to) ?? []), e.from]);
+  const out = new Map<string, string | null>();
+  const start = new Set(ids);
+  let wave = ids;
+  while (wave.length) {
+    const next: string[] = [];
+    for (const id of wave) {
+      for (const u of users.get(id) ?? []) {
+        if (start.has(u) || out.has(u)) continue;
+        out.set(u, start.has(id) ? null : id);
+        next.push(u);
+      }
+    }
+    wave = next;
+  }
+  return out;
+}
+
+function MapView({ ctx, gitRef, map, lay, found, words }: { ctx: Ctx; gitRef: string; map: S["RepoMap"]; lay: Plan; found: string[] | null; words: string }) {
   const [params, setParams] = useSearchParams();
   const byId = useMemo(() => new Map(map.blocks.map((b) => [b.id, b])), [map]);
-  const jobs = useJobs(ctx, map.commit);
+  const { jobs, pipeline } = useJobs(ctx, map.commit);
   const [main, room] = useWidth();
   const list = room > 0 && room < LIST_BELOW;
   // the graph on its canvas, once there is room for it
   const framed = room >= LIST_BELOW && lay.graph.length > 0;
   const asked = params.get("block");
   const chosen = asked && byId.has(asked) ? asked : null;
-  const select = useCallback(
-    (id: string | null) =>
+  // the chain: everything that depends on the chosen block lights up, not only what is near it
+  const chain = params.get("impact") === "1";
+  const setParam = useCallback(
+    (key: string, value: string | null) =>
       setParams(
         (now) => {
           const next = new URLSearchParams(now);
-          if (id) next.set("block", id);
-          else next.delete("block");
+          if (value) next.set(key, value);
+          else next.delete(key);
           return next;
         },
         { replace: true },
       ),
     [setParams],
   );
+  const select = useCallback((id: string | null) => setParam("block", id), [setParam]);
+  const setChain = useCallback((on: boolean) => setParam("impact", on ? "1" : null), [setParam]);
   useEffect(() => {
     if (!chosen) return;
     const close = (e: KeyboardEvent) => {
@@ -261,17 +372,63 @@ function MapView({ ctx, gitRef, map, lay }: { ctx: Ctx; gitRef: string; map: S["
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
   }, [chosen, select]);
-  // what is near the chosen block stays bright; the rest steps back
-  const near = useMemo(() => {
-    const s = new Set<string>();
-    if (!chosen) return s;
-    s.add(chosen);
-    for (const e of lay.edges) {
-      if (e.from === chosen) s.add(e.to);
-      if (e.to === chosen) s.add(e.from);
+  // the blocks a merge request changes (`?mr=`), from its page
+  const mr = params.get("mr");
+  const touched = useQuery({
+    queryKey: ["mr", ctx.p.id, Number(mr), "blocks", "map"],
+    queryFn: () => api.get<S["MrBlocks"]>(`/projects/${ctx.p.id}/merge_requests/${mr}/blocks`),
+    enabled: !!mr && /^\d+$/.test(mr),
+    staleTime: 60_000,
+  });
+  const changed = useMemo(() => (touched.data ? touched.data.blocks.map((t) => t.block.id).filter((id) => byId.has(id)) : null), [touched.data, byId]);
+  // what stays bright, the rest stepping back: the chosen block and what is near it (or, asked,
+  // all that depends on it); else the blocks found; else those the merge request changes (and,
+  // asked, what depends on them)
+  const lit = useMemo(() => {
+    if (!chosen) {
+      if (found) return new Set(found);
+      if (!changed) return null;
+      const s = new Set(changed);
+      if (chain) for (const id of dependents(lay.edges, changed).keys()) s.add(id);
+      return s;
     }
+    const s = new Set([chosen]);
+    if (chain) for (const id of dependents(lay.edges, [chosen]).keys()) s.add(id);
+    else
+      for (const e of lay.edges) {
+        if (e.from === chosen) s.add(e.to);
+        if (e.to === chosen) s.add(e.from);
+      }
     return s;
-  }, [chosen, lay]);
+  }, [chosen, chain, found, changed, lay]);
+  // the lines between the bright blocks light up too: a chain's, a merge request's
+  const joined = (!!chosen && chain) || (!chosen && !found && !!changed);
+  // what the canvas brings into view: the chain, or what the merge request changes
+  const fit = useMemo(() => (lit && joined ? [...lit].filter((id) => lay.at.has(id)) : []), [lit, joined, lay]);
+  // corrections, written into assay.toml in the editor: its own, or a new one
+  const nav = useNavigate();
+  const { user } = useSession();
+  const fix = useCallback(
+    (edit: AssayEdit) => nav(map.config_file ? refLink(ctx.web, "edit", gitRef, "assay.toml") : `${ctx.web}/-/new/${gitRef}`, { state: { assay: edit } }),
+    [nav, map.config_file, ctx.web, gitRef],
+  );
+  // a block whose jobs failed holds up what depends on it, as a pipeline's failed stage would:
+  // each such block, and the failed one it waits on
+  const waiting = useMemo(() => {
+    const failed = map.blocks.filter((b) => blockStatus(b, jobs) === "failed").map((b) => b.id);
+    const out = new Map<string, string>();
+    for (const f of failed) {
+      for (const id of dependents(lay.edges, [f]).keys()) if (!out.has(id) && !failed.includes(id)) out.set(id, f);
+    }
+    return out;
+  }, [map, jobs, lay]);
+  const waitsOn = useCallback(
+    (id: string) => {
+      const f = waiting.get(id);
+      return f ? title(byId.get(f)!) : undefined;
+    },
+    [waiting, byId],
+  );
 
   if (map.config_error) {
     return (
@@ -292,9 +449,36 @@ function MapView({ ctx, gitRef, map, lay }: { ctx: Ctx; gitRef: string; map: S["
     );
   }
   const card = (b: Block, links?: string) => (
-    <BlockCard key={b.id} b={b} status={blockStatus(b, jobs)} chosen={chosen === b.id} dim={!!chosen && !near.has(b.id)} onSelect={() => select(b.id)} links={links} />
+    <BlockCard
+      key={b.id}
+      b={b}
+      status={blockStatus(b, jobs)}
+      waits={waitsOn(b.id)}
+      chosen={chosen === b.id}
+      dim={!!lit && !lit.has(b.id)}
+      onSelect={() => select(b.id)}
+      links={links}
+    />
   );
-  const details = chosen ? <Details ctx={ctx} gitRef={gitRef} map={map} lay={lay} b={byId.get(chosen)!} jobs={jobs} select={select} /> : null;
+  const details = chosen ? (
+    <Details
+      ctx={ctx}
+      map={map}
+      lay={lay}
+      b={byId.get(chosen)!}
+      jobs={jobs}
+      pipeline={pipeline}
+      waits={waiting.get(chosen)}
+      chain={chain}
+      setChain={setChain}
+      select={select}
+      gitRef={gitRef}
+      me={user?.username}
+      fix={ctx.p.can_write_repository ? fix : undefined}
+    />
+  ) : null;
+  // a phone's list keeps only the blocks found
+  const shown = (b: Block) => !list || !found || found.includes(b.id);
   const alone = map.blocks.filter(solo).length;
   // a phone's list: what each needs, what uses it and what holds it, since no line shows it
   const counts = (id: string) => {
@@ -317,13 +501,56 @@ function MapView({ ctx, gitRef, map, lay }: { ctx: Ctx; gitRef: string; map: S["
         {!list && lay.drawn.length > 0 && <Legend />}
       </div>
       <p className="smart-guide">{framed && "From left to right: what runs, what it is built from, the code, its data. "}Choose a block to see what it needs and who to ask.</p>
+      {mr && touched.data && (
+        <div className="smart-mr" role="status">
+          <GitPullRequest size={15} aria-hidden />
+          <span className="grow">
+            <Link to={`${ctx.web}/-/merge_requests/${mr}`}>!{mr}</Link> changes {plural(touched.data.blocks.length, "block")}
+            {touched.data.unassigned > 0 && ` and ${plural(touched.data.unassigned, "file")} in none`}
+            {touched.data.blocks.length > 0 && ": "}
+            {touched.data.blocks.slice(0, 8).map((t, i) => (
+              <span key={t.block.id}>
+                {i > 0 && ", "}
+                <button type="button" className="smart-go" onClick={() => select(t.block.id)}>
+                  {title(t.block)}
+                </button>
+              </span>
+            ))}
+            {touched.data.blocks.length > 8 && `, and ${touched.data.blocks.length - 8} more`}
+          </span>
+          {touched.data.blocks.length > 0 && (
+            <button type="button" className={`btn small${chain ? " on" : ""}`} aria-pressed={chain} onClick={() => setChain(!chain)}>
+              With what depends on them
+            </button>
+          )}
+          <button type="button" className="icon-btn" aria-label="Show every block alike" title="Show every block alike" onClick={() => setParam("mr", null)}>
+            <X size={14} />
+          </button>
+        </div>
+      )}
       {/* the details: over the canvas when there is one, else beside the blocks */}
       <div className={`smart-layout${details && room > 0 && !framed ? " open" : ""}`}>
         <div className="smart-main" ref={main}>
-          {framed && <Canvas key={lay.id} lay={lay} byId={byId} jobs={jobs} chosen={chosen} near={near} select={select} room={room} panel={details} />}
+          {framed && (
+            <Canvas
+              key={lay.id}
+              lay={lay}
+              byId={byId}
+              jobs={jobs}
+              waitsOn={waitsOn}
+              chosen={chosen}
+              joined={joined}
+              lit={lit}
+              fit={fit}
+              select={select}
+              room={room}
+              panel={details}
+            />
+          )}
+          {list && found?.length === 0 && <Empty>No block has “{words.trim()}” in its name, what it is for or where it is.</Empty>}
           {list
             ? GROUPS.map(([group, kinds]) => {
-                const here = map.blocks.filter((b) => kinds.includes(b.kind)).sort((a, b) => rank.get(a.id)! - rank.get(b.id)!);
+                const here = map.blocks.filter((b) => kinds.includes(b.kind) && shown(b)).sort((a, b) => rank.get(a.id)! - rank.get(b.id)!);
                 return (
                   here.length > 0 && (
                     <section key={group} className="smart-group" aria-label={group}>
@@ -362,19 +589,27 @@ function useWidth(): [(el: HTMLDivElement | null) => void, number] {
   return [setEl, width];
 }
 
-/** `links`: what it needs and what uses it, in words (a phone's list, which draws no line). */
-type CardData = { b: Block; status: string | null; chosen: boolean; dim: boolean; onSelect: () => void; links?: string };
+/** `links`: what it needs and what uses it, in words (a phone's list, which draws no line);
+ *  `waits`: the block whose failed jobs hold it up. */
+type CardData = { b: Block; status: string | null; waits?: string; chosen: boolean; dim: boolean; onSelect: () => void; links?: string };
 type BlockNode = Node<CardData, "block">;
 type HolderNode = Node<CardData, "holder">;
-type LinkData = { e: Edge; mine: boolean; dim: boolean; tip: string };
+/** `mine`: a line lit with the chosen block (`said`: one of its own, which says its verb). */
+type LinkData = { e: Edge; mine: boolean; said: boolean; dim: boolean; tip: string };
 type LinkEdge = FlowEdge<LinkData, "link">;
 
 type CanvasProps = {
   lay: Plan;
   byId: Map<string, Block>;
   jobs: Map<string, Job>;
+  waitsOn: (id: string) => string | undefined;
   chosen: string | null;
-  near: Set<string>;
+  /** The lines between bright blocks light up too: a chain's, a merge request's. */
+  joined: boolean;
+  /** What stays bright; none: all of it. */
+  lit: Set<string> | null;
+  /** The blocks brought into view, zooming out if need be. */
+  fit: string[];
   select: (id: string | null) => void;
   /** The width the frame takes. */
   room: number;
@@ -393,22 +628,28 @@ function Canvas(props: CanvasProps) {
   );
 }
 
-function Flow({ lay, byId, jobs, chosen, near, select, room, panel }: CanvasProps) {
+function Flow({ lay, byId, jobs, waitsOn, chosen, joined, lit, fit: shown, select, room, panel }: CanvasProps) {
   const flow = useReactFlow();
   const arrow = useId();
   // the frame's border takes 2px; its height: the graph's, within FRAME_MIN and FRAME_MAX
   const width = room - 2;
   const tallest = Math.max(FRAME_MIN, FRAME_MAX * window.innerHeight);
   const zoom = Math.max(READABLE, Math.min(1, (width - 2 * MARGIN) / lay.width, (tallest - 2 * MARGIN) / lay.height));
-  const height = Math.round(Math.max(FRAME_MIN, Math.min(tallest, lay.height * zoom + 2 * MARGIN)));
+  const fit = Math.round(Math.max(FRAME_MIN, Math.min(tallest, lay.height * zoom + 2 * MARGIN)));
   const fitsAcross = lay.width * zoom <= width - 2 * MARGIN;
-  const fitsDown = lay.height * zoom <= height - 2 * MARGIN;
-  // where the canvas opens: read once
-  const [start] = useState(() => ({
-    zoom,
-    x: fitsAcross ? (width - lay.width * zoom) / 2 : MARGIN,
-    y: fitsDown ? (height - lay.height * zoom) / 2 : MARGIN,
-  }));
+  const fitsDown = lay.height * zoom <= fit - 2 * MARGIN;
+  // the minimap shows once the graph overflows the frame, beside the zoom buttons
+  const corner = fitsAcross && fitsDown ? CORNER : CORNER_MAP;
+  // where the canvas opens, read once. A block the corner's buttons would cover moves the graph
+  // right of them; a graph that fits across without room for that gets the frame taller instead,
+  // the buttons below it
+  const [open] = useState(() => {
+    const at = { zoom, x: fitsAcross ? (width - lay.width * zoom) / 2 : MARGIN, y: fitsDown ? (fit - lay.height * zoom) / 2 : MARGIN };
+    const shift = cornerShift(lay, at, fit, corner);
+    if (shift && fitsAcross && fitsDown && at.x + shift + lay.width * zoom > width - MARGIN) return { start: at, below: corner.h };
+    return { start: { ...at, x: at.x + shift }, below: 0 };
+  });
+  const height = fit + open.below;
 
   const nodes = useMemo<Node<CardData>[]>(
     () =>
@@ -425,15 +666,17 @@ function Flow({ lay, byId, jobs, chosen, near, select, room, panel }: CanvasProp
           draggable: false,
           selectable: false,
           focusable: false,
-          data: { b, status: blockStatus(b, jobs), chosen: chosen === id, dim: !!chosen && !near.has(id), onSelect: () => select(id) },
+          data: { b, status: blockStatus(b, jobs), waits: waitsOn(id), chosen: chosen === id, dim: !!lit && !lit.has(id), onSelect: () => select(id) },
         };
       }),
-    [lay, byId, jobs, chosen, near, select],
+    [lay, byId, jobs, waitsOn, chosen, lit, select],
   );
   const edges = useMemo<LinkEdge[]>(
     () =>
       lay.drawn.map((e) => {
-        const mine = !!chosen && (e.from === chosen || e.to === chosen);
+        const said = !!chosen && (e.from === chosen || e.to === chosen);
+        // a chain's, a merge request's: a line between two bright blocks
+        const mine = said || (joined && !!lit?.has(e.from) && !!lit?.has(e.to));
         return {
           id: `${e.from}>${e.to}:${e.kind}`,
           source: e.from,
@@ -442,10 +685,10 @@ function Flow({ lay, byId, jobs, chosen, near, select, room, panel }: CanvasProp
           selectable: false,
           focusable: false,
           markerEnd: e.kind === "part" ? undefined : `url(#${arrow}${mine ? "-hl" : ""})`,
-          data: { e, mine, dim: !!chosen && !mine, tip: tip(e, byId) },
+          data: { e, mine, said, dim: !!lit && !mine, tip: tip(e, byId) },
         };
       }),
-    [lay, chosen, byId, arrow],
+    [lay, chosen, joined, lit, byId, arrow],
   );
 
   // a block chosen out of sight, or under the panel: brought to the middle of what is in view
@@ -468,6 +711,23 @@ function Flow({ lay, byId, jobs, chosen, near, select, room, panel }: CanvasProp
     });
     return () => cancelAnimationFrame(frame);
   }, [chosen, lay, flow, width, height]);
+  // a chain, or what a merge request changes: all of it brought into view (beside the panel when
+  // it is open), zooming out if it must; read again only when the blocks do
+  const fitKey = shown.join(" ");
+  const panelOpen = !!panel;
+  useEffect(() => {
+    if (!fitKey) return;
+    const frame = requestAnimationFrame(() => {
+      const side = panelOpen && !window.matchMedia("(max-width: 900px)").matches ? PANEL + INSET : 0;
+      void flow.fitView({
+        nodes: fitKey.split(" ").map((id) => ({ id })),
+        padding: { top: `${MARGIN}px`, right: `${side + MARGIN}px`, bottom: `${corner.h}px`, left: `${MARGIN}px` },
+        maxZoom: flow.getViewport().zoom,
+        minZoom: 0.4,
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [fitKey, panelOpen, flow, corner]);
 
   return (
     <div className="smart-frame" style={{ height }}>
@@ -485,7 +745,7 @@ function Flow({ lay, byId, jobs, chosen, near, select, room, panel }: CanvasProp
         edges={edges}
         nodeTypes={NODE_TYPES}
         edgeTypes={EDGE_TYPES}
-        defaultViewport={start}
+        defaultViewport={open.start}
         minZoom={0.2}
         maxZoom={1.5}
         zIndexMode="auto"
@@ -507,7 +767,12 @@ function Flow({ lay, byId, jobs, chosen, near, select, room, panel }: CanvasProp
         onNodeClick={(_, n) => select(n.id)}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
-        <Controls showInteractive={false} position="bottom-left" />
+        {/* the whole graph, above the corner's buttons */}
+        <Controls
+          showInteractive={false}
+          position="bottom-left"
+          fitViewOptions={{ padding: { top: `${MARGIN}px`, right: `${MARGIN}px`, bottom: `${corner.h}px`, left: `${MARGIN}px` } }}
+        />
         {/* beside the buttons: a graph from left to right is crowded on the right, not there */}
         {!(fitsAcross && fitsDown) && (
           <MiniMap pannable zoomable position="bottom-left" style={{ width: 120, height: 76, marginLeft: 58 }} ariaLabel="Where the view is in the whole graph" />
@@ -544,13 +809,13 @@ function HolderNodeView({ data, width, height }: NodeProps<HolderNode>) {
 function LinkEdgeView({ id, sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, markerEnd, data }: EdgeProps<LinkEdge>) {
   const [d, labelX, labelY] = getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
   if (!data) return null;
-  const { e, mine, dim } = data;
+  const { e, mine, said, dim } = data;
   const cls = [e.kind === "part" ? "part" : e.inferred ? "inferred" : "declared", mine ? "hl" : dim ? "dim" : ""].join(" ");
   return (
     <>
       <title>{data.tip}</title>
       <BaseEdge id={id} path={d} markerEnd={markerEnd} className={`smart-link ${cls}`} interactionWidth={16} />
-      {mine && e.kind !== "part" && (
+      {said && e.kind !== "part" && (
         <EdgeLabelRenderer>
           <div className="smart-link-label" style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}>
             {VERB[e.kind]}
@@ -583,7 +848,7 @@ function Mark({ b }: { b: Block }) {
   );
 }
 
-function BlockCard({ b, status, chosen, dim, onSelect, links }: CardData) {
+function BlockCard({ b, status, waits, chosen, dim, onSelect, links }: CardData) {
   const [kind, color] = KIND[b.kind];
   const lang = b.languages[0];
   return (
@@ -601,11 +866,16 @@ function BlockCard({ b, status, chosen, dim, onSelect, links }: CardData) {
       <span className="smart-kind">
         <Mark b={b} />
         <span>{`${kind}${b.role ? ` · ${ROLE[b.role]}` : ""}`}</span>
-        {(solo(b) || status) && (
+        {(solo(b) || status || waits) && (
           <span className="smart-flags">
             {solo(b) && (
               <span className="smart-solo" title={SOLO}>
                 1 person
+              </span>
+            )}
+            {waits && (
+              <span className="smart-wait" title={`Waits on ${waits}, whose jobs failed`}>
+                <Hourglass size={13} aria-label={`Waits on ${waits}`} />
               </span>
             )}
             {status && (
@@ -638,7 +908,26 @@ function BlockCard({ b, status, chosen, dim, onSelect, links }: CardData) {
   );
 }
 
-function Details({ ctx, gitRef, map, lay, b, jobs, select }: { ctx: Ctx; gitRef: string; map: S["RepoMap"]; lay: Plan; b: Block; jobs: Map<string, Job>; select: (id: string | null) => void }) {
+type DetailsProps = {
+  ctx: Ctx;
+  gitRef: string;
+  map: S["RepoMap"];
+  lay: Plan;
+  b: Block;
+  jobs: Map<string, Job>;
+  pipeline?: S["PipelineDetail"];
+  /** The block whose failed jobs hold this one up. */
+  waits?: string;
+  chain: boolean;
+  setChain: (on: boolean) => void;
+  select: (id: string | null) => void;
+  /** Who is looking (a username), for what concerns them. */
+  me?: string;
+  /** Opens a correction in the editor; none for who cannot commit here. */
+  fix?: (edit: AssayEdit) => void;
+};
+
+function Details({ ctx, gitRef, map, lay, b, jobs, pipeline, waits, chain, setChain, select, me, fix }: DetailsProps) {
   const byId = new Map(map.blocks.map((x) => [x.id, x]));
   const [kind, color] = KIND[b.kind];
   const go = (id: string) => (
@@ -661,6 +950,11 @@ function Details({ ctx, gitRef, map, lay, b, jobs, select }: { ctx: Ctx; gitRef:
   const needs = lay.edges.filter((e) => e.from === b.id && e.kind !== "part");
   const holds = lay.edges.filter((e) => e.from === b.id && e.kind === "part");
   const neededBy = lay.edges.filter((e) => e.to === b.id && e.kind !== "part");
+  // the reviews of who changed it go on their line; the others who reviewed it, after
+  const reviews = new Map(b.reviewers.map((r) => [r.username, r]));
+  const committers = new Set(b.people.flatMap((p) => (p.username ? [p.username] : [])));
+  const onlyReviewed = b.reviewers.filter((r) => !committers.has(r.username));
+  const isMe = (username?: string | null) => !!me && !!username && username.toLowerCase() === me.toLowerCase();
   const total = b.languages.reduce((n, l) => n + l.files, 0) || 1;
   const langs = b.languages.slice(0, 5);
   const pct = (n: number) => Math.max(1, Math.round((100 * n) / total));
@@ -706,7 +1000,7 @@ function Details({ ctx, gitRef, map, lay, b, jobs, select }: { ctx: Ctx; gitRef:
           </div>
         </section>
       )}
-      {(b.owners.length > 0 || b.people.length > 0) && (
+      {(b.owners.length > 0 || b.people.length > 0 || b.reviewers.length > 0) && (
         <section>
           <h3>People to ask</h3>
           <ul>
@@ -718,18 +1012,49 @@ function Details({ ctx, gitRef, map, lay, b, jobs, select }: { ctx: Ctx; gitRef:
                 </span>
               </li>
             ))}
-            {b.people.map((p) => (
-              <li key={p.name}>
-                <Avatar name={p.name} username={p.username} />
-                <span className="grow">{p.username ? <UserLink username={p.username}>{p.name}</UserLink> : p.name}</span>
-                <span className="meta" title={p.last}>
-                  {plural(p.commits, "commit")} · {timeAgo(p.last)}
+            {b.people.map((p) => {
+              // who changed it and reviewed it too: both, by the latest
+              const r = p.username ? reviews.get(p.username) : undefined;
+              const last = r && r.last > p.last ? r.last : p.last;
+              return (
+                <li key={p.name}>
+                  <Avatar name={p.name} username={p.username} />
+                  <span className="grow">
+                    {p.username ? <UserLink username={p.username}>{p.name}</UserLink> : p.name}
+                    {fix && isMe(p.username) && (
+                      <>
+                        <br />
+                        <button type="button" className="smart-me" title="Leave yourself out of the people to ask, under all your names and addresses" onClick={() => fix({ kind: "exclude", who: p.name })}>
+                          Leave me out
+                        </button>
+                      </>
+                    )}
+                  </span>
+                  <span className="meta" title={last}>
+                    {plural(p.commits, "commit")}
+                    {r && ` · ${plural(r.reviews, "review")}`} · {timeAgo(last)}
+                  </span>
+                </li>
+              );
+            })}
+            {onlyReviewed.map((r) => (
+              <li key={`review:${r.username}`}>
+                <Avatar name={r.name || r.username} username={r.username} />
+                <span className="grow">
+                  <UserLink username={r.username}>{r.name || r.username}</UserLink>
+                </span>
+                <span className="meta" title={r.last}>
+                  {plural(r.reviews, "review")} · {timeAgo(r.last)}
                 </span>
               </li>
             ))}
           </ul>
           {solo(b) && <p className="smart-note">{SOLO}: worth sharing what they know.</p>}
-          {b.people.length > 0 && <p className="muted small">From the commits of the last {plural(map.days, "day")}.</p>}
+          {(b.people.length > 0 || b.reviewers.length > 0) && (
+            <p className="muted small">
+              From the {b.reviewers.length > 0 ? "commits and reviews" : "commits"} of the last {plural(map.days, "day")}.
+            </p>
+          )}
         </section>
       )}
       <EdgeList title="Needs">
@@ -759,17 +1084,29 @@ function Details({ ctx, gitRef, map, lay, b, jobs, select }: { ctx: Ctx; gitRef:
           </li>
         ))}
       </EdgeList>
-      {b.jobs.length > 0 && (
+      <Impact b={b} lay={lay} byId={byId} chain={chain} setChain={setChain} go={go} />
+      {(b.jobs.length > 0 || waits) && (
         <section>
-          <h3>CI jobs</h3>
+          <h3>CI</h3>
+          {pipeline && b.jobs.length > 0 && (
+            <p className="smart-pipeline">
+              <Link to={`${ctx.web}/-/pipelines/${pipeline.iid}`}>Pipeline #{pipeline.iid}</Link>{" "}
+              <span className="muted">
+                · {statusLabel(pipeline.status)} · {timeAgo(pipeline.created_at)}
+              </span>
+            </p>
+          )}
+          {waits && <p className="smart-note">Waits on {go(waits)}, whose jobs failed.</p>}
           <ul>
             {b.jobs.map((name) => {
               const j = jobs.get(name);
+              // its stage, and how long it took once done
+              const done = j && j.duration != null && !["running", "pending", "created", "manual", "scheduled"].includes(j.status);
               return (
                 <li key={name}>
                   {j && <StatusIcon status={j.status} size={14} allowFailure={j.allow_failure} />}
                   <span className="grow">{j ? <Link to={`${ctx.web}/-/jobs/${j.id}`}>{name}</Link> : <code>{name}</code>}</span>
-                  {j && <span className="meta">{statusLabel(j.status, j.allow_failure)}</span>}
+                  <span className="meta">{j ? `${j.stage} · ${done ? duration(j.duration!) : statusLabel(j.status, j.allow_failure)}` : pipeline && "not in this pipeline"}</span>
                 </li>
               );
             })}
@@ -790,7 +1127,133 @@ function Details({ ctx, gitRef, map, lay, b, jobs, select }: { ctx: Ctx; gitRef:
           </ul>
         </section>
       )}
+      {fix && <Fix key={b.id} b={b} map={map} me={me} fix={fix} />}
     </aside>
+  );
+}
+
+/** Corrections of the map, each opening assay.toml in the editor with it written in: checked
+ *  there before it is committed. */
+function Fix({ b, map, me, fix }: { b: Block; map: S["RepoMap"]; me?: string; fix: (edit: AssayEdit) => void }) {
+  const [open, setOpen] = useState<"rename" | "merge" | null>(null);
+  const [name, setName] = useState(b.name);
+  const [about, setAbout] = useState(b.description ?? "");
+  const others = map.blocks.filter((x) => x.id !== b.id).sort((x, y) => title(x).localeCompare(title(y)));
+  const [into, setInto] = useState(others[0]?.id ?? "");
+  const known = !!me && b.owners.some((o) => o.toLowerCase() === `@${me.toLowerCase()}`);
+  const t = title(b);
+  const keys: Record<string, string> = {};
+  if (name.trim() && name.trim() !== b.name) keys.name = name.trim();
+  if (about.trim() !== (b.description ?? "")) keys.description = about.trim();
+  const toggle = (what: "rename" | "merge") => setOpen(open === what ? null : what);
+  return (
+    <section className="smart-fix">
+      <h3>Correct the map</h3>
+      <div className="row">
+        <button type="button" className={`btn small${open === "rename" ? " on" : ""}`} aria-expanded={open === "rename"} onClick={() => toggle("rename")}>
+          Rename or describe
+        </button>
+        {others.length > 0 && (
+          <button type="button" className={`btn small${open === "merge" ? " on" : ""}`} aria-expanded={open === "merge"} onClick={() => toggle("merge")}>
+            Merge into…
+          </button>
+        )}
+        <button type="button" className="btn small" title="Its files go to the block around it" onClick={() => fix({ kind: "set", block: b.id, title: t, keys: { ignore: true } })}>
+          Not a block
+        </button>
+        {me && !known && (
+          <button type="button" className="btn small" title="Name yourself among the people to ask about it" onClick={() => fix({ kind: "referent", block: b.id, title: t, who: `@${me}` })}>
+            I know it
+          </button>
+        )}
+      </div>
+      {open === "rename" && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (Object.keys(keys).length) fix({ kind: "set", block: b.id, title: t, keys });
+          }}
+        >
+          <label>
+            Name
+            <input value={name} onChange={(e) => setName(e.target.value)} />
+          </label>
+          <label>
+            What it is for
+            <input value={about} placeholder="In a line" onChange={(e) => setAbout(e.target.value)} />
+          </label>
+          <div className="row">
+            <button className="btn small primary" disabled={!Object.keys(keys).length}>
+              Write it in assay.toml
+            </button>
+          </div>
+        </form>
+      )}
+      {open === "merge" && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (into) fix({ kind: "set", block: b.id, title: t, keys: { merge_into: into } });
+          }}
+        >
+          <label>
+            Part of
+            <Select value={into} onChange={setInto} options={others.map((x) => ({ value: x.id, label: title(x) }))} label="The block it is part of" />
+          </label>
+          <div className="row">
+            <button className="btn small primary" disabled={!into}>
+              Write it in assay.toml
+            </button>
+          </div>
+        </form>
+      )}
+      <p className="muted small">Each opens assay.toml with the change written in, to check before it is committed.</p>
+    </section>
+  );
+}
+
+/** What a change to the block reaches: all that depends on it, through others too, who knows
+ *  each and their CI jobs; lit up on the map when asked. */
+function Impact({ b, lay, byId, chain, setChain, go }: { b: Block; lay: Plan; byId: Map<string, Block>; chain: boolean; setChain: (on: boolean) => void; go: (id: string) => ReactNode }) {
+  const deps = dependents(lay.edges, [b.id]);
+  if (!deps.size) return null;
+  // those it reaches through others: the ones "Used by" does not list
+  const far = [...deps].filter((d): d is [string, string] => d[1] !== null);
+  const jobs = [...new Set([...deps.keys()].flatMap((id) => byId.get(id)?.jobs ?? []))];
+  return (
+    <section className="smart-impact">
+      <div className="smart-impact-head">
+        <h3>If it changes</h3>
+        <button type="button" className={`btn small${chain ? " on" : ""}`} aria-pressed={chain} onClick={() => setChain(!chain)}>
+          Light them up
+        </button>
+      </div>
+      <p>
+        {plural(deps.size, "block")} {deps.size === 1 ? "depends" : "depend"} on it{far.length > 0 && `, ${far.length} of them through others`}.
+      </p>
+      {far.length > 0 && (
+        <ul>
+          {far.map(([id, through]) => {
+            const d = byId.get(id);
+            return (
+              <li key={id}>
+                <span className="grow">
+                  {go(id)} <span className="muted">through {byId.has(through) ? title(byId.get(through)!) : through}</span>
+                </span>
+                {d && d.people.length > 0 && (
+                  <span className="smart-people">
+                    {d.people.slice(0, 3).map((p) => (
+                      <Avatar key={p.name} name={p.name} username={p.username} title={p.name} />
+                    ))}
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {jobs.length > 0 && <p className="muted small">Their CI jobs: {jobs.join(", ")}</p>}
+    </section>
   );
 }
 
@@ -860,8 +1323,8 @@ function Notes({ ctx, gitRef, map }: { ctx: Ctx; gitRef: string; map: S["RepoMap
   );
 }
 
-/** The jobs of the latest pipeline of `commit`, by name (their latest attempt). */
-function useJobs(ctx: Ctx, commit: string): Map<string, Job> {
+/** The latest pipeline of `commit`, and its jobs by name (their latest attempt). */
+function useJobs(ctx: Ctx, commit: string): { jobs: Map<string, Job>; pipeline?: S["PipelineDetail"] } {
   const statuses = useQuery({
     queryKey: ["commit-status", ctx.p.id, commit],
     queryFn: () => api.get<S["CommitStatus"][]>(`/projects/${ctx.p.id}/commit_statuses${qs({ shas: commit })}`),
@@ -874,7 +1337,10 @@ function useJobs(ctx: Ctx, commit: string): Map<string, Job> {
     enabled: iid != null,
     staleTime: 15_000,
   });
-  return useMemo(() => new Map((pipeline.data?.jobs ?? []).filter((j) => !j.retried).map((j) => [j.name, j])), [pipeline.data]);
+  return useMemo(
+    () => ({ jobs: new Map((pipeline.data?.jobs ?? []).filter((j) => !j.retried).map((j) => [j.name, j])), pipeline: pipeline.data }),
+    [pipeline.data],
+  );
 }
 
 const WAITING = ["pending", "created", "preparing", "waiting_for_resource", "scheduled"];
@@ -888,6 +1354,29 @@ function blockStatus(b: Block, jobs: Map<string, Job>): string | null {
   if (mine.some((j) => WAITING.includes(j.status))) return "pending";
   if (mine.every((j) => ["success", "skipped", "manual"].includes(j.status) || (j.status === "failed" && j.allow_failure))) return "success";
   return mine[0].status;
+}
+
+/** Where a block of the graph is, from the graph's top left, inside the blocks holding it. */
+function absolute(lay: Plan, id: string): { x: number; y: number } {
+  const p = lay.at.get(id)!;
+  if (!p.inside) return { x: p.x, y: p.y };
+  const o = absolute(lay, p.inside);
+  return { x: o.x + p.x, y: o.y + p.y };
+}
+
+/** How far right the graph must move, opening at `at` in a frame `height` tall, for no card to
+ *  be under the frame's bottom-left `corner`: 0 when none is. A holder's card is at the top of
+ *  its frame; the room around what it holds may go under. */
+function cornerShift(lay: Plan, at: { x: number; y: number; zoom: number }, height: number, corner: { w: number; h: number }): number {
+  let shift = 0;
+  for (const id of lay.graph) {
+    const o = absolute(lay, id);
+    const inset = lay.holders.has(id) ? INSET : 0;
+    const left = at.x + (o.x + inset) * at.zoom;
+    const top = at.y + (o.y + inset) * at.zoom;
+    if (left < corner.w && top < height && top + H * at.zoom > height - corner.h) shift = Math.max(shift, corner.w - left);
+  }
+  return shift;
 }
 
 /** Where a block of the graph goes, inside the block holding it if any (`inside`), and its size. */

@@ -1,10 +1,11 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { FilePlus2, GitBranch, Pencil, Trash2 } from "lucide-react";
+import { FilePlus2, GitBranch, Map as MapIcon, Pencil, Trash2 } from "lucide-react";
 import { api, ApiError, qs, refLink, type S } from "../../api/client";
 import { useSession } from "../../session";
 import { ErrorBox, Field, ListHead, Q } from "../../components/ui";
+import { applyAssayEdit, assayMessage, type AssayEdit } from "./assayToml";
 import { useResolved } from "./Code";
 import type { Ctx } from "./Project";
 
@@ -39,10 +40,12 @@ function Editor({ ctx, res, mode }: { ctx: Ctx; res: S["RefResolved"]; mode: Mod
   const branch = useBranch(ctx, res.ref);
   const isBranch = !!branch.data;
   const name = res.path.split("/").pop() ?? "";
-  const [path, setPath] = useState(mode === "new" ? (res.path ? `${res.path.replace(/\/$/, "")}/` : "") : res.path);
-  const [content, setContent] = useState("");
+  // a correction from the Smart View: written into assay.toml as it is loaded (or made)
+  const assay = (useLocation().state as { assay?: AssayEdit } | null)?.assay;
+  const [path, setPath] = useState(mode === "new" ? (assay ? "assay.toml" : res.path ? `${res.path.replace(/\/$/, "")}/` : "") : res.path);
+  const [content, setContent] = useState(mode === "new" && assay ? applyAssayEdit("", assay) : "");
   const [loaded, setLoaded] = useState(mode !== "edit");
-  const [message, setMessage] = useState(mode === "edit" ? `Update ${name}` : mode === "delete" ? `Delete ${name}` : "");
+  const [message, setMessage] = useState(assay ? assayMessage(assay) : mode === "edit" ? `Update ${name}` : mode === "delete" ? `Delete ${name}` : "");
   const [target, setTarget] = useState<"here" | "new">("here");
   const [newBranch, setNewBranch] = useState(() => suggestBranch(user?.username ?? "patch"));
   const [error, setError] = useState<unknown>(null);
@@ -57,18 +60,20 @@ function Editor({ ctx, res, mode }: { ctx: Ctx; res: S["RefResolved"]; mode: Mod
     fetch(`/api/v1/projects/${ctx.p.id}/repository/raw${qs({ ref: base, path: res.path })}`, { credentials: "same-origin" })
       .then((r) => (r.ok ? r.text() : Promise.reject(new Error(`could not load the file (${r.status})`))))
       .then((t) => {
-        setContent(t);
+        setContent(assay ? applyAssayEdit(t, assay) : t);
         setLoaded(true);
       })
       .catch(setError);
+    // the correction is the one the page was opened with
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, ctx.p.id, base, res.path]);
   // a tag or a commit cannot take commits: a new branch it is
   useEffect(() => {
     if (branch.isSuccess && !isBranch) setTarget("new");
   }, [branch.isSuccess, isBranch]);
   useEffect(() => {
-    if (mode === "new") setMessage(path.split("/").pop() ? `Add ${path.split("/").pop()}` : "");
-  }, [path, mode]);
+    if (mode === "new" && !assay) setMessage(path.split("/").pop() ? `Add ${path.split("/").pop()}` : "");
+  }, [path, mode, assay]);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -133,6 +138,14 @@ function Editor({ ctx, res, mode }: { ctx: Ctx; res: S["RefResolved"]; mode: Mod
       />
       <form className="stack editor-form" onSubmit={submit}>
         <ErrorBox error={error} />
+        {assay && (
+          <div className="banner" role="note">
+            <MapIcon size={16} aria-hidden />
+            <span className="grow small">
+              The Smart View&apos;s correction is written in below. Check it, then commit it here or on a new branch with a merge request.
+            </span>
+          </div>
+        )}
         {mode === "new" && (
           <Field label="File path" hint="Folders are created as needed">
             <input autoFocus value={path} onChange={(e) => setPath(e.target.value)} placeholder="docs/guide.md" spellCheck={false} />

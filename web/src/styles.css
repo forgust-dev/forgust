@@ -8367,6 +8367,140 @@ a.smart-root:hover {
   color: var(--warn);
   font-size: 13px;
 }
+/* words that find blocks, beside the ref: how many it finds at its end */
+.smart-find {
+  width: 240px;
+}
+.smart-find input {
+  width: 100%;
+  padding-right: 64px;
+}
+.smart-find-count {
+  position: absolute;
+  right: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+/* a block held up by the failed jobs of one it needs */
+.smart-wait {
+  display: inline-flex;
+  color: var(--warn);
+}
+.smart-impact-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.smart-impact-head h3 {
+  margin: 0;
+}
+.smart-impact .btn.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.smart-panel .smart-impact > p {
+  margin: 0 0 4px;
+  font-size: 13.5px;
+}
+.smart-panel .smart-impact > p.small {
+  margin-top: 8px;
+  font-size: 12.5px;
+}
+.smart-panel .smart-pipeline {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+/* the blocks a merge request changes, over the map */
+.smart-mr {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  font-size: 13px;
+}
+.smart-mr > svg {
+  flex: none;
+  color: var(--accent);
+}
+.smart-mr .btn.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+/* corrections of the map: written into assay.toml */
+.smart-fix .row {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.smart-fix form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+.smart-fix label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.smart-panel li .smart-me {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.smart-panel li .smart-me:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+/* the Smart View's block a file or folder is in, beside its path */
+.block-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 340px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.block-chip:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.block-chip-name {
+  overflow: hidden;
+  font-weight: 600;
+  color: var(--text);
+  text-overflow: ellipsis;
+}
+.block-chip-who {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.block-chip-who::before {
+  content: "· ";
+}
 /* over the canvas, on its right side: the graph keeps its width */
 @media (min-width: 901px) {
   .smart-frame > .smart-panel {

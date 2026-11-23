@@ -54,6 +54,52 @@ test("the Smart View maps the code into blocks and tells what each needs", async
     await page.keyboard.press("Escape");
     await expect(page.locator(".smart-panel")).toHaveCount(0);
     await expect(page).not.toHaveURL(/block=/);
+
+    // a block found by its name: Enter chooses it
+    const find = page.getByRole("searchbox", { name: "Find a block" });
+    await find.fill("core");
+    await expect(page.locator(".smart-find-count")).toHaveText("1 block");
+    await find.press("Enter");
+    await expect(page).toHaveURL(/[?&]block=core\b/);
+
+    // what a change reaches, through others too; lit up when asked
+    await page.goto(`${web}/-/smart_view?block=api`);
+    const api2 = page.getByRole("complementary", { name: "api, details" });
+    await expect(api2.getByText("2 blocks depend on it, 1 of them through others.")).toBeVisible();
+    await expect(api2.locator("li", { hasText: "through image" })).toContainText("app");
+    await api2.getByRole("button", { name: "Light them up" }).click();
+    await expect(page).toHaveURL(/[?&]impact=1\b/);
+    await expect(card("app")).not.toHaveClass(/\bdim\b/);
+    await expect(card("core")).toHaveClass(/\bdim\b/);
+
+    // a correction, written into a new assay.toml in the editor
+    await api2.getByRole("button", { name: "Rename or describe" }).click();
+    await api2.getByLabel("Name", { exact: true }).fill("API");
+    await api2.getByRole("button", { name: "Write it in assay.toml" }).click();
+    await expect(page).toHaveURL(new RegExp(`${web}/-/new/main`));
+    await expect(page.getByLabel("File path")).toHaveValue("assay.toml");
+    await expect(page.getByLabel("File content")).toHaveValue(/\[blocks\.api\]\nname = "API"\n/);
+
+    // a file's page names its block and who to ask
+    await page.goto(`${web}/-/blob/main/api/Cargo.toml`);
+    await expect(page.locator(".block-chip")).toContainText("api");
+
+    // a merge request lists the blocks it changes, lit up in the Smart View
+    if (!isMobile(page)) {
+      await api("post", `/projects/${project.id}/repository/commits`, {
+        branch: "more-core",
+        start_branch: "main",
+        commit_message: "More core",
+        actions: [{ action: "create", file_path: "core/src/more.rs", content: "pub fn g() {}\n" }],
+      });
+      const mr = await api("post", `/projects/${project.id}/merge_requests`, { source_branch: "more-core", title: "More core" });
+      await page.goto(`${web}/-/merge_requests/${mr.iid}`);
+      const blocks = page.locator(".fact").filter({ has: page.locator(".fact-label", { hasText: /^Blocks$/ }) });
+      await expect(blocks.getByRole("link", { name: "core", exact: true })).toBeVisible();
+      await expect(blocks).toContainText("1 file");
+      await blocks.getByRole("link", { name: "See them in the Smart View" }).click();
+      await expect(page.locator(".smart-mr")).toContainText("changes 1 block: core");
+    }
   } finally {
     await remove();
   }
