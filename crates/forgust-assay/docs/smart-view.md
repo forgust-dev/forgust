@@ -1,6 +1,6 @@
 # Smart View — vue intelligente du code pour une forge git
 
-Mis à jour le 2026-11-23
+Mis à jour le 2026-11-23 (Forgust 0.7.0)
 
 ## L'idée
 
@@ -17,7 +17,7 @@ Elle répond à la vraie question qu'on se pose en arrivant sur un repo : « c'e
 ## Pièges à anticiper
 
 - **Fiabilité** : la détection automatique se trompe souvent sur les monorepos. Un fichier de surcharge, `assay.toml` à la racine du repo, corrige les noms et les limites des blocs (voir « Le socle en détail »).
-- **Fraîcheur** : la vue doit se recalculer à chaque push, sinon on cesse vite de lui faire confiance.
+- **Fraîcheur** : la vue doit se recalculer à chaque push, sinon on cesse vite de lui faire confiance. Forgust la recalcule à chaque nouveau commit de la branche par défaut et de chaque merge request ouverte (voir « Dans Forgust »), et la page dit quand la carte montrée est en retard sur le dernier commit.
 - **Perception du « qui connaît »** : elle peut être vécue comme de la surveillance ou du classement. La présenter comme « personnes à contacter », basée sur l'activité récente et les revues, jamais comme un score. Chacun peut se retirer ou se déclarer référent.
 
 ## Stratégie
@@ -30,9 +30,11 @@ Le moteur de détection se construit d'abord comme une lib et une CLI indépenda
 
 Le moteur s'appelle **assay** (`crates/forgust-assay`) : une crate Rust, bibliothèque et CLI.
 - `assay map <repo>` imprime la carte en JSON ; `--text` en donne un résumé lisible, pour vérifier la détection à l'œil sur un vrai repo.
-- `assay view <repo> --open` en fait une page HTML, sans rien à charger, qu'on regarde dans le navigateur. Les blocs y sont des cartes, rangées de gauche à droite, de ce qui a besoin vers ce dont on a besoin. Un clic sur un bloc fait ressortir ses liens et montre ses langages, ses personnes à contacter, ses jobs et ce qui le déclare. C'est un premier jet de la Smart View, avant son intégration à la forge.
+- `assay view <repo> --open` en fait une page HTML, sans rien à charger, qu'on regarde dans le navigateur. Les blocs y sont des cartes, rangées de gauche à droite, de ce qui a besoin vers ce dont on a besoin. Un clic sur un bloc fait ressortir ses liens et montre ses langages, ses personnes à contacter, ses jobs et ce qui le déclare. Elle sert à vérifier la détection sur n'importe quel repo, hors de toute forge.
 - `assay report <repo>` écrit le rapport que lit une forge depuis un job de CI (`assay-report.json`) : la carte du commit cloné, ceux de ses chemins qui sont des fichiers, et les adresses de qui s'est retiré. C'est ce que lance Forgust, dans l'image d'assay.
-- En bibliothèque, `forgust_assay::map_snapshot` fait la carte d'un repo sans copie de travail : on lui passe les chemins, le texte des fichiers que retient `forgust_assay::reads` (manifestes, CI, CODEOWNERS, `assay.toml`) et l'historique.
+- En bibliothèque, `forgust_assay::map` fait la carte d'un dossier, et `forgust_assay::map_snapshot` celle d'un repo sans copie de travail : on lui passe les chemins, le texte des fichiers que retient `forgust_assay::reads` (manifestes, CI, CODEOWNERS, `assay.toml`) et l'historique. Forgust ne s'en sert plus : il lit le rapport du job.
+
+**L'image** (`ghcr.io/forgust-dev/forgust-assay`, `crates/forgust-assay/Dockerfile`) est publiée avec Forgust sous la même version, comme celle du reviewer : Alpine, `git`, les autorités de certification et `assay`, sous l'utilisateur 10001, sans entrypoint (le runner Docker de GitLab lance le script du job dans un shell). `git` y lit un clone qui appartient à un autre utilisateur, sans quoi la carte n'aurait pas ses personnes. Forgust l'utilise pour ses jobs, et elle sert aussi telle quelle dans la CI de n'importe quelle forge (exemple dans le README de la crate).
 
 ### Ce qu'est un bloc
 
@@ -181,7 +183,7 @@ Un extrait de la carte de Forgust (adresses masquées) :
 - `schema` augmente quand un champ change de sens ou disparaît ; un nouveau champ optionnel le garde.
 - La bibliothèque donne aussi `block_of(chemin)`, le bloc d'un fichier : c'est la base de l'impact sur les MR.
 
-### Premier essai : Forgust
+### Premier essai : Forgust (2026-11-21)
 
 `assay map ../forgust` prend 0,1 s et trouve 19 blocs : les 7 crates, l'app web et son outil de génération d'API, le schéma de `forgust-db`, les 2 images, les 6 services de compose et la CI. Les 14 liens trouvés sont tous justes :
 - `forgust-server` utilise `forgust-db`, `forgust-storage`, `forgust-ci-config` et `forgust-reviewer` ;
@@ -191,6 +193,8 @@ Un extrait de la carte de Forgust (adresses masquées) :
 Il reste 138 fichiers hors bloc : ceux de la racine, `.github` hors workflows, et les fixtures de `ci-conformance`.
 
 Le bus factor de Forgust vaut 1 sur presque tous les blocs : Bilal et BlaalV8 sont deux identités git sans rien en commun. Avec un `.mailmap` qui les réunit (essayé), il passe à 2 sur `forgust-server`, `forgust-web` et `forgust-db`.
+
+Le 2026-11-23, sur la version 0.7.0 : 22 blocs et 17 liens en 0,06 s. Les nouveaux venus sont `forgust-assay` et son image, celle du reviewer, et les services `assay`, `hooks` et `runner` de compose. Le `.mailmap` est en place, et 9 blocs restent connus d'une seule personne. Les 139 fichiers hors bloc sont toujours ceux de la racine et de `.github`.
 
 ### Dans Forgust
 
@@ -215,12 +219,23 @@ La page **Smart View** d'un projet, sous Code (`/-/smart_view`), montre la derni
 - qui peut committer corrige la carte depuis le panneau : « Rename or describe », « Merge into… », « Not a block », « I know it », et « Leave me out » sur sa propre ligne. Chacun ouvre l'éditeur sur `assay.toml` (ou un nouveau) avec la correction écrite, à relire avant de la committer ici ou dans une MR ; seules les lignes concernées changent ;
 - à l'ouverture, aucun bloc n'est caché sous les boutons de zoom ni sous la mini-carte : le graphe se décale, ou le cadre grandit.
 
+### L'essayer
+
+- **Sur la démo** (`deploy/seed.py`) : le monorepo `acme/platform/marketplace` a un peu de tout. Il a des paquets Rust, npm, Python et Go, des images, des services compose et un schéma. Il est déployé par un chart Helm, Kustomize, des rôles Ansible, des modules Terraform et un projet Pulumi. Chaque partie a ses jobs, dont un qui échoue exprès (`worker-test`) pour montrer le sablier. Le seed y active la Smart View ; ailleurs, un Maintainer l'active dans Settings > General.
+- **Avec `compose.yml`** : l'image `forgust-assay:local` est construite avec la pile (service `assay`), et le serveur la donne à ses jobs (`FORGUST_SMART_VIEW__IMAGE`).
+- **Hors forge** : `cargo run -p forgust-assay -- view <repo> --open`.
+
 ### Pas encore fait
 
 - Les `include:` de `.gitlab-ci.yml` ne sont pas suivis : leurs jobs se rattachent par `assay.toml`.
 - Les dépendances internes des projets Python et Go ne sont pas lues : seuls les blocs le sont.
 - Les référents ne tiennent pas compte de `git blame` (qui a écrit les lignes actuelles).
 - Un service compose n'a pas de personnes, puisqu'il n'a pas de fichiers à lui.
+- Ce qui déploie n'est lu qu'en partie, pour ne lire que peu de fichiers :
+  - les templates d'un chart ne sont pas lus (ce n'est du YAML qu'une fois rendu par Helm) : ses images viennent de son `values.yaml` ;
+  - Kustomize ne lit des manifestes que dans des dossiers aux noms usuels (`base/`, `overlays/`, `k8s/`…) : ailleurs, ses images ne viennent que de son champ `images:` ;
+  - Pulumi ne lit les images que dans la configuration de ses stacks, pas dans le code du programme ;
+  - le lien `runs` vers une image n'est qu'une supposition par le nom : une image poussée sous un autre nom que son dossier, son paquet ou son service compose n'est pas reliée (`assay.toml` le déclare).
 
 ## Priorité 1 — Le socle
 
@@ -242,16 +257,54 @@ L'impact sur les PR est la brique qui apporte de la valeur au quotidien, pas seu
 Peu chers une fois le socle en place, parce qu'ils réutilisent la carte fichiers → blocs et le graphe.
 
 - **Simulation d'impact** : on demande « si je change le schéma de la table `users`, qu'est-ce qui casse ? ». C'est le calcul de l'impact sur les PR, mais sans PR : la vue liste les blocs, tests, référents et repos touchés avant qu'une ligne soit écrite. **Première version faite** : « If it changes » donne la chaîne des blocs qui dépendent d'un bloc, avec leurs personnes et leurs jobs ; il manque les tests et les autres repos.
-- **Règles entre blocs** : déclarer par exemple « le Web ne doit pas appeler la BDD directement », et la CI bloque une PR qui viole la règle. L'idée la plus sous-estimée, parce qu'elle garde la vue juste dans le temps.
+- **Règles entre blocs** : déclarer par exemple « le Web ne doit pas appeler la BDD directement », et la CI bloque une PR qui viole la règle. L'idée la plus sous-estimée, parce qu'elle garde la vue juste dans le temps. Une forme concrète est proposée dans « Idées détaillées ».
 - **Issues et PR classées par bloc** : chaque issue est rattachée à un ou plusieurs blocs, automatiquement ou à la main. On voit la dette et les bugs ouverts par zone du code.
 - **Santé par bloc** : statut CI, couverture de tests, dépendances obsolètes, issues ouvertes. Deux onglets en plus :
   - **Coût** : temps de CI consommé, taille de l'image Docker, temps de build.
   - **Sécurité** : CVE des dépendances, secrets utilisés, surface exposée (ports, routes publiques).
-- **Diff de la vue entre deux versions** : comparer l'architecture entre deux releases (bloc ajouté, dépendance apparue, bloc qui a beaucoup grossi). Un changelog d'architecture automatique.
+- **Diff de la vue entre deux versions** : comparer l'architecture entre deux releases (bloc ajouté, dépendance apparue, bloc qui a beaucoup grossi). Un changelog d'architecture automatique. Une première version, par merge request, est détaillée dans « Idées détaillées ».
 - **CI générée** : la vue propose la CI de chaque bloc (`cargo build` et `cargo test` pour un bloc Rust, build d'image pour un bloc Docker, install, lint et build pour un bloc Web). Elle arrive en PR pour être relue, et seuls les jobs des blocs touchés par un push sont relancés.
 - **Revue adaptée au risque** : chaque PR reçoit un niveau de risque calculé d'après les blocs touchés, la familiarité de l'auteur avec ces blocs, la couverture de tests et les incidents récents. PR risquée : deux relecteurs dont un référent. PR triviale : fusion automatique possible.
 - **Page d'accueil du bloc** : les 3 ou 4 fichiers à lire en premier, ce qu'il faut pour le lancer (variables d'environnement, ports, secrets requis, commande de démarrage), et un parcours d'onboarding avec une première « good first issue » et le référent à contacter.
 - **Mémoire du bloc** : les décisions et grosses PR qui l'ont façonné, résumées par IA, plus un README et des notes de décision. La forge signale une doc obsolète quand le code a beaucoup changé depuis sa dernière mise à jour.
+
+## Idées détaillées
+
+Trois idées qui ne coûtent presque rien depuis que chaque merge request ouverte a sa carte, à côté de celle de la branche par défaut.
+
+### Ce que la merge request change à la carte
+
+Comparer la carte de la tête d'une MR à celle de la branche par défaut, et dire en tête de la MR ce qui change dans l'architecture :
+- un bloc apparaît ou disparaît (« ajoute le bloc `billing` ») ;
+- un lien apparaît ou disparaît (« `storefront` utilise maintenant `market-store` ») ;
+- un bloc change de rôle ou de type (une bibliothèque qui devient un binaire).
+
+Les deux cartes existent déjà : c'est une différence d'ensembles d'identifiants et de triplets `(from, to, kind)`, sans rien relancer. Ce qui ne change que des fichiers à l'intérieur des blocs ne dit rien : la section n'apparaît que si l'architecture bouge. C'est le relecteur qui en profite : un nouveau lien entre deux parties est souvent ce qui mérite le plus de questions dans une revue.
+
+### Les règles entre blocs, dans `assay.toml`
+
+Une forme simple, lue par assay au même passage que le reste :
+
+```toml
+[[rules]]                         # le front ne parle pas à la base
+from = ["acme-storefront", "acme-backoffice"]
+deny = ["role:database"]          # un bloc, un motif (`acme-*`) ou un rôle
+why = "Tout passe par l'API"
+
+[[rules]]
+from = ["kind:helm", "kind:kubernetes"]
+deny = ["kind:docker"]
+certain = true                    # seulement les liens déclarés : une supposition ne bloque pas
+```
+
+- assay vérifie les règles sur sa carte et met les liens fautifs dans le rapport (`violations`), avec la règle et le fichier qui dit le lien (`via`).
+- Forgust les montre dans la MR, comme un check : « `acme-storefront` utilise `db` (apps/storefront/package.json), ce que la règle *Tout passe par l'API* refuse ». Un réglage de projet en fait une condition de merge, comme le pipeline.
+- La même vérification sert hors de Forgust : `assay check` sort en erreur quand une règle est violée, dans l'image, dans n'importe quelle CI.
+- Les liens supposés (`connects`, `runs` par le nom) ne bloquent qu'avec `certain = false` : une règle ne doit pas tomber sur une devinette.
+
+### Le savoir à partager
+
+Une vue « à partager » liste les blocs connus d'une seule personne (bus factor 1, au moins cinq commits), sans propriétaire déclaré, triés par ce qui en dépend : un bloc dont dix autres dépendent passe avant une page de doc. Chaque ligne propose « I know it » (se déclarer référent) ou d'ouvrir une issue « Faire connaître <bloc> » assignée à la personne seule à le connaître. Sur Forgust aujourd'hui, 9 blocs sur 22 sont dans ce cas. Elle reste présentée comme une liste de choses à transmettre, jamais comme un classement des personnes.
 
 ## Priorité 3 — Les gros paris
 
