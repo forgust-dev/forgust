@@ -59,7 +59,6 @@ import { Select } from "../../components/controls";
 import { useSession } from "../../session";
 import type { AssayEdit } from "./assayToml";
 import { blockTitle } from "./blocks";
-import { RefPicker } from "./Code";
 import { StatusIcon, duration, statusLabel } from "./ci/Status";
 import { LOGOS, type Brand, type Logo } from "./logos";
 import type { Ctx } from "./Project";
@@ -247,22 +246,26 @@ const place = (b: Block) =>
 const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
 
 /** The project's code as blocks (what is built, run or deployed apart), what each needs, and
- *  the people to ask; `gitRef`: the branch, tag or commit shown (the default branch if none). */
-export function SmartView({ ctx, gitRef }: { ctx: Ctx; gitRef: string }) {
-  const ref = gitRef || ctx.p.default_branch || "main";
+ *  the people to ask: the latest map a job made of the default branch, or, from a merge
+ *  request (`?mr=`), of its head once it has one. */
+export function SmartView({ ctx }: { ctx: Ctx }) {
+  const [params, setParams] = useSearchParams();
+  const mr = params.get("mr");
+  const of = mr && /^\d+$/.test(mr) ? mr : undefined;
   // the map, and where its blocks go: laid out with it, so that the page comes in at once
   const q = useQuery({
-    queryKey: ["map", ctx.p.id, ref],
+    queryKey: ["map", ctx.p.id, of ?? ""],
     queryFn: async () => {
-      const map = await api.get<S["RepoMap"]>(`${ctx.base}/map${qs({ ref })}`);
-      return { map, lay: await plan(map) };
+      const view = await api.get<S["SmartView"]>(`${ctx.base}/map${qs({ merge_request: of })}`);
+      return { view, map: view.map ?? null, lay: view.map ? await plan(view.map) : null };
     },
     staleTime: 30_000,
+    // a commit is being mapped: its map comes in when the job is done
+    refetchInterval: (query) => (query.state.data?.view.run?.state === "pending" ? 4000 : false),
   });
-  const [params, setParams] = useSearchParams();
   const [words, setWords] = useState("");
   // the blocks the words find, in the order the graph shows them
-  const found = useMemo(() => (q.data && words.trim() ? findBlocks(q.data.map, q.data.lay, words) : null), [q.data, words]);
+  const found = useMemo(() => (q.data?.map && q.data.lay && words.trim() ? findBlocks(q.data.map, q.data.lay, words) : null), [q.data, words]);
   // Enter: the next block found is chosen, and brought into view
   const next = () => {
     if (!found?.length) return;
@@ -280,10 +283,53 @@ export function SmartView({ ctx, gitRef }: { ctx: Ctx; gitRef: string }) {
   return (
     <div className="stack smart-view">
       <ListHead title="Smart View" sub="The parts of this code, what each needs, and who to ask about them.">
-        {!!q.data?.map.blocks.length && <FindBlock value={words} onChange={setWords} found={found?.length ?? 0} onNext={next} />}
-        <RefPicker ctx={ctx} current={ref} path="" kind="smart_view" />
+        {!!q.data?.map?.blocks.length && <FindBlock value={words} onChange={setWords} found={found?.length ?? 0} onNext={next} />}
       </ListHead>
-      <Q q={q}>{({ map, lay }) => <MapView ctx={ctx} gitRef={ref} map={map} lay={lay} found={found} words={words} />}</Q>
+      <Q q={q}>
+        {({ view, map, lay }) => (
+          <>
+            <RunNote ctx={ctx} view={view} />
+            {map && lay && <MapView ctx={ctx} gitRef={map.ref} map={map} lay={lay} found={found} words={words} />}
+          </>
+        )}
+      </Q>
+    </div>
+  );
+}
+
+/** What stands between the page and an up-to-date map: the Smart View is off, a commit is being
+ *  mapped, or the last one could not be. Nothing when the map shown is the latest. */
+function RunNote({ ctx, view }: { ctx: Ctx; view: S["SmartView"] }) {
+  if (!view.enabled) {
+    return (
+      <Empty>
+        The Smart View is off for this project. Turned on, a job maps the code at each new commit of the default branch and of open merge requests.{" "}
+        {ctx.p.can_admin ? <Link to={`${ctx.web}/-/settings#smart-view`}>Turn it on in the settings</Link> : "A Maintainer turns it on in the project's settings."}
+      </Empty>
+    );
+  }
+  const run = view.run;
+  const job = run?.pipeline_iid ? <Link to={`${ctx.web}/-/pipelines/${run.pipeline_iid}`}>pipeline #{run.pipeline_iid}</Link> : "a pipeline";
+  if (!run) {
+    return view.map ? null : <Empty>No map yet: the default branch is mapped at its next commit.</Empty>;
+  }
+  const commit = <code>{run.commit.slice(0, 8)}</code>;
+  if (run.state === "pending") {
+    return (
+      <div className="banner" role="status">
+        <span className="grow small">
+          {view.map ? <>A newer commit ({commit}) is being mapped by {job}: this is the map of the one before.</> : <>The code is being mapped by {job}: the map shows here when it is done.</>}
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className="banner danger" role="alert">
+      <AlertTriangle size={16} />
+      <span className="grow small">
+        The commit {commit} could not be mapped ({job}){run.error ? <>: {run.error}</> : "."}
+        {view.map && " This is the map of an earlier one."}
+      </span>
     </div>
   );
 }
@@ -437,7 +483,7 @@ function MapView({ ctx, gitRef, map, lay, found, words }: { ctx: Ctx; gitRef: st
   const nav = useNavigate();
   const { user } = useSession();
   const fix = useCallback(
-    (edit: AssayEdit) => nav(map.config_file ? refLink(ctx.web, "edit", gitRef, "assay.toml") : `${ctx.web}/-/new/${gitRef}`, { state: { assay: edit } }),
+    (edit: AssayEdit) => nav(map.config_file ? refLink(ctx.web, "edit", gitRef, "assay.toml") : refLink(ctx.web, "new", gitRef), { state: { assay: edit } }),
     [nav, map.config_file, ctx.web, gitRef],
   );
   // a block whose jobs failed holds up what depends on it, as a pipeline's failed stage would:
@@ -1066,7 +1112,8 @@ function Details({ ctx, gitRef, map, lay, b, jobs, pipeline, waits, chain, setCh
   );
   // named, without a commit or a review in the window
   const owner = (o: string) => {
-    const handle = o.startsWith("@") ? o.slice(1) : null;
+    // a user's or a group's path only: what a repository's file says is never a link out of here
+    const handle = /^@[A-Za-z0-9_.-]+(\/[A-Za-z0-9_.-]+)*$/.test(o) ? o.slice(1) : null;
     return (
       <li key={`o:${o}`}>
         <Avatar name={handle ?? o} username={handle && !handle.includes("/") ? handle : undefined} />
@@ -1465,7 +1512,6 @@ function Notes({ ctx, gitRef, map }: { ctx: Ctx; gitRef: string; map: S["RepoMap
           </ul>
         </div>
       )}
-      {map.truncated && <p>This repository is large: only its first 100,000 files, and the latest 5,000 commits, were read.</p>}
       <p>
         The blocks come from the manifests. An <code>assay.toml</code> at the top of the repository renames, merges, ignores or adds blocks and links, and names who to ask.
       </p>
@@ -1570,6 +1616,9 @@ const LAYOUT = {
 /** Where the blocks go. A block sits inside its parent (a crate's schema, an app's tool), unless
  *  a link joins them already (an image built from the crate it lies in), or the parent is the
  *  whole repository: then a dotted line says it. */
+/** The graph's top in ELK's tree: no block's id (theirs are letters, digits and dashes). */
+const ROOT = "#root";
+
 async function plan(map: S["RepoMap"]): Promise<Plan> {
   const byId = new Map(map.blocks.map((b) => [b.id, b]));
   const links: Edge[] = map.links.filter((l) => byId.has(l.from) && byId.has(l.to)).map((l) => ({ from: l.from, to: l.to, kind: l.kind, inferred: l.inferred, via: l.via }));
@@ -1579,6 +1628,10 @@ async function plan(map: S["RepoMap"]): Promise<Plan> {
   for (const b of map.blocks) {
     if (!b.parent || !byId.has(b.parent) || linked(b.parent, b.id)) continue;
     const part: Edge = { from: b.parent, to: b.id, kind: "part", inferred: false, via: "" };
+    // never inside a block that is inside it (a map made before assay refused such loops)
+    let loops = false;
+    for (let p: string | undefined = b.parent, n = 0; p && !loops && n <= map.blocks.length; p = inside.get(p), n++) loops = p === b.id;
+    if (loops) continue;
     if (byId.get(b.parent)!.roots.some((r) => r.path === ".")) lines.push(part);
     else inside.set(b.id, b.parent);
   }
@@ -1613,7 +1666,7 @@ async function plan(map: S["RepoMap"]): Promise<Plan> {
       },
     };
   };
-  const root: ElkNode = { id: "root", layoutOptions: LAYOUT, children: top.map(node), edges: [] };
+  const root: ElkNode = { id: ROOT, layoutOptions: LAYOUT, children: top.map(node), edges: [] };
   // a line goes in the deepest block holding both of its ends (else the root), as ELK wants it
   const nodes = new Map<string, ElkNode>();
   const index = (n: ElkNode) => {
@@ -1628,7 +1681,7 @@ async function plan(map: S["RepoMap"]): Promise<Plan> {
   };
   drawn.forEach((e, i) => {
     const around = new Set(holding(e.from));
-    const home = holding(e.to).find((p) => around.has(p)) ?? "root";
+    const home = holding(e.to).find((p) => around.has(p)) ?? ROOT;
     const line: ElkExtendedEdge = { id: `e${i}`, sources: [e.from], targets: [e.to] };
     const n = nodes.get(home)!;
     n.edges = [...(n.edges ?? []), line];

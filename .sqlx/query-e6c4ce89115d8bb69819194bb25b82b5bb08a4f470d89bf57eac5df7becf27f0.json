@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.id, p.status FROM smart_view_maps m JOIN ci_pipelines p ON p.id = m.pipeline_id\n          WHERE m.state = 'pending' AND p.status <> ALL($1) AND p.finished_at < now() - interval '5 minutes'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "smart_view_maps",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "status",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "status"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "e6c4ce89115d8bb69819194bb25b82b5bb08a4f470d89bf57eac5df7becf27f0"
+}

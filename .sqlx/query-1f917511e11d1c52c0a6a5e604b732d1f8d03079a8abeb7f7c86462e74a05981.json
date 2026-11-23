@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT overrides FROM smart_view_instance WHERE id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "overrides",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "smart_view_instance",
+            "name": "overrides"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1f917511e11d1c52c0a6a5e604b732d1f8d03079a8abeb7f7c86462e74a05981"
+}

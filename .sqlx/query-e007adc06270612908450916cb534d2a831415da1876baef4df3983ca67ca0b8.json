@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM smart_view_maps\n          WHERE project_id = $1 AND coalesce(merge_request_id, 0) = coalesce($2::bigint, 0) AND sha = $3 AND state = 'failed'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e007adc06270612908450916cb534d2a831415da1876baef4df3983ca67ca0b8"
+}

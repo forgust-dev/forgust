@@ -175,7 +175,8 @@ fn instructions(text: &str) -> Vec<(String, String)> {
     let mut current = String::new();
     for line in text.lines() {
         let line = line.trim();
-        if current.is_empty() && (line.is_empty() || line.starts_with('#')) {
+        // a comment or an empty line, between the lines of a continued instruction too
+        if line.is_empty() || line.starts_with('#') {
             continue;
         }
         if let Some(head) = line.strip_suffix('\\') {
@@ -226,6 +227,13 @@ mod tests {
         assert_eq!(arguments(&got[1].1), vec!["Cargo.toml", "Cargo.lock", "./"]);
         assert_eq!(got[3].0, "COPY", "instructions are read in any case");
         assert_eq!(arguments(&got[3].1), vec!["web", "/web"]);
+    }
+
+    #[test]
+    fn a_comment_inside_a_continued_instruction_is_dropped() {
+        let got = instructions("COPY api \\\n  # the shared code\n\n  core ./\n");
+        assert_eq!(got.len(), 1);
+        assert_eq!(arguments(&got[0].1), vec!["api", "core", "./"]);
     }
 
     #[test]

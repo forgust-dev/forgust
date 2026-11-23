@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE smart_view_settings SET bot_user_id = $2, updated_at = now() WHERE project_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4f5824484f05d245ade602103f93cb0348fa4af39e902b7d6010f47e9b5b342a"
+}

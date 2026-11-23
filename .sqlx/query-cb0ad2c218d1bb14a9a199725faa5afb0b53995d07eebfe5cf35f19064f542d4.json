@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM smart_view_maps WHERE id = $1 AND state = 'pending'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cb0ad2c218d1bb14a9a199725faa5afb0b53995d07eebfe5cf35f19064f542d4"
+}

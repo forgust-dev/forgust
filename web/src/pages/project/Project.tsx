@@ -157,7 +157,7 @@ export function ProjectPage({ id, fullPath, rest }: { id: number; fullPath: stri
                   {section === "tree" && <Tree ctx={ctx} refAndPath={tail} />}
                   {section === "blob" && <Blob ctx={ctx} refAndPath={tail} />}
                   {section === "blame" && <Blame ctx={ctx} refAndPath={tail} />}
-                  {section === "smart_view" && <SmartView ctx={ctx} gitRef={tail} />}
+                  {section === "smart_view" && <SmartView ctx={ctx} />}
                   {(section === "edit" || section === "new" || section === "delete") && (p.can_write_repository ? <EditFile ctx={ctx} refAndPath={tail} mode={section} /> : <NotFound />)}
                   {section === "commits" && <Commits ctx={ctx} refAndPath={tail || ref} />}
                   {section === "commit" && <Commit ctx={ctx} sha={tail} />}

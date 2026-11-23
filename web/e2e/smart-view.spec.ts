@@ -1,9 +1,19 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Locator } from "@playwright/test";
 import { test, expect, freshProject, isMobile } from "./fixtures";
 
-// The Smart View: a project's code as blocks, what each needs, and who to ask.
+// The Smart View: a project's code as blocks, what each needs, and who to ask. A job of
+// Forgust's maps the code with the assay image; here a runner of the test's takes it and
+// uploads what assay writes for these files (`assay report`, kept beside this file). The
+// instance's Smart View runner tags are changed for the run, then put back.
+const REPORT = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), "smart-view-report.json"), "utf8"));
 
 test("the Smart View maps the code into blocks and tells what each needs", async ({ page }) => {
+  const tag = `e2e-map-${Date.now() % 100000}`;
+  let before: any = null;
+  let runnerId: number | null = null;
   const { project, web, api, remove } = await freshProject(page, "map", {
     "Cargo.toml": '[workspace]\nmembers = ["api", "core"]\n',
     Dockerfile: "FROM rust\nCOPY . .\nRUN cargo build --release -p api\n",
@@ -24,8 +34,37 @@ test("the Smart View maps the code into blocks and tells what each needs", async
       ],
     });
 
+    // off until a Maintainer turns it on
     await page.goto(`${web}/-/smart_view`);
     await expect(page.getByRole("heading", { name: "Smart View" })).toBeVisible();
+    await expect(page.getByText("The Smart View is off for this project.")).toBeVisible();
+
+    // turned on, a job maps the default branch: an instance runner of this test takes it
+    before = (await api("get", "/admin/smart_view")).settings;
+    await api("put", "/admin/smart_view", { ...before, enabled: true, tags: [tag] });
+    const runner = await api("post", "/admin/runners", { description: tag, tags: [tag], run_untagged: false });
+    runnerId = runner.id;
+    await api("put", `/projects/${project.id}/smart_view`, { enabled: true });
+    await page.reload();
+    await expect(page.getByText("The code is being mapped by")).toBeVisible();
+    let job: any = null;
+    for (let i = 0; i < 40 && !job; i++) {
+      const r = await page.request.post("/api/v4/jobs/request", { data: { token: runner.token, system_id: tag, info: { version: "19.5.3", executor: "docker" } } });
+      if (r.status() === 201) job = await r.json();
+      else await page.waitForTimeout(250);
+    }
+    expect(job, "the map job").toBeTruthy();
+    expect(JSON.stringify(job.steps)).toContain("assay report");
+    const sha = job.git_info.sha;
+    const report = { ...REPORT, commit: sha, map: { ...REPORT.map, commit: sha } };
+    const up = await page.request.post(`/api/v4/jobs/${job.id}/artifacts?artifact_type=smart_view&artifact_format=raw`, {
+      headers: { "JOB-TOKEN": job.token },
+      multipart: { file: { name: "assay-report.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(report)) } },
+    });
+    expect(up.status()).toBe(201);
+    expect((await page.request.put(`/api/v4/jobs/${job.id}`, { data: { token: job.token, state: "success", exit_code: 0 } })).status()).toBe(200);
+
+    // the page takes the map in when the job is done
     // compose.yml declares the services but holds no block's files
     await expect(page.getByText("5 blocks · 4 links · 3 files in no block")).toBeVisible();
     const card = (id: string) => page.locator(`.smart-card[data-id="${id}"]`);
@@ -107,6 +146,8 @@ test("the Smart View maps the code into blocks and tells what each needs", async
       await expect(page.locator(".smart-mr")).toContainText("changes 1 block: core");
     }
   } finally {
+    if (before) await api("put", "/admin/smart_view", before);
+    if (runnerId) await api("delete", `/runners/${runnerId}`);
     await remove();
   }
 });

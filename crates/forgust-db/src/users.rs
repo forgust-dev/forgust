@@ -34,7 +34,7 @@ impl User {
     /// A bot Forgust runs its own features as (built-in Renovate, scanners,
     /// AI review): not a project's access-token bot.
     pub fn is_builtin_bot(&self) -> bool {
-        matches!(self.user_type.as_str(), "renovate_bot" | "security_bot" | "ai_review_bot")
+        matches!(self.user_type.as_str(), "renovate_bot" | "security_bot" | "ai_review_bot" | "smart_view_bot")
     }
     pub fn is_active(&self) -> bool {
         self.state == "active"

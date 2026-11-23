@@ -29,6 +29,7 @@ pub struct Config {
     pub pages: PagesConfig,
     pub security_scanning: SecurityScanningConfig,
     pub ai_review: AiReviewConfig,
+    pub smart_view: SmartViewConfig,
     pub audit: AuditConfig,
     pub oidc: BTreeMap<String, OidcProvider>,
 }
@@ -227,6 +228,34 @@ impl Default for AiReviewConfig {
             options: BTreeMap::new(),
             secret_options: BTreeMap::new(),
             ca_pem: None,
+        }
+    }
+}
+
+/// The Smart View: with it on for a project, a job run by Forgust itself, on the
+/// instance's runners, with the assay image (`crates/forgust-assay`), maps each
+/// new commit of the default branch and of open merge requests, and uploads the
+/// map as a report. Nothing leaves the instance.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct SmartViewConfig {
+    /// Whether projects may turn it on.
+    pub enabled: bool,
+    /// The assay image the job runs (`assay report`).
+    pub image: String,
+    /// Runner tags the job asks for. Only instance runners take these jobs.
+    pub tags: Vec<String>,
+    pub timeout_secs: u64,
+}
+
+impl Default for SmartViewConfig {
+    fn default() -> Self {
+        SmartViewConfig {
+            enabled: true,
+            // released with the server, under the same version
+            image: format!("ghcr.io/forgust-dev/forgust-assay:{}", env!("CARGO_PKG_VERSION")),
+            tags: Vec::new(),
+            timeout_secs: 600,
         }
     }
 }

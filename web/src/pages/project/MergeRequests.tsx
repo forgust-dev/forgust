@@ -1376,7 +1376,7 @@ function BlocksFact({ ctx, m, canEdit, onAsk }: { ctx: Ctx; m: S["MrDetail"]; ca
   if (!mb?.blocks.length) return null;
   const owners = new Set((co.data?.sections.length ? co.data.suggested_reviewers : []).map((u) => u.id));
   const ask = mb.suggested_reviewers.filter((u) => !owners.has(u.id));
-  const smart = (extra: Record<string, string>) => `${refLink(ctx.web, "smart_view", mb.commit)}${qs({ mr: m.iid, ...extra })}`;
+  const smart = (extra: Record<string, string>) => `${ctx.web}/-/smart_view${qs({ mr: m.iid, ...extra })}`;
   const shown = mb.blocks.slice(0, 6);
   return (
     <div className="fact">

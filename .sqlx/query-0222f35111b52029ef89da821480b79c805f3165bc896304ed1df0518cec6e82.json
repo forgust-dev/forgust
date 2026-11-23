@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO smart_view_settings (project_id, enabled, bot_user_id, user_id) VALUES ($1, $2, $3, $4)\n         ON CONFLICT (project_id) DO UPDATE SET enabled = $2,\n             bot_user_id = coalesce($3, smart_view_settings.bot_user_id),\n             user_id = coalesce($4, smart_view_settings.user_id), updated_at = now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Bool",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0222f35111b52029ef89da821480b79c805f3165bc896304ed1df0518cec6e82"
+}

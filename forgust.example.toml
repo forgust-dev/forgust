@@ -110,6 +110,16 @@ timeout_secs = 3600
 # [renovate.extra_env]     # shown in the job's variables: no secrets
 # RENOVATE_PR_HOURLY_LIMIT = "4"
 
+[smart_view]
+# The Smart View: a project that turns it on has each new commit of its default branch
+# and of its open merge requests mapped by a job on these runners, with the assay image
+# (crates/forgust-assay, released with Forgust). Nothing leaves the instance, and only the
+# latest map of each is kept. Also in Admin > Smart View.
+enabled = true            # whether projects may turn it on
+tags = []                 # runner tags for the job (instance runners only)
+timeout_secs = 600
+# image = "ghcr.io/forgust-dev/forgust-assay:<this version>"   # the default follows each upgrade
+
 [ai_review]
 # AI review of merge requests: a "Request AI review" button runs a job on these
 # runners, with the reviewer image (crates/forgust-reviewer, released with Forgust), that

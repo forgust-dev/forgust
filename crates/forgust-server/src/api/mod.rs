@@ -203,6 +203,8 @@ pub fn router() -> Router<AppState> {
         .route("/projects/{id}/merge_requests/{iid}/ai_review", get(ai_review::mr_status).post(ai_review::mr_request))
         .route("/admin/ai_review", get(ai_review::admin_get).put(ai_review::admin_set))
         .route("/admin/ai_review/models", post(ai_review::admin_models))
+        .route("/projects/{id}/smart_view", get(smart_view::get).put(smart_view::set))
+        .route("/admin/smart_view", get(smart_view::admin_get).put(smart_view::admin_set))
         .route("/admin/renovate/host_rules", get(renovate::admin_host_rules).post(renovate::admin_add_host_rule))
         .route("/admin/renovate/host_rules/{rule_id}", delete(renovate::admin_delete_host_rule))
         .route("/projects/{id}/registry", get(registry::info))

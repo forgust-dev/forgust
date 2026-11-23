@@ -1482,6 +1482,8 @@ def seed_marketplace(apis, platform):
     r = Repo("marketplace", "bob", bob.token, "acme/platform/marketplace")
     market_history(r)
     r.push("main")
+    # a job on the compose runner maps it with the assay image (built with the stack)
+    bob.put(f"/projects/{p['id']}/smart_view", {"enabled": True})
     return p["id"]
 
 

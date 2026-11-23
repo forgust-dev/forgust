@@ -231,7 +231,7 @@ fn reports_what_it_cannot_read() {
             ("assay.toml", "[blocks.nothing]\nname = \"x\"\n"),
         ],
     );
-    let map = forgust_assay::map(&dir, &Options { people: false, days: None }).unwrap();
+    let map = forgust_assay::map(&dir, &Options { people: false, ..Default::default() }).unwrap();
     assert!(map.blocks.is_empty());
     assert!(map.warnings.iter().any(|w| w.starts_with("crates/a/Cargo.toml: invalid TOML")), "{:?}", map.warnings);
     assert!(map.warnings.iter().any(|w| w.starts_with("py/pyproject.toml: invalid TOML")), "{:?}", map.warnings);
@@ -270,7 +270,7 @@ fn maps_a_snapshot() {
         history: Some(history),
     };
     let map = forgust_assay::map_snapshot(&snapshot).unwrap();
-    let from_folder = forgust_assay::map(&repo("snapshot", &all), &Options { people: false, days: None }).unwrap();
+    let from_folder = forgust_assay::map(&repo("snapshot", &all), &Options { people: false, ..Default::default() }).unwrap();
     let ids = |m: &RepoMap| m.blocks.iter().map(|b| b.id.clone()).collect::<Vec<_>>();
     assert_eq!(ids(&map), ids(&from_folder), "the same blocks as from the folder");
     assert_eq!(map.links, from_folder.links, "and the same links");
@@ -538,7 +538,7 @@ fn maps_what_deploys() {
         ("infra/pulumi/index.ts", "import * as pulumi from \"@pulumi/pulumi\";\n"),
         (".gitlab-ci.yml", "helm-lint:\n  script: [helm lint]\n  rules:\n    - changes: [\"deploy/helm/**/*\"]\n"),
     ];
-    let map = forgust_assay::map(&repo("shop", &all), &Options { people: false, days: None }).unwrap();
+    let map = forgust_assay::map(&repo("shop", &all), &Options { people: false, ..Default::default() }).unwrap();
     assert!(map.warnings.is_empty(), "a chart's templates are not read: {:?}", map.warnings);
     let block = |id: &str| {
         map.blocks
@@ -641,4 +641,24 @@ fn maps_what_deploys() {
     let handed = forgust_assay::map_snapshot(&snapshot).unwrap();
     assert_eq!(handed.links, map.links);
     assert_eq!(handed.blocks.iter().map(|b| &b.id).collect::<Vec<_>>(), map.blocks.iter().map(|b| &b.id).collect::<Vec<_>>());
+}
+
+/// Blocks of several roots that hold each other's first one: one is the other's parent, never both.
+#[test]
+fn blocks_that_hold_each_other_make_no_loop() {
+    let dir = repo(
+        "loop",
+        &[
+            ("x/a/f.txt", "\n"),
+            ("y/b/f.txt", "\n"),
+            ("x/f.txt", "\n"),
+            ("y/f.txt", "\n"),
+            ("assay.toml", "[blocks.a]\npaths = [\"x/a\", \"y\"]\n\n[blocks.b]\npaths = [\"y/b\", \"x\"]\n"),
+        ],
+    );
+    let map = forgust_assay::map(&dir, &Options { people: false, ..Default::default() }).unwrap();
+    let parent = |id: &str| map.blocks.iter().find(|b| b.id == id).unwrap().parent.clone();
+    let (a, b) = (parent("a"), parent("b"));
+    assert!(a.is_none() || b.is_none(), "a in {a:?}, b in {b:?}");
+    assert!(a.as_deref() == Some("b") || b.as_deref() == Some("a"), "one is still inside the other");
 }

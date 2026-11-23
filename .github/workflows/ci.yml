@@ -311,7 +311,10 @@ jobs:
           docker run --rm "forgust-assay:ci-${GITHUB_RUN_NUMBER}" assay --version
           test "$(docker run --rm "forgust-assay:ci-${GITHUB_RUN_NUMBER}" id -u)" = 10001
           docker run --rm -v "$PWD:/repo:ro" "forgust-assay:ci-${GITHUB_RUN_NUMBER}" > map.txt
-          grep -q '^  forgust-server ' map.txt && grep -q 'people: ' map.txt || { cat map.txt; exit 1; }
+          grep -q '^  forgust-server ' map.txt || { cat map.txt; exit 1; }
+          # what a Smart View job runs: the report the server reads (the people are not
+          # checked: this checkout has one commit, which may be a bot's or a merge)
+          docker run --rm -v "$PWD:/repo:ro" "forgust-assay:ci-${GITHUB_RUN_NUMBER}" assay report --out /tmp/assay-report.json
 
   e2e-run:
     # browser tests against the server built in the job: one machine, with its

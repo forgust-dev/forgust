@@ -293,6 +293,53 @@
         }
       }
     },
+    "/api/v1/admin/smart_view": {
+      "get": {
+        "tags": [
+          "smart_view"
+        ],
+        "summary": "The Smart View on this instance: the settings in effect (the config file, then changes made here).",
+        "operationId": "admin_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminSmartViewStatus"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "smart_view"
+        ],
+        "operationId": "admin_set",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminSmartView"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminSmartViewStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/email/confirm": {
       "post": {
         "tags": [
@@ -2272,7 +2319,7 @@
         "tags": [
           "merge_requests"
         ],
-        "summary": "The blocks of the Smart View a merge request changes, mapped at its latest version's head.",
+        "summary": "The blocks of the Smart View a merge request changes: of its head's map, or the default\nbranch's until a job mapped it.",
         "operationId": "mr_blocks",
         "responses": {
           "200": {
@@ -3937,14 +3984,26 @@
         "tags": [
           "repository"
         ],
-        "summary": "The Smart View of a ref (without one, the default branch), kept per commit.",
+        "summary": "The Smart View of the default branch, or of a merge request's head: the latest map a job\nof Forgust's made of it.",
         "operationId": "map",
+        "parameters": [
+          {
+            "name": "merge_request",
+            "in": "query",
+            "description": "A merge request's iid: its head's map, when it has one",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RepoMap"
+                  "$ref": "#/components/schemas/SmartView"
                 }
               }
             }
@@ -3957,8 +4016,19 @@
         "tags": [
           "repository"
         ],
-        "summary": "The block of the Smart View a file or folder is in. A commit of the history is answered from\nthe default branch's map: a map per commit browsed would cost more than it tells.",
+        "summary": "The block of the Smart View a file or folder is in, by the default branch's map: a map per\nref browsed would cost more than it tells. None when the Smart View is off, or has no map yet.",
         "operationId": "path_block",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "query",
+            "description": "A file or a folder; the top without one",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -4282,6 +4352,54 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ScanningStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/smart_view": {
+      "get": {
+        "tags": [
+          "smart_view"
+        ],
+        "summary": "The Smart View of the project (Maintainers).",
+        "operationId": "get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SmartViewSettings"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "smart_view"
+        ],
+        "summary": "Turn the Smart View on or off for the project. On: a job of Forgust's maps the default\nbranch now, then each new commit of it and of open merge requests. Off: its maps go.",
+        "operationId": "set",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SmartViewSettingsBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SmartViewSettings"
                 }
               }
             }
@@ -5642,6 +5760,58 @@
           },
           "settings": {
             "$ref": "#/components/schemas/SecurityScanningConfig"
+          }
+        }
+      },
+      "AdminSmartView": {
+        "type": "object",
+        "required": [
+          "enabled",
+          "image",
+          "tags",
+          "timeout_secs"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether projects may turn the Smart View on."
+          },
+          "image": {
+            "type": "string",
+            "description": "The assay image the job runs; empty: the one released with this server."
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Runner tags the job asks for (instance runners only)."
+          },
+          "timeout_secs": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "AdminSmartViewStatus": {
+        "type": "object",
+        "required": [
+          "settings",
+          "default_image",
+          "enabled_projects"
+        ],
+        "properties": {
+          "default_image": {
+            "type": "string",
+            "description": "The image used when none is set: the config file's, by default this version's."
+          },
+          "enabled_projects": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/AdminSmartView"
           }
         }
       },
@@ -11098,6 +11268,43 @@
           "mail"
         ]
       },
+      "MapRun": {
+        "type": "object",
+        "required": [
+          "commit",
+          "state"
+        ],
+        "properties": {
+          "commit": {
+            "type": "string"
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Why it could not be mapped."
+          },
+          "pipeline_iid": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "The pipeline that maps it."
+          },
+          "state": {
+            "$ref": "#/components/schemas/MapRunState"
+          }
+        }
+      },
+      "MapRunState": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "failed"
+        ]
+      },
       "MappedPosition": {
         "type": "object",
         "description": "A note's position on another version of the MR.",
@@ -11817,7 +12024,7 @@
           },
           "commit": {
             "type": "string",
-            "description": "What was mapped: the head of its latest version (empty before it has one)."
+            "description": "The commit of the map they are read from: its head once a job mapped it, else the\ndefault branch's (empty without a map: the Smart View is off, or no job has run yet)."
           },
           "suggested_reviewers": {
             "type": "array",
@@ -12993,9 +13200,6 @@
       "PathBlock": {
         "type": "object",
         "description": "The block a path is in.",
-        "required": [
-          "ref"
-        ],
         "properties": {
           "block": {
             "oneOf": [
@@ -13006,10 +13210,6 @@
                 "type": "null"
               }
             ]
-          },
-          "ref": {
-            "type": "string",
-            "description": "The ref whose map it is: the branch or tag asked, else the default branch."
           }
         }
       },
@@ -14607,13 +14807,13 @@
         "description": "The map of a commit: its blocks, the links between them, and who knows each.",
         "required": [
           "commit",
+          "ref",
           "blocks",
           "links",
           "unassigned",
           "unassigned_sample",
           "warnings",
           "config_file",
-          "truncated",
           "days"
         ],
         "properties": {
@@ -14651,9 +14851,9 @@
             },
             "description": "From the block that needs to the one needed."
           },
-          "truncated": {
-            "type": "boolean",
-            "description": "So many files or commits that only the first files, or the latest commits, were read."
+          "ref": {
+            "type": "string",
+            "description": "The branch it is the head of: the default one, or a merge request's source."
           },
           "unassigned": {
             "type": "integer",
@@ -15870,6 +16070,68 @@
               "type": "string"
             },
             "description": "Full commit ids (at most 100)."
+          }
+        }
+      },
+      "SmartView": {
+        "type": "object",
+        "description": "The Smart View of a project: its latest map, and what is going on with a newer one.",
+        "required": [
+          "enabled"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "On for the project, and on the instance: without it there is no map."
+          },
+          "map": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RepoMap",
+                "description": "The latest map kept: the merge request's when one was asked and it has one, else the\ndefault branch's. None until a first job has run."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "run": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MapRun",
+                "description": "A commit newer than the map's being mapped, or the last one that could not be."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "SmartViewSettings": {
+        "type": "object",
+        "required": [
+          "available",
+          "enabled"
+        ],
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "description": "The instance lets projects turn the Smart View on."
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SmartViewSettingsBody": {
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
           }
         }
       },

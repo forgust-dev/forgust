@@ -33,6 +33,19 @@ enum Command {
         #[arg(long)]
         days: Option<u32>,
     },
+    /// Write the report a forge reads from a CI job: the map of the clone's commit, and what
+    /// shows it (Forgust's Smart View runs this)
+    Report {
+        /// The repository's folder, a git clone
+        #[arg(default_value = ".")]
+        path: PathBuf,
+        /// Where to write it
+        #[arg(long, short, default_value = forgust_assay::report::FILE)]
+        out: PathBuf,
+        /// The repository's name, which the block of its top folder takes (default: the folder's)
+        #[arg(long)]
+        name: Option<String>,
+    },
     /// Write the map of a repository as a page to look at: one HTML file, which opens offline
     View {
         /// The repository's folder
@@ -56,7 +69,7 @@ enum Command {
 fn main() -> anyhow::Result<()> {
     match Cli::parse().command {
         Command::Map { path, text, pretty, no_people, days } => {
-            let map = forgust_assay::map(&path, &forgust_assay::Options { people: !no_people, days })?;
+            let map = forgust_assay::map(&path, &forgust_assay::Options { people: !no_people, days, name: None })?;
             if text {
                 print!("{}", summary(&map));
             } else if pretty {
@@ -65,8 +78,13 @@ fn main() -> anyhow::Result<()> {
                 println!("{}", serde_json::to_string(&map)?);
             }
         }
+        Command::Report { path, out, name } => {
+            let report = forgust_assay::report::report(&path, &forgust_assay::Options { name, ..Default::default() })?;
+            std::fs::write(&out, serde_json::to_vec(&report)?)?;
+            println!("{}", out.display());
+        }
         Command::View { path, out, open, no_people, days } => {
-            let map = forgust_assay::map(&path, &forgust_assay::Options { people: !no_people, days })?;
+            let map = forgust_assay::map(&path, &forgust_assay::Options { people: !no_people, days, name: None })?;
             let name =
                 path.canonicalize()?.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "repository".to_string());
             let out = out.unwrap_or_else(|| PathBuf::from(format!("{name}.assay.html")));

@@ -107,28 +107,6 @@ fn sort_entries(entries: &mut [TreeEntry]) {
 
 const LOG_FORMAT: &str = "--format=%H%x00%P%x00%an%x00%ae%x00%at%x00%cn%x00%ce%x00%ct%x00%s%x00%b%x1e";
 
-/// `git log -z --name-only --format=%x1e%aN%x1f%aE%x1f%at`: per commit, its header, a NUL,
-/// a newline, then each path it changes, NUL-terminated.
-fn parse_log_paths(out: &[u8]) -> Vec<CommitPaths> {
-    let mut commits = Vec::new();
-    for chunk in out.split(|b| *b == 0x1e).filter(|c| !c.is_empty()) {
-        let (head, rest) = match chunk.iter().position(|b| *b == 0) {
-            Some(i) => (&chunk[..i], &chunk[i + 1..]),
-            None => (chunk, &[][..]),
-        };
-        let head = String::from_utf8_lossy(head);
-        let mut fields = head.split('\x1f');
-        let (Some(name), Some(email), Some(Ok(time))) = (fields.next(), fields.next(), fields.next().map(|t| t.trim().parse::<i64>()))
-        else {
-            continue;
-        };
-        let rest = rest.strip_prefix(b"\n").unwrap_or(rest);
-        let paths = rest.split(|b| *b == 0).filter(|p| !p.is_empty()).map(|p| String::from_utf8_lossy(p).into_owned()).collect();
-        commits.push(CommitPaths { name: name.to_string(), email: email.to_string(), time, paths });
-    }
-    commits
-}
-
 fn parse_log(out: &[u8]) -> Vec<CommitInfo> {
     let text = String::from_utf8_lossy(out);
     text.split('\x1e')
@@ -803,28 +781,6 @@ impl Storage for LocalStorage {
         c.arg("log").arg(LOG_FORMAT).arg(format!("--max-count={}", limit.min(1000))).arg(format!("{from}..{to}")).arg("--");
         let out = cli::run(c, 64 << 20, LONG).await?;
         Ok(parse_log(&out.stdout))
-    }
-
-    async fn log_paths(&self, repo: i64, rev: &str, since: i64, limit: usize) -> Result<(Vec<CommitPaths>, bool)> {
-        self.ensure(repo).await?;
-        if !validate_rev(rev) {
-            return Err(StorageError::Invalid("bad revision".into()));
-        }
-        let mut c = self.git(repo);
-        // the people as the repository names them, by its .mailmap at `rev` (none: as they signed)
-        c.arg("-c").arg(format!("mailmap.blob={rev}:.mailmap"));
-        c.args(["log", "-z", "--no-merges", "--no-renames", "--name-only", "--format=%x1e%aN%x1f%aE%x1f%at"])
-            .arg(format!("--since=@{since}"))
-            .arg(format!("--max-count={limit}"))
-            .arg(rev)
-            .arg("--");
-        let out = cli::run(c, 64 << 20, LONG).await?;
-        let mut commits = parse_log_paths(&out.stdout);
-        if out.truncated {
-            // the last one read may have lost some of its paths
-            commits.pop();
-        }
-        Ok((commits, out.truncated))
     }
 
     async fn diff(&self, repo: i64, from: Option<&str>, to: &str, opts: DiffOptions) -> Result<Diff> {

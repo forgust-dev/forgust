@@ -12,9 +12,9 @@
 //! # anyhow::Ok(())
 //! ```
 //!
-//! [`map`] reads a folder. A forge, which keeps no working copy, gathers a [`Snapshot`] from
-//! its storage instead (the paths, the text of those [`reads`] picks out, the history) and
-//! calls [`map_snapshot`].
+//! [`map`] reads a folder; without a working copy, gather a [`Snapshot`] (the paths, the text
+//! of those [`reads`] picks out, the history) and call [`map_snapshot`]. Forgust runs
+//! `assay report` in a CI job and reads the [`report`] it writes.
 
 mod codeowners;
 mod config;
@@ -23,6 +23,7 @@ mod files;
 mod lang;
 pub mod model;
 mod people;
+pub mod report;
 mod view;
 mod yaml;
 
@@ -31,6 +32,7 @@ use std::path::Path;
 
 pub use config::{BlockConfig, Config, FILE as CONFIG_FILE, LinkConfig, PeopleConfig};
 use detect::{Job, To, literal_prefix};
+pub use files::Patterns;
 pub use model::*;
 use model::{depth, holds};
 pub use people::Commit;
@@ -45,16 +47,19 @@ pub struct Options {
     pub people: bool,
     /// How many days of it; assay.toml's, else [`DAYS`].
     pub days: Option<u32>,
+    /// The repository's name, which the block of its top folder takes; the folder's without one
+    /// (a CI job's clone is in a folder of the runner's naming).
+    pub name: Option<String>,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Self { people: true, days: None }
+        Self { people: true, days: None, name: None }
     }
 }
 
-/// A repository as assay reads it, gathered beforehand: what a forge, which keeps no working
-/// copy, hands over to [`map_snapshot`].
+/// A repository as assay reads it, gathered beforehand: what [`map_snapshot`] maps, with no
+/// working copy at hand.
 #[derive(Debug, Clone, Default)]
 pub struct Snapshot {
     /// The repository's name: the block of its top folder takes it.
@@ -85,6 +90,11 @@ pub fn history_days(texts: &HashMap<String, String>) -> u32 {
 
 /// The map of the repository at `root`: a folder, in git or not.
 pub fn map(root: &Path, opts: &Options) -> anyhow::Result<RepoMap> {
+    map_snapshot(&snapshot(root, opts)?.0)
+}
+
+/// The folder at `root` as assay reads it, and how many days of its history were asked for.
+fn snapshot(root: &Path, opts: &Options) -> anyhow::Result<(Snapshot, u32)> {
     let root = root.canonicalize()?;
     let (files, in_git) = files::list(&root)?;
     let mut texts = HashMap::new();
@@ -97,8 +107,8 @@ pub fn map(root: &Path, opts: &Options) -> anyhow::Result<RepoMap> {
     let days = opts.days.unwrap_or_else(|| history_days(&texts));
     let history = if in_git && opts.people { people::history(&root, days) } else { None };
     let commit = if in_git { people::head(&root) } else { None };
-    let name = root.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-    map_snapshot(&Snapshot { name, commit, files, texts, history })
+    let name = opts.name.clone().unwrap_or_else(|| root.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default());
+    Ok((Snapshot { name, commit, files, texts, history }, days))
 }
 
 /// The map of a repository gathered beforehand. Fails only on an assay.toml that cannot be
@@ -338,17 +348,29 @@ fn within(blocks: &[Block], path: &str, job: bool) -> Vec<String> {
     }
 }
 
-/// Each block's parent: the block with the deepest root holding its first one.
+/// Each block's parent: the block with the deepest root holding its first one, but one that is
+/// already inside it (blocks of several roots may hold each other's first one): never a loop.
 fn parents(blocks: &mut [Block]) {
     let roots: Vec<(usize, String)> = blocks.iter().enumerate().flat_map(|(i, b)| b.roots.iter().map(move |r| (i, r.clone()))).collect();
+    let mut parent_of: Vec<Option<usize>> = vec![None; blocks.len()];
     for i in 0..blocks.len() {
         let Some(first) = blocks[i].roots.first() else { continue };
-        let parent = roots
-            .iter()
-            .filter(|(j, r)| *j != i && r != first && holds(r, first))
-            .max_by_key(|(_, r)| depth(r))
-            .map(|(j, _)| blocks[*j].id.clone());
-        blocks[i].parent = parent;
+        let mut holding: Vec<&(usize, String)> = roots.iter().filter(|(j, r)| *j != i && r != first && holds(r, first)).collect();
+        holding.sort_by_key(|(_, r)| std::cmp::Reverse(depth(r)));
+        // whether `j` is inside `i`, by the parents settled so far
+        let inside = |mut j: usize| {
+            while let Some(up) = parent_of[j] {
+                if up == i {
+                    return true;
+                }
+                j = up;
+            }
+            false
+        };
+        parent_of[i] = holding.into_iter().map(|(j, _)| *j).find(|j| !inside(*j));
+    }
+    for (i, parent) in parent_of.into_iter().enumerate() {
+        blocks[i].parent = parent.map(|j| blocks[j].id.clone());
     }
 }
 

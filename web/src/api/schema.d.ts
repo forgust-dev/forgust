@@ -123,6 +123,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/smart_view": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The Smart View on this instance: the settings in effect (the config file, then changes made here). */
+        get: operations["admin_get"];
+        put: operations["admin_set"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/email/confirm": {
         parameters: {
             query?: never;
@@ -1208,7 +1225,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The blocks of the Smart View a merge request changes, mapped at its latest version's head. */
+        /**
+         * The blocks of the Smart View a merge request changes: of its head's map, or the default
+         *     branch's until a job mapped it.
+         */
         get: operations["mr_blocks"];
         put?: never;
         post?: never;
@@ -2123,7 +2143,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The Smart View of a ref (without one, the default branch), kept per commit. */
+        /**
+         * The Smart View of the default branch, or of a merge request's head: the latest map a job
+         *     of Forgust's made of it.
+         */
         get: operations["map"];
         put?: never;
         post?: never;
@@ -2141,8 +2164,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * The block of the Smart View a file or folder is in. A commit of the history is answered from
-         *     the default branch's map: a map per commit browsed would cost more than it tells.
+         * The block of the Smart View a file or folder is in, by the default branch's map: a map per
+         *     ref browsed would cost more than it tells. None when the Smart View is off, or has no map yet.
          */
         get: operations["path_block"];
         put?: never;
@@ -2346,6 +2369,27 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["run_scan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/smart_view": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The Smart View of the project (Maintainers). */
+        get: operations["get"];
+        /**
+         * Turn the Smart View on or off for the project. On: a job of Forgust's maps the default
+         *     branch now, then each new commit of it and of open merge requests. Off: its maps go.
+         */
+        put: operations["set"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3050,6 +3094,23 @@ export interface components {
             /** @description Scans not finished. */
             running: number;
             settings: components["schemas"]["SecurityScanningConfig"];
+        };
+        AdminSmartView: {
+            /** @description Whether projects may turn the Smart View on. */
+            enabled: boolean;
+            /** @description The assay image the job runs; empty: the one released with this server. */
+            image: string;
+            /** @description Runner tags the job asks for (instance runners only). */
+            tags: string[];
+            /** Format: int64 */
+            timeout_secs: number;
+        };
+        AdminSmartViewStatus: {
+            /** @description The image used when none is set: the config file's, by default this version's. */
+            default_image: string;
+            /** Format: int64 */
+            enabled_projects: number;
+            settings: components["schemas"]["AdminSmartView"];
         };
         /** @description A person as the admin user list shows them. */
         AdminUser: {
@@ -4727,6 +4788,19 @@ export interface components {
         };
         /** @enum {string} */
         MapRole: "web" | "api" | "cli" | "library" | "database" | "cache" | "queue" | "search" | "storage" | "mail";
+        MapRun: {
+            commit: string;
+            /** @description Why it could not be mapped. */
+            error?: string | null;
+            /**
+             * Format: int64
+             * @description The pipeline that maps it.
+             */
+            pipeline_iid?: number | null;
+            state: components["schemas"]["MapRunState"];
+        };
+        /** @enum {string} */
+        MapRunState: "pending" | "failed";
         /** @description A note's position on another version of the MR. */
         MappedPosition: {
             /** Format: int32 */
@@ -4943,7 +5017,10 @@ export interface components {
         MrBlocks: {
             /** @description The most changed first. */
             blocks: components["schemas"]["MrBlock"][];
-            /** @description What was mapped: the head of its latest version (empty before it has one). */
+            /**
+             * @description The commit of the map they are read from: its head once a job mapped it, else the
+             *     default branch's (empty without a map: the Smart View is off, or no job has run yet).
+             */
             commit: string;
             /**
              * @description Who knows these blocks and could review it: its blocks' owners, then their reviewers, then
@@ -5342,8 +5419,6 @@ export interface components {
         /** @description The block a path is in. */
         PathBlock: {
             block?: components["schemas"]["MapBlock"] | null;
-            /** @description The ref whose map it is: the branch or tag asked, else the default branch. */
-            ref: string;
         };
         PathCommit: {
             commit?: components["schemas"]["CommitInfo"] | null;
@@ -5874,8 +5949,8 @@ export interface components {
             days: number;
             /** @description From the block that needs to the one needed. */
             links: components["schemas"]["MapLink"][];
-            /** @description So many files or commits that only the first files, or the latest commits, were read. */
-            truncated: boolean;
+            /** @description The branch it is the head of: the default one, or a merge request's source. */
+            ref: string;
             /** @description How many files are in no block (READMEs, a workspace's manifest…), and the first ones. */
             unassigned: number;
             unassigned_sample: string[];
@@ -6304,6 +6379,21 @@ export interface components {
         SignaturesQuery: {
             /** @description Full commit ids (at most 100). */
             shas: string[];
+        };
+        /** @description The Smart View of a project: its latest map, and what is going on with a newer one. */
+        SmartView: {
+            /** @description On for the project, and on the instance: without it there is no map. */
+            enabled: boolean;
+            map?: components["schemas"]["RepoMap"] | null;
+            run?: components["schemas"]["MapRun"] | null;
+        };
+        SmartViewSettings: {
+            /** @description The instance lets projects turn the Smart View on. */
+            available: boolean;
+            enabled: boolean;
+        };
+        SmartViewSettingsBody: {
+            enabled: boolean;
         };
         Source: {
             format: string;
@@ -7236,6 +7326,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminScanning"];
+                };
+            };
+        };
+    };
+    admin_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSmartViewStatus"];
+                };
+            };
+        };
+    };
+    admin_set: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminSmartView"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSmartViewStatus"];
                 };
             };
         };
@@ -10488,7 +10620,10 @@ export interface operations {
     };
     map: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description A merge request's iid: its head's map, when it has one */
+                merge_request?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -10500,14 +10635,17 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RepoMap"];
+                    "application/json": components["schemas"]["SmartView"];
                 };
             };
         };
     };
     path_block: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description A file or a folder; the top without one */
+                path?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -10806,6 +10944,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScanningStatus"];
+                };
+            };
+        };
+    };
+    get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SmartViewSettings"];
+                };
+            };
+        };
+    };
+    set: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SmartViewSettingsBody"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SmartViewSettings"];
                 };
             };
         };

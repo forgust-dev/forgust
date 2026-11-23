@@ -149,7 +149,8 @@ fn names_host(var: &str, value: &str, host: &str) -> bool {
         if opens && closes {
             return true;
         }
-        from = start + 1;
+        // past the match's first character, whatever its width
+        from = start + host.chars().next().map_or(1, char::len_utf8);
     }
     false
 }
@@ -174,5 +175,8 @@ mod tests {
         assert!(!names_host("POSTGRES_USER", "forgust", "forgust"), "a user named like a service is no host");
         assert!(!names_host("APP_URL", "https://web.example.com", "web"));
         assert!(!names_host("DB", "mydb", "db"));
+        // a name that does not start with an ASCII letter is searched like another
+        assert!(!names_host("NOTE", "xéclairx", "éclair"));
+        assert!(names_host("NOTE", "xéclairx http://éclair:80", "éclair"));
     }
 }

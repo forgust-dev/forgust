@@ -136,8 +136,9 @@ volumes: { forgust-data: {}, db-data: {} }
 - Fast code browsing: tree, blame, history, compare, syntax highlighting
 - Smart View: the code as blocks (packages, images, services, database schemas, Helm
   charts, Kubernetes, Ansible, Terraform and Pulumi, the CI), what each needs and who to ask
-  about it, found from the manifests and the history by [assay](crates/forgust-assay),
-  released with Forgust as an image too, to map any repository in CI
+  about it, found from the manifests and the history by [assay](crates/forgust-assay):
+  turned on per project, a job on the instance's runners maps each new commit of the default
+  branch and of open merge requests with the assay image, which maps any repository in CI
 - Code search across projects: exact text or regular expressions, filters by path,
   file name and language, only in code you can read
 - Markdown with diagrams (Mermaid), math, alerts and emoji shortcodes

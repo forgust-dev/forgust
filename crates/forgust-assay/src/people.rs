@@ -111,14 +111,34 @@ impl People {
     }
 }
 
+/// The addresses (lowercased, sorted) of who `exclude` names: those named, and every address
+/// of the people [`attach`] leaves out for it (a person named once is left out under all
+/// their names and addresses).
+pub fn excluded_emails(commits: &[Commit], exclude: &[String]) -> Vec<String> {
+    let mut out: BTreeSet<String> = exclude.iter().filter(|x| x.contains('@')).map(|x| x.to_lowercase()).collect();
+    let commits: Vec<&Commit> = commits.iter().filter(|c| !is_bot(&c.name, &c.email)).collect();
+    let mut people = People::new(commits.iter().map(|c| (c.name.as_str(), c.email.as_str())));
+    let opted_out: HashSet<usize> = commits.iter().filter(|c| named(exclude, c)).map(|c| people.of(c)).collect();
+    for c in &commits {
+        if opted_out.contains(&people.of(c)) {
+            out.insert(c.email.to_lowercase());
+        }
+    }
+    out.into_iter().collect()
+}
+
+/// Whether `exclude` names the commit's author, by name or address.
+fn named(exclude: &[String], c: &Commit) -> bool {
+    exclude.iter().any(|x| x.eq_ignore_ascii_case(&c.name) || x.eq_ignore_ascii_case(&c.email))
+}
+
 /// Each block's people, from the commits touching its files (`block_of` finds a path's
 /// block), and its bus factor: how many of them made at least a fifth of those commits.
 /// Someone `exclude` names, by one of their names or addresses, is left out under all of them.
 pub fn attach(blocks: &mut [Block], commits: &[Commit], block_of: impl Fn(&str) -> Option<usize>, exclude: &[String]) {
     let commits: Vec<&Commit> = commits.iter().filter(|c| !is_bot(&c.name, &c.email)).collect();
     let mut people = People::new(commits.iter().map(|c| (c.name.as_str(), c.email.as_str())));
-    let named = |c: &Commit| exclude.iter().any(|x| x.eq_ignore_ascii_case(&c.name) || x.eq_ignore_ascii_case(&c.email));
-    let opted_out: HashSet<usize> = commits.iter().filter(|c| named(c)).map(|c| people.of(c)).collect();
+    let opted_out: HashSet<usize> = commits.iter().filter(|c| named(exclude, c)).map(|c| people.of(c)).collect();
     // per block: person → their commits there, and the latest (with the name and address it bore)
     let mut per: Vec<HashMap<usize, (usize, &Commit)>> = vec![HashMap::new(); blocks.len()];
     for c in &commits {
@@ -165,6 +185,16 @@ fn date(t: i64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn who_opts_out_by_one_address_is_out_under_all() {
+        let c = |name: &str, email: &str| Commit { name: name.into(), email: email.into(), time: 1, files: vec!["a".into()] };
+        let commits = [c("Eve", "eve@work.example"), c("Eve", "Eve@Home.example"), c("Ada", "ada@example.com")];
+        assert_eq!(excluded_emails(&commits, &["eve@work.example".into()]), ["eve@home.example", "eve@work.example"]);
+        // named with no commit of theirs: the address named, at least
+        assert_eq!(excluded_emails(&commits, &["zed@example.com".into()]), ["zed@example.com"]);
+        assert!(excluded_emails(&commits, &[]).is_empty());
+    }
 
     #[test]
     fn reads_paths_as_they_are() {

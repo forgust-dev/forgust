@@ -31,6 +31,13 @@ export function applyAssayEdit(text: string, e: AssayEdit): string {
   const nl = text.includes("\r\n") ? "\r\n" : "\n";
   const lines = text.trim() === "" ? ["version = 1"] : text.replace(/\r\n/g, "\n").replace(/\n+$/, "").split("\n");
   const name = e.kind === "exclude" ? ["people"] : ["blocks", e.block];
+  if (!findTable(lines, name) && setElsewhere(lines, name)) {
+    // written on one line (`api = { … }`) or by dotted keys: a table of the same name after it
+    // would make the file unreadable, so the correction is left to make by hand
+    const what = e.kind === "set" ? Object.entries(e.keys).map(([k, v]) => `${key(k)} = ${typeof v === "boolean" ? v : str(v)}`).join(", ") : `${e.kind === "referent" ? "referents" : "exclude"}: ${str(e.who)}`;
+    lines.push("", `# Smart View: not written. ${name.map(key).join(".")} is set above without a table of its own; add there: ${what.replace(/[\r\n]/g, " ")}`);
+    return lines.join(nl) + nl;
+  }
   if (!findTable(lines, name)) {
     if (lines[lines.length - 1].trim() !== "") lines.push("");
     lines.push(`[${name.map(key).join(".")}]`);
@@ -90,6 +97,30 @@ function findTable(lines: string[], name: string[]): Table | null {
     if (p && p.length === name.length && p.every((x, j) => x === name[j])) found = { start: i, end: lines.length };
   }
   return found;
+}
+
+/** Whether `name` (a table's) is given a value outside a `[name]` table: as an inline table
+ *  (`api = { … }` under `[blocks]`) or by dotted keys (`blocks.api.name = …`). */
+function setElsewhere(lines: string[], name: string[]): boolean {
+  // the table the keys read are in: none inside an array of tables, or a header that does not read
+  let table: string[] | null = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (blank(lines[i])) continue;
+    const head = /^\s*(\[\[?)(.*?)\]\]?\s*(#.*)?$/.exec(lines[i]);
+    if (head) {
+      table = head[1] === "[" ? parts(head[2]) : null;
+      continue;
+    }
+    const m = /^\s*((?:"(?:[^"\\]|\\.)*"|'[^']*'|[A-Za-z0-9_-]+)(?:\s*\.\s*(?:"(?:[^"\\]|\\.)*"|'[^']*'|[A-Za-z0-9_-]+))*)\s*=/.exec(lines[i]);
+    const k = m ? parts(m[1]) : null;
+    if (table && k) {
+      const full = [...table, ...k];
+      // in the table itself is fine (findTable has it then); under its name from above is not
+      if (table.length < name.length && full.length >= name.length && name.every((x, j) => x === full[j])) return true;
+    }
+    i = valueEnd(lines, i);
+  }
+  return false;
 }
 
 /** The line a key of the table is on, or -1. */

@@ -31,7 +31,7 @@ export function useResolved(ctx: Ctx, refAndPath: string) {
   return q;
 }
 
-export function RefPicker({ ctx, current, path, kind }: { ctx: Ctx; current: string; path: string; kind: "tree" | "blob" | "commits" | "smart_view" }) {
+export function RefPicker({ ctx, current, path, kind }: { ctx: Ctx; current: string; path: string; kind: "tree" | "blob" | "commits" }) {
   const nav = useNavigate();
   const branches = useBranches(ctx);
   const tags = useTags(ctx);
@@ -129,10 +129,11 @@ function CloneMenu({ ctx, gitRef }: { ctx: Ctx; gitRef: string }) {
 }
 
 /** The Smart View's block a file or folder is in, and who to ask about it: to its details. */
-function BlockChip({ ctx, gitRef, path }: { ctx: Ctx; gitRef: string; path: string }) {
+function BlockChip({ ctx, path }: { ctx: Ctx; path: string }) {
   const q = useQuery({
-    queryKey: ["path-block", ctx.p.id, gitRef, path],
-    queryFn: () => api.get<S["PathBlock"]>(`${ctx.base}/map/block${qs({ ref: gitRef, path })}`),
+    // by the default branch's map, whatever the ref browsed
+    queryKey: ["path-block", ctx.p.id, path],
+    queryFn: () => api.get<S["PathBlock"]>(`${ctx.base}/map/block${qs({ path })}`),
     staleTime: 60_000,
   });
   const b = q.data?.block;
@@ -142,7 +143,7 @@ function BlockChip({ ctx, gitRef, path }: { ctx: Ctx; gitRef: string; path: stri
   return (
     <Link
       className="block-chip"
-      to={`${refLink(ctx.web, "smart_view", q.data!.ref)}${qs({ block: b.id })}`}
+      to={`${ctx.web}/-/smart_view${qs({ block: b.id })}`}
       title={`In the block ${name}${b.description ? `: ${b.description}` : ""}${who.length ? `. Ask ${who.join(" or ")}` : ""}`}
     >
       <Boxes size={13} aria-hidden />
@@ -314,7 +315,7 @@ function TreeView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
       <div className="repo-toolbar">
         <RefPicker ctx={ctx} current={res.ref} path={res.path} kind="tree" />
         {res.path ? <PathCrumbs ctx={ctx} gitRef={res.ref} path={res.path} /> : <RefCounts ctx={ctx} />}
-        {res.path && <BlockChip ctx={ctx} gitRef={res.ref} path={res.path} />}
+        {res.path && <BlockChip ctx={ctx} path={res.path} />}
         <div className="spacer" />
         <button className="btn" onClick={() => openPalette("files")} title="Find a file (t)">
           <Search size={14} /> Go to file <kbd>t</kbd>
@@ -491,7 +492,7 @@ function BlobView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
       <div className="repo-toolbar">
         <RefPicker ctx={ctx} current={res.ref} path={res.path} kind="blob" />
         <PathCrumbs ctx={ctx} gitRef={res.ref} path={res.path} />
-        <BlockChip ctx={ctx} gitRef={res.ref} path={res.path} />
+        <BlockChip ctx={ctx} path={res.path} />
         <div className="spacer" />
         <button className="btn hide-narrow" onClick={() => openPalette("files")} title="Find a file (t)">
           <Search size={14} /> Go to file <kbd>t</kbd>

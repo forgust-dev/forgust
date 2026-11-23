@@ -34,6 +34,7 @@ pub mod sbom;
 pub mod scanning;
 pub mod security;
 pub mod signatures;
+pub mod smart_view;
 pub mod stack;
 pub mod suggestions;
 pub mod updates;

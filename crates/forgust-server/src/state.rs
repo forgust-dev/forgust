@@ -28,6 +28,7 @@ pub struct Inner {
     pub events: Arc<dyn EventBus>,
     pub jobs: Arc<dyn JobQueue>,
     pub cache: ResponseCache,
+    pub smart_view_maps: SmartViewMaps,
     pub secrets: SecretBox,
     pub repo_locks: RepoLocks,
     pub hooks: HookConfig,
@@ -216,6 +217,15 @@ impl RepoLocks {
         }
         m.entry(repo).or_default().clone()
     }
+}
+
+/// The Smart View's maps as shown, by the id of the map kept: what the server puts in when
+/// one is read (whose account a committer is, who reviewed each block's changes) moves
+/// without a push, so each is kept a quarter of an hour. Readers at once wait for one build.
+pub type SmartViewMaps = Cache<i64, Arc<crate::api::smart_view::ShownMap>>;
+
+pub fn smart_view_maps() -> SmartViewMaps {
+    Cache::builder().max_capacity(256).time_to_live(Duration::from_secs(900)).build()
 }
 
 /// In-process cache of rendered JSON, keyed by immutable object IDs (see

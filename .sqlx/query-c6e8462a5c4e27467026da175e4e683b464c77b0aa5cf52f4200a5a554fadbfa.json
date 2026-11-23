@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE smart_view_maps SET state = 'failed', error = $2, finished_at = now()\n          WHERE id = $1 AND state = 'pending' RETURNING project_id, merge_request_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "smart_view_maps",
+            "name": "project_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "merge_request_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "smart_view_maps",
+            "name": "merge_request_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "c6e8462a5c4e27467026da175e4e683b464c77b0aa5cf52f4200a5a554fadbfa"
+}

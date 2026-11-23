@@ -13,6 +13,7 @@ export const ADMIN_PAGES = [
   { path: "dependency-updates", label: "Dependency updates" },
   { path: "security-scanning", label: "Security scanning" },
   { path: "ai-review", label: "AI review" },
+  { path: "smart-view", label: "Smart View" },
   { path: "audit", label: "Audit log" },
 ] as const satisfies readonly { path: string; label: string }[];
 

@@ -1,6 +1,6 @@
 # assay
 
-Map any repository into blocks: what can be built, run or deployed apart (a package, an image, a service, a database's schema, a chart, infrastructure code, the CI, the docs), the links between them, and the people who know them. The engine of Forgust's Smart View: a library, which the server calls, and a command, `assay`. It reads manifests, so it runs on any repository, whatever its forge.
+Map any repository into blocks: what can be built, run or deployed apart (a package, an image, a service, a database's schema, a chart, infrastructure code, the CI, the docs), the links between them, and the people who know them. The engine of Forgust's Smart View: a command, `assay`, which a job of Forgust's runs in its image, and a library. It reads manifests, so it runs on any repository, whatever its forge.
 
 From the repository's root:
 
@@ -13,6 +13,7 @@ cargo run -p forgust-assay -- map ../some-repo --pretty   # the JSON (schema 1)
 ```
 assay view [PATH] [-o FILE] [--open] [--no-people] [--days N]
 assay map [PATH] [--text | --pretty] [--no-people] [--days N]
+assay report [PATH] [-o FILE] [--name NAME]
 ```
 
 `assay view` writes one HTML file (`<repository>.assay.html` by default), its map inside and nothing to fetch: the blocks as cards, from what needs to what is needed, left to right; a block clicked shows its links, its languages and the people to ask.
@@ -25,7 +26,9 @@ assay map [PATH] [--text | --pretty] [--no-people] [--days N]
 docker run --rm -v "$PWD:/repo" ghcr.io/forgust-dev/forgust-assay:0.6.0
 ```
 
-A job of Forgust or GitLab that keeps the page of the map. The whole history tells who knows each block: a shallow clone only knows its last commits.
+Forgust's Smart View runs it by itself: a project that turns the Smart View on (Settings > General) has each new commit of its default branch and of its open merge requests mapped by a job of Forgust's, on the instance's runners, that runs `assay report` in this image and uploads what it writes (`assay-report.json`: the map, which of its paths are files, who opted out) as the job's `smart_view` report. The server keeps the latest map of each and shows it; an administrator sets the image and the runners' tags (Admin > Smart View, or `[smart_view]` in the config file).
+
+A job of your own, on Forgust or GitLab, that keeps the page of the map. The whole history tells who knows each block: a shallow clone only knows its last commits.
 
 ```yaml
 smart-view:
@@ -117,7 +120,7 @@ let map = forgust_assay::map(std::path::Path::new("."), &forgust_assay::Options:
 let block = map.block_of("crates/forgust-db/migrations/0001_init.sql");
 ```
 
-A forge keeps no working copy: it gathers a `Snapshot` from its storage instead (every path, the text of the files `forgust_assay::reads` picks out, the commits of the last `forgust_assay::history_days(&texts)` days) and maps that. Forgust's server does so (`crates/forgust-server/src/api/smart_view.rs`), through this crate without its `cli` feature.
+Without a working copy (a forge's bare repository), gather a `Snapshot` instead (every path, the text of the files `forgust_assay::reads` picks out, the commits of the last `forgust_assay::history_days(&texts)` days) and map that. Forgust's server does not: it reads the report (`forgust_assay::report`) a job of its own writes with `assay report`, through this crate without its `cli` feature.
 
 ```rust
 let snapshot = forgust_assay::Snapshot { name, commit: Some(id), files, texts, history: Some(commits) };

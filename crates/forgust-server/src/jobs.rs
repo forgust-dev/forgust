@@ -694,6 +694,34 @@ impl TaskHandler for ReadAiReview {
     }
 }
 
+/// A Smart View job ended with a report: keep its map.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ReadSmartView {
+    pub build_id: i64,
+}
+
+impl ReadSmartView {
+    pub fn request(self) -> JobRequest {
+        JobRequest {
+            task: Self::IDENTIFIER,
+            job_key: Some(format!("smart-view-read:{}", self.build_id)),
+            payload: serde_json::to_value(&self).unwrap_or_default(),
+            queue: None,
+            max_attempts: Some(3),
+        }
+    }
+}
+
+impl TaskHandler for ReadSmartView {
+    const IDENTIFIER: &'static str = "read_smart_view";
+
+    async fn run(self, ctx: WorkerContext) -> impl IntoTaskHandlerResult {
+        let state = ctx.get_ext::<AppState>().ok_or("no app state")?;
+        crate::services::smart_view::ingest(state, self.build_id).await.map_err(|e| format!("{e:#}"))?;
+        Ok::<(), String>(())
+    }
+}
+
 /// A pipeline ended: resolve what its complete default-branch scans no longer find.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ResolveSecurityFindings {
@@ -864,6 +892,7 @@ pub async fn start_worker(state: AppState, concurrency: usize) -> anyhow::Result
         .define_job::<MeasureRepositories>()
         .define_job::<ReadSecurityReports>()
         .define_job::<ReadAiReview>()
+        .define_job::<ReadSmartView>()
         .define_job::<ResolveSecurityFindings>()
         .define_job::<Backup>()
         .define_job::<Ping>()

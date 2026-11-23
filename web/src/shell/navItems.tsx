@@ -198,6 +198,7 @@ export const ADMIN_ICONS: Record<AdminPath, ReactNode> = {
   "dependency-updates": <RefreshCw size={16} />,
   "security-scanning": <ShieldCheck size={16} />,
   "ai-review": <Sparkles size={16} />,
+  "smart-view": <Boxes size={16} />,
   audit: <ScrollText size={16} />,
 };
 

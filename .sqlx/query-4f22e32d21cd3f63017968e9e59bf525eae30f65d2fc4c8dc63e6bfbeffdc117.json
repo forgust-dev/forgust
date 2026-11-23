@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO smart_view_instance (id, overrides) VALUES (true, $1)\n         ON CONFLICT (id) DO UPDATE SET overrides = $1, updated_at = now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4f22e32d21cd3f63017968e9e59bf525eae30f65d2fc4c8dc63e6bfbeffdc117"
+}

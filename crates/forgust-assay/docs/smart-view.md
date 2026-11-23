@@ -31,7 +31,8 @@ Le moteur de détection se construit d'abord comme une lib et une CLI indépenda
 Le moteur s'appelle **assay** (`crates/forgust-assay`) : une crate Rust, bibliothèque et CLI.
 - `assay map <repo>` imprime la carte en JSON ; `--text` en donne un résumé lisible, pour vérifier la détection à l'œil sur un vrai repo.
 - `assay view <repo> --open` en fait une page HTML, sans rien à charger, qu'on regarde dans le navigateur. Les blocs y sont des cartes, rangées de gauche à droite, de ce qui a besoin vers ce dont on a besoin. Un clic sur un bloc fait ressortir ses liens et montre ses langages, ses personnes à contacter, ses jobs et ce qui le déclare. C'est un premier jet de la Smart View, avant son intégration à la forge.
-- En bibliothèque, `forgust_assay::map_snapshot` fait la carte d'un repo sans copie de travail, ce que garde une forge : on lui passe les chemins, le texte des fichiers que retient `forgust_assay::reads` (manifestes, CI, CODEOWNERS, `assay.toml`) et l'historique. C'est ainsi que Forgust l'appelle, à travers son stockage.
+- `assay report <repo>` écrit le rapport que lit une forge depuis un job de CI (`assay-report.json`) : la carte du commit cloné, ceux de ses chemins qui sont des fichiers, et les adresses de qui s'est retiré. C'est ce que lance Forgust, dans l'image d'assay.
+- En bibliothèque, `forgust_assay::map_snapshot` fait la carte d'un repo sans copie de travail : on lui passe les chemins, le texte des fichiers que retient `forgust_assay::reads` (manifestes, CI, CODEOWNERS, `assay.toml`) et l'historique.
 
 ### Ce qu'est un bloc
 
@@ -193,8 +194,14 @@ Le bus factor de Forgust vaut 1 sur presque tous les blocs : Bilal et BlaalV8 so
 
 ### Dans Forgust
 
-La page **Smart View** d'un projet, sous Code (`/-/smart_view/<branche, tag ou commit>`), montre la carte d'une version du code. Branche `feat/smart-view` de Forgust :
-- le serveur lit à travers son stockage la liste des fichiers, le texte de ceux que retient `forgust_assay::reads` (2 000 au plus, 1 Mo chacun) et l'historique des jours voulus (5 000 commits au plus, `.mailmap` du commit appliqué), puis appelle `forgust_assay::map_snapshot`. La carte est gardée en cache par commit ;
+La page **Smart View** d'un projet, sous Code (`/-/smart_view`), montre la dernière carte de la branche par défaut. Elle fonctionne comme les autres outils intégrés (revue IA, scanners) : un job de CI lancé par Forgust, dont le résultat est un rapport du job.
+- un Maintainer l'active dans les réglages du projet (Settings > General > Smart View) ; elle est désactivée par défaut. Un administrateur choisit l'image et les tags des runners (Admin > Smart View, ou `[smart_view]` dans le fichier de configuration) et peut la désactiver pour toute l'instance ;
+- une fois activée, Forgust lance un pipeline à lui (source `smart_view`, runners d'instance, exécuté par un bot Reporter du projet) à chaque nouveau commit de la branche par défaut et de chaque merge request ouverte. Le job fait un clone complet, lance `assay report` dans l'image d'assay et dépose `assay-report.json` comme rapport `smart_view` ;
+- le serveur lit le rapport, vérifie qu'il est bien celui du commit demandé et garde la carte. L'artefact du job, lui, expire au bout d'un jour ;
+- **une seule carte est gardée** par branche par défaut et par merge request ouverte : une carte prête remplace les plus anciennes ; un push sur un commit encore en cours de cartographie annule ce job ; les cartes d'une merge request mergée ou fermée, d'une branche qui n'est plus la branche par défaut ou d'un projet qui a désactivé la Smart View sont supprimées (au plus une minute après) ;
+- tant qu'un commit plus récent est en cours, la page montre la carte précédente et le dit ; si le job échoue, elle garde la dernière carte et affiche l'erreur avec un lien vers le pipeline ;
+- le bloc d'un fichier (dans le navigateur de code) se lit dans la carte de la branche par défaut ; les blocs que touche une merge request se lisent dans la carte de sa tête, ou dans celle de la branche par défaut tant qu'elle n'est pas prête ;
+- les comptes des personnes et les relecteurs de chaque bloc sont ajoutés par le serveur à la lecture (ils changent sans push), et gardés un quart d'heure ;
 - les personnes sont reliées à leur compte par leur adresse vérifiée, et leurs adresses ne quittent pas le serveur ;
 - chaque bloc montre l'état de ses jobs dans le dernier pipeline du commit, et un job cassé allume le bloc ;
 - les racines, manifestes, fichiers qui disent un lien, comptes et jobs sont des liens ; un `assay.toml` illisible s'affiche en haut de la page avec son erreur ;
