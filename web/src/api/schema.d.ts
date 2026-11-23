@@ -3419,6 +3419,11 @@ export interface components {
             /** Format: date-time */
             started_at: string;
         };
+        BlockChange: {
+            block: components["schemas"]["MapBlock"];
+            kind_before: components["schemas"]["MapKind"];
+            role_before?: components["schemas"]["MapRole"] | null;
+        };
         BranchDto: {
             /**
              * Format: int64
@@ -4795,6 +4800,21 @@ export interface components {
             /** @description The folders or files whose files are its own. */
             roots: components["schemas"]["MapPath"][];
         };
+        /**
+         * @description What a merge request changes to the map: its head's against the default branch's, only what
+         *     the files it changes tell (a manifest, the file a link is read in, assay.toml). What the
+         *     default branch changed since the merge request left it is not the merge request's.
+         */
+        MapChanges: {
+            blocks_added: components["schemas"]["MapBlock"][];
+            /** @description A block whose kind or role changes: as it is at the head. */
+            blocks_changed: components["schemas"]["BlockChange"][];
+            blocks_removed: components["schemas"]["MapBlock"][];
+            links_added: components["schemas"]["MapLink"][];
+            links_removed: components["schemas"]["MapLink"][];
+            /** @description The links breaking a rule that it brings: not on the default branch. */
+            violations: components["schemas"]["MapViolation"][];
+        };
         /** @enum {string} */
         MapKind: "rust" | "node" | "python" | "go" | "docker" | "service" | "helm" | "kubernetes" | "ansible" | "terraform" | "pulumi" | "migrations" | "ci" | "docs" | "other";
         MapLanguage: {
@@ -4860,6 +4880,20 @@ export interface components {
         };
         /** @enum {string} */
         MapRunState: "pending" | "failed";
+        /** @description A link that breaks a rule of assay.toml: its blocks must not need each other. */
+        MapViolation: {
+            from: string;
+            /** @description A guess, which breaks only the rules that say so (`guesses = true`). */
+            inferred: boolean;
+            kind: components["schemas"]["MapLinkKind"];
+            /** @description The rule's place in assay.toml, from 1. */
+            rule: number;
+            to: string;
+            /** @description The file that tells the link. */
+            via: string;
+            /** @description Why the rule is there, as assay.toml says. */
+            why?: string | null;
+        };
         /** @description A note's position on another version of the MR. */
         MappedPosition: {
             /** Format: int32 */
@@ -5076,6 +5110,7 @@ export interface components {
         MrBlocks: {
             /** @description The most changed first. */
             blocks: components["schemas"]["MrBlock"][];
+            changes?: components["schemas"]["MapChanges"] | null;
             /**
              * @description The commit of the map they are read from: its head once a job mapped it, else the
              *     default branch's (empty without a map: the Smart View is off, or no job has run yet).
@@ -6013,6 +6048,8 @@ export interface components {
             /** @description How many files are in no block (READMEs, a workspace's manifest…), and the first ones. */
             unassigned: number;
             unassigned_sample: string[];
+            /** @description The links that break a rule of assay.toml (`[[rules]]`). */
+            violations: components["schemas"]["MapViolation"][];
             /**
              * @description What could not be read: a manifest that does not parse, a block assay.toml names but
              *     that is not there…

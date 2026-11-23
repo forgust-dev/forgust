@@ -32,7 +32,7 @@ import { Markdown } from "../../components/Markdown";
 import { Ring } from "../../components/decide";
 import { readinessChecks, readinessScore } from "../../components/readiness";
 import { Timeline, type LogEntry } from "../../components/timeline";
-import { blockTitle, whoKnows } from "./blocks";
+import { LINK_VERB, blockTitle, whoKnows } from "./blocks";
 
 /** Invalidate MR queries when the server reports a change (shared SSE stream). */
 export function useLiveUpdates(projectId: number) {
@@ -1370,12 +1370,15 @@ function BlocksFact({ ctx, m, canEdit, onAsk }: { ctx: Ctx; m: S["MrDetail"]; ca
     enabled: ctx.p.can_read_code,
   });
   const mb = q.data;
-  if (!mb?.blocks.length) return null;
+  if (!mb) return null;
+  const changes = mb.changes && <MapChangesFact ctx={ctx} m={m} c={mb.changes} />;
+  if (!mb.blocks.length) return changes ?? null;
   const owners = new Set((co.data?.sections.length ? co.data.suggested_reviewers : []).map((u) => u.id));
   const ask = mb.suggested_reviewers.filter((u) => !owners.has(u.id));
   const smart = (extra: Record<string, string>) => `${ctx.web}/-/smart_view${qs({ mr: m.iid, ...extra })}`;
   const shown = mb.blocks.slice(0, 6);
   return (
+    <>
     <div className="fact">
       <span className="fact-label">Blocks</span>
       <div className="fact-value column">
@@ -1401,6 +1404,44 @@ function BlocksFact({ ctx, m, canEdit, onAsk }: { ctx: Ctx; m: S["MrDetail"]; ca
             Ask {ask.map((u) => `@${u.username}`).join(", ")} to review
           </button>
         )}
+      </div>
+    </div>
+    {changes}
+    </>
+  );
+}
+
+/** What the merge request changes to the Smart View's map: blocks and links that come or go
+ *  through the files it changes, and the rules of assay.toml it breaks. Nothing when its
+ *  architecture stays as it is. */
+function MapChangesFact({ ctx, m, c }: { ctx: Ctx; m: S["MrDetail"]; c: S["MapChanges"] }) {
+  const lines: ReactNode[] = [];
+  const at = (id: string) => <Link to={`${ctx.web}/-/smart_view${qs({ mr: m.iid, block: id })}`}>{id}</Link>;
+  for (const v of c.violations) {
+    lines.push(
+      <div key={`v${v.rule}${v.from}${v.to}`} className="small map-change bad" title={`Rule ${v.rule} of assay.toml, read in ${v.via}`}>
+        <CircleAlert size={13} aria-hidden /> {at(v.from)} {LINK_VERB[v.kind]} {at(v.to)}: breaks rule {v.rule}
+        {v.why && <span className="faint"> · {v.why}</span>}
+      </div>,
+    );
+  }
+  for (const b of c.blocks_added) lines.push(<div key={`a${b.id}`} className="small map-change">Adds the block {at(b.id)}</div>);
+  for (const b of c.blocks_removed) lines.push(<div key={`r${b.id}`} className="small map-change">Removes the block <b>{b.id}</b></div>);
+  for (const ch of c.blocks_changed) {
+    const was = ch.role_before ?? ch.kind_before;
+    const is = ch.block.role ?? ch.block.kind;
+    lines.push(<div key={`c${ch.block.id}`} className="small map-change">{at(ch.block.id)} becomes {is === was ? ch.block.kind : is}, from {was}</div>);
+  }
+  for (const l of c.links_added) lines.push(<div key={`la${l.from}${l.to}${l.kind}`} className="small map-change" title={`Read in ${l.via}`}>{at(l.from)} now {LINK_VERB[l.kind]} {at(l.to)}</div>);
+  for (const l of c.links_removed) lines.push(<div key={`lr${l.from}${l.to}${l.kind}`} className="small map-change" title={`Read in ${l.via}`}>{at(l.from)} no longer {LINK_VERB[l.kind]} {at(l.to)}</div>);
+  if (!lines.length) return null;
+  const shown = lines.slice(0, 8);
+  return (
+    <div className="fact">
+      <span className="fact-label">Map changes</span>
+      <div className="fact-value column">
+        {shown}
+        {lines.length > shown.length && <span className="small faint">and {lines.length - shown.length} more</span>}
       </div>
     </div>
   );

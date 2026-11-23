@@ -17,6 +17,7 @@ import {
   FileText,
   GitPullRequest,
   HardDrive,
+  HandHeart,
   Hourglass,
   Library,
   ListEnd,
@@ -24,6 +25,7 @@ import {
   Pencil,
   Search,
   Server,
+  ShieldAlert,
   SquareTerminal,
   Table2,
   Users,
@@ -423,6 +425,8 @@ function MapView({ ctx, gitRef, map, lay, found, words }: { ctx: Ctx; gitRef: st
   const chosen = asked && byId.has(asked) ? asked : null;
   // the chain: everything that depends on the chosen block lights up, not only what is near it
   const chain = params.get("impact") === "1";
+  // the blocks only one person knows, to share (`?share=1`)
+  const share = params.get("share") === "1";
   const setParam = useCallback(
     (key: string, value: string | null) =>
       setParams(
@@ -572,10 +576,19 @@ function MapView({ ctx, gitRef, map, lay, found, words }: { ctx: Ctx; gitRef: st
       <div className="smart-bar">
         <span>
           {plural(map.blocks.length, "block")} · {plural(map.links.length, "link")} · {plural(map.unassigned, "file")} in no block
-          {alone > 0 && <span title={SOLO}> · {plural(alone, "block")} known by one person</span>}
+          {alone > 0 && (
+            <>
+              {" · "}
+              <button type="button" className={`smart-go smart-share-toggle${share ? " on" : ""}`} aria-pressed={share} title={SOLO} onClick={() => setParam("share", share ? null : "1")}>
+                {plural(alone, "block")} known by one person
+              </button>
+            </>
+          )}
         </span>
         {!list && lay.drawn.length > 0 && <Legend />}
       </div>
+      {map.violations.length > 0 && <Broken map={map} byId={byId} select={select} />}
+      {share && <ToShare ctx={ctx} map={map} lay={lay} select={select} me={user?.username} fix={ctx.p.can_write_repository ? fix : undefined} onClose={() => setParam("share", null)} />}
       <p className="smart-guide">{framed && "From left to right: what runs, what it is built from, the code, its data. "}Choose a block to see what it needs and who to ask.</p>
       {mr && touched.data && (
         <div className="smart-mr" role="status">
@@ -1258,6 +1271,7 @@ function Details({ ctx, gitRef, map, lay, b, jobs, pipeline, waits, chain, setCh
           <ul>{neededBy.map((e) => row(e.from, verb(e), e))}</ul>
         </Part>
       )}
+      <BrokenHere b={b} map={map} go={go} />
       <Impact b={b} lay={lay} byId={byId} usedBy={new Set(neededBy.map((e) => e.from))} chain={chain} setChain={setChain} go={go} />
       {fix && <Fix key={b.id} b={b} map={map} me={me} fix={fix} />}
     </aside>
@@ -1481,6 +1495,139 @@ function Legend() {
 }
 
 /** The files in no block, what could not be read, and how to correct the map. */
+/** The links that break a rule of assay.toml (`[[rules]]`), over the map. */
+function Broken({ map, byId, select }: { map: S["RepoMap"]; byId: Map<string, Block>; select: (id: string) => void }) {
+  const name = (id: string) => (
+    <button type="button" className="smart-go" onClick={() => select(id)}>
+      {byId.has(id) ? title(byId.get(id)!) : id}
+    </button>
+  );
+  const shown = map.violations.slice(0, 5);
+  return (
+    <div className="smart-broken" role="status">
+      <ShieldAlert size={15} aria-hidden />
+      <div className="grow">
+        <strong>{plural(map.violations.length, "link breaks", "links break")} a rule of assay.toml</strong>
+        <ul>
+          {shown.map((v) => (
+            <li key={`${v.rule}:${v.from}:${v.to}:${v.kind}`}>
+              {name(v.from)} {VERB[v.kind]} {name(v.to)}
+              {v.inferred && " (a guess)"}
+              <span className="meta">
+                {" "}
+                · rule {v.rule}
+                {v.why && `: ${v.why}`} · <code>{v.via}</code>
+              </span>
+            </li>
+          ))}
+        </ul>
+        {map.violations.length > shown.length && <span className="meta">and {map.violations.length - shown.length} more</span>}
+      </div>
+    </div>
+  );
+}
+
+/** In a block's details: the rules its links break, its own or those reaching it. */
+function BrokenHere({ b, map, go }: { b: Block; map: S["RepoMap"]; go: (id: string) => ReactNode }) {
+  const here = map.violations.filter((v) => v.from === b.id || v.to === b.id);
+  if (!here.length) return null;
+  return (
+    <Part icon={ShieldAlert} title="Breaks a rule" count={here.length} className="smart-broken-part">
+      <ul>
+        {here.map((v) => (
+          <li key={`${v.rule}:${v.from}:${v.to}:${v.kind}`}>
+            <span className="grow">
+              <span className="smart-line">
+                {v.from === b.id ? <>{VERB[v.kind]} {go(v.to)}</> : <>{go(v.from)} {VERB[v.kind]} it</>}
+              </span>
+              <span className="smart-sub">
+                Rule {v.rule}
+                {v.why && `: ${v.why}`} · {v.via}
+              </span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </Part>
+  );
+}
+
+/** The blocks only one person knows, with no one else named for them (CODEOWNERS naming that
+ *  same person keeps it in one head): the most depended on first. What to share, never a
+ *  ranking of people. */
+function ToShare({
+  ctx,
+  map,
+  lay,
+  select,
+  me,
+  fix,
+  onClose,
+}: {
+  ctx: Ctx;
+  map: S["RepoMap"];
+  lay: Plan;
+  select: (id: string) => void;
+  me?: string;
+  fix?: (edit: AssayEdit) => void;
+  onClose: () => void;
+}) {
+  const rows = map.blocks
+    .filter((b) => solo(b) && !b.owners.some((o) => o.toLowerCase() !== `@${b.people[0]?.username ?? ""}`.toLowerCase()))
+    .map((b) => ({ b, reach: dependents(lay.edges, [b.id]).size, who: b.people[0] }))
+    .sort((x, y) => y.reach - x.reach || title(x.b).localeCompare(title(y.b)));
+  const issue = (b: Block, who?: Block["people"][number]) =>
+    `${ctx.web}/-/issues/new${qs({
+      title: `Share what we know of ${title(b)}`,
+      description: `Only ${who?.username ? `@${who.username}` : (who?.name ?? "one person")} made a fifth or more of the recent changes to **${title(b)}**${b.roots[0] ? ` (\`${b.roots[0].path}\`)` : ""}, and no one else is named for it.\n\nA walk through it, a README, or a second person to review its changes would help.`,
+    })}`;
+  return (
+    <section className="smart-share" aria-label="To share">
+      <div className="smart-share-head">
+        <HandHeart size={15} aria-hidden />
+        <h2 className="grow">To share</h2>
+        <button type="button" className="icon-btn" aria-label="Close" title="Close" onClick={onClose}>
+          <X size={14} />
+        </button>
+      </div>
+      <p className="meta">
+        {rows.length
+          ? "Blocks only one person knows, and no one else is named for: what most depends on them first. A second person who knows them makes them safer to change."
+          : "Every block one person knows has someone else named for it."}
+      </p>
+      {rows.length > 0 && (
+        <ul>
+          {rows.map(({ b, reach, who }) => (
+            <li key={b.id}>
+              <RowMark b={b} />
+              <span className="grow">
+                <span className="smart-line">
+                  <button type="button" className="smart-go" onClick={() => select(b.id)}>
+                    {title(b)}
+                  </button>
+                </span>
+                <span className="smart-sub">
+                  {who && (who.username ? <UserLink username={who.username}>{who.name}</UserLink> : who.name)}
+                  {who && ` · ${plural(who.commits, "commit")}`}
+                  {` · ${reach ? `${plural(reach, "block")} depend on it` : "nothing depends on it"}`}
+                </span>
+              </span>
+              {fix && me && who?.username !== me && (
+                <button type="button" className="btn small" title="Name yourself among the people to ask about it" onClick={() => fix({ kind: "referent", block: b.id, title: title(b), who: `@${me}` })}>
+                  I know it
+                </button>
+              )}
+              <Link className="btn small" to={issue(b, who)}>
+                Open an issue
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function Notes({ ctx, gitRef, map }: { ctx: Ctx; gitRef: string; map: S["RepoMap"] }) {
   return (
     <div className="smart-notes">

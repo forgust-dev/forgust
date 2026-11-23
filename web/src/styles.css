@@ -9165,3 +9165,100 @@ button.test-case-row:hover {
     box-shadow: var(--shadow-pop);
   }
 }
+/* a merge request's changes to the Smart View's map; a rule it breaks in the danger colour */
+.map-change.bad {
+  color: var(--danger);
+}
+.map-change.bad > svg {
+  vertical-align: -2px;
+}
+/* the links that break a rule of assay.toml, over the map */
+.smart-broken {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--border));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--danger) 7%, var(--bg));
+  font-size: 13px;
+}
+.smart-broken > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--danger);
+}
+.smart-broken ul {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.smart-broken li {
+  padding: 2px 0;
+}
+.smart-broken .meta,
+.smart-share .meta {
+  color: var(--text-muted);
+}
+.smart-panel > section.smart-broken-part h3 > svg {
+  color: var(--danger);
+}
+/* the blocks only one person knows, to share */
+.smart-share-toggle {
+  font: inherit;
+  color: inherit;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+.smart-share-toggle.on {
+  color: var(--accent);
+}
+.smart-share {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  font-size: 13px;
+}
+.smart-share-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.smart-share-head > svg {
+  color: var(--accent);
+}
+.smart-share h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+.smart-share > p {
+  margin: 4px 0 8px;
+}
+.smart-share ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.smart-share li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+}
+.smart-share .smart-line,
+.smart-share .smart-sub {
+  display: block;
+}
+.smart-share .smart-sub {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+@media (max-width: 560px) {
+  .smart-share li {
+    flex-wrap: wrap;
+  }
+}
