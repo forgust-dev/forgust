@@ -5,6 +5,7 @@ pub mod ai_review;
 pub mod auth;
 pub mod avatars;
 pub mod awards;
+pub mod bot;
 pub mod ci;
 pub mod dto;
 pub mod environments;
@@ -192,6 +193,9 @@ pub fn router() -> Router<AppState> {
         .route("/projects/{id}/renovate/host_rules/{rule_id}", delete(renovate::delete_host_rule))
         .route("/groups/{id}/renovate", get(renovate::group_get).put(renovate::group_set))
         .route("/admin/renovate", get(renovate::admin_get).put(renovate::admin_set))
+        .route("/projects/{id}/bot", get(bot::get).put(bot::set))
+        .route("/projects/{id}/bot/commands", get(bot::commands))
+        .route("/groups/{id}/bot", get(bot::group_get).put(bot::group_set))
         .route("/projects/{id}/ai_review", get(ai_review::get).put(ai_review::set))
         .route("/projects/{id}/merge_requests/{iid}/ai_review", get(ai_review::mr_status).post(ai_review::mr_request))
         .route("/admin/ai_review", get(ai_review::admin_get).put(ai_review::admin_set))

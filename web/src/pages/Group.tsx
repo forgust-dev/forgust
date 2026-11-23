@@ -307,6 +307,12 @@ function GroupSettings({ group }: { group: S["GroupDetail"] }) {
       >
         <GroupSecurityScanning groupId={group.id} />
       </Section>
+      <Section
+        title="Forgust bot"
+        description="Turn on the bot that carries out the commands written in comments (/label ~bug, /merge) for the group's projects: every project that never chose, and every new one. Each project can still turn it off."
+      >
+        <GroupBot groupId={group.id} />
+      </Section>
       <Section title="Webhooks" description="Call a URL when something happens in any project of the group.">
         <Webhooks base={`/groups/${group.id}`} />
       </Section>
@@ -382,6 +388,18 @@ function GroupDependencyUpdates({ groupId }: { groupId: number }) {
       label="Dependency updates for the group's projects"
       said={(on, r) => (on ? `On for new projects; turned on for ${r.turned_on} project(s).` : "New projects no longer get dependency updates.")}
       unavailable="This instance does not offer dependency updates."
+    />
+  );
+}
+
+function GroupBot({ groupId }: { groupId: number }) {
+  return (
+    <GroupToggle<S["GroupBotStatus"]>
+      url={`/groups/${groupId}/bot`}
+      queryKey={["group-bot", groupId]}
+      label="The Forgust bot for the group's projects"
+      said={(on, r) => (on ? `On for new projects; turned on for ${r.turned_on} project(s).` : "New projects no longer get the bot.")}
+      unavailable="This instance does not offer the Forgust bot."
     />
   );
 }

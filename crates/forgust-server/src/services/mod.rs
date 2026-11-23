@@ -8,6 +8,7 @@ pub mod auto_merge;
 pub mod avatars;
 pub mod awards;
 pub mod blob_scan;
+pub mod bot;
 pub mod builtin;
 pub mod chat;
 pub mod codeowners;

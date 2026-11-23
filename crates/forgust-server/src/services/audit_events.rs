@@ -311,6 +311,17 @@ pub const EVENTS: &[EventType] = &[
     ),
     e("security_finding_dismissed", BUILTIN, P, &["finding", "reason"], "A security finding was dismissed."),
     e("security_finding_reopened", BUILTIN, P, &["finding"], "A dismissed security finding was reopened."),
+    e("bot_enabled", BUILTIN, P, &[], "The Forgust bot turned on for the project."),
+    e("bot_disabled", BUILTIN, P, &[], "The Forgust bot turned off for the project."),
+    e("bot_group_default", BUILTIN, N, &["enabled", "projects"], "A group turned the Forgust bot on or off for its projects."),
+    e(
+        "bot_command",
+        BUILTIN,
+        P,
+        &["command", "args", "by", "issue", "merge_request", "outcome", "reason"],
+        "The Forgust bot ran a command written in a comment (`/label ~bug`): the principal is the bot, `by` the user who wrote it, \
+         `outcome` `done` or `refused` (with the `reason`).",
+    ),
     e("ai_review_enabled", BUILTIN, P, &[], "AI review turned on for the project."),
     e("ai_review_disabled", BUILTIN, P, &[], "AI review turned off for the project."),
     e("ai_review_requested", BUILTIN, P, &["merge_request", "pipeline_id"], "An AI review of a merge request was asked for."),

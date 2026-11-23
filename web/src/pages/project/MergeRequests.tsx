@@ -1168,7 +1168,7 @@ function Thread({ ctx, m, root, replies, boxed }: { ctx: Ctx; m: S["MrDetail"]; 
         <ErrorBox error={error} />
         {open ? (
           <form className="stack" style={{ gap: 6 }} onSubmit={send}>
-            <MarkdownEditor projectId={ctx.p.id} autoFocus rows={3} value={reply} onChange={setReply} placeholder={root.internal ? "Reply internally…" : "Reply…"} label="Reply" />
+            <MarkdownEditor projectId={ctx.p.id} autoFocus rows={3} value={reply} onChange={setReply} placeholder={root.internal ? "Reply internally…" : "Reply…"} label="Reply" commands="merge_request" />
             <div className="row">
               <button className="btn primary small" disabled={!reply.trim()}>
                 Reply
@@ -1300,7 +1300,7 @@ function Activity({ ctx, m, notes }: { ctx: Ctx; m: S["MrDetail"]; notes: S["Not
       <Timeline entries={entries} />
       <form className="composer" onSubmit={send}>
         <ErrorBox error={error} />
-        <MarkdownEditor projectId={ctx.p.id} rows={3} placeholder={internal ? "Leave an internal comment" : "Leave a comment"} value={body} onChange={setBody} label="Comment" />
+        <MarkdownEditor projectId={ctx.p.id} rows={3} placeholder={internal ? "Leave an internal comment" : "Leave a comment"} value={body} onChange={setBody} label="Comment" commands="merge_request" />
         <div className="row wrap" style={{ justifyContent: "flex-end" }}>
           {m.can_comment_internal && <InternalToggle grow checked={internal} onChange={setInternal} />}
           <button className="btn dark" disabled={!body.trim()}>
@@ -1494,7 +1494,7 @@ function Composer({
           Commenting on lines {pos.start_new_line ?? pos.start_old_line}–{pos.new_line ?? pos.old_line}
         </span>
       )}
-      <MarkdownEditor projectId={projectId} autoFocus rows={3} value={body} onChange={setBody} placeholder="Comment on this line" label="Line comment" />
+      <MarkdownEditor projectId={projectId} autoFocus rows={3} value={body} onChange={setBody} placeholder="Comment on this line" label="Line comment" commands="merge_request" />
       {canInternal && <InternalToggle checked={internal} onChange={setInternal} />}
       <div className="row">
         <button className="btn primary small" disabled={!body.trim()}>

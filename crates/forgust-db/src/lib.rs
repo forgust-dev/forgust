@@ -6,6 +6,7 @@ pub mod ai_review;
 pub mod audit;
 pub mod authz;
 pub mod awards;
+pub mod bot;
 pub mod ci;
 pub mod ci_variables;
 pub mod code_search;

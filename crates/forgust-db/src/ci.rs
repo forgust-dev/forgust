@@ -647,6 +647,20 @@ pub async fn latest_status_for_sha(e: impl PgExecutor<'_>, project_id: i64, sha:
     .await
 }
 
+/// The pipeline [`latest_status_for_sha`] reads the status of.
+pub async fn latest_id_for_sha(e: impl PgExecutor<'_>, project_id: i64, sha: &str, mr_id: i64) -> Result<Option<i64>> {
+    sqlx::query_scalar!(
+        "SELECT id FROM ci_pipelines
+         WHERE project_id = $1 AND sha = $2 AND (merge_request_id = $3 OR (merge_request_id IS NULL AND NOT tag)) AND NOT is_system_source(source)
+         ORDER BY id DESC LIMIT 1",
+        project_id,
+        sha,
+        mr_id
+    )
+    .fetch_optional(e)
+    .await
+}
+
 pub async fn set_pipeline_status(e: impl PgExecutor<'_>, id: i64, status: &str) -> Result<bool> {
     let n = sqlx::query!(
         "UPDATE ci_pipelines SET status = $2, updated_at = now(),

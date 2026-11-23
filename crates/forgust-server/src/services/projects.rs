@@ -86,6 +86,7 @@ pub async fn create(state: &AppState, principal: &Principal, ns: &Namespace, req
     // a group above turned dependency updates on for its projects
     super::renovate::on_project_created(state, principal, &project).await;
     super::scanning::on_project_created(state, principal, &project).await;
+    super::bot::on_project_created(state, principal, &project).await;
     Ok(project)
 }
 

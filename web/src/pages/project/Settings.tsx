@@ -85,7 +85,7 @@ function MergeRequestSettings({ ctx }: { ctx: Ctx }) {
 function AutomationSettings({ ctx }: { ctx: Ctx }) {
   return (
     <div className="stack settings-page">
-      <ListHead title="Automation settings" sub="Built-in security scanning, dependency updates and AI review." />
+      <ListHead title="Automation settings" sub="Built-in security scanning, dependency updates, AI review and the Forgust bot." />
       <Section
         id="security-scanning"
         title="Security scanning"
@@ -107,7 +107,73 @@ function AutomationSettings({ ctx }: { ctx: Ctx }) {
       >
         <AiReview ctx={ctx} />
       </Section>
+      <Section
+        id="bot"
+        title="Forgust bot"
+        description="Commands written in comments, such as /label ~bug, /assign @alice or /merge, carried out by a bot that joins the project as a Developer."
+      >
+        <Bot ctx={ctx} />
+      </Section>
     </div>
+  );
+}
+
+function Bot({ ctx }: { ctx: Ctx }) {
+  const qc = useQueryClient();
+  const key = ["bot", ctx.p.id];
+  const q = useQuery({ queryKey: key, queryFn: () => api.get<S["BotStatus"]>(`/projects/${ctx.p.id}/bot`) });
+  return <Q q={q}>{(s) => <BotForm ctx={ctx} initial={s} onSaved={() => qc.invalidateQueries({ queryKey: key })} />}</Q>;
+}
+
+function BotForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S["BotStatus"]; onSaved: () => void }) {
+  const [enabled, setEnabled] = useState(initial.enabled);
+  const [error, setError] = useState<unknown>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const save = useMutation({
+    mutationFn: () => api.put(`/projects/${ctx.p.id}/bot`, { enabled }),
+    onSuccess: () => {
+      setError(null);
+      setMsg(enabled ? `The bot is on: @${initial.username} joined the project and reads new comments.` : "The bot is off: it left the project.");
+      onSaved();
+    },
+    onError: setError,
+  });
+  if (!initial.available && !initial.enabled) return <div className="muted small">This instance does not offer the Forgust bot.</div>;
+  return (
+    <form
+      className="stack"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save.mutate();
+      }}
+    >
+      <ErrorBox error={error} />
+      {msg && <div className="alert ok">{msg}</div>}
+      {initial.config_error && (
+        <div className="alert error">
+          No command runs: <code>{initial.config_path}</code> on the default branch cannot be used ({initial.config_error}).
+        </div>
+      )}
+      <label className="check">
+        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Run the commands written in comments
+      </label>
+      <p className="small muted" style={{ margin: 0 }}>
+        A command is a line of a comment on an issue or a merge request:{" "}
+        {initial.commands.map((c, i) => (
+          <span key={c}>
+            {i > 0 && ", "}
+            <code>/{c}</code>
+          </span>
+        ))}
+        . People run the commands for what they could do from the page; <code>{initial.config_path}</code> on the target branch lets more
+        people run some of them, or turns them off.
+      </p>
+      <div>
+        <button className="btn primary" disabled={save.isPending || enabled === initial.enabled}>
+          Save
+        </button>
+      </div>
+    </form>
   );
 }
 

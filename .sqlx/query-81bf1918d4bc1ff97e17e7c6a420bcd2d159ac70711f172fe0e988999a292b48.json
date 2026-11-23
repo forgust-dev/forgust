@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM merge_request_holds WHERE merge_request_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "81bf1918d4bc1ff97e17e7c6a420bcd2d159ac70711f172fe0e988999a292b48"
+}

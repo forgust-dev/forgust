@@ -110,6 +110,12 @@ timeout_secs = 3600
 # [renovate.extra_env]     # shown in the job's variables: no secrets
 # RENOVATE_PR_HOURLY_LIMIT = "4"
 
+[bot]
+# the Forgust bot (ADR-0026): projects turn it on, and `forgust-bot` carries out
+# the commands written in comments (/label ~bug, /assign @alice, /merge); it runs
+# in the server, no runner needed. A project's rules: .forgust/bot.toml
+enabled = true
+
 [ai_review]
 # AI review of merge requests: a "Request AI review" button runs a job on these
 # runners, with the reviewer image (crates/forgust-reviewer, released with Forgust), that

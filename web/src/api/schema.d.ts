@@ -352,6 +352,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/groups/{id}/bot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["group_get"];
+        /** Turn the Forgust bot on for every project of the group (those that never chose, and new ones). */
+        put: operations["group_set"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/groups/{id}/members": {
         parameters: {
             query?: never;
@@ -698,6 +715,48 @@ export interface paths {
         get: operations["get"];
         /** Turn AI review on or off for the project. */
         put: operations["set"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/bot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The Forgust bot of the project (Maintainers). */
+        get: operations["get"];
+        /**
+         * Turn the Forgust bot on or off: on, it joins the project as a Developer
+         *     and carries out the commands written in comments.
+         */
+        put: operations["set"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/bot/commands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The commands a comment can use here, for the composer's suggestions: none
+         *     while the bot is off, and not those the default branch's
+         *     `.forgust/bot.toml` turns off.
+         */
+        get: operations["commands"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -3179,6 +3238,34 @@ export interface components {
             /** Format: date-time */
             started_at: string;
         };
+        BotCommand: {
+            /** @description How its arguments are written (`~label …`; in brackets: optional), or "". */
+            arguments: string;
+            description: string;
+            /** @description Only on merge requests. */
+            merge_request_only: boolean;
+            /** @description `label`: written `/label`. */
+            name: string;
+        };
+        BotSettingsBody: {
+            enabled: boolean;
+        };
+        BotStatus: {
+            /** @description The instance offers the bot. */
+            available: boolean;
+            /** @description The commands it knows (`label`: written `/label`). */
+            commands: string[];
+            /**
+             * @description What is wrong with the rules on the default branch, when something is:
+             *     no command runs until it is fixed.
+             */
+            config_error?: string | null;
+            /** @description Where the project's rules are read from. */
+            config_path: string;
+            enabled: boolean;
+            /** @description The account that carries out the commands. */
+            username: string;
+        };
         BranchDto: {
             commit?: components["schemas"]["CommitSummary"] | null;
             default: boolean;
@@ -3931,6 +4018,16 @@ export interface components {
             key_ids: string[];
             /** Format: int64 */
             user_id: number;
+        };
+        GroupBot: {
+            /** @description The bot is on for the group's projects that never chose, and new ones. */
+            enabled: boolean;
+        };
+        GroupBotStatus: {
+            available: boolean;
+            enabled: boolean;
+            /** @description Projects turned on by the last change. */
+            turned_on: number;
         };
         GroupDetail: components["schemas"]["GroupDto"] & {
             /** @description The viewer's effective role (`none` when not a member). */
@@ -7109,6 +7206,48 @@ export interface operations {
             };
         };
     };
+    group_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupBotStatus"];
+                };
+            };
+        };
+    };
+    group_set: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupBot"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupBotStatus"];
+                };
+            };
+        };
+    };
     members: {
         parameters: {
             query?: never;
@@ -7709,6 +7848,67 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AiReviewSettings"];
+                };
+            };
+        };
+    };
+    get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BotStatus"];
+                };
+            };
+        };
+    };
+    set: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BotSettingsBody"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BotStatus"];
+                };
+            };
+        };
+    };
+    commands: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BotCommand"][];
                 };
             };
         };

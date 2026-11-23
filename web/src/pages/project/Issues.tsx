@@ -491,7 +491,7 @@ function IssueActivity({ ctx, i, notes, labels, refresh }: { ctx: Ctx; i: S["Iss
           }}
         >
           <ErrorBox error={error} />
-          <MarkdownEditor projectId={ctx.p.id} rows={3} placeholder={internal ? "Leave an internal comment" : "Leave a comment"} value={body} onChange={setBody} label="Comment" />
+          <MarkdownEditor projectId={ctx.p.id} rows={3} placeholder={internal ? "Leave an internal comment" : "Leave a comment"} value={body} onChange={setBody} label="Comment" commands="issue" />
           <div className="row wrap" style={{ justifyContent: "flex-end" }}>
             {i.can_comment_internal && <InternalToggle grow checked={internal} onChange={setInternal} />}
             {i.can_edit && (

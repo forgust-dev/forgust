@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT u.username AS \"username?\" FROM merge_request_holds h LEFT JOIN users u ON u.id = h.user_id\n            WHERE h.merge_request_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "username?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "username"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "b81349cf1eacd5bf0af9c59a64c50ed5f5085c4ca06ac6006db9487d4c133d2c"
+}

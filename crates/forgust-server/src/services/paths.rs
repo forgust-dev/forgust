@@ -4,7 +4,8 @@ use crate::error::{ApiError, ApiResult};
 
 pub const MAX_DEPTH: usize = 20;
 
-/// Top-level paths the web app and APIs use; no user or org may take them.
+/// Top-level paths the web app and APIs use, and the bot's name (ADR-0026);
+/// no user or org may take them.
 pub const RESERVED_TOP_LEVEL: &[&str] = &[
     "-",
     ".well-known",
@@ -15,6 +16,7 @@ pub const RESERVED_TOP_LEVEL: &[&str] = &[
     "explore",
     "favicon.ico",
     "forgot-password",
+    "forgust-bot",
     "groups",
     "health",
     "help",
@@ -124,6 +126,7 @@ mod tests {
         assert!(validate_top_level("api").is_err());
         assert!(validate_top_level("API").is_err());
         assert!(validate_top_level("acme").is_ok());
+        assert!(validate_top_level(crate::services::bot::USERNAME).is_err(), "nobody signs up as the bot");
         // reserved names are fine below the top level
         assert!(validate_segment("api").is_ok());
     }

@@ -666,6 +666,53 @@
         }
       }
     },
+    "/api/v1/groups/{id}/bot": {
+      "get": {
+        "tags": [
+          "bot"
+        ],
+        "operationId": "group_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupBotStatus"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "bot"
+        ],
+        "summary": "Turn the Forgust bot on for every project of the group (those that never chose, and new ones).",
+        "operationId": "group_set",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupBot"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupBotStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/groups/{id}/members": {
       "get": {
         "tags": [
@@ -1396,6 +1443,77 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AiReviewSettings"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/bot": {
+      "get": {
+        "tags": [
+          "bot"
+        ],
+        "summary": "The Forgust bot of the project (Maintainers).",
+        "operationId": "get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BotStatus"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "bot"
+        ],
+        "summary": "Turn the Forgust bot on or off: on, it joins the project as a Developer\nand carries out the commands written in comments.",
+        "operationId": "set",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BotSettingsBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BotStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/bot/commands": {
+      "get": {
+        "tags": [
+          "bot"
+        ],
+        "summary": "The commands a comment can use here, for the composer's suggestions: none\nwhile the bot is off, and not those the default branch's\n`.forgust/bot.toml` turns off.",
+        "operationId": "commands",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BotCommand"
+                  }
                 }
               }
             }
@@ -6247,6 +6365,84 @@
           }
         }
       },
+      "BotCommand": {
+        "type": "object",
+        "required": [
+          "name",
+          "arguments",
+          "description",
+          "merge_request_only"
+        ],
+        "properties": {
+          "arguments": {
+            "type": "string",
+            "description": "How its arguments are written (`~label …`; in brackets: optional), or \"\"."
+          },
+          "description": {
+            "type": "string"
+          },
+          "merge_request_only": {
+            "type": "boolean",
+            "description": "Only on merge requests."
+          },
+          "name": {
+            "type": "string",
+            "description": "`label`: written `/label`."
+          }
+        }
+      },
+      "BotSettingsBody": {
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "BotStatus": {
+        "type": "object",
+        "required": [
+          "available",
+          "enabled",
+          "username",
+          "config_path",
+          "commands"
+        ],
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "description": "The instance offers the bot."
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The commands it knows (`label`: written `/label`)."
+          },
+          "config_error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "What is wrong with the rules on the default branch, when something is:\nno command runs until it is fixed."
+          },
+          "config_path": {
+            "type": "string",
+            "description": "Where the project's rules are read from."
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "username": {
+            "type": "string",
+            "description": "The account that carries out the commands."
+          }
+        }
+      },
       "BranchDto": {
         "type": "object",
         "required": [
@@ -8733,6 +8929,39 @@
           "user_id": {
             "type": "integer",
             "format": "int64"
+          }
+        }
+      },
+      "GroupBot": {
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "The bot is on for the group's projects that never chose, and new ones."
+          }
+        }
+      },
+      "GroupBotStatus": {
+        "type": "object",
+        "required": [
+          "available",
+          "enabled",
+          "turned_on"
+        ],
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "turned_on": {
+            "type": "integer",
+            "description": "Projects turned on by the last change.",
+            "minimum": 0
           }
         }
       },

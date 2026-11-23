@@ -301,6 +301,8 @@ pub async fn add_note(state: &AppState, principal: &Principal, p: &Project, issu
         "note": { "id": id, "body": body, "author": user.username, "internal": internal, "noteable_type": "Issue" },
     });
     super::webhooks::emit_members_only(state, p, "note", internal || issue.confidential, payload).await;
+    // `/label ~bug`, `/close`: the bot's to carry out
+    super::bot::on_issue_note(state, principal, p, issue, body, internal).await;
     Ok(id)
 }
 

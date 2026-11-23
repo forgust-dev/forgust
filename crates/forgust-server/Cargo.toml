@@ -86,6 +86,8 @@ ammonia = "4"
 mime_guess = "2"
 quick-xml = "0.42"
 globset = "0.4"
+# .forgust/bot.toml (the version figment already brings)
+toml = "0.8"
 croner = "4"
 chrono-tz = "0.10"
 regex = "1"

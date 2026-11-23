@@ -412,6 +412,11 @@ pub async fn merge_status(state: &AppState, principal: &Principal, p: &Project, 
     if let Some(b) = super::stack::merge_blocker(state, mr).await? {
         blockers.push(b);
     }
+    // `/hold` (ADR-0026)
+    if let Some(by) = forgust_db::bot::held_by(&state.db, mr.id).await? {
+        let by = by.map(|u| format!(" by @{u}")).unwrap_or_default();
+        blockers.push(format!("the merge request was put on hold{by} (`/unhold` lifts it)"));
+    }
     match (&head, &target) {
         (None, _) => blockers.push(format!("source branch `{}` no longer exists", mr.source_branch)),
         (_, None) => blockers.push(format!("target branch `{}` no longer exists", mr.target_branch)),
@@ -1050,6 +1055,8 @@ pub async fn add_note(
     let mentioned = super::refs::on_write(state, p, &user, mr_target(mr), body, None, internal).await;
     done(state, user.id, p, mr).await;
     super::notify::merge_request_note(state, p, mr, &user, &note, &mentioned).await;
+    // `/label ~bug`, `/merge`: the bot's to carry out
+    super::bot::on_mr_note(state, principal, p, mr, body, note.internal).await;
     Ok(note)
 }
 

@@ -162,6 +162,10 @@ volumes: { forgust-data: {}, db-data: {} }
 - Emoji reactions, watching projects, per-project notification levels
 - A live notification inbox in the app, with a switch per kind of notification for
   the app and for email
+- A built-in bot for commands in comments, written as GitLab's quick actions:
+  `/label ~bug`, `/assign @alice`, `/milestone`, `/cc`, `/hold`, `/retest`,
+  `/rebase`, `/merge`. A `.forgust/bot.toml` in the repository says who else may
+  run each one (the author, code owners, a role)
 
 ### ⚙️ CI/CD
 - Pipelines with stages and `needs` graphs, live logs, artifacts, JUnit test reports

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO bot_settings (project_id, enabled, user_id) VALUES ($1, $2, $3)\n         ON CONFLICT (project_id) DO UPDATE SET enabled = $2, user_id = $3, updated_at = now()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Bool",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6a6fb1b529a3eb7290de2ae8d404100c4529bc1c3152826a283a89c42f8e614d"
+}

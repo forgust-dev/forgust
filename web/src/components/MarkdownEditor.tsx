@@ -1,24 +1,38 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
-import { CircleDot, GitMerge, Paperclip } from "lucide-react";
+import { CircleDot, GitMerge, Paperclip, TerminalSquare } from "lucide-react";
 import { api, qs, type S } from "../api/client";
 import { Avatar, useDebounced } from "./ui";
 import { Markdown } from "./Markdown";
 
-type Trigger = { char: "@" | "#" | "!"; start: number; query: string };
+type Trigger = { char: "@" | "#" | "!" | "/"; start: number; query: string };
+/** Where a comment is written: the bot's commands for it are suggested after a `/`. */
+export type CommandsFor = "issue" | "merge_request";
 type Item = {
   key: string;
   insert: string;
   label: string;
   sub: string;
-  kind: "user" | "issue" | "mr";
+  kind: "user" | "issue" | "mr" | "command";
   state?: string;
 };
 
-/** The reference being typed before the caret: `@na`, `#12`, `!fix`. */
-function triggerAt(text: string, caret: number): Trigger | null {
+/** The command being typed before the caret: a `/` that starts a line, outside a code block. */
+function commandAt(text: string, caret: number): Trigger | null {
   const before = text.slice(0, caret);
+  const m = before.match(/(?:^|\n) {0,3}\/([a-z_]*)$/);
+  if (!m) return null;
+  const fences = before.split("\n").filter((l) => /^\s*(```|~~~)/.test(l)).length;
+  if (fences % 2 === 1) return null;
+  return { char: "/", start: caret - m[1].length - 1, query: m[1] };
+}
+
+/** The reference being typed before the caret: `@na`, `#12`, `!fix`. */
+function triggerAt(text: string, caret: number, commands: boolean): Trigger | null {
+  const before = text.slice(0, caret);
+  const command = commands ? commandAt(text, caret) : null;
+  if (command) return command;
   const m = before.match(/(?:^|[\s([{,;])([@#!])([\w.\-]*)$/);
   if (!m) return null;
   return {
@@ -63,23 +77,45 @@ function caretXY(ta: HTMLTextAreaElement, pos: number) {
   div.appendChild(mark);
   document.body.appendChild(div);
   const x = mark.offsetLeft;
-  const y = mark.offsetTop + parseFloat(cs.lineHeight || "20") - ta.scrollTop;
+  const line = parseFloat(cs.lineHeight || "20");
+  const y = mark.offsetTop + line - ta.scrollTop;
   div.remove();
   // fixed coordinates in the window (the list is portaled out of clipping parents)
   const r = ta.getBoundingClientRect();
   return {
     x: Math.max(8, Math.min(r.left + x, window.innerWidth - 300)),
     y: r.top + Math.min(Math.max(y, 0), ta.clientHeight),
+    line,
   };
 }
 
-/** Suggestions for a trigger: project members, issues, merge requests. */
-function useSuggestions(projectId: number, t: Trigger | null): Item[] {
+/** The bot's commands for comments on `where` (none while the project's bot is off). */
+function useCommands(projectId: number, where?: CommandsFor): S["BotCommand"][] {
+  const q = useQuery({
+    queryKey: ["bot-commands", projectId],
+    enabled: !!where,
+    staleTime: 60_000,
+    queryFn: () => api.get<S["BotCommand"][]>(`/projects/${projectId}/bot/commands`),
+  });
+  return (q.data ?? []).filter((c) => where === "merge_request" || !c.merge_request_only);
+}
+
+/** Where the suggestions go: under the caret's line, or over it when the
+ * window has more room there; never taller than that room. */
+function listPlace(pos: { x: number; y: number; line: number }) {
+  const below = window.innerHeight - pos.y - 12;
+  const above = pos.y - pos.line - 12;
+  if (below >= 200 || below >= above) return { left: pos.x, top: pos.y + 4, maxHeight: Math.min(280, Math.max(below, 80)) };
+  return { left: pos.x, bottom: window.innerHeight - (pos.y - pos.line) + 4, maxHeight: Math.min(280, above) };
+}
+
+/** Suggestions for a trigger: project members, issues, merge requests, commands. */
+function useSuggestions(projectId: number, t: Trigger | null, commands: S["BotCommand"][]): Item[] {
   const query = useDebounced(t?.query ?? "", 120);
   const kind = t?.char;
   const q = useQuery({
     queryKey: ["md-suggest", projectId, kind, query],
-    enabled: !!kind,
+    enabled: !!kind && kind !== "/",
     staleTime: 30_000,
     // keep the last list while the next query loads: the list never blinks
     // shut between keystrokes (an Enter then would insert a newline)
@@ -123,13 +159,26 @@ function useSuggestions(projectId: number, t: Trigger | null): Item[] {
       }));
     },
   });
+  if (kind === "/") {
+    // as typed, not debounced: the list is already here
+    return commands
+      .filter((c) => c.name.startsWith(t?.query ?? ""))
+      .map((c) => ({
+        key: `c${c.name}`,
+        insert: `/${c.name}`,
+        label: c.description,
+        sub: c.arguments ? `/${c.name} ${c.arguments}` : `/${c.name}`,
+        kind: "command",
+      }));
+  }
   return kind ? (q.data ?? []) : [];
 }
 
 /**
  * A Markdown textarea with a Preview tab rendered by the server (same renderer
  * and sanitizer as saved notes, with links resolved inside the project).
- * Typing `@`, `#` or `!` suggests people, issues and merge requests.
+ * Typing `@`, `#` or `!` suggests people, issues and merge requests; in a
+ * comment (`commands`), a `/` that starts a line suggests the bot's commands.
  */
 export function MarkdownEditor({
   projectId,
@@ -139,6 +188,7 @@ export function MarkdownEditor({
   placeholder,
   autoFocus,
   label,
+  commands,
 }: {
   projectId: number;
   value: string;
@@ -147,14 +197,16 @@ export function MarkdownEditor({
   placeholder?: string;
   autoFocus?: boolean;
   label?: string;
+  commands?: CommandsFor;
 }) {
   const [tab, setTab] = useState<"write" | "preview">("write");
   const ta = useRef<HTMLTextAreaElement>(null);
   const [trigger, setTrigger] = useState<Trigger | null>(null);
   const [active, setActive] = useState(0);
-  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const [pos, setPos] = useState({ x: 0, y: 0, line: 20 });
   const listId = useId();
-  const items = useSuggestions(projectId, trigger);
+  const botCommands = useCommands(projectId, commands);
+  const items = useSuggestions(projectId, trigger, botCommands);
   const open = trigger != null && items.length > 0;
   const pending = useRef<number | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -203,7 +255,7 @@ export function MarkdownEditor({
   const look = () => {
     const el = ta.current;
     if (!el || el.selectionStart !== el.selectionEnd) return setTrigger(null);
-    const t = triggerAt(el.value, el.selectionStart);
+    const t = triggerAt(el.value, el.selectionStart, botCommands.length > 0);
     if (!t) dismissed.current = null;
     if (t && dismissed.current === t.start) return setTrigger(null);
     setTrigger(t);
@@ -236,10 +288,19 @@ export function MarkdownEditor({
     if (active >= items.length) setActive(0);
   }, [items.length, active]);
 
-  // the list sits at fixed coordinates: scrolling the page closes it
+  // the arrow keys reach every suggestion: the list follows the active one
+  const list = useRef<HTMLUListElement>(null);
+  useEffect(() => {
+    list.current?.children[active]?.scrollIntoView({ block: "nearest" });
+  }, [active, items.length]);
+
+  // the list sits at fixed coordinates: scrolling the page closes it (not
+  // scrolling the list itself, which is longer than it is tall)
   useEffect(() => {
     if (!trigger) return;
-    const close = (e: Event) => e.target !== ta.current && setTrigger(null);
+    const close = (e: Event) => {
+      if (e.target !== ta.current && !(e.target instanceof Node && list.current?.contains(e.target))) setTrigger(null);
+    };
     window.addEventListener("scroll", close, true);
     return () => window.removeEventListener("scroll", close, true);
   }, [trigger]);
@@ -267,7 +328,7 @@ export function MarkdownEditor({
         </button>
         <span className="grow" />
         <span className="faint small hide-narrow">
-          Markdown · @ # ! to reference
+          Markdown · @ # ! to reference{botCommands.length > 0 && " · / for commands"}
         </span>
         <button type="button" className="icon-btn" title="Attach files (or paste or drop them)" aria-label="Attach a file" onClick={() => fileInput.current?.click()}>
           <Paperclip size={14} />
@@ -342,7 +403,7 @@ export function MarkdownEditor({
               }
               // Escape drops the suggestions, also before they arrive (or before
               // the reference just typed was even noticed)
-              const now = e.key === "Escape" ? (trigger ?? triggerAt(e.currentTarget.value, e.currentTarget.selectionStart)) : null;
+              const now = e.key === "Escape" ? (trigger ?? triggerAt(e.currentTarget.value, e.currentTarget.selectionStart, botCommands.length > 0)) : null;
               if (now) {
                 e.preventDefault();
                 e.stopPropagation();
@@ -368,11 +429,12 @@ export function MarkdownEditor({
           {open &&
             createPortal(
               <ul
+                ref={list}
                 className="md-suggest"
                 id={listId}
                 role="listbox"
                 aria-label="Suggestions"
-                style={{ left: pos.x, top: pos.y + 4 }}
+                style={listPlace(pos)}
               >
                 {items.map((it, i) => (
                   <li
@@ -385,10 +447,14 @@ export function MarkdownEditor({
                       e.preventDefault();
                       pick(it);
                     }}
-                    onMouseEnter={() => setActive(i)}
+                    // the pointer moving, not the list scrolling under it (which
+                    // would take the arrow keys' choice back)
+                    onMouseMove={() => i !== active && setActive(i)}
                   >
                     {it.kind === "user" ? (
                       <Avatar name={it.label} username={it.sub.slice(1)} />
+                    ) : it.kind === "command" ? (
+                      <TerminalSquare size={14} className="faint" />
                     ) : it.kind === "issue" ? (
                       <CircleDot
                         size={14}
@@ -406,8 +472,17 @@ export function MarkdownEditor({
                         }
                       />
                     )}
-                    <span className="grow ellipsis">{it.label}</span>
-                    <span className="faint mono small">{it.sub}</span>
+                    {it.kind === "command" ? (
+                      <span className="grow md-suggest-command">
+                        <span className="mono small">{it.sub}</span>
+                        <span className="faint small">{it.label}</span>
+                      </span>
+                    ) : (
+                      <>
+                        <span className="grow ellipsis">{it.label}</span>
+                        <span className="faint mono small">{it.sub}</span>
+                      </>
+                    )}
                   </li>
                 ))}
               </ul>,

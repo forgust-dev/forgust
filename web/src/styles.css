@@ -6688,6 +6688,12 @@ a.item.import-row:hover {
 .md-suggest li > svg {
   flex: none;
 }
+/* a bot command: how it is written, then what it does */
+.md-suggest-command {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
 
 /* hover cards for references, MRs, issues and people */
 .hover-card {

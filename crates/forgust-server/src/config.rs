@@ -30,6 +30,7 @@ pub struct Config {
     pub security_scanning: SecurityScanningConfig,
     pub ai_review: AiReviewConfig,
     pub audit: AuditConfig,
+    pub bot: BotConfig,
     pub oidc: BTreeMap<String, OidcProvider>,
 }
 
@@ -66,6 +67,21 @@ impl Default for SecurityScanningConfig {
             max_concurrent: 2,
             timeout_secs: 3600,
         }
+    }
+}
+
+/// The Forgust bot (ADR-0026, `[bot]`): projects turn it on and it carries
+/// out the commands people write in comments. It runs in the server: no
+/// runner, no image.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct BotConfig {
+    pub enabled: bool,
+}
+
+impl Default for BotConfig {
+    fn default() -> Self {
+        BotConfig { enabled: true }
     }
 }
 

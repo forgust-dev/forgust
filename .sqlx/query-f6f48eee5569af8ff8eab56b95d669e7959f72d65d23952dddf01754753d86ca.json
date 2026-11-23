@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id FROM ci_pipelines\n         WHERE project_id = $1 AND sha = $2 AND (merge_request_id = $3 OR (merge_request_id IS NULL AND NOT tag)) AND NOT is_system_source(source)\n         ORDER BY id DESC LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "ci_pipelines",
+            "name": "id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f6f48eee5569af8ff8eab56b95d669e7959f72d65d23952dddf01754753d86ca"
+}
