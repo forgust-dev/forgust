@@ -45,12 +45,12 @@ where
     Ok(json_bytes(b))
 }
 
-async fn readable(state: &AppState, viewer: &crate::auth::Principal, id: &str) -> ApiResult<Project> {
+pub(crate) async fn readable(state: &AppState, viewer: &crate::auth::Principal, id: &str) -> ApiResult<Project> {
     project_for(state, viewer, id, ProjectAction::ReadCode).await
 }
 
 /// Resolve a branch, tag or commit to a commit ID.
-async fn commit_of(state: &AppState, p: &Project, rev: Option<&str>) -> ApiResult<(String, String)> {
+pub(crate) async fn commit_of(state: &AppState, p: &Project, rev: Option<&str>) -> ApiResult<(String, String)> {
     let rev = match rev.filter(|r| !r.is_empty()) {
         Some(r) => r.to_string(),
         None => p.default_branch.clone().ok_or(ApiError::NotFound)?,

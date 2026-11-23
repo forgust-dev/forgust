@@ -293,6 +293,53 @@
         }
       }
     },
+    "/api/v1/admin/smart_view": {
+      "get": {
+        "tags": [
+          "smart_view"
+        ],
+        "summary": "The Smart View on this instance: the settings in effect (the config file, then changes made here).",
+        "operationId": "admin_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminSmartViewStatus"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "smart_view"
+        ],
+        "operationId": "admin_set",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdminSmartView"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminSmartViewStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/email/confirm": {
       "post": {
         "tags": [
@@ -2267,6 +2314,26 @@
         }
       }
     },
+    "/api/v1/projects/{id}/merge_requests/{iid}/blocks": {
+      "get": {
+        "tags": [
+          "merge_requests"
+        ],
+        "summary": "The blocks of the Smart View a merge request changes: of its head's map, or the default\nbranch's until a job mapped it.",
+        "operationId": "mr_blocks",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MrBlocks"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{id}/merge_requests/{iid}/code_owners": {
       "get": {
         "tags": [
@@ -3912,6 +3979,69 @@
         }
       }
     },
+    "/api/v1/projects/{id}/repository/map": {
+      "get": {
+        "tags": [
+          "repository"
+        ],
+        "summary": "The Smart View of the default branch, or of a merge request's head: the latest map a job\nof Forgust's made of it.",
+        "operationId": "map",
+        "parameters": [
+          {
+            "name": "merge_request",
+            "in": "query",
+            "description": "A merge request's iid: its head's map, when it has one",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SmartView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/repository/map/block": {
+      "get": {
+        "tags": [
+          "repository"
+        ],
+        "summary": "The block of the Smart View a file or folder is in, by the default branch's map: a map per\nref browsed would cost more than it tells. None when the Smart View is off, or has no map yet.",
+        "operationId": "path_block",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "query",
+            "description": "A file or a folder; the top without one",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PathBlock"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{id}/repository/signatures": {
       "post": {
         "tags": [
@@ -4222,6 +4352,54 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ScanningStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/smart_view": {
+      "get": {
+        "tags": [
+          "smart_view"
+        ],
+        "summary": "The Smart View of the project (Maintainers).",
+        "operationId": "get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SmartViewSettings"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "smart_view"
+        ],
+        "summary": "Turn the Smart View on or off for the project. On: a job of Forgust's maps the default\nbranch now, then each new commit of it and of open merge requests. Off: its maps go.",
+        "operationId": "set",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SmartViewSettingsBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SmartViewSettings"
                 }
               }
             }
@@ -5582,6 +5760,58 @@
           },
           "settings": {
             "$ref": "#/components/schemas/SecurityScanningConfig"
+          }
+        }
+      },
+      "AdminSmartView": {
+        "type": "object",
+        "required": [
+          "enabled",
+          "image",
+          "tags",
+          "timeout_secs"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether projects may turn the Smart View on."
+          },
+          "image": {
+            "type": "string",
+            "description": "The assay image the job runs; empty: the one released with this server."
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Runner tags the job asks for (instance runners only)."
+          },
+          "timeout_secs": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        }
+      },
+      "AdminSmartViewStatus": {
+        "type": "object",
+        "required": [
+          "settings",
+          "default_image",
+          "enabled_projects"
+        ],
+        "properties": {
+          "default_image": {
+            "type": "string",
+            "description": "The image used when none is set: the config file's, by default this version's."
+          },
+          "enabled_projects": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/AdminSmartView"
           }
         }
       },
@@ -10739,6 +10969,342 @@
           }
         }
       },
+      "MapBlock": {
+        "type": "object",
+        "description": "A part of the repository built, run or deployed apart.",
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "roots",
+          "manifests",
+          "files",
+          "languages",
+          "jobs",
+          "owners",
+          "people",
+          "reviewers",
+          "configured"
+        ],
+        "properties": {
+          "bus_factor": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "How many people made at least a fifth of its recent commits: 1, only one knows it.",
+            "minimum": 0
+          },
+          "configured": {
+            "type": "boolean",
+            "description": "Declared by assay.toml rather than found."
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "What it is for, in a line: its manifest's (a package's description, an image's\n`org.opencontainers.image.description` label), or assay.toml's."
+          },
+          "files": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "id": {
+            "type": "string",
+            "description": "Stable while its name is: what assay.toml names it by."
+          },
+          "image": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The image a service runs."
+          },
+          "jobs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The CI jobs that build or test it."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MapKind"
+          },
+          "languages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapLanguage"
+            },
+            "description": "Code first, then the most files."
+          },
+          "manifests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapPath"
+            },
+            "description": "The files (or a folder of them) that declare it."
+          },
+          "name": {
+            "type": "string"
+          },
+          "owners": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Its CODEOWNERS owners, then assay.toml's referents: `@user`, `@group` or an address."
+          },
+          "parent": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The block it is part of (a database's schema, in its crate)."
+          },
+          "people": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapPerson"
+            },
+            "description": "Who changed it lately, most commits first: people to ask, never a score."
+          },
+          "reviewers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapReviewer"
+            },
+            "description": "Who reviewed its changes in the merge requests merged lately, most reviews first."
+          },
+          "role": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MapRole",
+                "description": "A guess from its manifest (its dependencies, a binary) or its image, which assay.toml\ncorrects."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "roots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapPath"
+            },
+            "description": "The folders or files whose files are its own."
+          }
+        }
+      },
+      "MapKind": {
+        "type": "string",
+        "enum": [
+          "rust",
+          "node",
+          "python",
+          "go",
+          "docker",
+          "service",
+          "helm",
+          "kubernetes",
+          "ansible",
+          "terraform",
+          "pulumi",
+          "migrations",
+          "ci",
+          "docs",
+          "other"
+        ]
+      },
+      "MapLanguage": {
+        "type": "object",
+        "required": [
+          "name",
+          "files"
+        ],
+        "properties": {
+          "color": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "`#rrggbb`, as the repository's language bar shows it; none for prose and data (JSON…)."
+          },
+          "files": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "MapLink": {
+        "type": "object",
+        "description": "`from` needs `to`.",
+        "required": [
+          "from",
+          "to",
+          "kind",
+          "inferred",
+          "via"
+        ],
+        "properties": {
+          "from": {
+            "type": "string"
+          },
+          "inferred": {
+            "type": "boolean",
+            "description": "A guess (a service's environment names the other as a host, a chart or a manifest names\nan image by its name), not declared."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MapLinkKind"
+          },
+          "to": {
+            "type": "string"
+          },
+          "via": {
+            "type": "string",
+            "description": "The file that says so."
+          }
+        }
+      },
+      "MapLinkKind": {
+        "type": "string",
+        "enum": [
+          "uses",
+          "builds",
+          "runs",
+          "depends_on",
+          "connects",
+          "calls"
+        ]
+      },
+      "MapPath": {
+        "type": "object",
+        "description": "A path of the repository: `.` is its top.",
+        "required": [
+          "path",
+          "dir"
+        ],
+        "properties": {
+          "dir": {
+            "type": "boolean",
+            "description": "A folder, not a file."
+          },
+          "path": {
+            "type": "string"
+          }
+        }
+      },
+      "MapPerson": {
+        "type": "object",
+        "required": [
+          "name",
+          "commits",
+          "last"
+        ],
+        "properties": {
+          "commits": {
+            "type": "integer",
+            "description": "Their commits there, within the days of history read.",
+            "minimum": 0
+          },
+          "last": {
+            "type": "string",
+            "description": "The day of their latest one (`YYYY-MM-DD`)."
+          },
+          "name": {
+            "type": "string"
+          },
+          "username": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Their account, by their verified email."
+          }
+        }
+      },
+      "MapReviewer": {
+        "type": "object",
+        "description": "Someone who reviewed a block's changes: approved, reviewed or commented a merge request that\nchanged it, not as its author.",
+        "required": [
+          "username",
+          "name",
+          "reviews",
+          "last"
+        ],
+        "properties": {
+          "last": {
+            "type": "string",
+            "description": "The day of the latest (`YYYY-MM-DD`)."
+          },
+          "name": {
+            "type": "string"
+          },
+          "reviews": {
+            "type": "integer",
+            "description": "The merge requests they reviewed there, within the days of history read.",
+            "minimum": 0
+          },
+          "username": {
+            "type": "string"
+          }
+        }
+      },
+      "MapRole": {
+        "type": "string",
+        "enum": [
+          "web",
+          "api",
+          "cli",
+          "library",
+          "database",
+          "cache",
+          "queue",
+          "search",
+          "storage",
+          "mail"
+        ]
+      },
+      "MapRun": {
+        "type": "object",
+        "required": [
+          "commit",
+          "state"
+        ],
+        "properties": {
+          "commit": {
+            "type": "string"
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Why it could not be mapped."
+          },
+          "pipeline_iid": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "The pipeline that maps it."
+          },
+          "state": {
+            "$ref": "#/components/schemas/MapRunState"
+          }
+        }
+      },
+      "MapRunState": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "failed"
+        ]
+      },
       "MappedPosition": {
         "type": "object",
         "description": "A note's position on another version of the MR.",
@@ -11419,6 +11985,58 @@
           },
           "tag": {
             "type": "string"
+          }
+        }
+      },
+      "MrBlock": {
+        "type": "object",
+        "required": [
+          "block",
+          "files"
+        ],
+        "properties": {
+          "block": {
+            "$ref": "#/components/schemas/MapBlock"
+          },
+          "files": {
+            "type": "integer",
+            "description": "Its files the merge request changes.",
+            "minimum": 0
+          }
+        }
+      },
+      "MrBlocks": {
+        "type": "object",
+        "description": "The blocks a merge request changes, with who knows them.",
+        "required": [
+          "commit",
+          "blocks",
+          "unassigned",
+          "suggested_reviewers"
+        ],
+        "properties": {
+          "blocks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MrBlock"
+            },
+            "description": "The most changed first."
+          },
+          "commit": {
+            "type": "string",
+            "description": "The commit of the map they are read from: its head once a job mapped it, else the\ndefault branch's (empty without a map: the Smart View is off, or no job has run yet)."
+          },
+          "suggested_reviewers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserBrief"
+            },
+            "description": "Who knows these blocks and could review it: its blocks' owners, then their reviewers, then\nwho changed them; not its author nor a reviewer yet."
+          },
+          "unassigned": {
+            "type": "integer",
+            "description": "How many of its changed files are in no block.",
+            "minimum": 0
           }
         }
       },
@@ -12576,6 +13194,22 @@
           "options": {
             "type": "object",
             "description": "Options for `navigator.credentials.get` (WebAuthn)."
+          }
+        }
+      },
+      "PathBlock": {
+        "type": "object",
+        "description": "The block a path is in.",
+        "properties": {
+          "block": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MapBlock"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       },
@@ -14168,6 +14802,79 @@
           }
         }
       },
+      "RepoMap": {
+        "type": "object",
+        "description": "The map of a commit: its blocks, the links between them, and who knows each.",
+        "required": [
+          "commit",
+          "ref",
+          "blocks",
+          "links",
+          "unassigned",
+          "unassigned_sample",
+          "warnings",
+          "config_file",
+          "days"
+        ],
+        "properties": {
+          "blocks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapBlock"
+            }
+          },
+          "commit": {
+            "type": "string",
+            "description": "The commit mapped."
+          },
+          "config_error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Why assay.toml could not be read: nothing is mapped until it is fixed."
+          },
+          "config_file": {
+            "type": "boolean",
+            "description": "The repository has an assay.toml at its top (corrections go there, else in a new one)."
+          },
+          "days": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The days of history that tell who knows a block.",
+            "minimum": 0
+          },
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapLink"
+            },
+            "description": "From the block that needs to the one needed."
+          },
+          "ref": {
+            "type": "string",
+            "description": "The branch it is the head of: the default one, or a merge request's source."
+          },
+          "unassigned": {
+            "type": "integer",
+            "description": "How many files are in no block (READMEs, a workspace's manifest…), and the first ones.",
+            "minimum": 0
+          },
+          "unassigned_sample": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "What could not be read: a manifest that does not parse, a block assay.toml names but\nthat is not there…"
+          }
+        }
+      },
       "RepoStats": {
         "type": "object",
         "required": [
@@ -15363,6 +16070,68 @@
               "type": "string"
             },
             "description": "Full commit ids (at most 100)."
+          }
+        }
+      },
+      "SmartView": {
+        "type": "object",
+        "description": "The Smart View of a project: its latest map, and what is going on with a newer one.",
+        "required": [
+          "enabled"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "On for the project, and on the instance: without it there is no map."
+          },
+          "map": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RepoMap",
+                "description": "The latest map kept: the merge request's when one was asked and it has one, else the\ndefault branch's. None until a first job has run."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "run": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MapRun",
+                "description": "A commit newer than the map's being mapped, or the last one that could not be."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
+      "SmartViewSettings": {
+        "type": "object",
+        "required": [
+          "available",
+          "enabled"
+        ],
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "description": "The instance lets projects turn the Smart View on."
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SmartViewSettingsBody": {
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
           }
         }
       },

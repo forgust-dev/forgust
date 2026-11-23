@@ -50,7 +50,7 @@ pub struct Trigger<'a> {
     pub config: Option<String>,
 }
 
-/// A pipeline Forgust runs itself (built-in Renovate, security scans, AI review): instance
+/// A pipeline Forgust runs itself (built-in Renovate, security scans, AI review, the Smart View's maps): instance
 /// runners only, no project CI variables, never a ref's or commit's status (the
 /// database's `is_system_source` says the same).
 pub fn is_system(source: &str) -> bool {
@@ -60,6 +60,7 @@ pub fn is_system(source: &str) -> bool {
             | crate::services::scanning::SOURCE
             | crate::services::ai_review::SOURCE
             | crate::services::sbom::SOURCE
+            | crate::services::smart_view::SOURCE
     )
 }
 
@@ -590,6 +591,7 @@ pub async fn process(state: &AppState, pipeline_id: i64) -> anyhow::Result<()> {
         }
         crate::services::renovate::on_pipeline_finished(state, &pipeline, status).await;
         crate::services::sbom::on_pipeline_finished(state, &pipeline, status).await;
+        crate::services::smart_view::on_pipeline_finished(state, &pipeline, status).await;
         state.events.publish(Event::Pipeline { project_id: pipeline.project_id, pipeline_id, status: status.to_string() });
         crate::ci::hooks::pipeline(state, pipeline.project_id, pipeline_id).await;
         crate::ci::on_pipeline_status(state, &pipeline).await;

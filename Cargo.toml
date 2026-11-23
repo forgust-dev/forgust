@@ -16,6 +16,7 @@ forgust-storage = { path = "crates/forgust-storage" }
 forgust-diff = { path = "crates/forgust-diff" }
 forgust-reviewer = { path = "crates/forgust-reviewer", default-features = false }
 forgust-ci-config = { path = "crates/forgust-ci-config" }
+forgust-assay = { path = "crates/forgust-assay", default-features = false }
 
 anyhow = "1"
 thiserror = "2"

@@ -1,0 +1,88 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, git_ref, sha, pipeline_id, state, error FROM smart_view_maps WHERE pipeline_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "smart_view_maps",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "git_ref",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "smart_view_maps",
+            "name": "git_ref"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "sha",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "smart_view_maps",
+            "name": "sha"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "pipeline_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "smart_view_maps",
+            "name": "pipeline_id"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "state",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "smart_view_maps",
+            "name": "state"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "error",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "smart_view_maps",
+            "name": "error"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "2837277c470a59793750ccefdcec83cefde2c767bd2d54032d4a45364e85ada8"
+}

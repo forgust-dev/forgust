@@ -278,6 +278,8 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
+      - name: Licenses of what ships (ADR-0007)
+        run: npm run licenses
       - name: Types from OpenAPI are committed
         run: npm run gen:api && git diff --exit-code src/api/schema.d.ts
       - run: npm run build
@@ -302,6 +304,17 @@ jobs:
           docker run --rm "forgust-reviewer:ci-${GITHUB_RUN_NUMBER}" forgust-review --version
           test "$(docker run --rm "forgust-reviewer:ci-${GITHUB_RUN_NUMBER}" id -u)" = 10001
           docker run --rm "forgust-reviewer:ci-${GITHUB_RUN_NUMBER}" git --version
+      - name: Build the assay image
+        run: docker build -f crates/forgust-assay/Dockerfile -t "forgust-assay:ci-${GITHUB_RUN_NUMBER}" .
+      - name: The assay image maps a clone of another user's, as its user
+        run: |
+          docker run --rm "forgust-assay:ci-${GITHUB_RUN_NUMBER}" assay --version
+          test "$(docker run --rm "forgust-assay:ci-${GITHUB_RUN_NUMBER}" id -u)" = 10001
+          docker run --rm -v "$PWD:/repo:ro" "forgust-assay:ci-${GITHUB_RUN_NUMBER}" > map.txt
+          grep -q '^  forgust-server ' map.txt || { cat map.txt; exit 1; }
+          # what a Smart View job runs: the report the server reads (the people are not
+          # checked: this checkout has one commit, which may be a bot's or a merge)
+          docker run --rm -v "$PWD:/repo:ro" "forgust-assay:ci-${GITHUB_RUN_NUMBER}" assay report --out /tmp/assay-report.json
 
   e2e-run:
     # browser tests against the server built in the job: one machine, with its

@@ -7888,3 +7888,801 @@ button.test-case-row:hover {
   width: 12rem;
   max-width: 100%;
 }
+
+/* the Smart View: the code as blocks, the links between them, who to ask */
+.page.wide {
+  max-width: 1680px;
+}
+.smart-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 20px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.smart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+}
+.smart-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.smart-legend svg {
+  color: var(--text-faint);
+}
+.smart-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.smart-layout.open {
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+.smart-main {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+/* the canvas (React Flow): it pans and zooms. Its styles come with the page, after these: hence
+   `.smart-frame` in front of what overrides them */
+.smart-frame {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-subtle);
+  /* its cards are drawn at its zoom (0.8 when it opens): their 1px border comes out under a pixel
+     wide, paler than a card's anywhere else, as if it had none. A shade darker makes up for it */
+  --card-line: var(--border-strong);
+  --card-line-hover: color-mix(in srgb, var(--border-strong) 75%, var(--text-faint));
+}
+.smart-frame .react-flow {
+  --xy-edge-stroke: var(--border-strong);
+  --xy-background-pattern-dots-color: var(--border-strong);
+  --xy-minimap-background-color: var(--bg);
+  --xy-minimap-mask-background-color: color-mix(in srgb, var(--bg-subtle) 72%, transparent);
+  --xy-minimap-node-background-color: var(--border-strong);
+  --xy-attribution-background-color: transparent;
+}
+.smart-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+.smart-frame .smart-handle {
+  width: 1px;
+  min-width: 0;
+  height: 1px;
+  min-height: 0;
+  border: 0;
+  background: none;
+  opacity: 0;
+  pointer-events: none;
+}
+/* a block holding others: its card on top, what it holds inside the frame */
+.smart-holder {
+  box-sizing: border-box;
+  padding: 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+}
+.smart-holder.dim {
+  border-color: var(--border);
+}
+.smart-frame .smart-link {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 1.5;
+}
+.smart-frame .smart-link.inferred {
+  stroke-dasharray: 5 3;
+}
+.smart-frame .smart-link.part {
+  stroke-dasharray: 2 3;
+}
+.smart-frame .smart-link.hl {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+.smart-frame .smart-link.dim {
+  opacity: 0.3;
+}
+.smart-arrow {
+  fill: var(--border-strong);
+}
+.smart-arrow-hl {
+  fill: var(--accent);
+}
+.smart-link-label {
+  position: absolute;
+  padding: 0 6px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--accent);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.smart-frame .react-flow__controls {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  box-shadow: var(--shadow);
+}
+.smart-frame .react-flow__controls-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.smart-frame .react-flow__controls-button:first-child {
+  border-top: 0;
+}
+.smart-frame .react-flow__controls-button:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.smart-frame .react-flow__controls-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.smart-frame .react-flow__controls-button svg {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+}
+.smart-frame .react-flow__minimap {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.smart-frame .react-flow__attribution {
+  padding: 2px 6px;
+  font-size: 10px;
+}
+.smart-frame .react-flow__attribution a {
+  color: var(--text-faint);
+  text-decoration: none;
+}
+.smart-card {
+  --k: var(--text-faint);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 204px;
+  height: 92px;
+  padding: 9px 11px;
+  border: 1px solid var(--card-line, var(--border));
+  border-radius: var(--radius);
+  background: var(--bg);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.smart-card:hover {
+  border-color: var(--card-line-hover, var(--border-strong));
+}
+.smart-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.smart-card.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), var(--shadow);
+}
+.smart-card.dim {
+  opacity: 0.4;
+}
+.smart-kind {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.smart-kind > span:first-of-type {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* what a block is: its technology's logo, in its brand's colour, or an icon in its kind's */
+.smart-mark {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--k);
+}
+.smart-mark.logo {
+  fill: var(--logo);
+}
+/* black or nearly (Rust's, Kafka's): the text's colour, light in the dark theme */
+.smart-mark.logo.dark {
+  fill: var(--text);
+}
+/* pale yellow (JavaScript's, ClickHouse's): a shade towards the text, to stand out on white */
+.smart-mark.logo.pale {
+  fill: color-mix(in srgb, var(--logo), var(--text) 25%);
+}
+.smart-flags {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+}
+.smart-name {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.smart-place {
+  overflow: hidden;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.smart-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-top: auto;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.smart-files {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.smart-solo {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 11px;
+}
+.smart-people {
+  display: flex;
+  flex: none;
+  margin-left: auto;
+}
+.smart-people .avatar {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  margin-left: -4px;
+  font-size: 9px;
+  box-shadow: 0 0 0 2px var(--bg);
+}
+.smart-group h2 {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.smart-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+/* a phone's: one block per line, all of its width */
+.smart-grid.list {
+  flex-direction: column;
+  gap: 10px;
+}
+.smart-grid.list .smart-card {
+  width: 100%;
+  height: auto;
+  min-height: 92px;
+}
+.smart-links {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.smart-desc {
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* a phone's card grows to the whole line */
+.smart-grid.list .smart-desc {
+  white-space: normal;
+}
+.smart-panel .smart-about {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--text-muted);
+}
+.smart-guide {
+  margin: -8px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.smart-unassigned summary {
+  cursor: pointer;
+}
+.smart-unassigned p {
+  margin: 6px 0 0;
+}
+.smart-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.smart-notes p,
+.smart-notes ul {
+  margin: 0;
+}
+.smart-notes code {
+  font-size: 12px;
+}
+/* a block's details: its name stays at the top; then parts, each under a line, with a heading
+   that has an icon and how many it lists; the corrections at the foot */
+.smart-panel {
+  position: sticky;
+  top: calc(var(--topbar-h) + 16px);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - var(--topbar-h) - 32px);
+  padding-top: 0;
+  overflow-y: auto;
+}
+.smart-panel-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 -18px;
+  padding: 14px 10px 10px 18px;
+  border-bottom: 1px solid transparent;
+  background: var(--bg);
+}
+.smart-panel.scrolled .smart-panel-head {
+  border-bottom-color: var(--border);
+}
+.smart-panel-head .smart-mark {
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+}
+.smart-panel-head .grow {
+  flex: 1;
+  min-width: 0;
+}
+.smart-panel h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 650;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.smart-panel-kind {
+  margin-top: 1px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.smart-intro {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 2px 0 14px;
+}
+.smart-panel > section {
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+  scroll-margin-top: 64px;
+}
+.smart-panel > section:last-child {
+  padding-bottom: 0;
+}
+.smart-part-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 24px;
+  margin-bottom: 6px;
+}
+.smart-part-head .btn.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.smart-panel h3 {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.smart-panel h3 > svg {
+  flex: none;
+  color: var(--text-muted);
+}
+.smart-count {
+  min-width: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--chip-bg);
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 18px;
+  text-align: center;
+}
+.smart-panel section > p {
+  margin: 8px 0 0;
+}
+.smart-panel ul {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.smart-panel li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 5px 0;
+  font-size: 13.5px;
+}
+.smart-panel li .grow {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* a line, then what it says in small under it */
+.smart-panel li .smart-line,
+.smart-panel li .smart-sub {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.smart-panel li .smart-line .smart-tag {
+  margin-left: 6px;
+}
+.smart-panel .smart-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.smart-panel .meta {
+  flex: none;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+/* a block named in a list: its name in the text's colour, its mark before it */
+.smart-panel li .smart-go {
+  color: var(--text);
+  font-weight: 500;
+}
+.smart-panel li .smart-go:hover {
+  color: var(--accent);
+}
+.smart-row-mark {
+  display: inline-flex;
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+.smart-row-mark .smart-mark {
+  width: 16px;
+  height: 16px;
+}
+/* the file a link was read from */
+.smart-via {
+  display: inline-flex;
+  flex: none;
+  color: var(--text-faint);
+}
+.smart-via:hover {
+  color: var(--accent);
+}
+/* where a block is: its image, folders, files and manifest */
+.smart-where {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.smart-where > * {
+  overflow-wrap: anywhere;
+}
+.smart-where a {
+  color: inherit;
+}
+.smart-where a:hover {
+  color: var(--accent);
+}
+.smart-where .sep {
+  color: var(--text-faint);
+}
+/* its CI at a glance, up top: a click goes to its jobs */
+.smart-states {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.smart-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 2px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.smart-state:hover {
+  background: var(--bg-hover);
+}
+.smart-state .st {
+  display: inline-flex;
+}
+.smart-state.failed {
+  border-color: transparent;
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.smart-note.smart-waits {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+}
+.smart-note.smart-waits > svg {
+  flex: none;
+  margin-top: 2px;
+}
+.smart-langs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 8px;
+  font-size: 12.5px;
+}
+.smart-langs > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.smart-go {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+.smart-go:hover {
+  text-decoration: underline;
+}
+.smart-tag {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--chip-bg);
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.smart-note {
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 13px;
+}
+/* words that find blocks, beside the ref: how many it finds at its end */
+.smart-find {
+  width: 240px;
+}
+.smart-find input {
+  width: 100%;
+  padding-right: 64px;
+}
+.smart-find-count {
+  position: absolute;
+  right: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+/* a block held up by the failed jobs of one it needs */
+.smart-wait {
+  display: inline-flex;
+  color: var(--warn);
+}
+.smart-panel .smart-impact > .smart-lead {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.smart-panel .smart-impact > .smart-jobs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.smart-jobs code {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--chip-bg);
+  color: var(--text);
+  font-size: 11.5px;
+}
+/* the blocks a merge request changes, over the map */
+.smart-mr {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  font-size: 13px;
+}
+.smart-mr > svg {
+  flex: none;
+  color: var(--accent);
+}
+.smart-mr .btn.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+/* corrections of the map: written into assay.toml; at the foot of the details, apart */
+.smart-panel > section.smart-fix {
+  margin: auto -18px -16px;
+  padding: 14px 18px 16px;
+  background: var(--bg-subtle);
+}
+.smart-fix .row {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.smart-fix form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+.smart-fix label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.smart-panel li .smart-me {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.smart-panel li .smart-me:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+/* the Smart View's block a file or folder is in, beside its path */
+.block-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 340px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.block-chip:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.block-chip-name {
+  overflow: hidden;
+  font-weight: 600;
+  color: var(--text);
+  text-overflow: ellipsis;
+}
+.block-chip-who {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.block-chip-who::before {
+  content: "· ";
+}
+/* over the canvas, on its right side: the graph keeps its width */
+@media (min-width: 901px) {
+  .smart-frame > .smart-panel {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    bottom: 12px;
+    z-index: 6;
+    width: 340px;
+    max-height: none;
+    box-shadow: var(--shadow-pop);
+  }
+}
+@media (max-width: 900px) {
+  .smart-layout.open {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  /* the details rise from the bottom, over the graph */
+  .smart-panel {
+    position: fixed;
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 30;
+    max-height: 62vh;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    box-shadow: var(--shadow-pop);
+  }
+}

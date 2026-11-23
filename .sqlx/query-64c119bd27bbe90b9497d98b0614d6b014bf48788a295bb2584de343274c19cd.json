@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM smart_view_maps WHERE project_id = $1 RETURNING pipeline_id, state",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pipeline_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "smart_view_maps",
+            "name": "pipeline_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "state",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "smart_view_maps",
+            "name": "state"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "64c119bd27bbe90b9497d98b0614d6b014bf48788a295bb2584de343274c19cd"
+}

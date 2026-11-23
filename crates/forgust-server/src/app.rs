@@ -119,6 +119,7 @@ pub async fn build_state(
         events: Arc::new(InProcessBus::new(1024)),
         jobs: Arc::new(GraphileQueue),
         cache: ResponseCache::new(cfg.limits.cache_bytes),
+        smart_view_maps: crate::state::smart_view_maps(),
         secrets,
         repo_locks: RepoLocks::default(),
         hooks: HookConfig { hooks_dir, socket: socket_path(&run_dir), secret: crate::crypto::random_urlsafe(32) },

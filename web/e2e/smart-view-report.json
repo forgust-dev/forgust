@@ -1,0 +1,178 @@
+{
+  "version": 1,
+  "commit": "0000000000000000000000000000000000000000",
+  "days": 365,
+  "config_file": false,
+  "map": {
+    "schema": 1,
+    "commit": "0000000000000000000000000000000000000000",
+    "blocks": [
+      {
+        "id": "api",
+        "name": "api",
+        "description": "Serves the shop",
+        "kind": "rust",
+        "role": "api",
+        "roots": [
+          "api"
+        ],
+        "manifests": [
+          "api/Cargo.toml"
+        ],
+        "files": 2,
+        "languages": [
+          {
+            "name": "Rust",
+            "files": 1
+          },
+          {
+            "name": "TOML",
+            "files": 1
+          }
+        ],
+        "people": [
+          {
+            "name": "Root",
+            "email": "root@example.com",
+            "commits": 1,
+            "last": "2026-11-23"
+          }
+        ],
+        "bus_factor": 1,
+        "source": "detected"
+      },
+      {
+        "id": "core",
+        "name": "core",
+        "kind": "rust",
+        "role": "library",
+        "roots": [
+          "core"
+        ],
+        "manifests": [
+          "core/Cargo.toml"
+        ],
+        "files": 2,
+        "languages": [
+          {
+            "name": "Rust",
+            "files": 1
+          },
+          {
+            "name": "TOML",
+            "files": 1
+          }
+        ],
+        "people": [
+          {
+            "name": "Root",
+            "email": "root@example.com",
+            "commits": 1,
+            "last": "2026-11-23"
+          }
+        ],
+        "bus_factor": 1,
+        "source": "detected"
+      },
+      {
+        "id": "image",
+        "name": "Dockerfile",
+        "kind": "docker",
+        "roots": [
+          "Dockerfile"
+        ],
+        "manifests": [
+          "Dockerfile"
+        ],
+        "files": 1,
+        "languages": [
+          {
+            "name": "Dockerfile",
+            "files": 1
+          }
+        ],
+        "people": [
+          {
+            "name": "E2E",
+            "email": "e2e@example.com",
+            "commits": 1,
+            "last": "2026-11-23"
+          }
+        ],
+        "bus_factor": 1,
+        "source": "detected"
+      },
+      {
+        "id": "app",
+        "name": "app",
+        "kind": "service",
+        "roots": [],
+        "manifests": [
+          "compose.yml"
+        ],
+        "files": 0,
+        "languages": [],
+        "source": "detected"
+      },
+      {
+        "id": "db",
+        "name": "db",
+        "kind": "service",
+        "role": "database",
+        "roots": [],
+        "manifests": [
+          "compose.yml"
+        ],
+        "image": "postgres:17",
+        "files": 0,
+        "languages": [],
+        "source": "detected"
+      }
+    ],
+    "links": [
+      {
+        "from": "api",
+        "to": "core",
+        "kind": "uses",
+        "certainty": "declared",
+        "via": "api/Cargo.toml"
+      },
+      {
+        "from": "app",
+        "to": "db",
+        "kind": "depends_on",
+        "certainty": "declared",
+        "via": "compose.yml"
+      },
+      {
+        "from": "app",
+        "to": "image",
+        "kind": "runs",
+        "certainty": "declared",
+        "via": "compose.yml"
+      },
+      {
+        "from": "image",
+        "to": "api",
+        "kind": "builds",
+        "certainty": "declared",
+        "via": "Dockerfile"
+      }
+    ],
+    "unassigned": {
+      "files": 3,
+      "sample": [
+        "Cargo.toml",
+        "README.md",
+        "compose.yml"
+      ]
+    }
+  },
+  "files": [
+    "Dockerfile",
+    "api/Cargo.toml",
+    "compose.yml",
+    "core/Cargo.toml"
+  ],
+  "excluded": []
+}

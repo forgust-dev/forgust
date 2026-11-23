@@ -123,6 +123,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/smart_view": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The Smart View on this instance: the settings in effect (the config file, then changes made here). */
+        get: operations["admin_get"];
+        put: operations["admin_set"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/email/confirm": {
         parameters: {
             query?: never;
@@ -1201,6 +1218,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/merge_requests/{iid}/blocks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The blocks of the Smart View a merge request changes: of its head's map, or the default
+         *     branch's until a job mapped it.
+         */
+        get: operations["mr_blocks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/merge_requests/{iid}/code_owners": {
         parameters: {
             query?: never;
@@ -2099,6 +2136,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/repository/map": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The Smart View of the default branch, or of a merge request's head: the latest map a job
+         *     of Forgust's made of it.
+         */
+        get: operations["map"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/repository/map/block": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The block of the Smart View a file or folder is in, by the default branch's map: a map per
+         *     ref browsed would cost more than it tells. None when the Smart View is off, or has no map yet.
+         */
+        get: operations["path_block"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/repository/signatures": {
         parameters: {
             query?: never;
@@ -2292,6 +2369,27 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["run_scan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/smart_view": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The Smart View of the project (Maintainers). */
+        get: operations["get"];
+        /**
+         * Turn the Smart View on or off for the project. On: a job of Forgust's maps the default
+         *     branch now, then each new commit of it and of open merge requests. Off: its maps go.
+         */
+        put: operations["set"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2996,6 +3094,23 @@ export interface components {
             /** @description Scans not finished. */
             running: number;
             settings: components["schemas"]["SecurityScanningConfig"];
+        };
+        AdminSmartView: {
+            /** @description Whether projects may turn the Smart View on. */
+            enabled: boolean;
+            /** @description The assay image the job runs; empty: the one released with this server. */
+            image: string;
+            /** @description Runner tags the job asks for (instance runners only). */
+            tags: string[];
+            /** Format: int64 */
+            timeout_secs: number;
+        };
+        AdminSmartViewStatus: {
+            /** @description The image used when none is set: the config file's, by default this version's. */
+            default_image: string;
+            /** Format: int64 */
+            enabled_projects: number;
+            settings: components["schemas"]["AdminSmartView"];
         };
         /** @description A person as the admin user list shows them. */
         AdminUser: {
@@ -4585,6 +4700,107 @@ export interface components {
             token?: string;
             url: string;
         };
+        /** @description A part of the repository built, run or deployed apart. */
+        MapBlock: {
+            /** @description How many people made at least a fifth of its recent commits: 1, only one knows it. */
+            bus_factor?: number | null;
+            /** @description Declared by assay.toml rather than found. */
+            configured: boolean;
+            /**
+             * @description What it is for, in a line: its manifest's (a package's description, an image's
+             *     `org.opencontainers.image.description` label), or assay.toml's.
+             */
+            description?: string | null;
+            files: number;
+            /** @description Stable while its name is: what assay.toml names it by. */
+            id: string;
+            /** @description The image a service runs. */
+            image?: string | null;
+            /** @description The CI jobs that build or test it. */
+            jobs: string[];
+            kind: components["schemas"]["MapKind"];
+            /** @description Code first, then the most files. */
+            languages: components["schemas"]["MapLanguage"][];
+            /** @description The files (or a folder of them) that declare it. */
+            manifests: components["schemas"]["MapPath"][];
+            name: string;
+            /** @description Its CODEOWNERS owners, then assay.toml's referents: `@user`, `@group` or an address. */
+            owners: string[];
+            /** @description The block it is part of (a database's schema, in its crate). */
+            parent?: string | null;
+            /** @description Who changed it lately, most commits first: people to ask, never a score. */
+            people: components["schemas"]["MapPerson"][];
+            /** @description Who reviewed its changes in the merge requests merged lately, most reviews first. */
+            reviewers: components["schemas"]["MapReviewer"][];
+            role?: components["schemas"]["MapRole"] | null;
+            /** @description The folders or files whose files are its own. */
+            roots: components["schemas"]["MapPath"][];
+        };
+        /** @enum {string} */
+        MapKind: "rust" | "node" | "python" | "go" | "docker" | "service" | "helm" | "kubernetes" | "ansible" | "terraform" | "pulumi" | "migrations" | "ci" | "docs" | "other";
+        MapLanguage: {
+            /** @description `#rrggbb`, as the repository's language bar shows it; none for prose and data (JSON…). */
+            color?: string | null;
+            files: number;
+            name: string;
+        };
+        /** @description `from` needs `to`. */
+        MapLink: {
+            from: string;
+            /**
+             * @description A guess (a service's environment names the other as a host, a chart or a manifest names
+             *     an image by its name), not declared.
+             */
+            inferred: boolean;
+            kind: components["schemas"]["MapLinkKind"];
+            to: string;
+            /** @description The file that says so. */
+            via: string;
+        };
+        /** @enum {string} */
+        MapLinkKind: "uses" | "builds" | "runs" | "depends_on" | "connects" | "calls";
+        /** @description A path of the repository: `.` is its top. */
+        MapPath: {
+            /** @description A folder, not a file. */
+            dir: boolean;
+            path: string;
+        };
+        MapPerson: {
+            /** @description Their commits there, within the days of history read. */
+            commits: number;
+            /** @description The day of their latest one (`YYYY-MM-DD`). */
+            last: string;
+            name: string;
+            /** @description Their account, by their verified email. */
+            username?: string | null;
+        };
+        /**
+         * @description Someone who reviewed a block's changes: approved, reviewed or commented a merge request that
+         *     changed it, not as its author.
+         */
+        MapReviewer: {
+            /** @description The day of the latest (`YYYY-MM-DD`). */
+            last: string;
+            name: string;
+            /** @description The merge requests they reviewed there, within the days of history read. */
+            reviews: number;
+            username: string;
+        };
+        /** @enum {string} */
+        MapRole: "web" | "api" | "cli" | "library" | "database" | "cache" | "queue" | "search" | "storage" | "mail";
+        MapRun: {
+            commit: string;
+            /** @description Why it could not be mapped. */
+            error?: string | null;
+            /**
+             * Format: int64
+             * @description The pipeline that maps it.
+             */
+            pipeline_iid?: number | null;
+            state: components["schemas"]["MapRunState"];
+        };
+        /** @enum {string} */
+        MapRunState: "pending" | "failed";
         /** @description A note's position on another version of the MR. */
         MappedPosition: {
             /** Format: int32 */
@@ -4791,6 +5007,28 @@ export interface components {
             /** Format: date-time */
             stored_at: string;
             tag: string;
+        };
+        MrBlock: {
+            block: components["schemas"]["MapBlock"];
+            /** @description Its files the merge request changes. */
+            files: number;
+        };
+        /** @description The blocks a merge request changes, with who knows them. */
+        MrBlocks: {
+            /** @description The most changed first. */
+            blocks: components["schemas"]["MrBlock"][];
+            /**
+             * @description The commit of the map they are read from: its head once a job mapped it, else the
+             *     default branch's (empty without a map: the Smart View is off, or no job has run yet).
+             */
+            commit: string;
+            /**
+             * @description Who knows these blocks and could review it: its blocks' owners, then their reviewers, then
+             *     who changed them; not its author nor a reviewer yet.
+             */
+            suggested_reviewers: components["schemas"]["UserBrief"][];
+            /** @description How many of its changed files are in no block. */
+            unassigned: number;
         };
         MrCount: {
             /** Format: int64 */
@@ -5177,6 +5415,10 @@ export interface components {
             ceremony: string;
             /** @description Options for `navigator.credentials.get` (WebAuthn). */
             options: Record<string, never>;
+        };
+        /** @description The block a path is in. */
+        PathBlock: {
+            block?: components["schemas"]["MapBlock"] | null;
         };
         PathCommit: {
             commit?: components["schemas"]["CommitInfo"] | null;
@@ -5691,6 +5933,33 @@ export interface components {
              */
             onboarding: boolean;
         };
+        /** @description The map of a commit: its blocks, the links between them, and who knows each. */
+        RepoMap: {
+            blocks: components["schemas"]["MapBlock"][];
+            /** @description The commit mapped. */
+            commit: string;
+            /** @description Why assay.toml could not be read: nothing is mapped until it is fixed. */
+            config_error?: string | null;
+            /** @description The repository has an assay.toml at its top (corrections go there, else in a new one). */
+            config_file: boolean;
+            /**
+             * Format: int32
+             * @description The days of history that tell who knows a block.
+             */
+            days: number;
+            /** @description From the block that needs to the one needed. */
+            links: components["schemas"]["MapLink"][];
+            /** @description The branch it is the head of: the default one, or a merge request's source. */
+            ref: string;
+            /** @description How many files are in no block (READMEs, a workspace's manifest…), and the first ones. */
+            unassigned: number;
+            unassigned_sample: string[];
+            /**
+             * @description What could not be read: a manifest that does not parse, a block assay.toml names but
+             *     that is not there…
+             */
+            warnings: string[];
+        };
         RepoStats: {
             commit: string;
             /**
@@ -6110,6 +6379,21 @@ export interface components {
         SignaturesQuery: {
             /** @description Full commit ids (at most 100). */
             shas: string[];
+        };
+        /** @description The Smart View of a project: its latest map, and what is going on with a newer one. */
+        SmartView: {
+            /** @description On for the project, and on the instance: without it there is no map. */
+            enabled: boolean;
+            map?: components["schemas"]["RepoMap"] | null;
+            run?: components["schemas"]["MapRun"] | null;
+        };
+        SmartViewSettings: {
+            /** @description The instance lets projects turn the Smart View on. */
+            available: boolean;
+            enabled: boolean;
+        };
+        SmartViewSettingsBody: {
+            enabled: boolean;
         };
         Source: {
             format: string;
@@ -7042,6 +7326,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminScanning"];
+                };
+            };
+        };
+    };
+    admin_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSmartViewStatus"];
+                };
+            };
+        };
+    };
+    admin_set: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminSmartView"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSmartViewStatus"];
                 };
             };
         };
@@ -8772,6 +9098,25 @@ export interface operations {
             };
         };
     };
+    mr_blocks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MrBlocks"];
+                };
+            };
+        };
+    };
     code_owners: {
         parameters: {
             query?: never;
@@ -10273,6 +10618,50 @@ export interface operations {
             };
         };
     };
+    map: {
+        parameters: {
+            query?: {
+                /** @description A merge request's iid: its head's map, when it has one */
+                merge_request?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SmartView"];
+                };
+            };
+        };
+    };
+    path_block: {
+        parameters: {
+            query?: {
+                /** @description A file or a folder; the top without one */
+                path?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PathBlock"];
+                };
+            };
+        };
+    };
     signatures: {
         parameters: {
             query?: never;
@@ -10555,6 +10944,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScanningStatus"];
+                };
+            };
+        };
+    };
+    get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SmartViewSettings"];
+                };
+            };
+        };
+    };
+    set: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SmartViewSettingsBody"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SmartViewSettings"];
                 };
             };
         };

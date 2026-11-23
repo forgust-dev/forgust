@@ -361,6 +361,59 @@ pub async fn latest_diffs(e: impl PgExecutor<'_>, mr_ids: &[i64]) -> Result<Vec<
         .collect())
 }
 
+/// Someone who took part in reviewing a merged MR, with the ends of its latest version.
+#[derive(Debug, Clone)]
+pub struct ReviewedBy {
+    pub mr_id: i64,
+    pub base_sha: String,
+    pub head_sha: String,
+    pub username: String,
+    pub name: String,
+    /// When they last approved, reviewed or commented there.
+    pub at: DateTime<Utc>,
+}
+
+/// Who reviewed the latest `limit` MRs merged since `since`: approved, reviewed or commented
+/// (internal notes left out), other than their author, and people, not bots. One row per MR and
+/// person (the Smart View's people to ask).
+pub async fn reviewed_since(e: impl PgExecutor<'_>, project_id: i64, since: DateTime<Utc>, limit: i64) -> Result<Vec<ReviewedBy>> {
+    sqlx::query_as!(
+        ReviewedBy,
+        r#"WITH merged AS (
+               SELECT id, author_id FROM merge_requests
+               WHERE project_id = $1 AND state = 'merged' AND merged_at >= $2
+               ORDER BY merged_at DESC LIMIT $3
+           ),
+           took_part AS (
+               SELECT merge_request_id, user_id, created_at AS at FROM approvals
+               WHERE merge_request_id IN (SELECT id FROM merged)
+               UNION ALL
+               SELECT merge_request_id, user_id, updated_at FROM merge_request_reviewers
+               WHERE merge_request_id IN (SELECT id FROM merged) AND state <> 'unreviewed'
+               UNION ALL
+               SELECT merge_request_id, author_id, created_at FROM notes
+               WHERE merge_request_id IN (SELECT id FROM merged) AND NOT system AND NOT internal AND author_id IS NOT NULL
+           )
+           SELECT d.merge_request_id AS "mr_id!", d.base_sha AS "base_sha!", d.head_sha AS "head_sha!",
+                  u.username AS "username!", u.name AS "name!", max(t.at) AS "at!"
+           FROM took_part t
+           JOIN merged m ON m.id = t.merge_request_id
+           JOIN users u ON u.id = t.user_id AND u.user_type = 'human'
+           JOIN LATERAL (
+               SELECT merge_request_id, base_sha, head_sha FROM merge_request_diffs
+               WHERE merge_request_id = m.id ORDER BY version DESC LIMIT 1
+           ) d ON true
+           WHERE t.user_id IS DISTINCT FROM m.author_id
+           GROUP BY d.merge_request_id, d.base_sha, d.head_sha, u.id, u.username, u.name
+           ORDER BY d.merge_request_id, u.username"#,
+        project_id,
+        since,
+        limit
+    )
+    .fetch_all(e)
+    .await
+}
+
 /// Lock the MR row for the rest of the transaction (versions, merges).
 pub async fn lock(conn: &mut PgConnection, mr_id: i64) -> Result<()> {
     sqlx::query!("SELECT id FROM merge_requests WHERE id = $1 FOR UPDATE", mr_id).fetch_one(&mut *conn).await?;

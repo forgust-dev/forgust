@@ -115,7 +115,65 @@ function AutomationSettings({ ctx }: { ctx: Ctx }) {
       >
         <AiReview ctx={ctx} />
       </Section>
+      <Section
+        id="smart-view"
+        title="Smart View"
+        description="The parts of this code, what each needs and who to ask, mapped by a job on the instance's runners at each new commit of the default branch and of open merge requests."
+      >
+        <SmartViewSetting ctx={ctx} />
+      </Section>
     </div>
+  );
+}
+
+function SmartViewSetting({ ctx }: { ctx: Ctx }) {
+  const qc = useQueryClient();
+  const key = ["smart-view-settings", ctx.p.id];
+  const q = useQuery({ queryKey: key, queryFn: () => api.get<S["SmartViewSettings"]>(`/projects/${ctx.p.id}/smart_view`) });
+  const done = () => {
+    qc.invalidateQueries({ queryKey: key });
+    qc.invalidateQueries({ queryKey: ["map", ctx.p.id] });
+  };
+  return <Q q={q}>{(s) => <SmartViewSettingForm ctx={ctx} initial={s} onSaved={done} />}</Q>;
+}
+
+function SmartViewSettingForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S["SmartViewSettings"]; onSaved: () => void }) {
+  const [enabled, setEnabled] = useState(initial.enabled);
+  const [error, setError] = useState<unknown>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const save = useMutation({
+    mutationFn: () => api.put(`/projects/${ctx.p.id}/smart_view`, { enabled }),
+    onSuccess: () => {
+      setError(null);
+      setMsg(enabled ? "The Smart View is on: the default branch is being mapped." : "The Smart View is off: its maps were removed.");
+      onSaved();
+    },
+    onError: setError,
+  });
+  if (!initial.available && !initial.enabled) return <div className="muted small">This instance does not offer the Smart View.</div>;
+  return (
+    <form
+      className="stack"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save.mutate();
+      }}
+    >
+      <ErrorBox error={error} />
+      {msg && <div className="alert ok">{msg}</div>}
+      <label className="check">
+        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Map this project for the Smart View
+      </label>
+      <p className="small muted" style={{ margin: 0 }}>
+        The job runs as a bot of the project that can only read it, and nothing leaves the instance. Only the latest map of the default branch and of each open
+        merge request is kept. An <code>assay.toml</code> at the top of the repository corrects what is found.
+      </p>
+      <div>
+        <button className="btn primary" disabled={save.isPending || enabled === initial.enabled}>
+          Save
+        </button>
+      </div>
+    </form>
   );
 }
 

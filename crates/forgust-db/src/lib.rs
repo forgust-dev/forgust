@@ -42,6 +42,7 @@ pub mod search;
 pub mod security;
 pub mod sessions;
 pub mod settings;
+pub mod smart_view;
 pub mod ssh_keys;
 pub mod todos;
 pub mod tokens;

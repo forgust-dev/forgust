@@ -42,6 +42,7 @@ export function Admin() {
         <Route path="dependency-updates" element={<DependencyUpdatesAdmin />} />
         <Route path="security-scanning" element={<SecurityScanningAdmin />} />
         <Route path="ai-review" element={<AiReviewAdmin />} />
+        <Route path="smart-view" element={<SmartViewAdmin />} />
         <Route path="audit" element={<AdminAuditLog />} />
       </Routes>
     </div>
@@ -525,6 +526,48 @@ function DependencyUpdatesForm({ initial }: { initial: S["AdminRenovateStatus"] 
       />
     </div>
     </>
+  );
+}
+
+function SmartViewAdmin() {
+  const q = useQuery({ queryKey: ["admin-smart-view"], queryFn: () => api.get<S["AdminSmartViewStatus"]>("/admin/smart_view") });
+  return <Q q={q}>{(s) => <SmartViewForm initial={s} />}</Q>;
+}
+
+/** Whether projects may turn the Smart View on, and the image and runners its jobs use. */
+function SmartViewForm({ initial }: { initial: S["AdminSmartViewStatus"] }) {
+  const qc = useQueryClient();
+  const [s, setS] = useState(initial.settings);
+  const { run, msg, error } = useFormRun(() => qc.invalidateQueries({ queryKey: ["admin-smart-view"] }));
+  const save = run(async () => {
+    const r = await api.put<S["AdminSmartViewStatus"]>("/admin/smart_view", { ...s, tags: s.tags.filter(Boolean) });
+    setS(r.settings);
+  }, "Saved.");
+  return (
+    <form className="stack" style={{ maxWidth: 640 }} onSubmit={save}>
+      <p className="muted small">
+        Projects turn on the Smart View in their settings. Forgust then maps each new commit of the default branch and of open merge requests in a job on the
+        instance runners, and keeps the latest map of each. Nothing leaves the instance. {initial.enabled_projects} project(s) use it. These settings apply over
+        the config file&apos;s <code>[smart_view]</code>.
+      </p>
+      <ErrorBox error={error} />
+      {msg && <div className="alert ok">{msg}</div>}
+      <label className="check">
+        <input type="checkbox" checked={s.enabled} onChange={(e) => setS({ ...s, enabled: e.target.checked })} /> Offer the Smart View to projects
+      </label>
+      <Field label="Image" hint="Empty: the one released with this server, which follows each upgrade. Or an image of your own that runs assay report with the same contract">
+        <input className="mono" value={s.image} placeholder={initial.default_image} onChange={(e) => setS({ ...s, image: e.target.value })} />
+      </Field>
+      <Field label="Runner tags" hint="Comma-separated; instance runners only">
+        <input value={s.tags.join(", ")} onChange={(e) => setS({ ...s, tags: e.target.value.split(",").map((t) => t.trim()) })} />
+      </Field>
+      <Field label="Timeout (minutes)">
+        <input type="number" min={1} max={120} value={Math.round(s.timeout_secs / 60)} onChange={(e) => setS({ ...s, timeout_secs: Number(e.target.value) * 60 })} />
+      </Field>
+      <div>
+        <button className="btn primary">Save</button>
+      </div>
+    </form>
   );
 }
 

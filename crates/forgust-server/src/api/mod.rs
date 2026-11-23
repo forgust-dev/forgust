@@ -24,6 +24,7 @@ pub mod repo;
 pub mod review;
 pub mod search;
 pub mod security;
+pub mod smart_view;
 pub mod tests;
 pub mod user;
 
@@ -202,6 +203,8 @@ pub fn router() -> Router<AppState> {
         .route("/projects/{id}/merge_requests/{iid}/ai_review", get(ai_review::mr_status).post(ai_review::mr_request))
         .route("/admin/ai_review", get(ai_review::admin_get).put(ai_review::admin_set))
         .route("/admin/ai_review/models", post(ai_review::admin_models))
+        .route("/projects/{id}/smart_view", get(smart_view::get).put(smart_view::set))
+        .route("/admin/smart_view", get(smart_view::admin_get).put(smart_view::admin_set))
         .route("/admin/renovate/host_rules", get(renovate::admin_host_rules).post(renovate::admin_add_host_rule))
         .route("/admin/renovate/host_rules/{rule_id}", delete(renovate::admin_delete_host_rule))
         .route("/projects/{id}/registry", get(registry::info))
@@ -247,6 +250,8 @@ pub fn router() -> Router<AppState> {
         .route("/projects/{id}/repository/tags/{*tag}", delete(repo::delete_tag))
         .route("/projects/{id}/repository/blame", get(repo::blame))
         .route("/projects/{id}/repository/files", get(repo::files))
+        .route("/projects/{id}/repository/map", get(smart_view::map))
+        .route("/projects/{id}/repository/map/block", get(smart_view::path_block))
         .route("/projects/{id}/markdown", post(repo::markdown))
         .route("/projects/{id}/templates/{kind}", get(repo::templates))
         // merge requests (M3)
@@ -265,6 +270,7 @@ pub fn router() -> Router<AppState> {
         .route("/projects/{id}/merge_requests/{iid}/reopen", post(mr::reopen))
         .route("/projects/{id}/merge_requests/{iid}/merge_status", get(mr::merge_status))
         .route("/projects/{id}/merge_requests/{iid}/code_owners", get(review::code_owners))
+        .route("/projects/{id}/merge_requests/{iid}/blocks", get(smart_view::mr_blocks))
         .route("/projects/{id}/merge_requests/{iid}/merge_train", post(mr::add_to_train).delete(mr::remove_from_train))
         .route("/projects/{id}/merge_trains", get(mr::merge_trains))
         .route("/projects/{id}/merge_requests/{iid}/merge", post(mr::merge))

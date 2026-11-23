@@ -1,5 +1,6 @@
 {
   "name": "forgust-web",
+  "description": "The web app the server serves",
   "private": true,
   "version": "0.6.0",
   "type": "module",
@@ -7,6 +8,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b",
+    "licenses": "node scripts/licenses.mjs",
     "gen:api": "npm ci --prefix tools/gen-api --no-audit --no-fund --silent && tools/gen-api/node_modules/.bin/openapi-typescript openapi.json -o src/api/schema.d.ts",
     "e2e": "playwright test"
   },
@@ -17,6 +19,8 @@
     "@fontsource/jetbrains-mono": "5.3.0",
     "@tanstack/react-query": "5.107.1",
     "@tanstack/react-virtual": "3.14.26",
+    "@xyflow/react": "12.12.0",
+    "elkjs": "0.12.1",
     "katex": "^0.19.1",
     "lucide-react": "1.73.0",
     "mermaid": "12.3.0",

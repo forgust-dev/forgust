@@ -34,10 +34,13 @@ pub async fn on_push(state: &AppState, project_id: i64, updates: &[RefUpdate], p
     let Some(p) = forgust_db::projects::find(&state.db, project_id).await? else { return Ok(()) };
     // built-in Renovate rebases its branches on a moved default branch
     if let Some(default) = &p.default_branch
-        && updates.iter().any(|u| u.name.strip_prefix("refs/heads/") == Some(default.as_str()) && u.new != pipeline::ZERO_OID)
+        && let Some(head) =
+            updates.iter().find(|u| u.name.strip_prefix("refs/heads/") == Some(default.as_str()) && u.new != pipeline::ZERO_OID)
     {
         crate::services::renovate::on_default_branch_push(state, project_id, pusher).await;
         crate::services::scanning::on_default_branch_push(state, project_id).await;
+        // the Smart View's map follows the default branch
+        crate::services::smart_view::on_default_branch_push(state, &p, &head.new).await;
     }
     // each pushed branch's open merge requests, read once for the scanners and
     // the pipelines below
@@ -48,6 +51,7 @@ pub async fn on_push(state: &AppState, project_id: i64, updates: &[RefUpdate], p
         // built-in scanners look at merge requests' new heads
         for mr in &mrs {
             crate::services::scanning::on_merge_request_head(state, &p, mr, &u.new).await;
+            crate::services::smart_view::on_merge_request_head(state, &p, mr, &u.new).await;
         }
         open.insert(branch, mrs);
     }
@@ -94,6 +98,7 @@ pub async fn on_merge_request(
     let Some(sha) = state.storage.resolve(project_id, &format!("refs/heads/{}", mr.source_branch)).await? else { return Ok(()) };
     if let Some(p) = forgust_db::projects::find(&state.db, project_id).await? {
         crate::services::scanning::on_merge_request_head(state, &p, mr, &sha).await;
+        crate::services::smart_view::on_merge_request_head(state, &p, mr, &sha).await;
     }
     // the push of this commit, handled first or at the same time, may start it too
     mr_pipeline_once(
@@ -277,6 +282,9 @@ async fn sweep_locked(state: &AppState) {
     }
     if let Err(e) = crate::services::ai_review::sweep(state).await {
         tracing::warn!(error = %e, "AI reviews not swept");
+    }
+    if let Err(e) = crate::services::smart_view::sweep(state).await {
+        tracing::warn!(error = %e, "Smart View maps not swept");
     }
     // delayed jobs whose time came, environments to stop
     match forgust_db::ci::due_scheduled(&state.db).await {

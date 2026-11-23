@@ -94,8 +94,8 @@ updates:
           - "*"
 
   - package-ecosystem: "docker"
-    # the server's image, and the AI review job's
-    directories: ["/", "/crates/forgust-reviewer"]
+    # the server's image, the AI review job's and assay's
+    directories: ["/", "/crates/forgust-reviewer", "/crates/forgust-assay"]
     schedule:
       interval: "weekly"
     # the Rust image moves with the toolchain CI pins (dtolnay/rust-toolchain)

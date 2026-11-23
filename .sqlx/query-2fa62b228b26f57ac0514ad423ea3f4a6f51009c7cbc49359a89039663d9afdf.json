@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM smart_view_maps\n          WHERE project_id = $1 AND coalesce(merge_request_id, 0) = coalesce($2::bigint, 0) AND state = 'pending' AND sha <> $3\n          RETURNING pipeline_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pipeline_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "smart_view_maps",
+            "name": "pipeline_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "2fa62b228b26f57ac0514ad423ea3f4a6f51009c7cbc49359a89039663d9afdf"
+}

@@ -1,4 +1,5 @@
-# cargo-deny: licenses and advisories (ADR-0007: every dependency must be MIT-compatible)
+# cargo-deny: licenses and advisories (ADR-0007: every dependency must be MIT-compatible).
+# The web app's npm packages are held to the same list by web/scripts/licenses.mjs.
 
 [graph]
 all-features = false

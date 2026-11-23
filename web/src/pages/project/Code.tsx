@@ -6,7 +6,7 @@ import { api, bytes, qs, refLink, timeAgo, type S } from "../../api/client";
 import { Avatar, Badge, CopyField, GitPerson, Q, useCopy } from "../../components/ui";
 import { Popover, Segmented, Select } from "../../components/controls";
 import { type Ctx } from "./Project";
-import { BookOpen, Box, Check, ChevronDown, Code2, Copy, CornerLeftUp, Download, FileCode, FileText, Folder, GitBranch, History, Link2, Search, Tag, WrapText, FilePlus2, Pencil, Trash2 } from "lucide-react";
+import { BookOpen, Box, Boxes, Check, ChevronDown, Code2, Copy, CornerLeftUp, Download, FileCode, FileText, Folder, GitBranch, History, Link2, Search, Tag, WrapText, FilePlus2, Pencil, Trash2 } from "lucide-react";
 import { fetchers, keys, usePrefetch } from "../../prefetch";
 import { openPalette, useShortcuts } from "../../shell/palette";
 import { usePref } from "../../shell/theme";
@@ -14,6 +14,7 @@ import { columns, HBar, hsVar, htmlText, remeasure, useCharWidth, useHScroll, us
 import { Markdown } from "../../components/Markdown";
 import { SignatureBadge, useSignatures } from "./Signatures";
 import { EDITORS } from "./editors";
+import { blockTitle, whoKnows } from "./blocks";
 
 /** Resolve `<ref>/<path>` (refs may contain slashes) once per URL. */
 export function useResolved(ctx: Ctx, refAndPath: string) {
@@ -124,6 +125,31 @@ function CloneMenu({ ctx, gitRef }: { ctx: Ctx; gitRef: string }) {
         </div>
       </div>
     </Popover>
+  );
+}
+
+/** The Smart View's block a file or folder is in, and who to ask about it: to its details. */
+function BlockChip({ ctx, path }: { ctx: Ctx; path: string }) {
+  const q = useQuery({
+    // by the default branch's map, whatever the ref browsed
+    queryKey: ["path-block", ctx.p.id, path],
+    queryFn: () => api.get<S["PathBlock"]>(`${ctx.base}/map/block${qs({ path })}`),
+    staleTime: 60_000,
+  });
+  const b = q.data?.block;
+  if (!b) return null;
+  const who = whoKnows(b, 2);
+  const name = blockTitle(b);
+  return (
+    <Link
+      className="block-chip"
+      to={`${ctx.web}/-/smart_view${qs({ block: b.id })}`}
+      title={`In the block ${name}${b.description ? `: ${b.description}` : ""}${who.length ? `. Ask ${who.join(" or ")}` : ""}`}
+    >
+      <Boxes size={13} aria-hidden />
+      <span className="block-chip-name">{name}</span>
+      {who.length > 0 && <span className="block-chip-who">{who.join(", ")}</span>}
+    </Link>
   );
 }
 
@@ -289,6 +315,7 @@ function TreeView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
       <div className="repo-toolbar">
         <RefPicker ctx={ctx} current={res.ref} path={res.path} kind="tree" />
         {res.path ? <PathCrumbs ctx={ctx} gitRef={res.ref} path={res.path} /> : <RefCounts ctx={ctx} />}
+        {res.path && <BlockChip ctx={ctx} path={res.path} />}
         <div className="spacer" />
         <button className="btn" onClick={() => openPalette("files")} title="Find a file (t)">
           <Search size={14} /> Go to file <kbd>t</kbd>
@@ -465,6 +492,7 @@ function BlobView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
       <div className="repo-toolbar">
         <RefPicker ctx={ctx} current={res.ref} path={res.path} kind="blob" />
         <PathCrumbs ctx={ctx} gitRef={res.ref} path={res.path} />
+        <BlockChip ctx={ctx} path={res.path} />
         <div className="spacer" />
         <button className="btn hide-narrow" onClick={() => openPalette("files")} title="Find a file (t)">
           <Search size={14} /> Go to file <kbd>t</kbd>

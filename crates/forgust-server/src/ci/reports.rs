@@ -386,7 +386,9 @@ pub async fn after_job(state: &AppState, build_id: i64, project_id: i64) {
         let security = arts.iter().any(|a| crate::ci::security::REPORT_TYPES.contains(&a.file_type.as_str()));
         // read only for review pipelines (checked when read)
         let review = arts.iter().any(|a| a.file_type == crate::services::ai_review::REPORT);
-        if tests || security || review {
+        // read only for the Smart View's own pipelines (checked when read)
+        let map = arts.iter().any(|a| a.file_type == crate::services::smart_view::REPORT);
+        if tests || security || review || map {
             let mut tx = state.db.begin().await?;
             if tests {
                 state.jobs.enqueue(&mut tx, crate::jobs::ParseTestReport { build_id }.request()).await?;
@@ -396,6 +398,9 @@ pub async fn after_job(state: &AppState, build_id: i64, project_id: i64) {
             }
             if review {
                 state.jobs.enqueue(&mut tx, crate::jobs::ReadAiReview { build_id }.request()).await?;
+            }
+            if map {
+                state.jobs.enqueue(&mut tx, crate::jobs::ReadSmartView { build_id }.request()).await?;
             }
             tx.commit().await?;
         }

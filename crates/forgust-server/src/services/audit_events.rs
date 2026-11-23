@@ -185,6 +185,7 @@ pub const EVENTS: &[EventType] = &[
         &["*"],
         "AI review settings changed; `details` holds them, with `api_key` and `secret_options` as kept, removed or changed (the names set), never their values.",
     ),
+    e("smart_view_instance_updated", ADMIN, NONE, &["*"], "Smart View settings changed; `details` holds them."),
     e("renovate_instance_updated", ADMIN, NONE, &["*"], "Renovate settings changed; `details` holds them (no secrets)."),
     e(
         "renovate_host_rule_added",
@@ -332,6 +333,8 @@ pub const EVENTS: &[EventType] = &[
     e("ai_review_enabled", BUILTIN, P, &[], "AI review turned on for the project."),
     e("ai_review_disabled", BUILTIN, P, &[], "AI review turned off for the project."),
     e("ai_review_requested", BUILTIN, P, &["merge_request", "pipeline_id"], "An AI review of a merge request was asked for."),
+    e("smart_view_enabled", BUILTIN, P, &[], "The Smart View turned on for the project."),
+    e("smart_view_disabled", BUILTIN, P, &[], "The Smart View turned off for the project."),
     e("mcp_tool_call", BUILTIN, P, &["tool", "via", "token_id"], "An MCP client changed something through a tool."),
     // refusals
     e(

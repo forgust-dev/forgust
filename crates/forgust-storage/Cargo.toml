@@ -1,5 +1,6 @@
 [package]
 name = "forgust-storage"
+description = "The Git repositories on disk, behind the Storage trait every caller goes through"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

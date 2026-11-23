@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM smart_view_maps m\n          WHERE EXISTS (SELECT 1 FROM merge_requests mr WHERE mr.id = m.merge_request_id AND mr.state <> 'opened')\n             OR (m.merge_request_id IS NULL\n                 AND EXISTS (SELECT 1 FROM projects p WHERE p.id = m.project_id AND p.default_branch IS DISTINCT FROM m.git_ref))\n          RETURNING m.pipeline_id, m.state",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pipeline_id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "smart_view_maps",
+            "name": "pipeline_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "state",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "smart_view_maps",
+            "name": "state"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "99a38538d171ae9545e9da309d4a767cf2e52e0882debd2e0c1617f6ee6fe63c"
+}

@@ -46,6 +46,8 @@ services:
       FORGUST_FEATURES__WEBHOOKS_ALLOW_LOCAL: "true"
       FORGUST_FEATURES__IMPORTS_ALLOW_LOCAL: "true"
       FORGUST_TELEMETRY__LOG_FORMAT: text
+      # the Smart View's jobs run the image built below, not a released one
+      FORGUST_SMART_VIEW__IMAGE: forgust-assay:local
     volumes:
       - forgust-data:/var/lib/forgust
 
@@ -83,6 +85,16 @@ services:
     environment:
       MP_SMTP_AUTH_ACCEPT_ANY: "1"
       MP_SMTP_AUTH_ALLOW_INSECURE: "1"
+
+  # the image the Smart View's jobs run (crates/forgust-assay), built with the stack so
+  # that the runner finds it on this machine; the service itself only says its version
+  assay:
+    image: forgust-assay:local
+    build:
+      context: .
+      dockerfile: crates/forgust-assay/Dockerfile
+    restart: "no"
+    command: ["assay", "--version"]
 
   # CI: a stock gitlab-runner (docker executor), registered by deploy/seed.py
   runner:

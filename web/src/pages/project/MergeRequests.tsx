@@ -31,6 +31,7 @@ import { Markdown } from "../../components/Markdown";
 import { Ring } from "../../components/decide";
 import { readinessChecks, readinessScore } from "../../components/readiness";
 import { Timeline, type LogEntry } from "../../components/timeline";
+import { blockTitle, whoKnows } from "./blocks";
 
 /** Invalidate MR queries when the server reports a change (shared SSE stream). */
 export function useLiveUpdates(projectId: number) {
@@ -540,6 +541,12 @@ function MrAside({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
           iid={m.iid}
           canEdit={m.can_edit && m.state === "opened"}
           onAsk={(ids) => act(() => api.put(path, { reviewer_ids: [...m.reviewers.map((r) => r.id), ...ids] }), "Code owners asked to review")}
+        />
+        <BlocksFact
+          ctx={ctx}
+          m={m}
+          canEdit={m.can_edit && m.state === "opened"}
+          onAsk={(ids) => act(() => api.put(path, { reviewer_ids: [...m.reviewers.map((r) => r.id), ...ids] }), "Asked to review")}
         />
         <div className="fact">
           <span className="fact-label">Versions</span>
@@ -1342,6 +1349,59 @@ function CodeOwnersFact({ ctx, iid, canEdit, onAsk }: { ctx: Ctx; iid: number; c
         {canEdit && co.suggested_reviewers.length > 0 && (
           <button className="btn small" onClick={() => onAsk(co.suggested_reviewers.map((u) => u.id))}>
             Ask {co.suggested_reviewers.map((u) => `@${u.username}`).join(", ")} to review
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** The Smart View's blocks the merge request changes, who knows them, and a way to ask them to
+ *  review it; in the Smart View, lit up. */
+function BlocksFact({ ctx, m, canEdit, onAsk }: { ctx: Ctx; m: S["MrDetail"]; canEdit: boolean; onAsk: (ids: number[]) => void }) {
+  const head = m.versions.reduce<S["MrDetail"]["versions"][number] | undefined>((a, v) => (!a || v.version > a.version ? v : a), undefined)?.head_sha;
+  const q = useQuery({
+    queryKey: ["mr", ctx.p.id, m.iid, "blocks", head],
+    queryFn: () => api.get<S["MrBlocks"]>(`/projects/${ctx.p.id}/merge_requests/${m.iid}/blocks`),
+    enabled: ctx.p.can_read_code && !!head,
+    staleTime: 60_000,
+  });
+  // who CODEOWNERS has it suggest already is asked by its own button (same query as its fact)
+  const co = useQuery({
+    queryKey: ["mr", ctx.p.id, m.iid, "code-owners"],
+    queryFn: () => api.get<S["CodeOwners"]>(`/projects/${ctx.p.id}/merge_requests/${m.iid}/code_owners`),
+    enabled: ctx.p.can_read_code,
+  });
+  const mb = q.data;
+  if (!mb?.blocks.length) return null;
+  const owners = new Set((co.data?.sections.length ? co.data.suggested_reviewers : []).map((u) => u.id));
+  const ask = mb.suggested_reviewers.filter((u) => !owners.has(u.id));
+  const smart = (extra: Record<string, string>) => `${ctx.web}/-/smart_view${qs({ mr: m.iid, ...extra })}`;
+  const shown = mb.blocks.slice(0, 6);
+  return (
+    <div className="fact">
+      <span className="fact-label">Blocks</span>
+      <div className="fact-value column">
+        {shown.map(({ block: b, files }) => {
+          const who = whoKnows(b, 2);
+          return (
+            <div key={b.id} className="small" title={b.description ?? undefined}>
+              <Link to={smart({ block: b.id })}>{blockTitle(b)}</Link>
+              <span className="faint">
+                {" "}
+                · {files} file{files === 1 ? "" : "s"}
+                {who.length > 0 && ` · ${who.join(", ")}`}
+              </span>
+            </div>
+          );
+        })}
+        {mb.blocks.length > shown.length && <span className="small faint">and {mb.blocks.length - shown.length} more</span>}
+        <Link className="small" to={smart({})}>
+          See them in the Smart View
+        </Link>
+        {canEdit && ask.length > 0 && (
+          <button className="btn small" onClick={() => onAsk(ask.map((u) => u.id))}>
+            Ask {ask.map((u) => `@${u.username}`).join(", ")} to review
           </button>
         )}
       </div>

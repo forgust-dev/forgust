@@ -86,6 +86,7 @@ async fn the_system_pipelines_are_the_same_on_both_sides(pool: sqlx::PgPool) {
         "security",
         "ai_review",
         "sbom",
+        "smart_view",
     ];
     for s in sources {
         let db: bool = sqlx::query_scalar("SELECT is_system_source($1)").bind(s).fetch_one(&pool).await.unwrap();

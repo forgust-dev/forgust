@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__ASSAY_TITLE__ · assay</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f9f7f4;
+    --surface: #ffffff;
+    --hover: #f3eee7;
+    --border: #e8e2da;
+    --border-strong: #ded6cb;
+    --text: #1c1915;
+    --muted: #554e46;
+    --faint: #6a625a;
+    --accent: #b84a00;
+    --accent-soft: #fdeee3;
+    --edge: #bdb3a7;
+    --warn: #8a5a00;
+    --warn-soft: #fcf1d6;
+    --chip: #f1ece5;
+    --shadow: 0 1px 2px rgba(60, 40, 20, 0.06), 0 6px 18px rgba(60, 40, 20, 0.07);
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d0e12;
+      --surface: #17191f;
+      --hover: #22252d;
+      --border: #2a2e36;
+      --border-strong: #3b414c;
+      --text: #f5f5f6;
+      --muted: #a3aab5;
+      --faint: #858d9a;
+      --accent: #ff7a1a;
+      --accent-soft: #3a200f;
+      --edge: #4d5460;
+      --warn: #f2b04f;
+      --warn-soft: #3a2c12;
+      --chip: #22252d;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 6px 18px rgba(0, 0, 0, 0.3);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  }
+  button { font: inherit; color: inherit; }
+  header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 22px;
+    padding: 16px 24px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  h1 { margin: 0; font-size: 20px; letter-spacing: -0.01em; }
+  h1 small { margin-left: 8px; color: var(--faint); font: 12px var(--mono); }
+  .stats { color: var(--muted); font-size: 13px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-left: auto; color: var(--muted); font-size: 12px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend svg { overflow: visible; }
+  .layout { flex: 1; display: flex; min-height: 0; }
+  #board { flex: 1; overflow: auto; position: relative; }
+  /* the canvas is drawn at full size, then scaled down to the board's width (fit) */
+  #stage { position: relative; margin: 0 auto; }
+  #canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+  #edges { position: absolute; inset: 0; overflow: visible; pointer-events: none; }
+  #edges path { fill: none; stroke: var(--edge); stroke-width: 1.5; transition: stroke 120ms ease, opacity 120ms ease; }
+  #edges path.inferred { stroke-dasharray: 6 5; }
+  #edges path.part { stroke-dasharray: 1.5 4; stroke-linecap: round; }
+  #edges path.hl { stroke: var(--accent); stroke-width: 2; }
+  #edges path.dim { opacity: 0.18; }
+  .card {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 220px;
+    height: 96px;
+    padding: 9px 12px 10px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    text-align: left;
+    cursor: pointer;
+    transition: border-color 120ms ease, opacity 120ms ease, box-shadow 120ms ease;
+  }
+  .card:hover { border-color: var(--border-strong); }
+  .card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .card.selected { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow); }
+  .card.dim { opacity: 0.35; }
+  .loose .card { position: relative; }
+  .kind { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+  .dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--k); }
+  .name { overflow: hidden; font-size: 14.5px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+  .place { overflow: hidden; color: var(--faint); font: 11.5px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+  .foot { display: flex; align-items: center; gap: 8px; margin-top: auto; color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .people { display: flex; margin-left: auto; padding-left: 6px; }
+  .avatar {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    margin-left: -6px;
+    border: 2px solid var(--surface);
+    border-radius: 50%;
+    background: hsl(var(--h) 45% 46%);
+    color: #fff;
+    font-size: 9.5px;
+    font-weight: 700;
+  }
+  .solo { padding: 0 6px; border-radius: 999px; background: var(--warn-soft); color: var(--warn); font-size: 11px; font-weight: 600; }
+  section.loose { padding: 8px 24px 28px; }
+  section.loose h2, aside h3 { margin: 0 0 10px; color: var(--faint); font-size: 11px; font-weight: 650; letter-spacing: 0.05em; text-transform: uppercase; }
+  .loose .grid { display: flex; flex-wrap: wrap; gap: 12px; }
+  .notes { padding: 0 24px 24px; color: var(--faint); font-size: 12.5px; }
+  .notes code, aside code { font: 12px var(--mono); }
+  aside {
+    flex: none;
+    width: 360px;
+    overflow: auto;
+    padding: 18px 20px 28px;
+    border-left: 1px solid var(--border);
+    background: var(--surface);
+  }
+  aside[hidden] { display: none; }
+  aside .close { float: right; padding: 2px 8px; border: 1px solid var(--border); border-radius: 6px; background: none; color: var(--muted); cursor: pointer; }
+  aside .close:hover { background: var(--hover); }
+  aside h2 { margin: 2px 0 2px; font-size: 19px; letter-spacing: -0.01em; }
+  aside .sub { color: var(--faint); font: 12px var(--mono); word-break: break-all; }
+  aside .desc { margin: 8px 0 0; color: var(--muted); font-size: 13.5px; }
+  aside section { margin-top: 20px; }
+  aside ul { margin: 0; padding: 0; list-style: none; }
+  aside li { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  aside li:last-child { border-bottom: 0; }
+  aside li .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  aside .meta { color: var(--faint); font-size: 12px; white-space: nowrap; }
+  aside .tag { padding: 0 6px; border-radius: 999px; background: var(--chip); color: var(--muted); font-size: 11px; }
+  aside .go { padding: 0; border: 0; background: none; color: var(--accent); cursor: pointer; font-weight: 600; }
+  aside .go:hover { text-decoration: underline; }
+  .bar { display: flex; height: 8px; margin: 2px 0 8px; overflow: hidden; border-radius: 999px; background: var(--chip); }
+  .bar span { height: 100%; }
+  .langs { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--muted); font-size: 12px; }
+  .langs i { display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 2px; }
+  .note { margin: 8px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--warn-soft); color: var(--warn); font-size: 12.5px; }
+  .empty { padding: 48px 24px; color: var(--muted); text-align: center; }
+  @media (max-width: 760px) {
+    header { padding: 14px 16px 12px; }
+    .legend { margin-left: 0; }
+    aside { position: fixed; right: 0; bottom: 0; left: 0; width: auto; max-height: 62vh; border-top: 1px solid var(--border); border-left: 0; box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.15); }
+    section.loose, .notes { padding-right: 16px; padding-left: 16px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title"></h1>
+  <span class="stats" id="stats"></span>
+  <span class="legend" aria-label="Legend">
+    <span><svg width="26" height="6"><path d="M0 3H26" stroke="currentColor" stroke-width="1.5"/></svg>declared</span>
+    <span><svg width="26" height="6"><path d="M0 3H26" stroke="currentColor" stroke-width="1.5" stroke-dasharray="6 5"/></svg>a guess</span>
+    <span><svg width="26" height="6"><path d="M0 3H26" stroke="currentColor" stroke-width="1.5" stroke-dasharray="1.5 4" stroke-linecap="round"/></svg>part of</span>
+    <span>arrows go to what is needed</span>
+  </span>
+</header>
+<div class="layout">
+  <main id="board">
+    <div id="stage"><div id="canvas"><svg id="edges"></svg></div></div>
+    <section class="loose" id="loose" hidden><h2>Not linked to other blocks</h2><div class="grid"></div></section>
+    <div class="notes" id="notes"></div>
+  </main>
+  <aside id="panel" hidden aria-live="polite"></aside>
+</div>
+<script id="map" type="application/json">__ASSAY_MAP__</script>
+<script>
+"use strict";
+const map = JSON.parse(document.getElementById("map").textContent);
+// the JSON leaves out what is empty
+map.warnings ??= [];
+for (const b of map.blocks) {
+  for (const k of ["roots", "manifests", "languages", "jobs", "owners", "people"]) b[k] ??= [];
+}
+const TITLE = document.title.replace(/ · assay$/, "");
+const W = 220, H = 96, GX = 72, GY = 16, PAD = 28;
+/** The smallest the canvas is scaled to fit the board: below, it scrolls instead. */
+const MIN_SCALE = 0.72;
+const KIND = {
+  rust: ["Rust crate", "#c0581f"], node: ["npm package", "#4f9a3a"], python: ["Python project", "#3d7ab8"], go: ["Go module", "#1a9bb5"],
+  migrations: ["Schema", "#8a5cd0"], docker: ["Image", "#2f6fe0"], service: ["Service", "#6b7a86"], helm: ["Helm chart", "#3a4bb0"],
+  kubernetes: ["Kubernetes", "#326ce5"], ansible: ["Ansible", "#c43c3c"], terraform: ["Terraform module", "#7b4fba"], pulumi: ["Pulumi project", "#9b3c94"],
+  ci: ["CI", "#b8901a"], docs: ["Docs", "#8a8178"], other: ["Block", "#8a8178"],
+};
+const VERB = { uses: "uses", builds: "builds", runs: "runs", depends_on: "depends on", connects: "connects to", calls: "calls", contains: "holds" };
+const LANG = ["#c0581f", "#3d7ab8", "#4f9a3a", "#8a5cd0", "#b8901a", "#6b7a86"];
+
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const byId = new Map(map.blocks.map((b) => [b.id, b]));
+/** The title of a block: its name, but its id when the name is only its path (an image, a schema). */
+const title = (b) => (b.name === b.roots[0] ? b.id : b.name);
+const place = (b) =>
+  b.roots.length ? b.roots[0] + (b.roots.length > 1 ? ` +${b.roots.length - 1}` : "") : b.image ? b.image.replace(/@sha256:[0-9a-f]+$/, "") : b.manifests.join(", ");
+const initials = (name) => name.split(/[\s._-]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("") || "?";
+const hue = (s) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) % 360, 7);
+
+// the links, and each block's parent holding it (unless they are linked already)
+const edges = map.links.map((l) => ({ ...l, part: false }));
+const linkedPair = (a, b) => map.links.some((l) => (l.from === a && l.to === b) || (l.from === b && l.to === a));
+for (const b of map.blocks) {
+  if (b.parent && byId.has(b.parent) && !linkedPair(b.parent, b.id)) edges.push({ from: b.parent, to: b.id, kind: "contains", certainty: "declared", via: "", part: true });
+}
+const linked = new Set(edges.flatMap((e) => [e.from, e.to]));
+const graph = map.blocks.filter((b) => linked.has(b.id)).map((b) => b.id);
+const loose = map.blocks.filter((b) => !linked.has(b.id));
+const ins = new Map(graph.map((id) => [id, []]));
+const outs = new Map(graph.map((id) => [id, []]));
+for (const e of edges) { outs.get(e.from).push(e); ins.get(e.to).push(e); }
+
+// columns: each block one right of the furthest block needing it (a link back is left out)
+const layer = new Map();
+const visiting = new Set();
+function layerOf(id) {
+  if (layer.has(id)) return layer.get(id);
+  visiting.add(id);
+  let l = 0;
+  for (const e of ins.get(id)) if (!visiting.has(e.from)) l = Math.max(l, layerOf(e.from) + 1);
+  visiting.delete(id);
+  layer.set(id, l);
+  return l;
+}
+graph.forEach(layerOf);
+// a block nothing needs sits just before what it needs, not with the first ones
+for (const id of graph) {
+  if (ins.get(id).length || !outs.get(id).length) continue;
+  layer.set(id, Math.max(0, Math.min(...outs.get(id).map((e) => layer.get(e.to))) - 1));
+}
+// columns left empty close up
+const used = [...new Set(layer.values())].sort((a, b) => a - b);
+for (const [id, l] of layer) layer.set(id, used.indexOf(l));
+const cols = [];
+for (const id of graph) (cols[layer.get(id)] ||= []).push(id);
+const rows = Math.max(0, ...cols.map((c) => c?.length ?? 0));
+
+// order in each column by where their neighbours are (a few sweeps each way)
+const slot = new Map();
+const settle = () => cols.forEach((c) => c.forEach((id, i) => slot.set(id, i - (c.length - 1) / 2)));
+settle();
+const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
+function order(c, key) {
+  const k = new Map(c.map((id) => [id, key(id) ?? slot.get(id)]));
+  c.sort((a, b) => k.get(a) - k.get(b));
+  settle();
+}
+for (let pass = 0; pass < 4; pass++) {
+  for (let l = 1; l < cols.length; l++) if (cols[l]) order(cols[l], (id) => mean(ins.get(id).map((e) => slot.get(e.from))));
+  for (let l = cols.length - 2; l >= 0; l--) if (cols[l]) order(cols[l], (id) => mean(outs.get(id).map((e) => slot.get(e.to))));
+}
+const box = new Map();
+cols.forEach((c, l) => c?.forEach((id, i) => box.set(id, { x: PAD + l * (W + GX), y: PAD + ((rows - c.length) / 2 + i) * (H + GY) })));
+
+function card(b) {
+  const el = document.createElement("button");
+  el.type = "button";
+  el.className = "card";
+  el.dataset.id = b.id;
+  const [kindName, color] = KIND[b.kind] ?? KIND.other;
+  el.style.setProperty("--k", color);
+  const lang = b.languages[0];
+  const people = b.people.slice(0, 3).map((p) => `<span class="avatar" style="--h:${hue(p.name)}" title="${esc(p.name)}">${esc(initials(p.name))}</span>`).join("");
+  el.innerHTML =
+    `<span class="kind"><span class="dot"></span>${esc(kindName)}${b.role ? ` · ${esc(b.role)}` : ""}</span>` +
+    `<span class="name">${esc(title(b))}</span>` +
+    `<span class="place"${b.description ? ` title="${esc(place(b))}"` : ""}>${esc(b.description ?? place(b))}</span>` +
+    `<span class="foot">${b.files ? `${b.files} file${b.files === 1 ? "" : "s"}` : ""}${lang ? ` · ${esc(lang.name)}` : ""}` +
+    `${b.bus_factor === 1 ? `<span class="solo" title="Only one person made a fifth or more of its recent changes">1 person</span>` : ""}` +
+    `<span class="people">${people}</span></span>`;
+  el.setAttribute("aria-label", `${title(b)}, ${kindName}`);
+  el.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    select(b.id);
+  });
+  return el;
+}
+
+const canvas = document.getElementById("canvas");
+const stage = document.getElementById("stage");
+const svg = document.getElementById("edges");
+const fullW = cols.length ? PAD * 2 + cols.length * W + (cols.length - 1) * GX + 40 : 0;
+const fullH = rows ? PAD * 2 + rows * H + (rows - 1) * GY : 0;
+canvas.style.width = `${fullW}px`;
+canvas.style.height = `${fullH}px`;
+/** Scales the canvas to the board's width (not below MIN_SCALE), the stage keeping its room. */
+function fit() {
+  const room = document.getElementById("board").clientWidth - 8;
+  const s = fullW ? Math.max(MIN_SCALE, Math.min(1, room / fullW)) : 1;
+  canvas.style.transform = s < 1 ? `scale(${s})` : "";
+  stage.style.width = `${fullW * s}px`;
+  stage.style.height = `${fullH * s}px`;
+  // the blocks linked to none, at the same size as the others
+  document.querySelector("#loose .grid").style.zoom = String(s);
+}
+addEventListener("resize", fit);
+for (const id of graph) {
+  const el = card(byId.get(id));
+  const p = box.get(id);
+  el.style.left = `${p.x}px`;
+  el.style.top = `${p.y}px`;
+  canvas.appendChild(el);
+}
+
+// edge ends spread along each card's side, in the order of what is at their other end
+const ends = new Map();
+function spread(list, side, other) {
+  list.sort((a, b) => box.get(other(a)).y - box.get(other(b)).y);
+  list.forEach((e, i) => ends.set(`${side}:${e.from}>${e.to}`, (i - (list.length - 1) / 2) * Math.min(14, 52 / list.length)));
+}
+for (const id of graph) {
+  const right = (e, mine) => box.get(mine(e)).x > box.get(id).x;
+  spread(outs.get(id).filter((e) => right(e, (x) => x.to)), "out", (e) => e.to);
+  spread(ins.get(id).filter((e) => !right(e, (x) => x.from)), "in", (e) => e.from);
+}
+function path(e) {
+  const a = box.get(e.from), b = box.get(e.to);
+  const y1 = a.y + H / 2 + (ends.get(`out:${e.from}>${e.to}`) ?? 0);
+  const y2 = b.y + H / 2 + (ends.get(`in:${e.from}>${e.to}`) ?? 0);
+  if (b.x > a.x) {
+    const x1 = a.x + W, x2 = b.x - 3, dx = Math.max(34, (x2 - x1) / 2);
+    return `M${x1},${y1} C${x1 + dx},${y1} ${x2 - dx},${y2} ${x2},${y2}`;
+  }
+  if (b.x < a.x) {
+    const x1 = a.x, x2 = b.x + W + 3, dx = Math.max(34, (x1 - x2) / 2);
+    return `M${x1},${y1} C${x1 - dx},${y1} ${x2 + dx},${y2} ${x2},${y2}`;
+  }
+  const x = a.x + W;
+  return `M${x},${y1} C${x + 60},${y1} ${x + 60},${y2} ${x + 3},${y2}`;
+}
+svg.innerHTML =
+  `<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--edge)"/></marker>` +
+  `<marker id="arrow-hl" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--accent)"/></marker></defs>`;
+const lines = edges.map((e) => {
+  const el = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  el.setAttribute("d", path(e));
+  el.setAttribute("class", e.part ? "part" : e.certainty);
+  if (!e.part) el.setAttribute("marker-end", "url(#arrow)");
+  svg.appendChild(el);
+  return { e, el };
+});
+
+if (loose.length) {
+  const section = document.getElementById("loose");
+  section.hidden = false;
+  for (const b of loose) section.querySelector(".grid").appendChild(card(b));
+}
+
+document.getElementById("title").innerHTML = `${esc(TITLE)}${map.commit ? `<small title="${esc(map.commit)}">${esc(map.commit.slice(0, 7))}</small>` : ""}`;
+document.getElementById("stats").textContent =
+  `${map.blocks.length} block${map.blocks.length === 1 ? "" : "s"} · ${map.links.length} link${map.links.length === 1 ? "" : "s"} · ${map.unassigned.files} file${map.unassigned.files === 1 ? "" : "s"} in no block`;
+const notes = [];
+if (map.unassigned.files) notes.push(`Files in no block: ${map.unassigned.sample.map((f) => `<code>${esc(f)}</code>`).join(", ")}${map.unassigned.files > map.unassigned.sample.length ? ", …" : ""}`);
+for (const w of map.warnings ?? []) notes.push(`Not read: <code>${esc(w)}</code>`);
+document.getElementById("notes").innerHTML = notes.map((n) => `<p>${n}</p>`).join("");
+if (!map.blocks.length) document.getElementById("board").insertAdjacentHTML("afterbegin", `<p class="empty">No block found: no manifest assay knows (Cargo.toml, package.json, a Dockerfile, a compose file, a chart, Terraform…).</p>`);
+
+// a block chosen: its links stand out, the rest steps back, its details show
+const panel = document.getElementById("panel");
+let chosen = null;
+function select(id) {
+  chosen = id && byId.has(id) ? id : null;
+  const near = new Set([chosen]);
+  for (const e of edges) {
+    if (e.from === chosen) near.add(e.to);
+    if (e.to === chosen) near.add(e.from);
+  }
+  for (const c of document.querySelectorAll(".card")) {
+    c.classList.toggle("selected", c.dataset.id === chosen);
+    c.classList.toggle("dim", !!chosen && !near.has(c.dataset.id));
+  }
+  for (const { e, el } of lines) {
+    const mine = !!chosen && (e.from === chosen || e.to === chosen);
+    el.classList.toggle("hl", mine);
+    el.classList.toggle("dim", !!chosen && !mine);
+    if (!e.part) el.setAttribute("marker-end", mine ? "url(#arrow-hl)" : "url(#arrow)");
+  }
+  history.replaceState(null, "", chosen ? `#${encodeURIComponent(chosen)}` : location.pathname + location.search);
+  if (!chosen) {
+    panel.hidden = true;
+    fit();
+    return;
+  }
+  panel.hidden = false;
+  fit();
+  panel.innerHTML = details(byId.get(chosen));
+  panel.querySelector(".close").addEventListener("click", () => select(null));
+  for (const g of panel.querySelectorAll(".go")) g.addEventListener("click", () => select(g.dataset.id));
+  const c = document.querySelector(`.card[data-id="${CSS.escape(chosen)}"]`);
+  c?.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
+
+function details(b) {
+  const [kindName, color] = KIND[b.kind] ?? KIND.other;
+  const parts = [];
+  parts.push(`<button type="button" class="close" aria-label="Close">Close</button>`);
+  parts.push(`<div class="kind"><span class="dot" style="--k:${color}"></span>${esc(kindName)}${b.role ? ` · ${esc(b.role)}` : ""}${b.source === "configured" ? " · from assay.toml" : ""}</div>`);
+  parts.push(`<h2>${esc(title(b))}</h2>`);
+  parts.push(`<div class="sub">${esc(b.roots.length ? b.roots.join(", ") : b.image ?? "")}</div>`);
+  if (b.description) parts.push(`<p class="desc">${esc(b.description)}</p>`);
+  if (b.parent) parts.push(`<div class="meta" style="margin-top:6px">Part of <button type="button" class="go" data-id="${esc(b.parent)}">${esc(title(byId.get(b.parent) ?? { name: b.parent, roots: [] }))}</button></div>`);
+  if (b.files) {
+    const total = b.languages.reduce((n, l) => n + l.files, 0) || 1;
+    const top = b.languages.slice(0, 5);
+    parts.push(
+      `<section><h3>${b.files} file${b.files === 1 ? "" : "s"}</h3>` +
+        `<div class="bar">${top.map((l, i) => `<span style="width:${(l.files / total) * 100}%;background:${LANG[i % LANG.length]}" title="${esc(l.name)}"></span>`).join("")}</div>` +
+        `<div class="langs">${top.map((l, i) => `<span><i style="background:${LANG[i % LANG.length]}"></i>${esc(l.name)} ${Math.round((l.files / total) * 100)}%</span>`).join("")}</div></section>`,
+    );
+  }
+  if (b.people.length || b.owners.length) {
+    let s = `<section><h3>People to ask</h3><ul>`;
+    for (const o of b.owners) s += `<li><span class="grow">${esc(o)}</span><span class="tag">declared</span></li>`;
+    for (const p of b.people) {
+      const commits = Number.isFinite(Number(p.commits)) ? Number(p.commits) : 0;
+      s += `<li><span class="avatar" style="--h:${hue(p.name)};margin-left:0">${esc(initials(p.name))}</span><span class="grow" title="${esc(p.email)}">${esc(p.name)}</span><span class="meta">${commits} commit${commits === 1 ? "" : "s"} · ${esc(p.last)}</span></li>`;
+    }
+    s += `</ul>`;
+    if (b.bus_factor === 1 && b.people.length) s += `<p class="note">Only one person made a fifth or more of its recent changes: worth sharing what they know.</p>`;
+    parts.push(s + `</section>`);
+  }
+  const go = (id) => `<button type="button" class="go" data-id="${esc(id)}">${esc(title(byId.get(id)))}</button>`;
+  // a guess says so; the file telling it, by its name (its path on hover)
+  const tail = (e) =>
+    `${e.certainty === "inferred" ? `<span class="tag">a guess</span>` : ""}${e.via ? `<span class="meta" title="${esc(e.via)}">${esc(e.via.split("/").pop())}</span>` : ""}`;
+  const list = (h, items) => (items.length ? `<section><h3>${h}</h3><ul>${items.join("")}</ul></section>` : "");
+  parts.push(list("Needs", edges.filter((e) => e.from === b.id && !e.part).map((e) => `<li><span class="grow">${esc(VERB[e.kind])} ${go(e.to)}</span>${tail(e)}</li>`)));
+  parts.push(list("Holds", edges.filter((e) => e.from === b.id && e.part).map((e) => `<li><span class="grow">${go(e.to)}</span></li>`)));
+  parts.push(list("Needed by", edges.filter((e) => e.to === b.id && !e.part).map((e) => `<li><span class="grow">${go(e.from)} ${esc(VERB[e.kind])} it</span>${tail(e)}</li>`)));
+  if (b.jobs.length) parts.push(`<section><h3>CI jobs</h3><ul>${b.jobs.map((j) => `<li><code class="grow">${esc(j)}</code></li>`).join("")}</ul></section>`);
+  if (b.manifests.length) parts.push(`<section><h3>Found in</h3><ul>${b.manifests.map((m) => `<li><code class="grow">${esc(m)}</code></li>`).join("")}</ul></section>`);
+  return parts.join("");
+}
+
+fit();
+document.getElementById("board").addEventListener("click", () => select(null));
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") select(null);
+});
+if (location.hash) select(decodeURIComponent(location.hash.slice(1)));
+</script>
+</body>
+</html>

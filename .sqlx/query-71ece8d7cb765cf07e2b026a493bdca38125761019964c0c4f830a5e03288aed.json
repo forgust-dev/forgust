@@ -1,0 +1,85 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH merged AS (\n               SELECT id, author_id FROM merge_requests\n               WHERE project_id = $1 AND state = 'merged' AND merged_at >= $2\n               ORDER BY merged_at DESC LIMIT $3\n           ),\n           took_part AS (\n               SELECT merge_request_id, user_id, created_at AS at FROM approvals\n               WHERE merge_request_id IN (SELECT id FROM merged)\n               UNION ALL\n               SELECT merge_request_id, user_id, updated_at FROM merge_request_reviewers\n               WHERE merge_request_id IN (SELECT id FROM merged) AND state <> 'unreviewed'\n               UNION ALL\n               SELECT merge_request_id, author_id, created_at FROM notes\n               WHERE merge_request_id IN (SELECT id FROM merged) AND NOT system AND NOT internal AND author_id IS NOT NULL\n           )\n           SELECT d.merge_request_id AS \"mr_id!\", d.base_sha AS \"base_sha!\", d.head_sha AS \"head_sha!\",\n                  u.username AS \"username!\", u.name AS \"name!\", max(t.at) AS \"at!\"\n           FROM took_part t\n           JOIN merged m ON m.id = t.merge_request_id\n           JOIN users u ON u.id = t.user_id AND u.user_type = 'human'\n           JOIN LATERAL (\n               SELECT merge_request_id, base_sha, head_sha FROM merge_request_diffs\n               WHERE merge_request_id = m.id ORDER BY version DESC LIMIT 1\n           ) d ON true\n           WHERE t.user_id IS DISTINCT FROM m.author_id\n           GROUP BY d.merge_request_id, d.base_sha, d.head_sha, u.id, u.username, u.name\n           ORDER BY d.merge_request_id, u.username",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "mr_id!",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "merge_request_diffs",
+            "name": "merge_request_id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "base_sha!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "merge_request_diffs",
+            "name": "base_sha"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "head_sha!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "merge_request_diffs",
+            "name": "head_sha"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "username!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "username"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "name!",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "users",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "at!",
+        "type_info": "Timestamptz",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "71ece8d7cb765cf07e2b026a493bdca38125761019964c0c4f830a5e03288aed"
+}

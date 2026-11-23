@@ -765,6 +765,7 @@ const ARTIFACT_TYPES: &[&str] = &[
     "repository_xray",
     "cyclonedx",
     crate::services::ai_review::REPORT,
+    crate::services::smart_view::REPORT,
 ];
 
 async fn upload_artifacts(
