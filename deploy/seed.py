@@ -1363,6 +1363,38 @@ API (`infra/pulumi`).
 """
 
 
+# a rule between blocks: the apps go through the API, never to the data
+MARKET_RULES = """
+# what the apps must not need: the Smart View reports the links that break it
+[[rules]]
+from = ["acme-storefront", "acme-backoffice"]
+deny = ["role:database", "market-store", "acme-db-client"]
+why = "The apps go through the API"
+"""
+
+# the merge request that breaks it: the storefront reads the stock straight from the database
+MARKET_DB_CLIENT = {
+    "packages/db-client/package.json": json.dumps({"name": "@acme/db-client", "description": "Queries the catalog's tables straight from Postgres",
+                                                   "private": True, "type": "module", "main": "src/index.ts", "dependencies": {"pg": "8.16.0"}}, indent=2) + "\n",
+    "packages/db-client/src/index.ts": "import pg from \"pg\";\n\nexport const stock = async (sku: string): Promise<number> => {\n  const db = new pg.Client();\n  await db.connect();\n  const r = await db.query(\"select stock from products where sku = $1\", [sku]);\n  return r.rows[0]?.stock ?? 0;\n};\n",
+}
+
+
+def market_rules_mr(r, api, pid):
+    """A branch whose storefront reads the database itself, against the rule: its merge request
+    shows what it changes to the map, and the rule it breaks."""
+    r.git("checkout", "-q", "-b", "storefront-stock", "main")
+    pkg = json.loads(r.git("show", "main:apps/storefront/package.json"))
+    pkg["dependencies"]["@acme/db-client"] = "*"
+    r.commit("carol", "storefront: show the stock, read from the database", {**MARKET_DB_CLIENT, "apps/storefront/package.json": json.dumps(pkg, indent=2) + "\n"},
+             days_ago=0)
+    r.push("storefront-stock")
+    r.git("checkout", "-q", "main")
+    time.sleep(4)  # let the server process the push first
+    api.post(f"/projects/{pid}/merge_requests", {"source_branch": "storefront-stock", "target_branch": "main", "title": "Show the stock on the product page",
+                                                "description": "Reads the stock from the catalog's table: quicker than a call to the API."})
+
+
 def market_deploy(r):
     """What deploys the marketplace, each in a few hands: for the Smart View's infrastructure."""
     r.commit("bob", "deploy: a Helm chart for the API and the storefront", MARKET_HELM)
@@ -1465,6 +1497,7 @@ def market_history(r):
                                           "crates/domain/src/lib.rs": "//! Products, carts and orders.\npub mod discount;\npub mod money;\n\npub struct Product {\n    pub sku: String,\n    pub name: String,\n    pub price: money::Cents,\n}\n"})
     r.commit("erin", "docs: the runbook", {"docs/runbook.md": "# Runbook\n\n- Orders stuck: look at the worker's dead-letter queue.\n- Search stale: run `market-indexer`.\n"})
     market_deploy(r)
+    r.commit("alice", "assay.toml: the apps go through the API", {"assay.toml": MARKET_ASSAY + MARKET_RULES})
     r.commit("frank", "worker: metrics", {"services/worker/internal/orders/metrics.go": "package orders\n\n// Handled counts the events handled.\nvar Handled int\n"}, days_ago=9)
     r.commit("dave", "storefront: search the catalog", {"apps/storefront/src/Search.tsx": "import { products } from \"@acme/api-client\";\n\nexport function Search() {\n  void products;\n  return <input type=\"search\" />;\n}\n"}, days_ago=6)
     r.commit("alice", "indexer: a full reindex", {"services/indexer/indexer/main.py": "\"\"\"Pushes the catalog to the search index.\"\"\"\n\n\ndef run(full: bool = False):\n    print(\"indexed 0 products\" + (\" (full)\" if full else \"\"))\n"}, days_ago=4)
@@ -1484,6 +1517,7 @@ def seed_marketplace(apis, platform):
     r.push("main")
     # a job on the compose runner maps it with the assay image (built with the stack)
     bob.put(f"/projects/{p['id']}/smart_view", {"enabled": True})
+    market_rules_mr(r, apis["carol"], p["id"])
     return p["id"]
 
 
