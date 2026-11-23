@@ -168,6 +168,10 @@ function BotForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S["BotStatus"];
         . People run the commands for what they could do from the page; <code>{initial.config_path}</code> on the target branch lets more
         people run some of them, or turns them off.
       </p>
+      <p className="small muted" style={{ margin: 0 }}>
+        {botLabels(initial.label_rules)} Rules under <code>[labels]</code> in <code>{initial.config_path}</code> label merge requests by
+        the paths they change, by their size and by the type of their title (<code>fix: …</code>).
+      </p>
       <div>
         <button className="btn primary" disabled={save.isPending || enabled === initial.enabled}>
           Save
@@ -175,6 +179,17 @@ function BotForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S["BotStatus"];
       </div>
     </form>
   );
+}
+
+/** What the rules on the default branch label merge requests by. */
+function botLabels(r: S["BotLabelRules"]): string {
+  const by = [
+    r.paths > 0 && `the paths they change (${r.paths} ${r.paths === 1 ? "label" : "labels"})`,
+    r.size && "their size",
+    r.title > 0 && `the type of their title (${r.title} ${r.title === 1 ? "type" : "types"})`,
+  ].filter(Boolean);
+  if (by.length === 0) return "It labels no merge request yet.";
+  return `It labels merge requests by ${by.join(", ")}.`;
 }
 
 function AiReview({ ctx }: { ctx: Ctx }) {

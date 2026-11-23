@@ -3247,6 +3247,14 @@ export interface components {
             /** @description `label`: written `/label`. */
             name: string;
         };
+        BotLabelRules: {
+            /** @description Labels given by the paths a merge request changes. */
+            paths: number;
+            /** @description `size/XS` … `size/XL`, by lines changed. */
+            size: boolean;
+            /** @description Labels given by the type of the title (`feat: …`). */
+            title: number;
+        };
         BotSettingsBody: {
             enabled: boolean;
         };
@@ -3263,6 +3271,8 @@ export interface components {
             /** @description Where the project's rules are read from. */
             config_path: string;
             enabled: boolean;
+            /** @description The labels it puts on merge requests, by the rules on the default branch. */
+            label_rules: components["schemas"]["BotLabelRules"];
             /** @description The account that carries out the commands. */
             username: string;
         };

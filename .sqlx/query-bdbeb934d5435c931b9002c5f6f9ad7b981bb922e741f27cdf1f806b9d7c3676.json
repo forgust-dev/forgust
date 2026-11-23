@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM merge_request_auto_labels WHERE merge_request_id = $1 AND name <> ALL ($2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bdbeb934d5435c931b9002c5f6f9ad7b981bb922e741f27cdf1f806b9d7c3676"
+}

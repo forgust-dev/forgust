@@ -99,3 +99,26 @@ pub async fn unhold(e: impl PgExecutor<'_>, merge_request_id: i64) -> Result<boo
     let n = sqlx::query!("DELETE FROM merge_request_holds WHERE merge_request_id = $1", merge_request_id).execute(e).await?.rows_affected();
     Ok(n > 0)
 }
+
+// --------------------------------------------------------------- auto-labels
+
+/// The labels the bot's rules asked for when it last looked at the merge request.
+pub async fn auto_labels(e: impl PgExecutor<'_>, merge_request_id: i64) -> Result<Vec<String>> {
+    sqlx::query_scalar!("SELECT name FROM merge_request_auto_labels WHERE merge_request_id = $1 ORDER BY name", merge_request_id)
+        .fetch_all(e)
+        .await
+}
+
+pub async fn set_auto_labels(conn: &mut sqlx::PgConnection, merge_request_id: i64, names: &[String]) -> Result<()> {
+    sqlx::query!("DELETE FROM merge_request_auto_labels WHERE merge_request_id = $1 AND name <> ALL ($2)", merge_request_id, names)
+        .execute(&mut *conn)
+        .await?;
+    sqlx::query!(
+        "INSERT INTO merge_request_auto_labels (merge_request_id, name) SELECT $1, n FROM unnest($2::text[]) AS n ON CONFLICT DO NOTHING",
+        merge_request_id,
+        names
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}

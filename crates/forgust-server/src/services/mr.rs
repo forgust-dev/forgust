@@ -141,6 +141,7 @@ pub async fn create(state: &AppState, principal: &Principal, p: &Project, req: C
     {
         tracing::warn!(project_id = p.id, iid = mr.iid, error = %e, "merge request pipeline not created");
     }
+    super::bot::labels::on_merge_request(state, p, &mr).await;
     Ok(mr)
 }
 
@@ -211,6 +212,10 @@ pub async fn update_details(state: &AppState, principal: &Principal, p: &Project
         on_push(state, p.id, &[crate::jobs::RefUpdate { old: head.clone(), new: head, name: format!("refs/heads/{}", m.source_branch) }])
             .await
             .map_err(ApiError::Internal)?;
+    }
+    if title != m.title || retarget {
+        // another type in the title, or the rules of another branch
+        super::bot::labels::on_merge_request(state, p, m).await;
     }
     state.events.publish(Event::MergeRequest { project_id: p.id, iid: m.iid });
     // marking ready, or a new target, may let a pending auto-merge go (or cancel it)
@@ -328,6 +333,8 @@ async fn follow_push(
         }
         if let Some(p) = project.as_ref() {
             super::webhooks::emit(state, p, "merge_request", merge_request_payload(state, p, mr, "update", None, Some(&d))).await;
+            // other paths, another size
+            super::bot::labels::on_merge_request(state, p, mr).await;
         }
     }
     Ok(())

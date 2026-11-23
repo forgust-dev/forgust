@@ -302,3 +302,65 @@ async fn an_instance_can_do_without(pool: sqlx::PgPool) {
     let (code, v) = owner.put(&format!("/api/v1/projects/{proj}/bot"), json!({ "enabled": true })).await;
     assert_eq!(code, 409, "{v}");
 }
+
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn labels_on_merge_requests(pool: sqlx::PgPool) {
+    let srv = TestServer::start(pool).await;
+    let (owner, dev, _rep, _org, proj, work) = setup(&srv).await;
+    let base = format!("/api/v1/projects/{proj}");
+    owner.ok_put(&format!("{base}/bot"), json!({ "enabled": true })).await;
+    let rules = "[labels.paths]\ndocs = [\"*.md\", \"/docs/\"]\ncode = [\"/src/\"]\n\n[labels.size]\n\n[labels.title]\nfix = \"bug\"\nfeat = \"feature\"\n";
+    commit_file(&work, ".forgust/bot.toml", rules, "label rules").await;
+    must(git(&work, &["push", "-q", &srv.http_url("olivia", REPO), "main"]).await);
+    wait_jobs(&srv.state).await;
+    let s = owner.ok_get(&format!("{base}/bot")).await;
+    assert_eq!(s["label_rules"], json!({ "paths": 2, "size": true, "title": 2 }), "{s}");
+
+    // opened: by its paths, its size and its title; the labels are made
+    must(git(&work, &["checkout", "-q", "-b", "feature/docs"]).await);
+    commit_file(&work, "docs/guide.md", "# Guide\n\nRead me.\n", "a guide").await;
+    must(git(&work, &["push", "-q", &srv.http_url("dave", REPO), "feature/docs"]).await);
+    wait_jobs(&srv.state).await;
+    dev.ok_post(&format!("{base}/merge_requests"), json!({ "source_branch": "feature/docs", "title": "Draft: fix(docs): a guide" })).await;
+    let mr = format!("{base}/merge_requests/1");
+    assert_eq!(names(&dev.ok_get(&mr).await["labels"], "name"), vec!["bug", "docs", "size/XS"]);
+    assert_eq!(names(&dev.ok_get(&format!("{base}/labels")).await, "name"), vec!["bug", "docs", "size/XS"]);
+    let notes = dev.ok_get(&format!("{mr}/notes")).await;
+    assert!(notes.as_array().unwrap().iter().any(|n| n["system"] == true && n["author_username"] == BOT), "{notes}");
+    let audit = srv.audit_events("bot_labels").await;
+    assert_eq!(audit.len(), 1, "{audit:?}");
+    assert_eq!(audit[0].2, json!({ "merge_request": 1, "added": ["bug", "docs", "size/XS"], "removed": [] }));
+
+    // a label taken off by hand stays off; a push brings the new size and paths
+    owner.ok_post(&format!("{base}/labels"), json!({ "name": "mine" })).await;
+    dev.ok_put(&format!("{mr}/labels"), json!({ "labels": ["bug", "size/XS", "mine"] })).await;
+    let code: String = (0..40).map(|i| format!("// line {i}\n")).collect();
+    commit_file(&work, "src/more.rs", &code, "more code").await;
+    must(git(&work, &["push", "-q", &srv.http_url("dave", REPO), "feature/docs"]).await);
+    wait_jobs(&srv.state).await;
+    assert_eq!(names(&dev.ok_get(&mr).await["labels"], "name"), vec!["bug", "code", "mine", "size/M"]);
+
+    // another title: its label goes with the old type; a title of no type has none
+    dev.ok_put(&mr, json!({ "title": "feat: a guide" })).await;
+    assert_eq!(names(&dev.ok_get(&mr).await["labels"], "name"), vec!["code", "feature", "mine", "size/M"]);
+    dev.ok_put(&mr, json!({ "title": "A guide" })).await;
+    assert_eq!(names(&dev.ok_get(&mr).await["labels"], "name"), vec!["code", "mine", "size/M"]);
+    // nothing changes: nothing is done
+    let n = srv.audit_events("bot_labels").await.len();
+    dev.ok_put(&mr, json!({ "description": "More." })).await;
+    dev.ok_put(&mr, json!({ "title": "The guide" })).await;
+    assert_eq!(srv.audit_events("bot_labels").await.len(), n);
+
+    // the rules are the target branch's: a merge request cannot bring its own
+    must(git(&work, &["checkout", "-q", "-b", "feature/rules", "main"]).await);
+    commit_file(&work, ".forgust/bot.toml", "[labels.title]\nfix = \"urgent\"\n", "my rules").await;
+    must(git(&work, &["push", "-q", &srv.http_url("dave", REPO), "feature/rules"]).await);
+    wait_jobs(&srv.state).await;
+    dev.ok_post(&format!("{base}/merge_requests"), json!({ "source_branch": "feature/rules", "title": "fix: rules" })).await;
+    assert_eq!(names(&dev.ok_get(&format!("{base}/merge_requests/2")).await["labels"], "name"), vec!["bug", "size/XS"]);
+
+    // off: merge requests are left alone
+    owner.ok_put(&format!("{base}/bot"), json!({ "enabled": false })).await;
+    dev.ok_put(&mr, json!({ "title": "fix: the guide" })).await;
+    assert_eq!(names(&dev.ok_get(&mr).await["labels"], "name"), vec!["code", "mine", "size/M"]);
+}

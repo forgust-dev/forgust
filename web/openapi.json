@@ -6391,6 +6391,30 @@
           }
         }
       },
+      "BotLabelRules": {
+        "type": "object",
+        "required": [
+          "paths",
+          "size",
+          "title"
+        ],
+        "properties": {
+          "paths": {
+            "type": "integer",
+            "description": "Labels given by the paths a merge request changes.",
+            "minimum": 0
+          },
+          "size": {
+            "type": "boolean",
+            "description": "`size/XS` … `size/XL`, by lines changed."
+          },
+          "title": {
+            "type": "integer",
+            "description": "Labels given by the type of the title (`feat: …`).",
+            "minimum": 0
+          }
+        }
+      },
       "BotSettingsBody": {
         "type": "object",
         "required": [
@@ -6409,7 +6433,8 @@
           "enabled",
           "username",
           "config_path",
-          "commands"
+          "commands",
+          "label_rules"
         ],
         "properties": {
           "available": {
@@ -6436,6 +6461,10 @@
           },
           "enabled": {
             "type": "boolean"
+          },
+          "label_rules": {
+            "$ref": "#/components/schemas/BotLabelRules",
+            "description": "The labels it puts on merge requests, by the rules on the default branch."
           },
           "username": {
             "type": "string",

@@ -26,6 +26,18 @@ pub struct BotStatus {
     pub config_error: Option<String>,
     /// The commands it knows (`label`: written `/label`).
     pub commands: Vec<String>,
+    /// The labels it puts on merge requests, by the rules on the default branch.
+    pub label_rules: BotLabelRules,
+}
+
+#[derive(Serialize, ToSchema, Default)]
+pub struct BotLabelRules {
+    /// Labels given by the paths a merge request changes.
+    pub paths: usize,
+    /// `size/XS` … `size/XL`, by lines changed.
+    pub size: bool,
+    /// Labels given by the type of the title (`feat: …`).
+    pub title: usize,
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -35,7 +47,12 @@ pub struct BotSettingsBody {
 
 async fn status_of(state: &AppState, p: &forgust_db::projects::Project) -> ApiResult<BotStatus> {
     let enabled = forgust_db::bot::enabled(&state.db, p.id).await? == Some(true);
-    let config_error = if enabled { svc::rules(state, p, None).await?.err() } else { None };
+    let rules = if enabled { svc::rules(state, p, None).await? } else { Ok(Default::default()) };
+    let (config_error, rules) = match rules {
+        Ok(r) => (None, r),
+        Err(e) => (Some(e), Default::default()),
+    };
+    let label_rules = BotLabelRules { paths: rules.labels.paths.len(), size: rules.labels.size.is_some(), title: rules.labels.title.len() };
     Ok(BotStatus {
         available: state.cfg.bot.enabled,
         enabled,
@@ -43,6 +60,7 @@ async fn status_of(state: &AppState, p: &forgust_db::projects::Project) -> ApiRe
         config_path: svc::config::PATH.into(),
         config_error,
         commands: svc::parse::Kind::ALL.iter().map(|k| k.name().to_string()).collect(),
+        label_rules,
     })
 }
 

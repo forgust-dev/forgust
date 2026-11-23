@@ -322,6 +322,13 @@ pub const EVENTS: &[EventType] = &[
         "The Forgust bot ran a command written in a comment (`/label ~bug`): the principal is the bot, `by` the user who wrote it, \
          `outcome` `done` or `refused` (with the `reason`).",
     ),
+    e(
+        "bot_labels",
+        BUILTIN,
+        P,
+        &["merge_request", "added", "removed"],
+        "The Forgust bot labeled a merge request by the rules of `.forgust/bot.toml` (changed paths, size, the title's type).",
+    ),
     e("ai_review_enabled", BUILTIN, P, &[], "AI review turned on for the project."),
     e("ai_review_disabled", BUILTIN, P, &[], "AI review turned off for the project."),
     e("ai_review_requested", BUILTIN, P, &["merge_request", "pipeline_id"], "An AI review of a merge request was asked for."),

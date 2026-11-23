@@ -90,7 +90,7 @@ use super::{
         renovate::RenovateStatus, renovate::RenovateRun, renovate::RenovateSettingsBody, renovate::RenovateRunStarted,
         renovate::NewHostRule, forgust_db::renovate::HostRule, renovate::GroupRenovate, renovate::GroupRenovateStatus, renovate::AdminRenovate,
         renovate::AdminRenovateStatus,
-        bot::BotStatus, bot::BotCommand, bot::BotSettingsBody, bot::GroupBot, bot::GroupBotStatus,
+        bot::BotStatus, bot::BotLabelRules, bot::BotCommand, bot::BotSettingsBody, bot::GroupBot, bot::GroupBotStatus,
         ai_review::AiReviewSettings, ai_review::AiReviewSettingsBody, ai_review::AiReviewRun, ai_review::AiReviewStatus,
         ai_review::AdminAiReview, ai_review::AdminAiReviewStatus, ai_review::AdminAiReviewModelsBody, ai_review::AdminAiReviewModels,
         environments::EnvironmentDetail, environments::ProtectEnvironment, forgust_db::environments::Environment,

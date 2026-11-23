@@ -55,8 +55,8 @@ fn glob(p: &str) -> Option<GlobMatcher> {
     GlobBuilder::new(p).literal_separator(true).build().ok().map(|g| g.compile_matcher())
 }
 
-/// gitignore-like pattern → globs over repository paths.
-fn matchers(pattern: &str) -> Vec<GlobMatcher> {
+/// gitignore-like pattern → globs over repository paths (none: no pattern).
+pub(crate) fn matchers(pattern: &str) -> Vec<GlobMatcher> {
     let p = pattern.replace("\\ ", " ");
     if p == "*" {
         return glob("**").into_iter().collect();

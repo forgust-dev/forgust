@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO merge_request_auto_labels (merge_request_id, name) SELECT $1, n FROM unnest($2::text[]) AS n ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6c4808c195df8d0f791ec9676ef4f9ed597baac850bc3b556033ab82ef2d2520"
+}

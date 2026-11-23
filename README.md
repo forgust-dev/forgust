@@ -166,6 +166,9 @@ volumes: { forgust-data: {}, db-data: {} }
   `/label ~bug`, `/assign @alice`, `/milestone`, `/cc`, `/hold`, `/retest`,
   `/rebase`, `/merge`. A `.forgust/bot.toml` in the repository says who else may
   run each one (the author, code owners, a role)
+- The bot labels merge requests by the same file's rules: the paths they
+  change, their size (`size/XS` … `size/XL`) and the type of their title
+  (`fix: …`)
 
 ### ⚙️ CI/CD
 - Pipelines with stages and `needs` graphs, live logs, artifacts, JUnit test reports

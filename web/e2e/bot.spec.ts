@@ -11,6 +11,8 @@ test("forgust bot: turn on, a command in a comment, turn off", async ({ page }) 
     await section.getByRole("checkbox", { name: /commands written in comments/ }).check();
     await section.getByRole("button", { name: "Save", exact: true }).click();
     await expect(section.getByText("@forgust-bot joined the project")).toBeVisible();
+    // no `[labels]` rules in the repository yet
+    await expect(section.getByText("It labels no merge request yet.")).toBeVisible();
     await page.goto(`${web}/-/members`);
     await expect(page.getByText("forgust-bot").first()).toBeVisible();
 

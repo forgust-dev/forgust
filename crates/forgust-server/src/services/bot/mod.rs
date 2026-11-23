@@ -15,8 +15,12 @@
 //! refused or unknown gets one reply per comment, saying why. Every command
 //! is audited (`bot_command`) as the bot, with who asked. The bot never
 //! reads its own comments.
+//!
+//! It also labels merge requests by the same file's `[labels]` rules
+//! ([`labels`]).
 
 pub mod config;
+pub mod labels;
 pub mod parse;
 
 use forgust_db::access::{DEVELOPER, REPORTER};
