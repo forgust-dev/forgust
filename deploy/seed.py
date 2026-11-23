@@ -871,8 +871,9 @@ def seed_others(apis, ids, acme, platform, partners, shop):
 # --------------------------------------------------------------------------- marketplace
 
 # A monorepo for the Smart View: a storefront and a back office on one API, the API's crates and
-# their schema, a worker and a search indexer, their images and services; each part with its CI
-# jobs (one failing), its owners, and a history of who changed it.
+# their schema, a worker and a search indexer, their images and services, and what deploys them
+# (a Helm chart, Kustomize, Ansible, Terraform, Pulumi); each part with its CI jobs (one failing),
+# its owners, and a history of who changed it.
 MARKET_DESCRIPTION = "Acme's next shop, in one repository: open its Smart View to see the parts, what each needs and who to ask."
 
 MARKET_README = """# Marketplace
@@ -1063,6 +1064,323 @@ MARKET_CODEOWNERS = """# who reviews which part
 """
 
 
+MARKET_HELM = {
+    "deploy/helm/marketplace/Chart.yaml": """apiVersion: v2
+name: marketplace
+description: The API and the storefront on Kubernetes
+type: application
+version: 0.3.0
+appVersion: "1.4.2"
+dependencies:
+  - name: common
+    version: 0.1.x
+    repository: file://../common
+""",
+    "deploy/helm/marketplace/values.yaml": """api:
+  replicas: 3
+  image:
+    repository: registry.acme.dev/marketplace/api
+    tag: "1.4.2"
+storefront:
+  replicas: 2
+  image:
+    repository: registry.acme.dev/marketplace/storefront
+    tag: "1.4.2"
+ingress:
+  host: shop.acme.dev
+""",
+    "deploy/helm/marketplace/templates/api.yaml": """apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  labels: {{- include "common.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.api.replicas }}
+  template:
+    spec:
+      containers:
+        - name: api
+          image: "{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}"
+          ports: [{ containerPort: 8080 }]
+""",
+    "deploy/helm/marketplace/templates/storefront.yaml": """apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: storefront
+  labels: {{- include "common.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.storefront.replicas }}
+  template:
+    spec:
+      containers:
+        - name: storefront
+          image: "{{ .Values.storefront.image.repository }}:{{ .Values.storefront.image.tag }}"
+""",
+    "deploy/helm/common/Chart.yaml": """apiVersion: v2
+name: common
+description: The labels and probes every chart of the marketplace shares
+type: library
+version: 0.1.0
+""",
+    "deploy/helm/common/templates/_labels.tpl": """{{- define "common.labels" -}}
+app.kubernetes.io/part-of: marketplace
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- end }}
+""",
+}
+
+MARKET_KUSTOMIZE = {
+    "deploy/k8s/base/kustomization.yaml": """apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - worker.yaml
+images:
+  - name: registry.acme.dev/marketplace/worker
+    newTag: "2.1.0"
+""",
+    "deploy/k8s/base/worker.yaml": """apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: order-worker }
+  template:
+    metadata:
+      labels: { app: order-worker }
+    spec:
+      containers:
+        - name: worker
+          image: registry.acme.dev/marketplace/worker:2.1.0
+          env:
+            - name: AMQP_URL
+              valueFrom: { secretKeyRef: { name: order-worker, key: amqp-url } }
+""",
+    "deploy/k8s/overlays/staging/kustomization.yaml": """apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namePrefix: staging-
+resources:
+  - ../../base
+""",
+    "deploy/k8s/overlays/production/kustomization.yaml": """apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base
+patches:
+  - path: replicas.yaml
+""",
+    "deploy/k8s/overlays/production/replicas.yaml": """apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-worker
+spec:
+  replicas: 4
+""",
+}
+
+MARKET_ANSIBLE = {
+    "deploy/ansible/ansible.cfg": "[defaults]\ninventory = inventory/production.ini\nroles_path = roles\n",
+    "deploy/ansible/inventory/production.ini": "[db]\ndb1.acme.internal\n\n[search]\nsearch1.acme.internal\n",
+    "deploy/ansible/site.yml": """- name: The database
+  hosts: db
+  become: true
+  roles: [postgres]
+
+- name: Search
+  hosts: search
+  become: true
+  roles: [search-indexer]
+""",
+    "deploy/ansible/roles/base/meta/main.yml": """galaxy_info:
+  description: "What every host gets: its packages, its updates, its metrics"
+  min_ansible_version: "2.16"
+""",
+    "deploy/ansible/roles/base/tasks/main.yml": """- name: The packages every host needs
+  ansible.builtin.apt:
+    name: [curl, unattended-upgrades, prometheus-node-exporter]
+    state: present
+    update_cache: true
+""",
+    "deploy/ansible/roles/postgres/meta/main.yml": """galaxy_info:
+  description: PostgreSQL 17 for the marketplace, with nightly backups to S3
+dependencies:
+  - role: base
+""",
+    "deploy/ansible/roles/postgres/tasks/main.yml": """- name: PostgreSQL 17
+  ansible.builtin.apt:
+    name: postgresql-17
+    state: present
+
+- name: Nightly backups
+  ansible.builtin.cron:
+    name: pg_dump to S3
+    hour: "3"
+    minute: "0"
+    job: /usr/local/bin/backup-to-s3
+""",
+    "deploy/ansible/roles/postgres/defaults/main.yml": "postgres_max_connections: 200\n",
+    "deploy/ansible/roles/search-indexer/meta/main.yml": """galaxy_info:
+  description: The search indexer, in a container beside Meilisearch
+dependencies:
+  - role: base
+""",
+    "deploy/ansible/roles/search-indexer/tasks/main.yml": """- name: The indexer
+  community.docker.docker_container:
+    name: market-indexer
+    image: "registry.acme.dev/marketplace/indexer:{{ indexer_version }}"
+    command: market-indexer
+    restart_policy: unless-stopped
+""",
+}
+
+MARKET_TERRAFORM = {
+    "infra/terraform/main.tf": """terraform {
+  required_version = ">= 1.6"
+  backend "gcs" {
+    bucket = "acme-terraform-state"
+    prefix = "marketplace"
+  }
+}
+
+provider "google" {
+  project = var.project
+  region  = var.region
+}
+
+module "network" {
+  source = "./modules/network"
+  region = var.region
+}
+
+module "cluster" {
+  source  = "./modules/cluster"
+  network = module.network.id
+}
+""",
+    "infra/terraform/variables.tf": """variable "project" {
+  type = string
+}
+
+variable "region" {
+  type    = string
+  default = "europe-west1"
+}
+""",
+    "infra/terraform/modules/network/main.tf": """variable "region" {
+  type = string
+}
+
+resource "google_compute_network" "main" {
+  name                    = "marketplace"
+  auto_create_subnetworks = false
+}
+
+output "id" {
+  value = google_compute_network.main.id
+}
+""",
+    "infra/terraform/modules/cluster/main.tf": """variable "network" {
+  type = string
+}
+
+resource "google_container_cluster" "main" {
+  name             = "marketplace"
+  network          = var.network
+  enable_autopilot = true
+}
+""",
+}
+
+MARKET_PULUMI = {
+    "infra/pulumi/Pulumi.yaml": """name: review-apps
+runtime: nodejs
+description: A preview of the API for each merge request, on Cloud Run
+""",
+    "infra/pulumi/Pulumi.production.yaml": """config:
+  gcp:region: europe-west1
+  review-apps:apiImage: registry.acme.dev/marketplace/api:1.4.2
+  review-apps:ttlHours: "48"
+""",
+    "infra/pulumi/package.json": json.dumps({"name": "review-apps", "private": True, "main": "index.ts",
+                                             "dependencies": {"@pulumi/gcp": "^8.20.0", "@pulumi/pulumi": "^3.150.0"}}, indent=2) + "\n",
+    "infra/pulumi/index.ts": """import * as gcp from "@pulumi/gcp";
+import * as pulumi from "@pulumi/pulumi";
+
+const config = new pulumi.Config();
+
+// one Cloud Run service per merge request: its stack
+export const url = new gcp.cloudrunv2.Service(`api-${pulumi.getStack()}`, {
+  location: "europe-west1",
+  template: { containers: [{ image: config.require("apiImage") }] },
+}).uri;
+""",
+}
+
+# a job for each, on its files: the Smart View shows it on the block
+MARKET_CI_DEPLOY = """
+helm-lint:
+  stage: test
+  script:
+    - echo "helm lint deploy/helm/* (demo)"
+  rules:
+    - changes: ["deploy/helm/**/*"]
+
+kustomize-build:
+  stage: test
+  script:
+    - echo "kustomize build deploy/k8s/overlays/production (demo)"
+  rules:
+    - changes: ["deploy/k8s/**/*"]
+
+ansible-lint:
+  stage: test
+  script:
+    - echo "ansible-lint deploy/ansible (demo)"
+  rules:
+    - changes: ["deploy/ansible/**/*"]
+
+terraform-plan:
+  stage: test
+  script:
+    - echo "terraform plan (demo)"
+  rules:
+    - changes: ["infra/terraform/**/*"]
+
+pulumi-preview:
+  stage: test
+  script:
+    - echo "pulumi preview --stack production (demo)"
+  rules:
+    - changes: ["infra/pulumi/**/*"]
+"""
+
+MARKET_README_DEPLOY = """
+The API and the storefront run on Kubernetes from a Helm chart (`deploy/helm`), the worker from
+Kustomize (`deploy/k8s`), on a cloud Terraform sets up (`infra/terraform`). Ansible sets up the
+database and search hosts (`deploy/ansible`); Pulumi gives each merge request a preview of the
+API (`infra/pulumi`).
+"""
+
+
+def market_deploy(r):
+    """What deploys the marketplace, each in a few hands: for the Smart View's infrastructure."""
+    r.commit("bob", "deploy: a Helm chart for the API and the storefront", MARKET_HELM)
+    r.commit("frank", "deploy: the order worker on Kubernetes, with Kustomize", MARKET_KUSTOMIZE)
+    r.commit("alice", "infra: the network and the cluster, in Terraform", MARKET_TERRAFORM)
+    r.commit("alice", "deploy: Ansible for the database and search hosts",
+             {p: c for p, c in MARKET_ANSIBLE.items() if "search-indexer" not in p and p != "deploy/ansible/site.yml"}
+             | {"deploy/ansible/site.yml": MARKET_ANSIBLE["deploy/ansible/site.yml"].split("\n- name: Search")[0]})
+    r.commit("frank", "deploy: the search indexer beside Meilisearch, with Ansible",
+             {p: c for p, c in MARKET_ANSIBLE.items() if "search-indexer" in p or p == "deploy/ansible/site.yml"})
+    r.commit("carol", "infra: a preview of the API for each merge request, with Pulumi", MARKET_PULUMI)
+    r.commit("bob", "deploy: two replicas more for the API",
+             {"deploy/helm/marketplace/values.yaml": MARKET_HELM["deploy/helm/marketplace/values.yaml"].replace("replicas: 3", "replicas: 5", 1)})
+    r.commit("bob", "CI: lint and plan what deploys, when it changes",
+             {".gitlab-ci.yml": MARKET_CI + MARKET_CI_DEPLOY, "README.md": MARKET_README.replace("\nSee [docs", MARKET_README_DEPLOY + "\nSee [docs", 1),
+              "CODEOWNERS": MARKET_CODEOWNERS + "/deploy/helm/ @bob\n/deploy/k8s/ @frank\n/deploy/ansible/ @alice\n/infra/ @alice\n"})
+
+
 def market_package(name, description, deps=None, **extra):
     return json.dumps({"name": name, "description": description, "private": True, "type": "module", **extra,
                        **({"dependencies": deps} if deps else {})}, indent=2) + "\n"
@@ -1146,6 +1464,7 @@ def market_history(r):
     r.commit("bob", "domain: discounts", {"crates/domain/src/discount.rs": "use crate::money::Cents;\n\npub fn percent_off(c: Cents, pct: i64) -> Cents {\n    c - c * pct / 100\n}\n",
                                           "crates/domain/src/lib.rs": "//! Products, carts and orders.\npub mod discount;\npub mod money;\n\npub struct Product {\n    pub sku: String,\n    pub name: String,\n    pub price: money::Cents,\n}\n"})
     r.commit("erin", "docs: the runbook", {"docs/runbook.md": "# Runbook\n\n- Orders stuck: look at the worker's dead-letter queue.\n- Search stale: run `market-indexer`.\n"})
+    market_deploy(r)
     r.commit("frank", "worker: metrics", {"services/worker/internal/orders/metrics.go": "package orders\n\n// Handled counts the events handled.\nvar Handled int\n"}, days_ago=9)
     r.commit("dave", "storefront: search the catalog", {"apps/storefront/src/Search.tsx": "import { products } from \"@acme/api-client\";\n\nexport function Search() {\n  void products;\n  return <input type=\"search\" />;\n}\n"}, days_ago=6)
     r.commit("alice", "indexer: a full reindex", {"services/indexer/indexer/main.py": "\"\"\"Pushes the catalog to the search index.\"\"\"\n\n\ndef run(full: bool = False):\n    print(\"indexed 0 products\" + (\" (full)\" if full else \"\"))\n"}, days_ago=4)
