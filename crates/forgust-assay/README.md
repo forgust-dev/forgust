@@ -23,7 +23,7 @@ assay report [PATH] [-o FILE] [--name NAME]
 `ghcr.io/forgust-dev/forgust-assay`, released with Forgust under the same version, maps a repository in any CI. It is Alpine, `git`, the system's certificate authorities and the `assay` command, running as user 10001; git reads a clone of another user's all the same. It has no entrypoint, because GitLab Runner's Docker executor runs a job's script through a shell. Its default command prints the summary of the folder mounted at `/repo`:
 
 ```sh
-docker run --rm -v "$PWD:/repo" ghcr.io/forgust-dev/forgust-assay:0.6.0
+docker run --rm -v "$PWD:/repo" ghcr.io/forgust-dev/forgust-assay:0.7.0
 ```
 
 Forgust's Smart View runs it by itself: a project that turns the Smart View on (Settings > General) has each new commit of its default branch and of its open merge requests mapped by a job of Forgust's, on the instance's runners, that runs `assay report` in this image and uploads what it writes (`assay-report.json`: the map, which of its paths are files, who opted out) as the job's `smart_view` report. The server keeps the latest map of each and shows it; an administrator sets the image and the runners' tags (Admin > Smart View, or `[smart_view]` in the config file).
@@ -32,7 +32,7 @@ A job of your own, on Forgust or GitLab, that keeps the page of the map. The who
 
 ```yaml
 smart-view:
-  image: ghcr.io/forgust-dev/forgust-assay:0.6.0
+  image: ghcr.io/forgust-dev/forgust-assay:0.7.0
   variables:
     GIT_DEPTH: 0
   script:
