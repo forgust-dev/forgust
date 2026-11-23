@@ -761,15 +761,6 @@ async fn password_checks_in_a_session_are_limited(pool: sqlx::PgPool) {
     assert_eq!(code, 403, "{body}");
 }
 
-fn link_token(body: &str, page: &str) -> String {
-    let i = body.find(&format!("/{page}?token=")).unwrap_or_else(|| panic!("no {page} link in {body}"));
-    body[i + page.len() + 8..].chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').collect()
-}
-
-fn last_mail_to(srv: &TestServer, to: &str) -> Option<forgust_server::services::notify::Email> {
-    srv.state.mailer.sent().into_iter().rev().find(|m| m.to.iter().any(|t| t == to))
-}
-
 #[sqlx::test(migrator = "forgust_db::MIGRATOR")]
 async fn password_reset_by_email(pool: sqlx::PgPool) {
     let srv = TestServer::start(pool).await;

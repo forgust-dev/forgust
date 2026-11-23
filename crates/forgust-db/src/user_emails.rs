@@ -77,14 +77,18 @@ pub async fn insert(e: impl PgExecutor<'_>, user_id: i64, email: &str, confirmed
 }
 
 /// Confirm it (`by`: link, admin or auto), dropping the other accounts'
-/// unconfirmed listings of it. False: it was already, or is gone. Someone's
+/// unconfirmed listings of it. None: it was already, or is gone. Someone's
 /// own address or confirmed by another account meanwhile: a unique violation.
-pub async fn confirm(e: impl PgExecutor<'_>, id: i64, by: &str) -> Result<bool> {
-    let n = sqlx::query!("UPDATE user_emails SET confirmed_at = now(), confirmed_by = $2 WHERE id = $1 AND confirmed_at IS NULL", id, by)
-        .execute(e)
-        .await?
-        .rows_affected();
-    Ok(n > 0)
+pub async fn confirm(e: impl PgExecutor<'_>, id: i64, by: &str) -> Result<Option<UserEmail>> {
+    sqlx::query_as!(
+        UserEmail,
+        "UPDATE user_emails SET confirmed_at = now(), confirmed_by = $2 WHERE id = $1 AND confirmed_at IS NULL
+         RETURNING id, email, confirmed_at, confirmed_by, created_at",
+        id,
+        by
+    )
+    .fetch_optional(e)
+    .await
 }
 
 pub async fn delete(e: impl PgExecutor<'_>, user_id: i64, id: i64) -> Result<Option<UserEmail>> {

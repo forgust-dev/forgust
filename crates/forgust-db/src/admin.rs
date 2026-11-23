@@ -550,18 +550,18 @@ pub async fn users(e: impl PgExecutor<'_>, search: &str, filter: &str, limit: i6
                   (SELECT count(*) FROM personal_access_tokens t WHERE t.user_id = u.id AND NOT t.revoked
                      AND (t.expires_at IS NULL OR t.expires_at > now())) AS "tokens!",
                   COALESCE((SELECT array_agg(DISTINCT i.provider) FROM identities i WHERE i.user_id = u.id), '{}') AS "providers!",
-                  (SELECT count(*) FROM user_emails x WHERE x.user_id = u.id) AS "other_emails!",
-                  (SELECT count(*) FROM user_emails x WHERE x.user_id = u.id AND x.confirmed_at IS NULL) AS "other_emails_unconfirmed!"
+                  x.n AS "other_emails!", x.pending AS "other_emails_unconfirmed!"
              FROM users u
+             CROSS JOIN LATERAL (SELECT count(*) AS n, count(*) FILTER (WHERE confirmed_at IS NULL) AS pending
+                                   FROM user_emails WHERE user_id = u.id) x
             WHERE ($1 = '' OR u.username ILIKE '%' || $1 || '%' OR u.name ILIKE '%' || $1 || '%' OR u.email ILIKE '%' || $1 || '%'
-                   OR EXISTS (SELECT 1 FROM user_emails x WHERE x.user_id = u.id AND x.email ILIKE '%' || $1 || '%'))
+                   OR EXISTS (SELECT 1 FROM user_emails e WHERE e.user_id = u.id AND e.email ILIKE '%' || $1 || '%'))
               AND CASE $2
                     WHEN 'bots' THEN u.user_type <> 'human'
                     WHEN 'admins' THEN u.user_type = 'human' AND u.is_admin
                     WHEN 'blocked' THEN u.user_type = 'human' AND u.state = 'blocked'
                     WHEN 'external' THEN u.user_type = 'human' AND u.is_external
-                    WHEN 'unconfirmed' THEN u.user_type = 'human' AND (u.email_verified_at IS NULL
-                         OR EXISTS (SELECT 1 FROM user_emails x WHERE x.user_id = u.id AND x.confirmed_at IS NULL))
+                    WHEN 'unconfirmed' THEN u.user_type = 'human' AND (u.email_verified_at IS NULL OR x.pending > 0)
                     WHEN 'two_factor_off' THEN u.user_type = 'human' AND NOT u.two_factor_enabled
                     ELSE u.user_type = 'human' END
             ORDER BY u.username LIMIT $3 OFFSET $4"#,

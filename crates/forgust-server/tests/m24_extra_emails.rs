@@ -4,15 +4,6 @@ mod common;
 use common::*;
 use serde_json::json;
 
-fn link_token(body: &str, page: &str) -> String {
-    let i = body.find(&format!("/{page}?token=")).unwrap_or_else(|| panic!("no {page} link in {body}"));
-    body[i + page.len() + 8..].chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').collect()
-}
-
-fn last_mail_to(srv: &TestServer, to: &str) -> Option<forgust_server::services::notify::Email> {
-    srv.state.mailer.sent().into_iter().rev().find(|m| m.to.iter().any(|t| t == to))
-}
-
 /// Who commits made with `email` show as.
 async fn linked(srv: &TestServer, email: &str) -> Option<String> {
     let rows = forgust_db::people::usernames_by_email(&srv.state.db, &[email.to_lowercase()]).await.unwrap();

@@ -15,9 +15,9 @@ use crate::error::{ApiError, ApiResult};
 use crate::state::AppState;
 
 const RESET_HOURS: i64 = 1;
-const CONFIRM_HOURS: i64 = 24;
+pub(super) const CONFIRM_HOURS: i64 = 24;
 
-fn link(state: &AppState, page: &str, token: &str) -> String {
+pub(super) fn link(state: &AppState, page: &str, token: &str) -> String {
     state.cfg.web_url(&format!("{page}?token={token}"))
 }
 
@@ -64,7 +64,7 @@ pub async fn set_email(state: &AppState, by: &Principal, user: &User, email: &st
     let mut tx = state.db.begin().await?;
     let set =
         if vouched { udb::confirm_email(&mut *tx, user.id, email).await } else { udb::set_unproven_email(&mut *tx, user.id, email).await };
-    set.map_err(|e| if forgust_db::is_unique_violation(&e) { ApiError::conflict("email is already in use") } else { e.into() })?;
+    set.map_err(super::emails::email_in_use)?;
     // links sent to the old address prove nothing about this one
     udb::delete_tokens(&mut *tx, user.id, "email").await?;
     udb::delete_tokens(&mut *tx, user.id, "password_reset").await?;
@@ -161,12 +161,8 @@ pub async fn confirm(state: &AppState, token: &str, signed_in: Option<i64>) -> A
     if email.eq_ignore_ascii_case(&user.email) {
         udb::set_email_verified(&mut *tx, user.id).await?;
     } else if user.unconfirmed_email.as_deref().is_some_and(|u| u.eq_ignore_ascii_case(&email)) {
-        match forgust_db::user_emails::reserved_by(&mut *tx, &email).await? {
-            Some(o) if o == user.id => return Err(ApiError::conflict("this address is in your other addresses: remove it there first")),
-            Some(_) => return Err(ApiError::conflict("this address is now used by another account")),
-            None => {}
-        }
-        udb::confirm_email(&mut *tx, user.id, &email).await?;
+        super::emails::check_free_as_own(&mut *tx, user.id, &email).await?;
+        udb::confirm_email(&mut *tx, user.id, &email).await.map_err(super::emails::email_in_use)?;
         // a reset link sent to the old address proves nothing about this one
         udb::delete_tokens(&mut *tx, user.id, "password_reset").await?;
     } else {

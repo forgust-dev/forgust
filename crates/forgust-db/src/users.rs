@@ -257,7 +257,6 @@ pub async fn delete(e: impl PgExecutor<'_>, id: i64) -> Result<()> {
 pub async fn forget_credentials(c: &mut PgConnection, user_id: i64) -> Result<()> {
     clear_second_factors(c, user_id).await?;
     sqlx::query!("DELETE FROM user_emails WHERE user_id = $1", user_id).execute(&mut *c).await?;
-    sqlx::query!("DELETE FROM user_tokens WHERE user_id = $1 AND purpose = 'extra_email'", user_id).execute(&mut *c).await?;
     sqlx::query!("UPDATE personal_access_tokens SET revoked = true WHERE user_id = $1", user_id).execute(&mut *c).await?;
     sqlx::query!("DELETE FROM ssh_keys WHERE user_id = $1", user_id).execute(&mut *c).await?;
     sqlx::query!("DELETE FROM identities WHERE user_id = $1", user_id).execute(&mut *c).await?;

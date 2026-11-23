@@ -15,15 +15,15 @@ use chrono::{Duration, Utc};
 use forgust_db::user_emails::{self as edb, UserEmail};
 use forgust_db::users::User;
 use serde_json::json;
+use sqlx::PgExecutor;
 
 use crate::auth::Principal;
 use crate::crypto;
 use crate::error::{ApiError, ApiResult};
 use crate::state::AppState;
 
-/// Extra addresses per account: unconfirmed ones reserve their address too.
-pub const MAX_PER_ACCOUNT: i64 = 20;
-const CONFIRM_HOURS: i64 = 24;
+/// Extra addresses per account, unconfirmed ones included.
+const MAX_PER_ACCOUNT: i64 = 20;
 
 /// How an address `user` adds is confirmed as they add it, if it is: only on
 /// an instance that sends no email (else its link does it). An
@@ -44,7 +44,7 @@ pub async fn confirmed_as_added(state: &AppState, user: &User) -> ApiResult<Opti
 /// Refused when `email` is somebody's already (`user`'s included: their own
 /// address, or a confirmed extra one), or in `user`'s list already. Another
 /// account's unconfirmed listing of it is no reason.
-pub async fn check_free(state: &AppState, user: &User, email: &str) -> ApiResult<()> {
+async fn check_free(state: &AppState, user: &User, email: &str) -> ApiResult<()> {
     match edb::reserved_by(&state.db, email).await? {
         Some(id) if id == user.id && email.eq_ignore_ascii_case(&user.email) => {
             Err(ApiError::conflict("this is your account's own address already"))
@@ -58,9 +58,20 @@ pub async fn check_free(state: &AppState, user: &User, email: &str) -> ApiResult
     }
 }
 
-/// A confirmation refused by the database: the address became someone's own,
-/// or another account confirmed it, since it was listed.
-fn taken_meanwhile(e: sqlx::Error) -> ApiError {
+/// Refused when `email`, about to become `user_id`'s own address, is
+/// somebody's already: their own, or a confirmed extra one (theirs
+/// included). Unconfirmed listings of it make way.
+pub async fn check_free_as_own(e: impl PgExecutor<'_>, user_id: i64, email: &str) -> ApiResult<()> {
+    match edb::reserved_by(e, email).await? {
+        Some(id) if id == user_id => Err(ApiError::conflict("this address is in your other addresses: remove it there first")),
+        Some(_) => Err(ApiError::conflict("email is already in use")),
+        None => Ok(()),
+    }
+}
+
+/// A write the database refused because the address is somebody's (taken
+/// since it was checked, by the reservation triggers or unique indexes).
+pub fn email_in_use(e: sqlx::Error) -> ApiError {
     if forgust_db::is_unique_violation(&e) { ApiError::conflict("email is already in use") } else { e.into() }
 }
 
@@ -73,7 +84,7 @@ pub async fn add(state: &AppState, by: &Principal, user: &User, email: &str, con
         return Err(ApiError::bad(format!("an account has {MAX_PER_ACCOUNT} other addresses at most: remove one first")));
     }
     check_free(state, user, email).await?;
-    let row = edb::insert(&state.db, user.id, email, confirmed_by).await.map_err(taken_meanwhile)?;
+    let row = edb::insert(&state.db, user.id, email, confirmed_by).await.map_err(email_in_use)?;
     super::audit(state, by, "email_added", Some(("user", user.id)), json!({ "email_id": row.id, "confirmed_by": confirmed_by }), None)
         .await;
     if row.confirmed_at.is_none() {
@@ -97,7 +108,7 @@ pub async fn send_link(state: &AppState, user: &User, row: &UserEmail) -> ApiRes
         user.id,
         "extra_email",
         Some(&row.email),
-        Utc::now() + Duration::hours(CONFIRM_HOURS),
+        Utc::now() + Duration::hours(super::accounts::CONFIRM_HOURS),
     )
     .await?;
     tx.commit().await?;
@@ -106,10 +117,11 @@ pub async fn send_link(state: &AppState, user: &User, row: &UserEmail) -> ApiRes
         &row.email,
         "Confirm your email address",
         &format!(
-            "Hello {},\n\nConfirm that {} is one of your addresses on Forgust: the commits made with it will show as yours.\n\n{}\n\nThe link works once, within {CONFIRM_HOURS} hours. If you did not ask for this, ignore this email.\n",
+            "Hello {},\n\nConfirm that {} is one of your addresses on Forgust: the commits made with it will show as yours.\n\n{}\n\nThe link works once, within {} hours. If you did not ask for this, ignore this email.\n",
             user.username,
             row.email,
-            state.cfg.web_url(&format!("verify-email?token={token}"))
+            super::accounts::link(state, "verify-email", &token),
+            super::accounts::CONFIRM_HOURS
         ),
     )
     .await;
@@ -124,28 +136,29 @@ pub async fn confirm_by_admin(state: &AppState, by: &Principal, user: &User, id:
         return Err(ApiError::conflict("this address is already confirmed"));
     }
     let mut tx = state.db.begin().await?;
-    edb::confirm(&mut *tx, row.id, "admin").await.map_err(taken_meanwhile)?;
+    let row = edb::confirm(&mut *tx, row.id, "admin")
+        .await
+        .map_err(email_in_use)?
+        .ok_or_else(|| ApiError::conflict("this address is already confirmed"))?;
     edb::delete_tokens(&mut *tx, user.id, &row.email).await?;
     tx.commit().await?;
     super::audit(state, by, "email_confirmed", Some(("user", user.id)), json!({ "by": "administrator", "email_id": row.id }), None).await;
-    edb::find(&state.db, user.id, id).await?.ok_or(ApiError::NotFound)
+    Ok(row)
 }
 
 /// Confirm the extra address a link was mailed for (`accounts::confirm`
 /// checked who is signed in). None: the account no longer has it.
 pub async fn confirm_by_link(e: &mut sqlx::PgConnection, user: &User, email: &str) -> ApiResult<Option<UserEmail>> {
     let Some(row) = edb::find_by_email(&mut *e, user.id, email).await? else { return Ok(None) };
-    edb::confirm(&mut *e, row.id, "link").await.map_err(taken_meanwhile)?;
-    Ok(Some(row))
+    // already confirmed (by an administrator meanwhile): as it is
+    Ok(Some(edb::confirm(&mut *e, row.id, "link").await.map_err(email_in_use)?.unwrap_or(row)))
 }
 
 /// Remove `user`'s address `id`: commits made with it stop showing as
 /// theirs (imported issues and merge requests it matched stay theirs).
 pub async fn remove(state: &AppState, by: &Principal, user: &User, id: i64) -> ApiResult<()> {
-    let mut tx = state.db.begin().await?;
-    let row = edb::delete(&mut *tx, user.id, id).await?.ok_or(ApiError::NotFound)?;
-    edb::delete_tokens(&mut *tx, user.id, &row.email).await?;
-    tx.commit().await?;
+    // its links go with it (a trigger)
+    let row = edb::delete(&state.db, user.id, id).await?.ok_or(ApiError::NotFound)?;
     let admin = by.direct_user().is_none_or(|u| u.id != user.id);
     super::audit(
         state,

@@ -16,11 +16,24 @@ CREATE TABLE user_emails (
 );
 CREATE UNIQUE INDEX user_emails_email_idx ON user_emails (lower(email)) WHERE confirmed_at IS NOT NULL;
 CREATE UNIQUE INDEX user_emails_user_email_idx ON user_emails (user_id, lower(email));
+-- the listings of an address, confirmed or not (dropped when someone takes it)
+CREATE INDEX user_emails_lower_email_idx ON user_emails (lower(email));
+
+-- Links for an extra address (`email`: which one) go with its listing.
+ALTER TABLE user_tokens DROP CONSTRAINT user_tokens_purpose_check;
+ALTER TABLE user_tokens ADD CONSTRAINT user_tokens_purpose_check CHECK (purpose IN ('password_reset', 'email', 'extra_email'));
+CREATE FUNCTION user_emails_drop_links() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    DELETE FROM user_tokens WHERE user_id = OLD.user_id AND purpose = 'extra_email' AND lower(email) = lower(OLD.email);
+    RETURN NULL;
+END $$;
+CREATE TRIGGER user_emails_drop_links AFTER DELETE ON user_emails
+    FOR EACH ROW EXECUTE FUNCTION user_emails_drop_links();
 
 -- An account's own address is nobody's extra one (theirs included: it is
--- their address already), confirmed: refused; unconfirmed: dropped, with its
--- links. The lock on the address makes two saves of it at once wait for each
--- other.
+-- their address already), confirmed: refused; unconfirmed: dropped. The lock
+-- on the address makes two saves of it at once wait for each other.
 CREATE FUNCTION users_email_reserved() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
@@ -32,15 +45,14 @@ BEGIN
         RAISE EXCEPTION 'email is already in use' USING ERRCODE = 'unique_violation';
     END IF;
     DELETE FROM user_emails WHERE lower(email) = lower(NEW.email);
-    DELETE FROM user_tokens WHERE purpose = 'extra_email' AND lower(email) = lower(NEW.email);
     RETURN NEW;
 END $$;
 CREATE TRIGGER users_email_reserved BEFORE INSERT OR UPDATE OF email ON users
     FOR EACH ROW EXECUTE FUNCTION users_email_reserved();
 
 -- An extra address is nobody's own one, and confirmed by one account at
--- most: confirming it drops the other accounts' unconfirmed listings of it,
--- with their links.
+-- most (user_emails_email_idx): confirming it drops the other accounts'
+-- unconfirmed listings of it.
 CREATE FUNCTION user_emails_reserved() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
@@ -49,20 +61,12 @@ BEGIN
         RAISE EXCEPTION 'email is already in use' USING ERRCODE = 'unique_violation';
     END IF;
     IF NEW.confirmed_at IS NOT NULL THEN
-        IF EXISTS (SELECT 1 FROM user_emails WHERE lower(email) = lower(NEW.email) AND confirmed_at IS NOT NULL AND id <> NEW.id) THEN
-            RAISE EXCEPTION 'email is already in use' USING ERRCODE = 'unique_violation';
-        END IF;
-        DELETE FROM user_emails WHERE lower(email) = lower(NEW.email) AND user_id <> NEW.user_id;
-        DELETE FROM user_tokens WHERE purpose = 'extra_email' AND lower(email) = lower(NEW.email) AND user_id <> NEW.user_id;
+        DELETE FROM user_emails WHERE lower(email) = lower(NEW.email) AND user_id <> NEW.user_id AND confirmed_at IS NULL;
     END IF;
     RETURN NEW;
 END $$;
 CREATE TRIGGER user_emails_reserved BEFORE INSERT OR UPDATE OF email, confirmed_at ON user_emails
     FOR EACH ROW EXECUTE FUNCTION user_emails_reserved();
-
--- Links for an extra address (`email`: which one).
-ALTER TABLE user_tokens DROP CONSTRAINT user_tokens_purpose_check;
-ALTER TABLE user_tokens ADD CONSTRAINT user_tokens_purpose_check CHECK (purpose IN ('password_reset', 'email', 'extra_email'));
 
 -- Without email, the addresses people add are confirmed as they add them
 -- (only while sign-up is closed: see services/emails.rs).

@@ -91,6 +91,8 @@ fn split(raw: &[u8]) -> Option<Signed> {
 /// extra one). Unsure (the database did not answer): no.
 async fn owns_email(state: &AppState, user: Option<&User>, email: &str) -> bool {
     match user {
+        // most commits carry the account's own address: no query for those
+        Some(u) if u.email_verified() && u.email.eq_ignore_ascii_case(email) => true,
         Some(u) => forgust_db::user_emails::owns(&state.db, u.id, email).await.unwrap_or(false),
         None => false,
     }
