@@ -33,7 +33,8 @@ pub async fn create(conn: &mut PgConnection, req: CreateUser<'_>) -> ApiResult<U
     if forgust_db::routes::path_taken(&mut *conn, req.username).await? {
         return Err(ApiError::conflict("username is already taken"));
     }
-    if forgust_db::users::find_by_email(&mut *conn, req.email).await?.is_some() {
+    // somebody's own address or an extra one, confirmed or not
+    if forgust_db::user_emails::taken_by(&mut *conn, req.email).await?.is_some() {
         return Err(ApiError::conflict("email is already in use"));
     }
     let hash = match req.password {

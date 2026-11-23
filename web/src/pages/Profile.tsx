@@ -6,6 +6,7 @@ import { useSession } from "../session";
 import { Avatar, Badge, Card, CopyLabel, ErrorBox, Field, NewSecret, Q, Section, useCopy, useFormRun } from "../components/ui";
 import { ScopePicker, useCrudList } from "../components/Tokens";
 import { ResendLink } from "../components/ResendLink";
+import { OtherEmails } from "../components/UserEmails";
 import { AvatarUpload } from "../components/AvatarUpload";
 import { NotificationDefaults } from "../components/Notifications";
 import { cancelled, createCredential, webauthnSupported } from "../api/webauthn";
@@ -102,6 +103,12 @@ function ProfileForm() {
             <button className="btn primary">Save</button>
           </div>
         </form>
+      </Section>
+      <Section
+        title="Other email addresses"
+        description="Commits made with a confirmed one show as yours, and imported contributions under it become yours. Emails still go to your address above."
+      >
+        <OtherEmails />
       </Section>
     </div>
   );

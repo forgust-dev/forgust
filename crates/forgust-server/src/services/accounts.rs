@@ -131,11 +131,15 @@ pub async fn reset(state: &AppState, token: &str, password: &str) -> ApiResult<U
 /// replaces it. Only the account itself, signed in, may: someone who receives
 /// the link for an account another person registered with their address
 /// cannot hand that account their address by clicking it.
-pub async fn confirm(state: &AppState, token: &str, signed_in: Option<i64>) -> ApiResult<User> {
+/// Answers the address confirmed.
+pub async fn confirm(state: &AppState, token: &str, signed_in: Option<i64>) -> ApiResult<String> {
     let mut tx = state.db.begin().await?;
-    let t = udb::take_token(&mut *tx, &crypto::token_hash(token), "email")
-        .await?
-        .ok_or_else(|| ApiError::bad("this link is invalid or has expired; ask for a new one"))?;
+    let hash = crypto::token_hash(token);
+    let (t, extra) = match udb::take_token(&mut *tx, &hash, "email").await? {
+        Some(t) => (Some(t), false),
+        None => (udb::take_token(&mut *tx, &hash, "extra_email").await?, true),
+    };
+    let t = t.ok_or_else(|| ApiError::bad("this link is invalid or has expired; ask for a new one"))?;
     let user = udb::find(&mut *tx, t.user_id).await?.ok_or(ApiError::NotFound)?;
     if signed_in != Some(user.id) {
         // the link stays usable (the transaction rolls back)
@@ -145,11 +149,22 @@ pub async fn confirm(state: &AppState, token: &str, signed_in: Option<i64>) -> A
         )));
     }
     let email = t.email.unwrap_or_default();
+    if extra {
+        let row = super::emails::confirm_by_link(&mut tx, &user, &email)
+            .await?
+            .ok_or_else(|| ApiError::bad("this link is for an address the account no longer has"))?;
+        tx.commit().await?;
+        let by = Principal::User { user: user.clone(), scopes: None };
+        super::audit(state, &by, "email_confirmed", Some(("user", user.id)), json!({ "email_id": row.id }), None).await;
+        return Ok(row.email);
+    }
     if email.eq_ignore_ascii_case(&user.email) {
         udb::set_email_verified(&mut *tx, user.id).await?;
     } else if user.unconfirmed_email.as_deref().is_some_and(|u| u.eq_ignore_ascii_case(&email)) {
-        if udb::find_by_email(&mut *tx, &email).await?.is_some_and(|o| o.id != user.id) {
-            return Err(ApiError::conflict("this address is now used by another account"));
+        match forgust_db::user_emails::taken_by(&mut *tx, &email).await? {
+            Some(o) if o == user.id => return Err(ApiError::conflict("this address is in your other addresses: remove it there first")),
+            Some(_) => return Err(ApiError::conflict("this address is now used by another account")),
+            None => {}
         }
         udb::confirm_email(&mut *tx, user.id, &email).await?;
         // a reset link sent to the old address proves nothing about this one
@@ -160,5 +175,5 @@ pub async fn confirm(state: &AppState, token: &str, signed_in: Option<i64>) -> A
     tx.commit().await?;
     super::audit(state, &Principal::User { user: user.clone(), scopes: None }, "email_confirmed", Some(("user", user.id)), json!({}), None)
         .await;
-    Ok(udb::find(&state.db, user.id).await?.unwrap_or(user))
+    Ok(email)
 }

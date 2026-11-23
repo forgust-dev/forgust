@@ -184,10 +184,9 @@ async fn resolve(state: &AppState, p: &Project, refs: &BTreeSet<String>) -> ApiR
                     ids = forgust_db::members::group_member_ids_with_ancestors(&state.db, hit.source_id).await?;
                 }
             }
-        } else if let Some(u) = forgust_db::users::find_by_email(&state.db, r).await?
-            && u.email_verified()
-        {
-            ids.push(u.id);
+        } else if let Some(id) = forgust_db::user_emails::confirmed_owner(&state.db, r).await? {
+            // its own confirmed address or an extra one
+            ids.push(id);
         }
         let mut names = Vec::new();
         for u in forgust_db::users::find_many(&state.db, &ids).await? {

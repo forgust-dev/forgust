@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE user_emails SET confirmed_at = now(), confirmed_by = $2 WHERE id = $1 AND confirmed_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b2428491e3fd567292a2d2a15eeaa4d5ef6b057093a435e038c9c7f07c48f844"
+}

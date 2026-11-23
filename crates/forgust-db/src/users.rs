@@ -252,9 +252,12 @@ pub async fn delete(e: impl PgExecutor<'_>, id: i64) -> Result<()> {
 /// Every way into the account but its password: access tokens, SSH keys,
 /// provider identities, passkeys and the second factor with its recovery codes (for an
 /// address that turns out to be someone else's: what they find must not be
-/// what whoever registered it set up).
+/// what whoever registered it set up). The other addresses they added go too:
+/// commits made with them are not the account's.
 pub async fn forget_credentials(c: &mut PgConnection, user_id: i64) -> Result<()> {
     clear_second_factors(c, user_id).await?;
+    sqlx::query!("DELETE FROM user_emails WHERE user_id = $1", user_id).execute(&mut *c).await?;
+    sqlx::query!("DELETE FROM user_tokens WHERE user_id = $1 AND purpose = 'extra_email'", user_id).execute(&mut *c).await?;
     sqlx::query!("UPDATE personal_access_tokens SET revoked = true WHERE user_id = $1", user_id).execute(&mut *c).await?;
     sqlx::query!("DELETE FROM ssh_keys WHERE user_id = $1", user_id).execute(&mut *c).await?;
     sqlx::query!("DELETE FROM identities WHERE user_id = $1", user_id).execute(&mut *c).await?;

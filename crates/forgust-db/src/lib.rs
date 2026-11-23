@@ -46,6 +46,7 @@ pub mod smart_view;
 pub mod ssh_keys;
 pub mod todos;
 pub mod tokens;
+pub mod user_emails;
 pub mod users;
 pub mod webauthn;
 pub mod webhooks;

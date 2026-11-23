@@ -87,9 +87,13 @@ fn split(raw: &[u8]) -> Option<Signed> {
     Some(Signed { kind, signature, payload, committer_email })
 }
 
-/// The confirmed address of `user` is the committer's.
-fn owns_email(user: &User, email: &str) -> bool {
-    user.email_verified() && user.email.eq_ignore_ascii_case(email)
+/// The committer's address is a confirmed one of `user` (its own or an
+/// extra one). Unsure (the database did not answer): no.
+async fn owns_email(state: &AppState, user: Option<&User>, email: &str) -> bool {
+    match user {
+        Some(u) => forgust_db::user_emails::owns(&state.db, u.id, email).await.unwrap_or(false),
+        None => false,
+    }
 }
 
 /// Check a raw commit's signature. None: the commit is not signed.
@@ -142,7 +146,7 @@ async fn verify_pgp(state: &AppState, s: &Signed, v: &mut Verification) {
         v.signer = user.as_ref().map(|u| u.username.clone());
         let email = s.committer_email.to_ascii_lowercase();
         v.verification_status =
-            if user.is_some_and(|u| owns_email(&u, &email)) && row.emails.contains(&email) { "verified" } else { "unverified" }.into();
+            if row.emails.contains(&email) && owns_email(state, user.as_ref(), &email).await { "verified" } else { "unverified" }.into();
         return;
     }
 }
@@ -164,7 +168,7 @@ async fn verify_ssh(state: &AppState, s: &Signed, v: &mut Verification) {
     v.key_expired = expires_at.is_some_and(|t| t <= chrono::Utc::now());
     let user = forgust_db::users::find(&state.db, user_id).await.ok().flatten();
     v.signer = user.as_ref().map(|u| u.username.clone());
-    v.verification_status = if user.is_some_and(|u| owns_email(&u, &s.committer_email)) { "verified" } else { "unverified" }.into();
+    v.verification_status = if owns_email(state, user.as_ref(), &s.committer_email).await { "verified" } else { "unverified" }.into();
 }
 
 /// An uploaded OpenPGP public key: (fingerprint, key ids, emails), or why not.

@@ -718,10 +718,11 @@ async fn sync_from_provider(
         let name = identity.name.as_deref().map(str::trim).filter(|n| *n != user.name && services::paths::validate_name(n).is_ok());
         let mut email =
             identity.email.as_deref().filter(|e| !e.eq_ignore_ascii_case(&user.email) && services::paths::validate_email(e).is_ok());
+        // another account's, or one of this account's other addresses
         if let Some(e) = email
-            && forgust_db::users::find_by_email(&state.db, e).await?.is_some()
+            && forgust_db::user_emails::taken_by(&state.db, e).await?.is_some()
         {
-            tracing::warn!(user = user.id, provider = provider_name, "the provider's email belongs to another account: kept the old one");
+            tracing::warn!(user = user.id, provider = provider_name, "the provider's email is already in use: kept the old one");
             email = None;
         }
         if let Some(n) = name {
@@ -869,6 +870,11 @@ async fn finish_sign_in(
                 Some(e) => forgust_db::users::find_by_email(&state.db, e).await?,
                 None => None,
             };
+            // one of an account's other addresses: never linked by (only its own address is)
+            let other_address = match (&by_email, &identity.email) {
+                (None, Some(e)) => forgust_db::user_emails::taken_by(&state.db, e).await?.is_some(),
+                _ => false,
+            };
             let user = match by_email {
                 // only an account whose own address was confirmed: never hand one to
                 // whoever controls this email at the provider (account pre-hijacking)
@@ -876,6 +882,12 @@ async fn finish_sign_in(
                 Some(_) => {
                     return Err(ApiError::forbidden(format!(
                         "an account with this email already exists: sign in to it with your password, then link {} under Your settings > Password & 2FA",
+                        provider.display_name
+                    )));
+                }
+                None if other_address => {
+                    return Err(ApiError::forbidden(format!(
+                        "an account uses this email as one of its other addresses: sign in to it with your password, then link {} under Your settings > Password & 2FA",
                         provider.display_name
                     )));
                 }
@@ -1075,6 +1087,6 @@ pub async fn confirm_email(
     Json(req): Json<ConfirmEmail>,
 ) -> ApiResult<Json<serde_json::Value>> {
     let me = v.direct_user().filter(|_| matches!(v, crate::auth::Principal::User { scopes: None, .. })).map(|u| u.id);
-    let user = services::accounts::confirm(&state, req.token.trim(), me).await?;
-    Ok(Json(json!({ "email": user.email })))
+    let email = services::accounts::confirm(&state, req.token.trim(), me).await?;
+    Ok(Json(json!({ "email": email })))
 }

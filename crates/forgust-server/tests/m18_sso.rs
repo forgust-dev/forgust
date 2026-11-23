@@ -388,3 +388,22 @@ async fn the_provider_alone_does_not_change_a_two_factor_account(pool: sqlx::PgP
     let me = session.ok_get("/api/v1/user").await;
     assert_eq!((me["email"].as_str(), me["is_admin"].as_bool()), (Some("thief@evil.example"), Some(true)));
 }
+
+/// Linking by email uses the account's own address only: a provider identity
+/// with one of its other addresses neither signs in to it nor takes the
+/// address for a new account.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn an_other_address_does_not_link_an_identity(pool: sqlx::PgPool) {
+    let (srv, idp) = with_idp(pool, json!({ "link_existing_by_email": true, "auto_create": true })).await;
+    srv.user("alice", false).await;
+    let aid = srv.user_id("alice").await;
+    forgust_db::user_emails::insert(&srv.state.db, aid, "alice@corp.example", Some("admin")).await.unwrap();
+    let r = sign_in(&srv, &idp, person("a-1", "alice@corp.example")).await;
+    let why = refusal(&r);
+    assert!(why.contains("one of its other addresses"), "{why}");
+    let linked: i64 = sqlx::query_scalar("SELECT count(*) FROM identities").fetch_one(&srv.state.db).await.unwrap();
+    assert_eq!(linked, 0);
+    // her own address still links
+    let r = sign_in(&srv, &idp, person("a-1", "alice@example.com")).await;
+    assert_eq!(signed_in_as(&srv, r).await, "alice");
+}
