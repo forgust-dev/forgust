@@ -341,21 +341,17 @@ async fn typed_answers_and_code_mode(pool: sqlx::PgPool) {
     owner.ok_post(&format!("/api/v1/projects/{p}/issues"), json!({ "title": "First" })).await;
     let read = Mcp::new(&srv, Some(&token(&owner, "read", &["read_api"]).await));
     let write = Mcp::new(&srv, Some(&token(&owner, "write", &["api"]).await));
-    let call = |m: &Mcp, name: &str, args: Value| {
-        let (m, name) = (Mcp { base: m.base.clone(), token: m.token.clone(), http: m.http.clone() }, name.to_string());
-        async move { m.rpc("tools/call", json!({ "name": name, "arguments": args })).await }
-    };
 
     // typed answers: an output schema per tool, structuredContent next to the text
     let list = read.rpc("tools/list", json!({})).await;
     let schema = |name: &str| list["tools"].as_array().unwrap().iter().find(|t| t["name"] == name).unwrap()["outputSchema"].clone();
     assert_eq!(schema("list_issues")["properties"]["items"]["type"], "array");
     assert_eq!(schema("get_issue")["type"], "object");
-    let r = call(&read, "list_issues", json!({ "project_id": p })).await;
+    let r = read.tool("list_issues", json!({ "project_id": p })).await;
     assert_eq!(r["structuredContent"]["items"][0]["title"], "First", "{r}");
-    let r = call(&read, "get_mcp_server_version", json!({})).await;
+    let r = read.tool("get_mcp_server_version", json!({})).await;
     assert_eq!(r["structuredContent"]["user"], "olivia", "{r}");
-    let r = call(&write, "create_issue", json!({ "project_id": p, "title": "Second" })).await;
+    let r = write.tool("create_issue", json!({ "project_id": p, "title": "Second" })).await;
     assert_eq!(r["structuredContent"]["iid"], 2, "{r}");
 
     // code mode: off until an administrator turns it on
@@ -383,7 +379,7 @@ async fn typed_answers_and_code_mode(pool: sqlx::PgPool) {
     assert_eq!(only, ["search_api", "execute_api"]);
 
     // search_api: scripts over the OpenAPI document
-    let r = call(&read, "search_api", json!({ "code": "Object.keys(spec.paths).filter((p) => p.endsWith('/issues'))" })).await;
+    let r = read.tool("search_api", json!({ "code": "Object.keys(spec.paths).filter((p) => p.endsWith('/issues'))" })).await;
     assert!(r["structuredContent"]["result"].as_array().unwrap().iter().any(|x| x == "/api/v1/projects/{id}/issues"), "{r}");
 
     // an `mcp` token (what OAuth clients get) has no execute_api: /api/v1 needs read_api or api
@@ -398,7 +394,7 @@ async fn typed_answers_and_code_mode(pool: sqlx::PgPool) {
         "const r = await forgust.get('/api/v1/projects/{p}/issues?state=all');\nconst list = r.issues ?? r.items ?? r;\nconsole.log(list.length);\n\
          const me = await forgust.get('/user');\nreturn {{ me: me.username, titles: list.map((i) => i.title).sort() }};"
     );
-    let r = call(&read, "execute_api", json!({ "code": code })).await;
+    let r = read.tool("execute_api", json!({ "code": code })).await;
     assert_eq!(r["structuredContent"]["result"], json!({ "me": "olivia", "titles": ["First", "Second"] }), "{r}");
     assert_eq!(r["structuredContent"]["logs"], json!(["2"]));
     assert!(r["content"][0]["text"].as_str().unwrap().contains("untrusted"), "{r}");
@@ -406,7 +402,7 @@ async fn typed_answers_and_code_mode(pool: sqlx::PgPool) {
     // ...but does not write; a failed call throws with its status
     let code =
         format!("try {{ await forgust.post('/projects/{p}/issues', {{ title: 'x' }}); }} catch (e) {{ return [e.status, e.message]; }}");
-    let r = call(&read, "execute_api", json!({ "code": code })).await;
+    let r = read.tool("execute_api", json!({ "code": code })).await;
     assert_eq!(r["structuredContent"]["result"][0], 403, "{r}");
     let (err, text) = read.call("execute_api", json!({ "code": "forgust.get('/projects/999999')" })).await;
     assert!(err && text.contains("Error"), "{text}");
@@ -415,7 +411,7 @@ async fn typed_answers_and_code_mode(pool: sqlx::PgPool) {
     // a stream of events fails at once, not at the end of the run
     let start = std::time::Instant::now();
     let code = format!("try {{ await forgust.get('/events?projects={p}'); }} catch (e) {{ return [e.status, e.message]; }}");
-    let r = call(&read, "execute_api", json!({ "code": code })).await;
+    let r = read.tool("execute_api", json!({ "code": code })).await;
     assert_eq!(r["structuredContent"]["result"][0], 400, "{r}");
     assert!(start.elapsed() < std::time::Duration::from_secs(10), "waited for the stream");
 
@@ -430,7 +426,7 @@ async fn typed_answers_and_code_mode(pool: sqlx::PgPool) {
 
     // `api` tokens change things, each change audited by route, in the project's log
     let code = "const i = await forgust.post('/api/v1/projects/acme%2Fplatform%2Fapi/issues', { title: 'From a script' });\nreturn i.iid;";
-    let r = call(&write, "execute_api", json!({ "code": code })).await;
+    let r = write.tool("execute_api", json!({ "code": code })).await;
     assert_eq!(r["structuredContent"]["result"], 3, "{r}");
     let (details, target_type, target_id): (Value, Option<String>, Option<i64>) = sqlx::query_as(
         "SELECT details, target_type, target_id FROM audit_events WHERE action = 'mcp_tool_call' AND details->>'tool' = 'execute_api'",
@@ -445,6 +441,6 @@ async fn typed_answers_and_code_mode(pool: sqlx::PgPool) {
 
     // at most 50 calls a run
     let code = "for (let i = 0; i < 60; i++) { try { await forgust.get('/user'); } catch (e) { return [i, e.status]; } }";
-    let r = call(&write, "execute_api", json!({ "code": code })).await;
+    let r = write.tool("execute_api", json!({ "code": code })).await;
     assert_eq!(r["structuredContent"]["result"], json!([50, 429]), "{r}");
 }

@@ -9,22 +9,24 @@
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
-use std::net::{IpAddr, SocketAddr};
+use std::future::Future;
+use std::net::SocketAddr;
 use std::rc::Rc;
-use std::sync::{LazyLock, Mutex};
+use std::sync::{LazyLock, Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
 use axum::body::Body;
-use axum::extract::{ConnectInfo, MatchedPath, Request};
+use axum::extract::rejection::RawPathParamsRejection;
+use axum::extract::{ConnectInfo, MatchedPath, RawPathParams, Request};
 use axum::http::{Method, header};
 use axum::middleware::{self, Next};
 use axum::response::Response;
-use rquickjs::{Context, Function, Promise, Runtime};
+use rquickjs::{Context, Ctx, Function, Promise, Runtime};
 use serde_json::{Value, json};
 use tower::ServiceExt;
 
 use super::Caller;
-use crate::auth::{InProcess, Principal};
+use crate::auth::InProcess;
 use crate::state::AppState;
 
 const MEMORY: usize = 64 << 20;
@@ -49,6 +51,18 @@ static RUNNING: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(RUNS)
 /// Scripts running, per user id (no entry: none).
 static BY_USER: LazyLock<Mutex<HashMap<i64, usize>>> = LazyLock::new(Mutex::default);
 
+fn by_user() -> MutexGuard<'static, HashMap<i64, usize>> {
+    BY_USER.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+fn late() -> String {
+    format!("the script ran longer than {} s", TIME.as_secs())
+}
+
+fn too_big() -> String {
+    format!("the script used more than {} MB", MEMORY >> 20)
+}
+
 /// A running script's place: one of `RUNS`, one of its user's `RUNS_PER_USER`.
 struct Slot {
     user: i64,
@@ -57,7 +71,7 @@ struct Slot {
 
 impl Slot {
     fn take(user: i64) -> Result<Slot, String> {
-        let mut by_user = BY_USER.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut by_user = by_user();
         if by_user.get(&user).copied().unwrap_or(0) >= RUNS_PER_USER {
             return Err(format!("you already run {RUNS_PER_USER} scripts: wait for one to end"));
         }
@@ -71,7 +85,7 @@ impl Slot {
 
 impl Drop for Slot {
     fn drop(&mut self) {
-        let mut by_user = BY_USER.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut by_user = by_user();
         if let Some(n) = by_user.get_mut(&self.user) {
             *n -= 1;
             if *n == 0 {
@@ -82,8 +96,10 @@ impl Drop for Slot {
 }
 
 /// `/api/v1`, as `execute_api` calls it, built once: each run only gives it
-/// its state.
-static ROUTER: LazyLock<axum::Router<AppState>> = LazyLock::new(|| crate::api::router().route_layer(middleware::from_fn(keep_route)));
+/// its state. Not the app's outer layers (metrics, compression, headers):
+/// none of them is for an in-process call.
+static ROUTER: LazyLock<axum::Router<AppState>> =
+    LazyLock::new(|| axum::Router::new().nest("/api/v1", crate::api::router().route_layer(middleware::from_fn(keep_route))));
 
 /// The API's OpenAPI document, as `search_api` gives it to scripts.
 static SPEC: LazyLock<String> = LazyLock::new(|| serde_json::to_string(&crate::api::openapi::document()).unwrap_or_default());
@@ -141,27 +157,27 @@ pub async fn search(c: &Caller, code: String) -> Result<Value, String> {
 pub async fn execute(c: &Caller, code: String) -> Result<Value, String> {
     let host = Host {
         router: ROUTER.clone().with_state(c.state.clone()),
-        state: c.state.clone(),
-        principal: c.principal.clone(),
-        write: c.write,
-        api: c.api,
-        ip: c.ip,
-        token_id: c.token_id,
-        rate_key: c.rate_key.clone(),
-        handle: tokio::runtime::Handle::current(),
+        caller: c.clone(),
         deadline: Instant::now() + TIME,
         calls: Cell::new(0),
     };
     sandbox(c.user.id, code, Some(host)).await
 }
 
-/// The route a request matched, on its response: for the audit log, which
-/// names routes, never paths (they can name people).
-async fn keep_route(req: Request, next: Next) -> Response {
+/// What a request matched, kept on its response for the audit log: the
+/// route (never the path: it can name people) and its `{id}`.
+#[derive(Clone)]
+struct Matched {
+    route: MatchedPath,
+    id: Option<String>,
+}
+
+async fn keep_route(params: Result<RawPathParams, RawPathParamsRejection>, req: Request, next: Next) -> Response {
     let route = req.extensions().get::<MatchedPath>().cloned();
+    let id = params.ok().and_then(|p| p.iter().find(|(k, _)| *k == "id").map(|(_, v)| v.to_string()));
     let mut resp = next.run(req).await;
-    if let Some(r) = route {
-        resp.extensions_mut().insert(r);
+    if let Some(route) = route {
+        resp.extensions_mut().insert(Matched { route, id });
     }
     resp
 }
@@ -192,34 +208,7 @@ fn run_js(code: &str, host: Option<Host>, deadline: Instant, logs: &Rc<RefCell<V
     rt.set_interrupt_handler(Some(Box::new(move || Instant::now() > deadline)));
     let ctx = Context::full(&rt).map_err(|e| e.to_string())?;
     let out = ctx.with(|ctx| {
-        let fail = |e: rquickjs::Error| -> String {
-            if Instant::now() > deadline {
-                return format!("the script ran longer than {} s", TIME.as_secs());
-            }
-            match e {
-                rquickjs::Error::Exception => {
-                    let thrown = ctx.catch();
-                    match thrown.as_exception() {
-                        Some(x) => {
-                            let msg = x.message().unwrap_or_default();
-                            if msg.contains("out of memory") {
-                                return format!("the script used more than {} MB", MEMORY >> 20);
-                            }
-                            let name = x.get::<_, Option<String>>("name").ok().flatten().unwrap_or_else(|| "Error".into());
-                            let stack = x.stack().unwrap_or_default();
-                            format!("{name}: {msg}\n{stack}").trim_end().to_string()
-                        }
-                        None => match ctx.json_stringify(thrown) {
-                            Ok(Some(s)) => format!("the script threw {}", s.to_string().unwrap_or_default()),
-                            _ => "the script threw a value that is not JSON".into(),
-                        },
-                    }
-                }
-                rquickjs::Error::Allocation => format!("the script used more than {} MB", MEMORY >> 20),
-                rquickjs::Error::WouldBlock => "the script waits for something that never comes (there are no timers or events)".into(),
-                e => e.to_string(),
-            }
-        };
+        let fail = |e| describe(&ctx, e, deadline);
         let g = ctx.globals();
         let kept = logs.clone();
         let size = Cell::new(0usize);
@@ -230,11 +219,7 @@ fn run_js(code: &str, host: Option<Host>, deadline: Instant, logs: &Rc<RefCell<V
             }
             let mut l = kept.borrow_mut();
             if line.len() >= left {
-                let mut end = left;
-                while !line.is_char_boundary(end) {
-                    end -= 1;
-                }
-                line.truncate(end);
+                line.truncate(line.floor_char_boundary(left));
                 l.push(line);
                 l.push(format!("[console output cut at {} KB]", LOGS >> 10));
                 size.set(LOGS);
@@ -265,17 +250,41 @@ fn run_js(code: &str, host: Option<Host>, deadline: Instant, logs: &Rc<RefCell<V
     serde_json::from_str(&out).map_err(|e| format!("the result cannot be read ({e}): JSON at most 128 levels deep"))
 }
 
+/// What went wrong in a run, for the assistant.
+fn describe(ctx: &Ctx<'_>, e: rquickjs::Error, deadline: Instant) -> String {
+    if Instant::now() > deadline {
+        return late();
+    }
+    match e {
+        rquickjs::Error::Exception => thrown(ctx),
+        rquickjs::Error::Allocation => too_big(),
+        rquickjs::Error::WouldBlock => "the script waits for something that never comes (there are no timers or events)".into(),
+        e => e.to_string(),
+    }
+}
+
+/// What the script threw: an error's name, message and stack, or the value.
+fn thrown(ctx: &Ctx<'_>) -> String {
+    let thrown = ctx.catch();
+    let Some(x) = thrown.as_exception() else {
+        return match ctx.json_stringify(thrown) {
+            Ok(Some(s)) => format!("the script threw {}", s.to_string().unwrap_or_default()),
+            _ => "the script threw a value that is not JSON".into(),
+        };
+    };
+    let msg = x.message().unwrap_or_default();
+    if msg.contains("out of memory") {
+        return too_big();
+    }
+    let name = x.get::<_, Option<String>>("name").ok().flatten().unwrap_or_else(|| "Error".into());
+    let stack = x.stack().unwrap_or_default();
+    format!("{name}: {msg}\n{stack}").trim_end().to_string()
+}
+
 /// What `forgust.request` reaches: the API as the caller.
 struct Host {
     router: axum::Router,
-    state: AppState,
-    principal: Principal,
-    write: bool,
-    api: bool,
-    ip: Option<IpAddr>,
-    token_id: Option<i64>,
-    rate_key: String,
-    handle: tokio::runtime::Handle,
+    caller: Caller,
     deadline: Instant,
     calls: Cell<usize>,
 }
@@ -285,7 +294,9 @@ impl Host {
     fn request(&self, method: &str, path: &str, body: Option<String>) -> String {
         let answer = match self.call(method, path, body) {
             Ok((status, body)) if status < 400 => json!({ "ok": true, "status": status, "body": body }),
-            Ok((status, body)) => json!({ "ok": false, "status": status, "message": message(status, &body), "body": body }),
+            Ok((status, body)) => {
+                json!({ "ok": false, "status": status, "message": super::tools::api_message(status, &body), "body": body })
+            }
             Err((status, message)) => json!({ "ok": false, "status": status, "message": message }),
         };
         answer.to_string()
@@ -302,78 +313,61 @@ impl Host {
         };
         // the paths of search_api's spec, or the same without /api/v1
         let path = path.trim();
-        let path = match path.strip_prefix("/api/v1") {
-            Some(rest) if rest.is_empty() || rest.starts_with(['/', '?']) => rest,
-            _ => path,
-        };
         if !path.starts_with('/') || path.starts_with("//") {
             return Err((400, format!("{path}: a path of the API, as /api/v1/projects/...")));
         }
-        if method != Method::GET && !self.api {
-            let why = if self.write {
-                "this token changes things through the write tools only: execute_api writes need a token with the api scope"
-            } else {
-                "this token is read-only"
-            };
-            return Err((403, why.into()));
-        }
+        let path = match path.strip_prefix("/api/v1") {
+            Some(rest) if rest.is_empty() || rest.starts_with(['/', '?']) => path.to_string(),
+            _ => format!("/api/v1{path}"),
+        };
         let n = self.calls.get() + 1;
         self.calls.set(n);
         if n > CALLS {
             return Err((429, format!("at most {CALLS} API calls a run")));
         }
-        if !super::limiter().allow(&self.rate_key) {
+        let c = &self.caller;
+        if !super::limiter().allow(&c.rate_key) {
             return Err((429, format!("rate limited: at most {} calls a minute per token", super::RATE)));
         }
         let mut req = Request::builder()
             .method(method.clone())
-            .uri(path)
+            .uri(&path)
             .header(header::ACCEPT, "application/json")
             .header(header::CONTENT_TYPE, "application/json")
             .body(body.map_or_else(Body::empty, Body::from))
             .map_err(|e| (400, format!("{path}: {e}")))?;
-        req.extensions_mut().insert(InProcess(self.principal.clone()));
-        if let Some(ip) = self.ip {
+        req.extensions_mut().insert(InProcess(c.principal.clone()));
+        if let Some(ip) = c.ip {
             req.extensions_mut().insert(ConnectInfo(SocketAddr::new(ip, 0)));
         }
-        let late = || (504, format!("the script ran longer than {} s", TIME.as_secs()));
-        let left = self.deadline.saturating_duration_since(Instant::now());
-        let resp = match self.handle.block_on(tokio::time::timeout(left, self.router.clone().oneshot(req))) {
-            Ok(Ok(resp)) => resp,
-            Ok(Err(e)) => match e {},
-            Err(_) => return Err(late()),
-        };
+        let resp = self.within(self.router.clone().oneshot(req))?.unwrap_or_else(|e| match e {});
         let status = resp.status();
         // a change is audited once it is made, whatever becomes of its answer
-        if status.is_success() && method != Method::GET {
-            let route = resp.extensions().get::<MatchedPath>().map_or("(no route)", MatchedPath::as_str);
-            let project = self.handle.block_on(self.project_of(route, path));
+        if status.is_success()
+            && method != Method::GET
+            && let Some(m) = resp.extensions().get::<Matched>()
+        {
+            let project = block_on(self.project_of(m));
             let details = json!({
-                "tool": "execute_api", "via": "mcp", "token_id": self.token_id, "method": method.as_str(),
-                // as the audit log names routes elsewhere
-                "route": format!("/api/v1{route}"),
+                "tool": "execute_api", "via": "mcp", "token_id": c.token_id, "method": method.as_str(), "route": m.route.as_str(),
             });
-            let ip = self.ip.map(|ip| ip.to_string());
-            let audit = crate::services::audit(
-                &self.state,
-                &self.principal,
+            let ip = c.ip.map(|ip| ip.to_string());
+            block_on(crate::services::audit(
+                &c.state,
+                &c.principal,
                 "mcp_tool_call",
                 project.map(|id| ("project", id)),
                 details,
                 ip.as_deref(),
-            );
-            self.handle.block_on(audit);
+            ));
         }
         // a stream (server-sent events) never ends: refused, not waited for
         if resp.headers().get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).is_some_and(|t| t.starts_with("text/event-stream")) {
             return Err((400, "a stream of events: execute_api reads whole answers only".to_string()));
         }
-        let left = self.deadline.saturating_duration_since(Instant::now());
-        let bytes = match self.handle.block_on(tokio::time::timeout(left, axum::body::to_bytes(resp.into_body(), BODY))) {
-            Ok(Ok(bytes)) => bytes,
-            Ok(Err(_)) => return Err((413, format!("the answer is larger than {} MB: ask for less (a page, a path)", BODY >> 20))),
-            Err(_) => return Err(late()),
-        };
+        let bytes = self
+            .within(axum::body::to_bytes(resp.into_body(), BODY))?
+            .map_err(|_| (413, format!("the answer is larger than {} MB: ask for less (a page, a path)", BODY >> 20)))?;
         let body = serde_json::from_slice(&bytes).unwrap_or_else(|_| match std::str::from_utf8(&bytes) {
             Ok(s) => Value::String(s.to_string()),
             Err(_) => Value::String(format!("({} bytes of binary data)", bytes.len())),
@@ -381,35 +375,36 @@ impl Host {
         Ok((status.as_u16(), body))
     }
 
+    /// `f`, if it ends before the run's deadline.
+    fn within<F: Future>(&self, f: F) -> Result<F::Output, (u16, String)> {
+        let left = self.deadline.saturating_duration_since(Instant::now());
+        block_on(tokio::time::timeout(left, f)).map_err(|_| (504, late()))
+    }
+
     /// The project a `/projects/{id}/...` call changed, for its audit row
-    /// (the project's log shows it): from the path the script called.
-    async fn project_of(&self, route: &str, path: &str) -> Option<i64> {
-        route.strip_prefix("/projects/{id}")?;
-        let id = path.split(['?', '#']).next()?.strip_prefix("/projects/")?.split('/').next()?;
-        let id = percent_encoding::percent_decode_str(id).decode_utf8().ok()?;
+    /// (the project's log shows it).
+    async fn project_of(&self, m: &Matched) -> Option<i64> {
+        if !m.route.as_str().starts_with("/api/v1/projects/{id}") {
+            return None;
+        }
+        let id = m.id.as_deref()?;
         match id.parse() {
             Ok(n) => Some(n),
-            Err(_) => crate::api::load_project(&self.state, &id).await.ok().map(|p| p.id),
+            Err(_) => crate::api::load_project(&self.caller.state, id).await.ok().map(|p| p.id),
         }
     }
 }
 
-/// A failed call's message, as the API's errors give it.
-fn message(status: u16, body: &Value) -> String {
-    body["message"]
-        .as_str()
-        .or(body["error_description"].as_str())
-        .or(body["error"].as_str())
-        .or(body.as_str().filter(|s| !s.is_empty() && s.len() < 500))
-        .map(str::to_string)
-        .unwrap_or_else(|| format!("HTTP {status}"))
+/// Runs `f` to its end from the script's thread (a blocking one, in the runtime).
+fn block_on<F: Future>(f: F) -> F::Output {
+    tokio::runtime::Handle::current().block_on(f)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// A script with no API (search_api's sandbox, without the spec when `bare`).
+    /// A script with no API (search_api's sandbox).
     fn js(code: &str, time: Duration) -> Result<Value, String> {
         let logs = Rc::new(RefCell::new(Vec::new()));
         run_js(code, None, Instant::now() + time, &logs).map(|v| json!({ "result": v, "logs": logs.take() }))

@@ -386,9 +386,14 @@ impl Mcp {
         v["result"].clone()
     }
 
+    /// A `tools/call` result: content, structuredContent, isError.
+    pub async fn tool(&self, tool: &str, args: Value) -> Value {
+        self.rpc("tools/call", json!({ "name": tool, "arguments": args })).await
+    }
+
     /// (is_error, text)
     pub async fn call(&self, tool: &str, args: Value) -> (bool, String) {
-        let r = self.rpc("tools/call", json!({ "name": tool, "arguments": args })).await;
+        let r = self.tool(tool, args).await;
         (r["isError"] == true, r["content"][0]["text"].as_str().unwrap().to_string())
     }
 

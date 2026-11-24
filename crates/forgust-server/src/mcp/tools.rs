@@ -449,20 +449,30 @@ fn structured(v: Value, len: usize) -> Value {
 /// The tools, built once.
 static DEFS: std::sync::LazyLock<Vec<Def>> = std::sync::LazyLock::new(build_defs);
 
-/// What `tools/list` answers: write tools only for tokens that may write,
-/// code mode's only when it is on (and only them for `?tools=code`),
-/// `execute_api` only for tokens that may call `/api/v1`.
+/// Why `c` may not call `d`, if it may not.
+fn refusal(c: &Caller, d: &Def) -> Option<&'static str> {
+    if d.write && !c.write() {
+        Some("this token is read-only: a token with the `api` scope can change things")
+    } else if is_code(d.name) && !c.code_mode {
+        Some("code mode is off: an administrator can turn it on (Admin, Settings)")
+    } else if d.name == "execute_api" && !c.read_api() {
+        Some("execute_api calls /api/v1 as you: it needs a token with the read_api or api scope (an mcp token keeps to the other tools)")
+    } else {
+        None
+    }
+}
+
+/// What `tools/list` answers: the tools `c` may call (only code mode's for
+/// `?tools=code`).
 pub fn list(c: &Caller) -> Vec<Value> {
     DEFS.iter()
-        .filter(|d| c.write || !d.write)
-        .filter(|d| if is_code(d.name) { c.code_mode } else { !c.code_only })
-        .filter(|d| d.name != "execute_api" || c.read_api)
+        .filter(|d| refusal(c, d).is_none() && (is_code(d.name) || !c.code_only))
         .map(|d| {
             // execute_api changes things when the token may (DELETE too)
-            let changes = d.write || (d.name == "execute_api" && c.api);
+            let api_writes = d.name == "execute_api" && c.api();
             json!({
                 "name": d.name, "title": d.title, "description": d.description, "inputSchema": d.schema, "outputSchema": output_schema(d.name),
-                "annotations": { "title": d.title, "readOnlyHint": !changes, "destructiveHint": d.name == "execute_api" && c.api, "openWorldHint": false },
+                "annotations": { "title": d.title, "readOnlyHint": !(d.write || api_writes), "destructiveHint": api_writes, "openWorldHint": false },
             })
         })
         .collect()
@@ -485,11 +495,7 @@ fn error(s: &str) -> Value {
 /// At most `CAP` bytes, cut on a character boundary, saying so.
 fn cap(mut s: String) -> String {
     if s.len() > CAP {
-        let mut end = CAP;
-        while !s.is_char_boundary(end) {
-            end -= 1;
-        }
-        s.truncate(end);
+        s.truncate(s.floor_char_boundary(CAP));
         s.push_str("\n[cut: the answer was longer than 64 KB; ask for less (a page, a path, fewer lines)]");
     }
     s
@@ -501,16 +507,18 @@ async fn call_api(r: impl IntoResponse) -> R {
     let status = resp.status();
     let bytes = axum::body::to_bytes(resp.into_body(), 64 << 20).await.map_err(|e| e.to_string())?;
     let v: Value = serde_json::from_slice(&bytes).unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&bytes).into_owned()));
-    if status.is_success() {
-        Ok(v)
-    } else {
-        Err(v["message"]
-            .as_str()
-            .or(v["error_description"].as_str())
-            .or(v["error"].as_str())
-            .map(str::to_string)
-            .unwrap_or_else(|| format!("HTTP {status}")))
-    }
+    if status.is_success() { Ok(v) } else { Err(api_message(status.as_u16(), &v)) }
+}
+
+/// A failed API call's message, as the API's errors give it.
+pub(super) fn api_message(status: u16, body: &Value) -> String {
+    body["message"]
+        .as_str()
+        .or(body["error_description"].as_str())
+        .or(body["error"].as_str())
+        .or(body.as_str().filter(|s| !s.is_empty() && s.len() < 500))
+        .map(str::to_string)
+        .unwrap_or_else(|| format!("HTTP {status}"))
 }
 
 fn q<T: DeserializeOwned>(v: Value) -> Result<Query<T>, String> {
@@ -677,53 +685,41 @@ pub async fn call(c: &Caller, name: &str, args: &Value) -> Value {
     };
     let args = &args;
     let Some(def) = DEFS.iter().find(|d| d.name == name) else { return error(&format!("unknown tool {name}")) };
-    if def.write && !c.write {
-        return error("this token is read-only: a token with the `api` scope can change things");
+    if let Some(why) = refusal(c, def) {
+        return error(why);
     }
-    if is_code(name) && !c.code_mode {
-        return error("code mode is off: an administrator can turn it on (Admin, Settings)");
-    }
-    if name == "execute_api" && !c.read_api {
-        return error(
-            "execute_api calls /api/v1 as you: it needs a token with the read_api or api scope (an mcp token keeps to the other tools)",
-        );
-    }
-    match run(c, name, args).await {
-        Ok(v) if def.write => {
-            let project = project_arg(args).ok();
-            let pid = match &project {
-                Some(p) => api::load_project(&c.state, p).await.ok().map(|p| p.id),
-                None => None,
-            };
-            crate::services::audit(
-                &c.state,
-                &c.principal,
-                "mcp_tool_call",
-                pid.map(|id| ("project", id)),
-                json!({ "tool": name, "via": "mcp", "token_id": c.token_id }),
-                None,
-            )
-            .await;
-            let json = serde_json::to_string_pretty(&v).unwrap_or_default();
-            let mut out = text(cap(format!("Done, as @{}.\n{json}", c.user.username)));
-            out["structuredContent"] = structured(v, json.len());
-            out
-        }
-        Ok(v) => {
-            let json = serde_json::to_string_pretty(&v).unwrap_or_default();
-            let mut out = text(cap(format!("{UNTRUSTED}\n<forgust-data>\n{json}\n</forgust-data>")));
-            out["structuredContent"] = structured(v, json.len());
-            out
-        }
-        Err(e) => error(&e),
-    }
+    let v = match run(c, name, args).await {
+        Ok(v) => v,
+        Err(e) => return error(&e),
+    };
+    let json = serde_json::to_string_pretty(&v).unwrap_or_default();
+    let mut out = if def.write {
+        let pid = match project_arg(args) {
+            Ok(p) => api::load_project(&c.state, &p).await.ok().map(|p| p.id),
+            Err(_) => None,
+        };
+        crate::services::audit(
+            &c.state,
+            &c.principal,
+            "mcp_tool_call",
+            pid.map(|id| ("project", id)),
+            json!({ "tool": name, "via": "mcp", "token_id": c.token_id }),
+            None,
+        )
+        .await;
+        text(cap(format!("Done, as @{}.\n{json}", c.user.username)))
+    } else {
+        text(cap(format!("{UNTRUSTED}\n<forgust-data>\n{json}\n</forgust-data>")))
+    };
+    out["structuredContent"] = structured(v, json.len());
+    out
 }
 
 async fn run(c: &Caller, name: &str, a: &Value) -> R {
     match name {
         "get_mcp_server_version" => Ok(json!({
             "name": "Forgust", "version": env!("CARGO_PKG_VERSION"), "url": c.state.cfg.server.external_url,
-            "user": c.user.username, "can_write": c.write,
+            "user": c.user.username, "can_write": c.write(),
         })),
         "list_projects" => {
             let paging = json!({ "search": s(a, "search").unwrap_or_default(), "page": i(a, "page").unwrap_or(1), "per_page": 50 });
