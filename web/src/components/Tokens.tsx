@@ -77,7 +77,7 @@ export function AccessTokens({ base }: { base: string }) {
                     <strong>{t.name}</strong> <span className="faint small">@{t.bot_username}</span>
                     <div className="small muted">{t.scopes.join(", ")}</div>
                   </div>
-                  <Badge tone="accent">{t.access_level}</Badge>
+                  <Badge>{t.access_level}</Badge>
                   {t.revoked ? (
                     <StateBadge tone="neutral" icon={Ban}>
                       Revoked

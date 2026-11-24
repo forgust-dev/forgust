@@ -336,7 +336,7 @@ export function MergeRequestPage({ ctx, iid, tab }: { ctx: Ctx; iid: number; tab
                   {v ? `${v.commits_count} commit${v.commits_count === 1 ? "" : "s"}` : ""}
                   <ArrowRight size={15} />
                 </span>
-                <Link className="ref-chip target" to={refLink(ctx.web, "tree", m.target_branch)}>
+                <Link className="ref-chip" to={refLink(ctx.web, "tree", m.target_branch)}>
                   <GitBranch size={13} />
                   {m.target_branch}
                 </Link>

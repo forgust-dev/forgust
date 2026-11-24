@@ -488,9 +488,9 @@ function ProtectedBranches({ ctx }: { ctx: Ctx }) {
               <div className="item" key={r.id}>
                 <code className="grow">{r.name}</code>
                 <Badge>push: {r.push_access_level.replace("_", " ")}</Badge>
-                {r.allow_force_push && <Badge tone="warn">force push</Badge>}
+                {r.allow_force_push && <Badge>force push</Badge>}
                 {r.allow_deploy_keys && <Badge>deploy keys</Badge>}
-                {r.code_owner_approval_required && <Badge tone="accent">code owners approve</Badge>}
+                {r.code_owner_approval_required && <Badge>code owners approve</Badge>}
                 <button className="btn small danger" onClick={() => del.mutate(r.id)}>
                   Unprotect
                 </button>
@@ -1111,7 +1111,7 @@ function Mirrors({ ctx }: { ctx: Ctx }) {
             <div className="list">
               {mirrors.map((m) => (
                 <div className="item mirror-row" key={m.id}>
-                  <Badge tone={m.direction === "pull" ? "accent" : undefined}>{m.direction === "pull" ? "Pull" : "Push"}</Badge>
+                  <Badge>{m.direction === "pull" ? "Pull" : "Push"}</Badge>
                   <div className="grow" style={{ minWidth: 0 }}>
                     <div className="mono small ellipsis">{m.url}</div>
                     <div className="small">

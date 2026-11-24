@@ -89,7 +89,7 @@ export function Members({ base, canManage, kind }: { base: string; canManage: bo
                           <span>since {timeAgo(m.created_at)}</span>
                         </div>
                       </div>
-                      <span className="pill accent">{m.access_level}</span>
+                      <span className="pill">{m.access_level}</span>
                       {canManage && (
                         <button className="btn small danger" onClick={() => remove.mutate(m.user_id)}>
                           Remove
@@ -134,7 +134,7 @@ export function Members({ base, canManage, kind }: { base: string; canManage: bo
                     <div className="item" key={s.group_id}>
                       <span className="tile group">{s.group_full_path.split("/").pop()?.[0]?.toUpperCase()}</span>
                       <span className="grow ref-name">{s.group_full_path}</span>
-                      <span className="pill accent">up to {s.max_access_level}</span>
+                      <span className="pill">up to {s.max_access_level}</span>
                       {canManage && (
                         <button className="btn small danger" onClick={() => unshare.mutate(s.group_id)}>
                           Unshare

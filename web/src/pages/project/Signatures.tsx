@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api, type S } from "../../api/client";
 import type { Ctx } from "./Project";
+import { ShieldAlert, ShieldCheck } from "lucide-react";
 
 /** Signature checks per commit (unsigned commits are absent), for lists. */
 export function useSignatures(ctx: Ctx, shas: string[]) {
@@ -30,11 +31,12 @@ export function SignatureBadge({ v, className }: { v?: S["Verification"]; classN
   // and takes the title away); signed out, there are none, and the title says it
   return (
     <span
-      className={`badge ${ok ? "ok" : "warn"} sig-badge${className ? ` ${className}` : ""}`}
+      className={`state tone-${ok ? "ok" : "warn"} sig-badge${className ? ` ${className}` : ""}`}
       data-signature={JSON.stringify(v)}
       tabIndex={0}
       title={`${v.signature_type} signature. ${SIGNATURE_TEXT[v.verification_status] ?? ""}${who}${v.key_fingerprint ? ` ${v.key_fingerprint}` : ""}`}
     >
+      {ok ? <ShieldCheck size={13} aria-hidden /> : <ShieldAlert size={13} aria-hidden />}
       {ok ? "Verified" : "Unverified"}
     </span>
   );

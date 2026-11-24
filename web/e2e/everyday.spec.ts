@@ -61,7 +61,7 @@ test("the stack map shows both layers and what merges next", async ({ page }) =>
   await expect(map).toContainText("layer 2 of 2");
   await expect(map.locator("li")).toHaveCount(2);
   await expect(map.locator("li.current")).toContainText("Checkout page");
-  await expect(map.locator("li", { hasText: "Checkout with discounts" })).toContainText("merges next");
+  await expect(map.locator("li", { hasText: "Checkout with discounts" })).toContainText("Merges next");
   // the upper layer cannot merge before the one below
   await expect(page.getByText("merge !1 first")).toBeVisible();
   await map.locator("li", { hasText: "Checkout with discounts" }).getByRole("link").click();
@@ -462,7 +462,7 @@ test("protect tags in settings; protected tags are marked", async ({ page }) => 
     await expect(page.locator('[aria-label="Protected tags"]')).toContainText(pattern);
     await page.request.post(`/api/v1/projects/${project.id}/repository/tags`, { headers: csrf, data: { tag_name: tag, ref: "main" } });
     await page.goto(`${P}/-/tags`);
-    await expect(page.locator(".ref-row", { hasText: tag }).locator(".pill.warn")).toHaveText("protected");
+    await expect(page.locator(".ref-row", { hasText: tag }).locator(".pill", { hasText: "protected" })).toHaveText("protected");
   } finally {
     await page.request.delete(`/api/v1/projects/${project.id}/repository/tags/${tag}`, { headers: csrf });
     const rules = await (await page.request.get(`/api/v1/projects/${project.id}/protected_tags`)).json();

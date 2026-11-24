@@ -4,7 +4,7 @@ import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, GitBranch, Pause, Pencil, Play, Plus, RotateCw, Trash2 } from "lucide-react";
 import { api, listAnd, qs, refLink, timeAgo, timeUntil, type S } from "../../../api/client";
 import { useSession } from "../../../session";
-import { Empty, ErrorBox, Field, FieldGroup, Q, ListHead } from "../../../components/ui";
+import { Empty, ErrorBox, Field, FieldGroup, Q, ListHead, StateBadge } from "../../../components/ui";
 import { Select } from "../../../components/controls";
 import { useToast } from "../../../shell/toast";
 import { useConfirm } from "../../../shell/dialog";
@@ -99,7 +99,11 @@ function ScheduleCard({
             {words ?? "Custom interval"} <span className="faint">· {s.cron_timezone}</span>
           </p>
         </div>
-        {!s.active && <span className="pill">Paused</span>}
+        {!s.active && (
+          <StateBadge tone="neutral" icon={Pause}>
+            Paused
+          </StateBadge>
+        )}
       </header>
       <dl className="sched-facts">
         <div>

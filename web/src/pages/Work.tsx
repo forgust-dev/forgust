@@ -207,7 +207,9 @@ function Todos({ pending, onDone, quiet, clear }: { pending: S["Todo"][]; onDone
                   <Link to={targetUrl(t)} className="ellipsis">
                     {t.target_title}
                   </Link>
-                  {t.target_state !== "opened" && <span className="badge">{t.target_state}</span>}
+                  {t.target_state !== "opened" && (
+                    <StateBadge tone={t.target_state === "merged" ? "merged" : "neutral"}>{t.target_state[0].toUpperCase() + t.target_state.slice(1)}</StateBadge>
+                  )}
                 </div>
                 <div className="row-meta">
                   <span>

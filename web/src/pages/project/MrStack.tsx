@@ -1,12 +1,13 @@
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { GitBranch, Layers, X } from "lucide-react";
+import { GitBranch, Layers, X, ArrowDownToLine, GitMerge } from "lucide-react";
 import { api, qs, timeAgo, type S } from "../../api/client";
 import { usePref } from "../../shell/theme";
 import { useBranches } from "./Code";
 import { useAct } from "../../shell/toast";
 import type { Ctx } from "./Project";
 import { StateMark, mrLook } from "../../components/states";
+import { StateBadge } from "../../components/ui";
 
 /** Open merge requests of the project (shared with the list's cache key). */
 export function useOpenMrs(ctx: Ctx, enabled = true) {
@@ -77,9 +78,21 @@ export function StackMap({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
             <Link to={`${ctx.web}/-/merge_requests/${e.iid}`} className="grow ellipsis">
               <span className="faint">!{e.iid}</span> {e.title}
             </Link>
-            {e.needs_rebase && <span className="badge warn">needs rebase</span>}
-            {e.iid === s.next_to_merge && <span className="badge ok">merges next</span>}
-            {e.state === "merged" && <span className="badge accent">merged</span>}
+            {e.needs_rebase && (
+              <StateBadge tone="warn" icon={GitBranch}>
+                Needs rebase
+              </StateBadge>
+            )}
+            {e.iid === s.next_to_merge && (
+              <StateBadge tone="ok" icon={ArrowDownToLine}>
+                Merges next
+              </StateBadge>
+            )}
+            {e.state === "merged" && (
+              <StateBadge tone="merged" icon={GitMerge}>
+                Merged
+              </StateBadge>
+            )}
           </li>
         ))}
       </ol>

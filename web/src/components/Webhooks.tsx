@@ -91,7 +91,7 @@ export function Webhooks({ base }: { base: string }) {
                 <div key={h.id} className="list-group">
                   <div className="item">
                     <code className="grow ellipsis">{h.url}</code>
-                    {h.format !== "generic" && <Badge tone="accent">{formatName(h.format)}</Badge>}
+                    {h.format !== "generic" && <Badge>{formatName(h.format)}</Badge>}
                     {h.events.map((e) => (
                       <Badge key={e}>{e}</Badge>
                     ))}

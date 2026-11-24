@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, CalendarDays, CheckCircle2, CircleDot, GitMerge, Milestone as MilestoneIcon, Pencil, Plus, Trash2 } from "lucide-react";
 import { api, plural, qs, type S } from "../../api/client";
-import { ConfidentialMark, Empty, ErrorBox, Field, FilterTabs, ListHead, Q } from "../../components/ui";
+import { ConfidentialMark, Empty, ErrorBox, Field, FilterTabs, ListHead, Q, StateBadge } from "../../components/ui";
 import { DecideCard, Ring, type DecideRow } from "../../components/decide";
 import { Select } from "../../components/controls";
 import { MarkdownEditor } from "../../components/MarkdownEditor";
@@ -189,7 +189,11 @@ export function MilestonesPage({ ctx }: { ctx: Ctx }) {
                       <Link to={`${ctx.web}/-/milestones/${m.id}`} className="ellipsis">
                         {m.title}
                       </Link>
-                      {m.state === "closed" && <span className="pill">closed</span>}
+                      {m.state === "closed" && (
+                        <StateBadge tone="neutral" icon={CheckCircle2}>
+                          Closed
+                        </StateBadge>
+                      )}
                     </div>
                     <div className="row-meta">
                       <Dates m={m} />
@@ -324,7 +328,12 @@ export function MilestonePage({ ctx, id }: { ctx: Ctx; id: number }) {
           <ListHead
             title={
               <span className="row" style={{ gap: 8 }}>
-                <MilestoneIcon size={18} /> {m.title} {m.state === "closed" && <span className="pill">closed</span>}
+                <MilestoneIcon size={18} /> {m.title}{" "}
+                {m.state === "closed" && (
+                  <StateBadge tone="neutral" icon={CheckCircle2}>
+                    Closed
+                  </StateBadge>
+                )}
               </span>
             }
             sub={<Dates m={m} />}

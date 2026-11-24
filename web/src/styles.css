@@ -758,30 +758,66 @@ form.stack {
   background: var(--bg-subtle);
 }
 
-.badge {
+/* ---- attributes, as the UI convention draws them: a property of the thing (its visibility, a
+   role, what protects it, a kind), a fine grey outline and maybe a small icon; never colored, so
+   that it never reads as a state (Badge, `.pill`) */
+.badge,
+.pill {
   display: inline-flex;
+  flex: none;
   align-items: center;
+  gap: 4px;
   height: 20px;
   padding: 0 7px;
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  background: var(--bg-hover);
+  background: transparent;
   color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: lowercase;
+  font: 500 12px/1 var(--sans);
   white-space: nowrap;
 }
-.badge.accent {
-  background: var(--accent-soft);
-  color: var(--accent-ink);
+.badge svg,
+.pill svg {
+  flex: none;
 }
-.badge.ok {
-  background: var(--ok-soft);
-  color: var(--ok);
+a.badge:hover,
+a.pill:hover {
+  border-color: var(--text-faint);
+  color: var(--text);
+  text-decoration: none;
 }
-.badge.warn {
-  background: var(--warn-soft);
-  color: var(--warn);
+
+/* ---- references: a branch, a tag, a commit, a milestone; a grey chip in mono, the same on
+   every page, and clickable (`.ref-chip`, `.sha`, `.milestone-chip`) */
+.ref-chip,
+.sha,
+.milestone-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  max-width: 100%;
+  padding: 0 7px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--chip-bg);
+  color: var(--text);
+  font: 500 12px/1 var(--mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ref-chip svg,
+.milestone-chip svg {
+  flex: none;
+  color: var(--text-muted);
+}
+a.ref-chip:hover,
+a.sha:hover,
+a.milestone-chip:hover {
+  background: var(--border-strong);
+  text-decoration: none;
 }
 
 .alert {
@@ -1143,14 +1179,6 @@ form.stack {
   gap: 12px;
   padding: 10px 14px;
   border-top: 1px solid var(--border);
-}
-.sha {
-  font-family: var(--mono);
-  font-size: 12px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: var(--bg-hover);
-  color: var(--text);
 }
 
 /* ---------------------------------------------------------------- review */
@@ -1709,19 +1737,7 @@ kbd {
 }
 .side-link .count {
   min-width: 20px;
-  padding: 0 6px;
-  border-radius: var(--radius-sm);
-  background: var(--chip-bg);
-  color: var(--text-muted);
-  font-family: var(--sans);
-  font-size: 11.5px;
-  font-weight: 600;
-  line-height: 18px;
-  text-align: center;
-}
-.side-link.active .count {
-  background: var(--accent-soft);
-  color: var(--accent-ink);
+  text-align: right;
 }
 .side-link.back {
   margin-bottom: 6px;
@@ -2435,18 +2451,6 @@ kbd {
   font-size: 15.5px;
   line-height: 1.55;
 }
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 1px 9px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 500;
-  background: var(--bg);
-}
 .repo-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;
@@ -3127,47 +3131,6 @@ kbd {
   gap: 10px;
   margin-top: 4px;
 }
-.ref-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 28px;
-  max-width: 100%;
-  padding: 0 10px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--bg);
-  color: var(--text);
-  font: 12.5px var(--mono);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ref-chip:hover {
-  border-color: var(--text-faint);
-  text-decoration: none;
-}
-.ref-chip svg {
-  flex: none;
-  color: var(--text-muted);
-}
-.ref-chip.target {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-.ref-chip.target svg {
-  color: var(--accent);
-}
-/* where the merge request goes: in ink, like the project's tile */
-.mr-route .ref-chip.target {
-  border-color: var(--tile-bg);
-  background: var(--tile-bg);
-  color: var(--on-ink);
-}
-.mr-route .ref-chip.target svg {
-  color: var(--brand);
-}
 .mr-route-arrow {
   display: inline-flex;
   align-items: center;
@@ -3190,9 +3153,14 @@ kbd {
   gap: 6px;
   padding: 10px 0;
 }
-.tab-count {
-  font: 12px var(--mono);
-  color: var(--text-muted);
+/* ---- counters, as the UI convention draws them: a small grey number right after what it
+   counts (tabs, the sidebar, section titles); unread is the one counter in color */
+.tab-count,
+.section-count,
+.side-link .count {
+  color: var(--text-faint);
+  font: 500 12px/1 var(--sans);
+  font-variant-numeric: tabular-nums;
 }
 .diff-bar {
   display: inline-flex;
@@ -4130,8 +4098,6 @@ a.status-badge:hover {
 }
 .section-count {
   margin-left: 3px;
-  color: var(--text-faint);
-  font: 500 12px var(--mono);
 }
 .section-actions {
   display: flex;
@@ -5279,11 +5245,9 @@ a.row-title:hover,
   max-width: 40%;
 }
 .ref-chip.small {
-  height: 22px;
-  padding: 0 7px;
-  gap: 4px;
+  height: 20px;
+  padding: 0 6px;
   font-size: 11.5px;
-  border-color: var(--border);
 }
 .mr-row-route .ref-chip.small {
   display: inline-block;
@@ -5403,14 +5367,6 @@ a.row-title:hover,
 }
 .tip-subject {
   max-width: 48ch;
-}
-.pill.accent {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-.pill.warn {
-  border-color: var(--warn);
-  color: var(--warn);
 }
 .row-title .pill {
   flex: none;
@@ -6052,29 +6008,9 @@ a.label-chip:hover {
   white-space: nowrap;
 }
 .milestone-chip {
-  display: inline-flex;
-  align-items: center;
-  flex: none;
-  gap: 4px;
   max-width: 220px;
   height: 20px;
-  padding: 0 8px 0 6px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--bg);
-  color: var(--text-muted);
-  font-size: 11.5px;
-  font-weight: 500;
-  line-height: 18px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   vertical-align: middle;
-}
-a.milestone-chip:hover {
-  border-color: var(--text-faint);
-  color: var(--text);
-  text-decoration: none;
 }
 .label-dot {
   flex: none;

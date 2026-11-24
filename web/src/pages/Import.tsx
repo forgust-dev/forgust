@@ -1,9 +1,9 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ArrowRight, CheckCircle2, CircleDashed, CircleX, Download, ExternalLink, Loader2, Lock, Plus, RotateCcw, Square } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, CircleDashed, CircleX, Download, ExternalLink, Loader2, Lock, Plus, RotateCcw, Square, Archive } from "lucide-react";
 import { api, bytes, timeAgo, type S } from "../api/client";
-import { Empty, ErrorBox, Field, FieldGroup, ListHead, Q, SearchField, Section } from "../components/ui";
+import { Empty, ErrorBox, Field, FieldGroup, ListHead, Q, SearchField, Section, StateBadge } from "../components/ui";
 import { Choices, Segmented, Select } from "../components/controls";
 import { useSession } from "../session";
 import { useAct } from "../shell/toast";
@@ -284,7 +284,11 @@ function ProjectLine({ p }: { p: S["SourceProject"] }) {
       <div className="row-title">
         <span className="ellipsis">{p.full_path}</span>
         <span className="pill">{p.visibility}</span>
-        {p.archived && <span className="pill">archived</span>}
+        {p.archived && (
+          <StateBadge tone="neutral" icon={Archive}>
+            Archived
+          </StateBadge>
+        )}
         {p.empty && <span className="pill">empty</span>}
       </div>
       {p.description && <div className="row-desc ellipsis">{p.description}</div>}

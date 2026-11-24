@@ -6,7 +6,7 @@ import { Archive, ArrowRight, BookOpen, Building2, CalendarDays, GitBranch, GitC
 import { api, bytes, qs, timeAgo, type S, encPath, refLink } from "../../api/client";
 import { StatusBadge } from "./ci/Status";
 import { fetchers, keys } from "../../prefetch";
-import { Badge, CopyField, NotFound, Q, Spinner, Tile } from "../../components/ui";
+import { Badge, CopyField, NotFound, Q, Spinner, Tile, StateBadge } from "../../components/ui";
 import { KeepNav, useSetNav } from "../../shell/nav";
 import { Blame, Blob, Tree } from "./Code";
 import { Commit, Commits } from "./History";
@@ -296,12 +296,12 @@ function ProjectHeader({ p }: { p: S["ProjectDetail"] }) {
           </span>
         )}
         {p.archived && (
-          <span className="pill warn" title={p.archived_at ? `Archived ${new Date(p.archived_at).toLocaleString()}` : undefined}>
-            <Archive size={13} /> Archived
-          </span>
+          <StateBadge tone="neutral" icon={Archive} title={p.archived_at ? `Archived ${new Date(p.archived_at).toLocaleString()}` : undefined}>
+            Archived
+          </StateBadge>
         )}
         <span className="grow" />
-        {p.access_level !== "none" && <Badge tone="accent">{p.access_level}</Badge>}
+        {p.access_level !== "none" && <Badge>{p.access_level}</Badge>}
         {user && <NotificationBell projectId={p.id} />}
       </div>
       {p.description && <p className="repo-desc">{p.description}</p>}

@@ -286,7 +286,7 @@ function Users() {
                       <div className="row wrap" style={{ gap: 6 }}>
                         <UserLink username={u.username}>{u.name || u.username}</UserLink>
                         <span className="muted small">@{u.username}</span>
-                        {u.is_admin && <Badge tone="accent">admin</Badge>}
+                        {u.is_admin && <Badge>admin</Badge>}
                         {u.is_external && <Badge>external</Badge>}
                         {u.state === "blocked" && (
                           <StateBadge tone="danger" icon={Ban}>

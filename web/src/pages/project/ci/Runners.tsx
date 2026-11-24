@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Lock, Plus, Server, Trash2 } from "lucide-react";
 import { api, timeAgo, type S } from "../../../api/client";
-import { Section, Empty, ErrorBox, Field, NewSecret, Q } from "../../../components/ui";
+import { Section, Empty, ErrorBox, Field, NewSecret, Q, StateBadge } from "../../../components/ui";
 import { useToast } from "../../../shell/toast";
 import { useConfirm } from "../../../shell/dialog";
 
@@ -124,7 +124,9 @@ export function RunnersPanel({ list, create, title = "Runners", note }: { list: 
                     <div className="grow stack" style={{ gap: 3, minWidth: 0 }}>
                       <span>
                         <strong>#{r.id}</strong> {r.description || <span className="faint">no description</span>}{" "}
-                        <span className={`badge ${RUNNER_STATUS[r.status] ?? ""}`}>{r.status.replace("_", " ")}</span> <span className="badge">{r.kind}</span>
+                        <StateBadge tone={r.status === "online" ? "ok" : r.status === "paused" ? "warn" : "neutral"}>
+                          {r.status[0].toUpperCase() + r.status.slice(1).replace("_", " ")}
+                        </StateBadge> <span className="badge">{r.kind}</span>
                         {r.protected_only && (
                           <span className="badge">
                             <Lock size={10} /> protected

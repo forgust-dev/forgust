@@ -1,7 +1,7 @@
 import { useLayoutEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, Clock3, CornerDownRight, GitBranch, Play, RotateCcw, Server, ServerOff, Square, Tag, Timer, Plus, X } from "lucide-react";
+import { CalendarClock, Clock3, CornerDownRight, GitBranch, Play, RotateCcw, Server, ServerOff, Square, Tag, Timer, Plus, X, Shield } from "lucide-react";
 import { api, qs, refLink, timeAgo, type S } from "../../../api/client";
 import { Empty, ErrorBox, Field, FieldGroup, FilterTabs, ListHead, Q, SearchField } from "../../../components/ui";
 import { Select } from "../../../components/controls";
@@ -439,12 +439,19 @@ export function PipelineHeader({ ctx, p, tab }: { ctx: Ctx; p: S["PipelineDetail
           </div>
           <div>
             <dt>Ref</dt>
-            <dd className="mono">
-              {p.tag ? <Tag size={12} /> : <GitBranch size={12} />} <Link to={refLink(ctx.web, "tree", p.ref)}>{p.ref}</Link>{" "}
-              <Link to={`${ctx.web}/-/commit/${p.sha}`} className="muted">
-                @{p.sha.slice(0, 8)}
+            <dd className="row wrap" style={{ gap: 6 }}>
+              <Link className="ref-chip small" to={refLink(ctx.web, "tree", p.ref)}>
+                {p.tag ? <Tag size={11} /> : <GitBranch size={11} />}
+                {p.ref}
               </Link>
-              {p.protected && <span className="badge">protected</span>}
+              <Link to={`${ctx.web}/-/commit/${p.sha}`} className="sha">
+                {p.sha.slice(0, 8)}
+              </Link>
+              {p.protected && (
+                <span className="badge">
+                  <Shield size={11} aria-hidden /> protected
+                </span>
+              )}
             </dd>
           </div>
           <div>

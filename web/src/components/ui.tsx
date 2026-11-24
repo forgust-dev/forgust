@@ -123,8 +123,10 @@ export function StateBadge({ tone, icon: Icon, children, className, title }: { t
   );
 }
 
-export function Badge({ children, tone }: { children: ReactNode; tone?: "accent" | "ok" | "warn" }) {
-  return <span className={`badge ${tone ?? ""}`}>{children}</span>;
+/** A property of a thing (a role, its visibility, a kind), as the UI convention draws it: a fine
+ *  grey outline, never colored, so that it never reads as a state. */
+export function Badge({ children }: { children: ReactNode }) {
+  return <span className="badge">{children}</span>;
 }
 
 export function Field({ label, hint, children }: { label: string; hint?: ReactNode; children: ReactNode }) {
@@ -467,7 +469,7 @@ export function ImportedMark({ x }: { x: Authored }) {
 /** A confidential issue: seen only by Reporters and up, its author and its assignees. */
 export function ConfidentialMark() {
   return (
-    <span className="pill warn confidential-mark" title="Confidential: only Reporters and up, the author and assignees can see it">
+    <span className="pill confidential-mark" title="Confidential: only Reporters and up, the author and assignees can see it">
       <Lock size={11} aria-hidden /> Confidential
     </span>
   );
@@ -476,7 +478,7 @@ export function ConfidentialMark() {
 /** An internal comment: seen only by the project's Reporters and up. */
 export function InternalMark() {
   return (
-    <span className="pill warn internal-mark" title="Internal: only Reporters and up can see this comment">
+    <span className="pill internal-mark" title="Internal: only Reporters and up can see this comment">
       <EyeOff size={11} aria-hidden /> Internal
     </span>
   );

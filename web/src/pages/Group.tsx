@@ -37,7 +37,7 @@ export function GroupPage({ id, rest }: { id: number; fullPath: string; rest: st
                     </span>
                     {group.is_org && <span className="pill">Organization</span>}
                     <span className="grow" />
-                    {group.access_level !== "none" && <Badge tone="accent">{group.access_level}</Badge>}
+                    {group.access_level !== "none" && <Badge>{group.access_level}</Badge>}
                   </div>
                   {group.description && <p className="repo-desc">{group.description}</p>}
                 </div>

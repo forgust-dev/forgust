@@ -530,7 +530,7 @@ function BlobView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
                   <span>{bytes(blob.lfs ? blob.lfs.size : blob.size)}</span>
                   {blob.language && <span className="hide-narrow">{blob.language}</span>}
                 </span>
-                {blob.lfs && <Badge tone="accent">LFS</Badge>}
+                {blob.lfs && <Badge>LFS</Badge>}
                 <div className="spacer" />
                 {text && !preview && (
                   <button className={`icon-btn ${wrap ? "on" : ""}`} onClick={() => setWrap(!wrap)} aria-pressed={wrap} title="Wrap long lines" aria-label="Wrap long lines">

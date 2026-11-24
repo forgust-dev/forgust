@@ -587,7 +587,7 @@ function WebauthnCard({ kind, onCodes, onChange }: { kind: CredentialKind; onCod
         }
         const items = data.credentials.filter((c) => c.kind === kind);
         return (
-          <Card title={<>{copy.title} {items.length > 0 && <Badge tone="ok">{items.length}</Badge>}</>}>
+          <Card title={<>{copy.title} {items.length > 0 && <span className="section-count">{items.length}</span>}</>}>
             <div className="stack">
               <ErrorBox error={error} />
               {msg && <div className="alert ok">{msg}</div>}

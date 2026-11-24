@@ -143,8 +143,12 @@ function EnvRow({ ctx, e, short, onStop }: { ctx: Ctx; e: S["EnvironmentRow"]; s
           <Link to={`${ctx.web}/-/environments/${e.id}`} className="ellipsis">
             {short ?? e.name}
           </Link>
-          <span className={`pill${e.tier === "production" ? " warn" : ""}`}>{e.tier}</span>
-          {e.state !== "available" && <span className="pill">{STATE[e.state]?.label ?? e.state}</span>}
+          <span className="pill">{e.tier}</span>
+          {e.state !== "available" && (
+            <StateBadge tone="neutral" icon={STATE[e.state]?.icon ?? Square}>
+              {STATE[e.state]?.label ?? e.state}
+            </StateBadge>
+          )}
         </div>
         <div className="row-meta">
           {d ? (

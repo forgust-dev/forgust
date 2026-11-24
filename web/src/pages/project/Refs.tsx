@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeftRight, ArrowRight, Download, GitBranch, GitMerge, Package, Plus, Tag, Trash2 } from "lucide-react";
+import { ArrowLeftRight, ArrowRight, Download, GitBranch, GitMerge, Package, Plus, Tag, Trash2, Shield, Star } from "lucide-react";
 import { api, qs, timeAgo, type S, encPath, refLink } from "../../api/client";
 import { Empty, ErrorBox, Field, ListHead, Q, SearchField, useDebounced } from "../../components/ui";
 import { useToast } from "../../shell/toast";
@@ -124,8 +124,16 @@ export function Branches({ ctx }: { ctx: Ctx }) {
                       <Link to={refLink(ctx.web, "tree", b.name)} className="ref-name ellipsis">
                         {b.name}
                       </Link>
-                      {b.default && <span className="pill accent">default</span>}
-                      {b.protected && <span className="pill warn">protected</span>}
+                      {b.default && (
+                        <span className="pill">
+                          <Star size={11} aria-hidden /> default
+                        </span>
+                      )}
+                      {b.protected && (
+                        <span className="pill">
+                          <Shield size={11} aria-hidden /> protected
+                        </span>
+                      )}
                     </div>
                     <Tip ctx={ctx} c={b.commit} />
                   </div>
@@ -257,9 +265,13 @@ export function Tags({ ctx }: { ctx: Ctx }) {
                         {t.name}
                       </Link>
                       {t.annotated && <span className="pill">annotated</span>}
-                      {t.protected && <span className="pill warn">protected</span>}
+                      {t.protected && (
+                        <span className="pill">
+                          <Shield size={11} aria-hidden /> protected
+                        </span>
+                      )}
                       {t.release && (
-                        <Link className="pill accent" to={`${ctx.web}/-/releases/${encodeURIComponent(t.name)}`} title="This tag's release">
+                        <Link className="pill" to={`${ctx.web}/-/releases/${encodeURIComponent(t.name)}`} title="This tag's release">
                           <Package size={11} /> {t.release}
                         </Link>
                       )}
