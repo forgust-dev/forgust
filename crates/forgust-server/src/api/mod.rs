@@ -449,13 +449,15 @@ impl Paging {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::IntoParams)]
 pub struct ResolveQuery {
+    /// A URL path: group/project, a group or a username.
     path: String,
 }
 
 /// Resolve a URL path to a project, group or user namespace (used by the web app
 /// for GitLab-shaped URLs). Old paths report where they moved.
+#[utoipa::path(get, path = "/api/v1/resolve", params(ResolveQuery), responses((status = 200, body = dto::Resolved)), tag = "projects")]
 async fn resolve_path(State(state): State<AppState>, Viewer(p): Viewer, Query(q): Query<ResolveQuery>) -> ApiResult<Json<dto::Resolved>> {
     let path = q.path.trim_matches('/');
     let mut conn = state.db.acquire().await?;
@@ -489,6 +491,8 @@ async fn resolve_path(State(state): State<AppState>, Viewer(p): Viewer, Query(q)
     Ok(Json(dto::Resolved { kind: kind.into(), id: hit.source_id, full_path: hit.path, redirected: hit.redirected }))
 }
 
+/// The style sheet of syntax highlighting (for the web app).
+#[utoipa::path(get, path = "/api/v1/highlight.css", responses((status = 200, content_type = "text/css")), tag = "repository")]
 async fn highlight_css(State(state): State<AppState>) -> impl axum::response::IntoResponse {
     (
         [(axum::http::header::CONTENT_TYPE, "text/css"), (axum::http::header::CACHE_CONTROL, "public, max-age=86400")],
@@ -496,6 +500,8 @@ async fn highlight_css(State(state): State<AppState>) -> impl axum::response::In
     )
 }
 
+/// The server's name and version.
+#[utoipa::path(get, path = "/api/v1/version", responses((status = 200)), tag = "auth")]
 async fn version() -> Json<serde_json::Value> {
     Json(serde_json::json!({ "name": "Forgust", "version": env!("CARGO_PKG_VERSION") }))
 }

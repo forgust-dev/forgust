@@ -887,6 +887,7 @@ pub async fn play_job(
 }
 
 /// A delayed job waits for someone instead (it becomes manual).
+#[utoipa::path(post, path = "/api/v1/projects/{id}/jobs/{job_id}/unschedule", responses((status = 200, body = JobDto)), tag = "ci")]
 pub async fn unschedule_job(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,

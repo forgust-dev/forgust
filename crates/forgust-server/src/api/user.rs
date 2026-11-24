@@ -53,6 +53,8 @@ pub struct UpdateMe {
     pub current_password: String,
 }
 
+/// Update your name and email (needs a signed-in browser session of the account); a new address needs the current password and takes over once confirmed from its inbox.
+#[utoipa::path(put, path = "/api/v1/user", request_body = UpdateMe, responses((status = 200, body = UserDto)), tag = "user")]
 pub async fn update_me(
     State(state): State<AppState>,
     SignedIn(u, p): SignedIn,
@@ -172,6 +174,8 @@ async fn reauth(state: &AppState, jar: &axum_extra::extract::CookieJar, ip: Clie
     }
 }
 
+/// Change your password with the current one (needs a signed-in browser session of the account); your other sessions are signed out.
+#[utoipa::path(put, path = "/api/v1/user/password", request_body = ChangePassword, responses((status = 200)), tag = "user")]
 pub async fn change_password(
     State(state): State<AppState>,
     SignedIn(u, p): SignedIn,
@@ -238,6 +242,8 @@ pub struct LinkStart {
 /// Start linking a provider to the signed-in account: the provider's sign-in,
 /// whose callback adds the identity to this account. Asked for with the
 /// password, like any new way into the account.
+/// It needs a signed-in browser session of the account and, with email on, a confirmed address.
+#[utoipa::path(post, path = "/api/v1/user/identities/{name}/link", request_body = ConfirmPassword, responses((status = 200, body = LinkStart)), tag = "user")]
 pub async fn link_identity(
     State(state): State<AppState>,
     SignedIn(u, p): SignedIn,
@@ -259,6 +265,8 @@ pub async fn link_identity(
 
 /// Unlink a provider. Never the last way in: an account without a password
 /// keeps at least one provider.
+/// It needs a signed-in browser session of the account and the password.
+#[utoipa::path(post, path = "/api/v1/user/identities/{name}/unlink", request_body = ConfirmPassword, responses((status = 200)), tag = "user")]
 pub async fn unlink_identity(
     State(state): State<AppState>,
     SignedIn(u, p): SignedIn,
@@ -319,6 +327,8 @@ pub async fn list_keys(State(state): State<AppState>, SignedIn(u, _): SignedIn) 
     Ok(Json(forgust_db::ssh_keys::list_for_user(&state.db, u.id).await?))
 }
 
+/// Add an SSH key to your account (needs a signed-in browser session of the account and, with email on, a confirmed address).
+#[utoipa::path(post, path = "/api/v1/user/keys", request_body = AddKey, responses((status = 200, body = SshKey)), tag = "user")]
 pub async fn add_key(State(state): State<AppState>, SignedIn(u, p): SignedIn, Json(req): Json<AddKey>) -> ApiResult<Json<SshKey>> {
     // a key outlives any token: a leaked token must not be able to plant one
     require_interactive(&u, &p)?;
@@ -334,6 +344,8 @@ pub async fn add_key(State(state): State<AppState>, SignedIn(u, p): SignedIn, Js
     Ok(Json(keys.into_iter().find(|k| k.id == id).ok_or(ApiError::NotFound)?))
 }
 
+/// Remove one of your SSH keys (needs a signed-in browser session of the account).
+#[utoipa::path(delete, path = "/api/v1/user/keys/{id}", responses((status = 200)), tag = "user")]
 pub async fn delete_key(State(state): State<AppState>, SignedIn(u, p): SignedIn, Path(id): Path<i64>) -> ApiResult<Json<Value>> {
     require_interactive(&u, &p)?;
     if !forgust_db::ssh_keys::delete_for_user(&state.db, u.id, id).await? {
@@ -371,6 +383,8 @@ pub async fn list_tokens(State(state): State<AppState>, SignedIn(u, _): SignedIn
     Ok(Json(forgust_db::tokens::list_pats(&state.db, u.id).await?))
 }
 
+/// Create a personal access token, shown this once (needs a signed-in browser session of the account and, with email on, a confirmed address); `admin_mode` is for administrators.
+#[utoipa::path(post, path = "/api/v1/user/tokens", request_body = CreateToken, responses((status = 200, body = NewToken)), tag = "user")]
 pub async fn create_token(
     State(state): State<AppState>,
     SignedIn(u, p): SignedIn,
@@ -390,6 +404,8 @@ pub async fn create_token(
     Ok(Json(NewToken { id, token, username: Some(u.username) }))
 }
 
+/// Revoke one of your personal access tokens (needs a signed-in browser session of the account).
+#[utoipa::path(delete, path = "/api/v1/user/tokens/{id}", responses((status = 200)), tag = "user")]
 pub async fn revoke_token(State(state): State<AppState>, SignedIn(u, p): SignedIn, Path(id): Path<i64>) -> ApiResult<Json<Value>> {
     require_interactive(&u, &p)?;
     if !forgust_db::tokens::revoke_pat(&state.db, u.id, id).await? {
@@ -411,6 +427,8 @@ pub struct TotpSetup {
 /// password, like enabling it: a borrowed session must not be able to put its
 /// own secret on the account. An account without a password keeps its recent
 /// sign-in for the enabling.
+/// It needs a signed-in browser session of the account.
+#[utoipa::path(post, path = "/api/v1/user/two_factor/setup", request_body = ConfirmPassword, responses((status = 200, body = TotpSetup)), tag = "user")]
 pub async fn totp_setup(
     State(state): State<AppState>,
     SignedIn(u, p): SignedIn,
@@ -448,6 +466,8 @@ pub struct TotpEnabled {
     pub recovery_codes: Vec<String>,
 }
 
+/// Turn on two-factor authentication with a code of the app set up first and the password (needs a signed-in browser session of the account); answers the recovery codes, shown this once.
+#[utoipa::path(post, path = "/api/v1/user/two_factor/enable", request_body = TotpCode, responses((status = 200, body = TotpEnabled)), tag = "user")]
 pub async fn totp_enable(
     State(state): State<AppState>,
     SignedIn(u, p): SignedIn,
@@ -480,6 +500,8 @@ pub struct TotpDisable {
     pub password: String,
 }
 
+/// Turn off two-factor authentication with the password (needs a signed-in browser session of the account).
+#[utoipa::path(post, path = "/api/v1/user/two_factor/disable", request_body = TotpDisable, responses((status = 200, body = UserDto)), tag = "user")]
 pub async fn totp_disable(
     State(state): State<AppState>,
     SignedIn(u, p): SignedIn,
@@ -504,6 +526,8 @@ pub struct RecoveryCodesLeft {
     pub remaining: i64,
 }
 
+/// How many unused two-factor recovery codes you have left (needs a signed-in browser session of the account).
+#[utoipa::path(get, path = "/api/v1/user/two_factor/recovery_codes", responses((status = 200, body = RecoveryCodesLeft)), tag = "user")]
 pub async fn recovery_codes(State(state): State<AppState>, SignedIn(u, p): SignedIn) -> ApiResult<Json<RecoveryCodesLeft>> {
     require_interactive(&u, &p)?;
     Ok(Json(RecoveryCodesLeft { remaining: forgust_db::recovery_codes::remaining(&state.db, u.id).await? }))
@@ -516,6 +540,8 @@ pub struct NewRecoveryCodes {
 }
 
 /// New recovery codes; the old ones stop working.
+/// It needs a signed-in browser session of the account, the password and two-factor turned on.
+#[utoipa::path(post, path = "/api/v1/user/two_factor/recovery_codes", request_body = ConfirmPassword, responses((status = 200, body = NewRecoveryCodes)), tag = "user")]
 pub async fn recovery_codes_reset(
     State(state): State<AppState>,
     SignedIn(u, p): SignedIn,
@@ -548,6 +574,8 @@ pub struct WebauthnCredentials {
     pub credentials: Vec<forgust_db::webauthn::CredentialInfo>,
 }
 
+/// Your security keys and passkeys, and whether they work on this instance.
+#[utoipa::path(get, path = "/api/v1/user/webauthn", responses((status = 200, body = WebauthnCredentials)), tag = "user")]
 pub async fn webauthn_list(State(state): State<AppState>, SignedIn(u, _): SignedIn) -> ApiResult<Json<WebauthnCredentials>> {
     Ok(Json(WebauthnCredentials { available: state.webauthn.is_some(), credentials: forgust_db::webauthn::list(&state.db, u.id).await? }))
 }
@@ -580,6 +608,8 @@ async fn current_session(state: &AppState, jar: &axum_extra::extract::CookieJar)
 /// Start adding a security key or a passkey. The authenticator is asked not to
 /// make a second credential for the account; a passkey must be one it can
 /// offer with no username (discoverable) and that verifies its user.
+/// It needs a signed-in browser session of the account, the password and, with email on, a confirmed address.
+#[utoipa::path(post, path = "/api/v1/user/webauthn/register/start", request_body = WebauthnRegisterStart, responses((status = 200, body = WebauthnRegistration)), tag = "user")]
 pub async fn webauthn_register_start(
     State(state): State<AppState>,
     SignedIn(u, p): SignedIn,
@@ -656,6 +686,8 @@ fn credential_name(name: &str) -> ApiResult<String> {
 }
 
 /// Finish adding a security key or a passkey, from the session that started it.
+/// It needs a signed-in browser session of the account; the first security key brings the recovery codes, shown this once.
+#[utoipa::path(post, path = "/api/v1/user/webauthn/register/finish", request_body = WebauthnRegisterFinish, responses((status = 200, body = WebauthnRegistered)), tag = "user")]
 pub async fn webauthn_register_finish(
     State(state): State<AppState>,
     SignedIn(u, p): SignedIn,
@@ -738,6 +770,8 @@ pub struct WebauthnRename {
     pub name: String,
 }
 
+/// Rename one of your security keys or passkeys (needs a signed-in browser session of the account).
+#[utoipa::path(put, path = "/api/v1/user/webauthn/{id}", request_body = WebauthnRename, responses((status = 200)), tag = "user")]
 pub async fn webauthn_rename(
     State(state): State<AppState>,
     SignedIn(u, p): SignedIn,
@@ -755,6 +789,8 @@ pub async fn webauthn_rename(
 
 /// Remove a security key or a passkey (the password again). With the last
 /// second factor go the recovery codes.
+/// It needs a signed-in browser session of the account.
+#[utoipa::path(post, path = "/api/v1/user/webauthn/{id}/remove", request_body = ConfirmPassword, responses((status = 200, body = UserDto)), tag = "user")]
 pub async fn webauthn_remove(
     State(state): State<AppState>,
     SignedIn(u, p): SignedIn,
@@ -826,6 +862,8 @@ pub async fn my_project_states(
 }
 
 /// User picker for member dialogs.
+/// The search matches usernames and names; administrators also see (and match) emails, and blocked users.
+#[utoipa::path(get, path = "/api/v1/users", params(("search" = Option<String>, Query, description = "Part of a username or name"), ("page" = Option<i64>, Query, description = "Page, from 1"), ("per_page" = Option<i64>, Query, description = "At most 100; 20 by default")), responses((status = 200, body = [UserDto])), tag = "user")]
 pub async fn search_users(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -888,6 +926,7 @@ pub async fn todos(
 }
 
 /// Mark one to-do done.
+#[utoipa::path(post, path = "/api/v1/user/todos/{id}/done", responses((status = 200)), tag = "user")]
 pub async fn todo_done(State(state): State<AppState>, SignedIn(u, _): SignedIn, Path(id): Path<i64>) -> ApiResult<Json<Value>> {
     let d = forgust_db::todos::mark_done(&state.db, u.id, Some(id)).await?;
     if d.todos == 0 {
@@ -898,6 +937,7 @@ pub async fn todo_done(State(state): State<AppState>, SignedIn(u, _): SignedIn, 
 }
 
 /// Mark every pending to-do done.
+#[utoipa::path(post, path = "/api/v1/user/todos/done", responses((status = 200)), tag = "user")]
 pub async fn todos_done(State(state): State<AppState>, SignedIn(u, _): SignedIn) -> ApiResult<Json<Value>> {
     let d = forgust_db::todos::mark_done(&state.db, u.id, None).await?;
     bell_follows(&state, u.id, d);
@@ -1005,6 +1045,8 @@ pub async fn profile(State(state): State<AppState>, SignedIn(_, v): SignedIn, Pa
 
 /// Send the confirmation link again: for the new address waiting, else for
 /// the account's own unconfirmed one.
+/// It needs a signed-in browser session of the account; only with email on.
+#[utoipa::path(post, path = "/api/v1/user/email/resend", responses((status = 200)), tag = "user")]
 pub async fn resend_confirmation(State(state): State<AppState>, SignedIn(u, p): SignedIn) -> ApiResult<Json<Value>> {
     require_interactive(&u, &p)?;
     services::accounts::require_email(&state)?;

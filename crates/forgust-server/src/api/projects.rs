@@ -76,10 +76,13 @@ pub async fn create(
 }
 
 /// Archive the project: read-only for everyone until its Owner unarchives it.
+#[utoipa::path(post, path = "/api/v1/projects/{id}/archive", responses((status = 200)), tag = "projects")]
 pub async fn archive(State(state): State<AppState>, SignedIn(_, p): SignedIn, Path(id): Path<String>) -> ApiResult<Json<Value>> {
     set_archived(&state, &p, &id, true).await
 }
 
+/// Unarchive the project (Owners only).
+#[utoipa::path(post, path = "/api/v1/projects/{id}/unarchive", responses((status = 200)), tag = "projects")]
 pub async fn unarchive(State(state): State<AppState>, SignedIn(_, p): SignedIn, Path(id): Path<String>) -> ApiResult<Json<Value>> {
     set_archived(&state, &p, &id, false).await
 }
@@ -137,6 +140,8 @@ pub struct UpdateProject {
     pub default_branch: Option<String>,
 }
 
+/// Change the project's name, description, visibility or default branch (Maintainers; visibility is the Owners' call).
+#[utoipa::path(put, path = "/api/v1/projects/{id}", request_body = UpdateProject, responses((status = 200, body = ProjectDto)), tag = "projects")]
 pub async fn update(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -155,6 +160,8 @@ pub struct NewPath {
     pub path: String,
 }
 
+/// Change the project's path (Owners only).
+#[utoipa::path(post, path = "/api/v1/projects/{id}/path", request_body = NewPath, responses((status = 200, body = ProjectDto)), tag = "projects")]
 pub async fn rename(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -171,6 +178,8 @@ pub struct TransferProject {
     pub namespace_id: i64,
 }
 
+/// Move the project to another namespace (Owners only, and who may create projects there).
+#[utoipa::path(post, path = "/api/v1/projects/{id}/transfer", request_body = TransferProject, responses((status = 200, body = ProjectDto)), tag = "projects")]
 pub async fn transfer(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -183,6 +192,8 @@ pub async fn transfer(
     Ok(Json(ProjectDto::from(&proj, &state.cfg)))
 }
 
+/// Delete the project (Owners only).
+#[utoipa::path(delete, path = "/api/v1/projects/{id}", responses((status = 200)), tag = "projects")]
 pub async fn delete(State(state): State<AppState>, SignedIn(_, p): SignedIn, Path(id): Path<String>) -> ApiResult<Json<Value>> {
     let proj = load_project(&state, &id).await?;
     projects::delete(&state, &p, &proj).await?;
@@ -195,6 +206,8 @@ pub async fn members(State(state): State<AppState>, SignedIn(_, p): SignedIn, Pa
     Ok(Json(forgust_db::members::list(&state.db, "project", proj.id).await?.into_iter().map(Into::into).collect()))
 }
 
+/// Add a member or change their role (Maintainers; not above their own role).
+#[utoipa::path(post, path = "/api/v1/projects/{id}/members", request_body = AddMember, responses((status = 200)), tag = "projects")]
 pub async fn add_member(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -207,6 +220,8 @@ pub async fn add_member(
     Ok(Json(json!({ "ok": true })))
 }
 
+/// Remove a member (Maintainers, not one above them); anyone may leave.
+#[utoipa::path(delete, path = "/api/v1/projects/{id}/members/{user_id}", responses((status = 200)), tag = "projects")]
 pub async fn remove_member(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -217,11 +232,15 @@ pub async fn remove_member(
     Ok(Json(json!({ "ok": true })))
 }
 
+/// Groups the project is shared with (those the viewer may see).
+#[utoipa::path(get, path = "/api/v1/projects/{id}/shares", responses((status = 200, body = [ShareDto])), tag = "projects")]
 pub async fn shares(State(state): State<AppState>, SignedIn(_, p): SignedIn, Path(id): Path<String>) -> ApiResult<Json<Vec<ShareDto>>> {
     let proj = project_for(&state, &p, &id, ProjectAction::Read).await?;
     Ok(Json(super::groups::visible_shares(&state, &p, forgust_db::links::project_shares(&state.db, proj.id).await?).await?))
 }
 
+/// Share the project with a group, capped at a role (Maintainers; not above their own role).
+#[utoipa::path(post, path = "/api/v1/projects/{id}/shares", request_body = ShareRequest, responses((status = 200)), tag = "projects")]
 pub async fn share(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -234,6 +253,8 @@ pub async fn share(
     Ok(Json(json!({ "ok": true })))
 }
 
+/// Stop sharing the project with a group (Maintainers).
+#[utoipa::path(delete, path = "/api/v1/projects/{id}/shares/{group_id}", responses((status = 200)), tag = "projects")]
 pub async fn unshare(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -289,6 +310,8 @@ fn push_level(s: &str) -> ApiResult<i16> {
     }
 }
 
+/// Protect branches matching a name or glob, or change their rule (Maintainers).
+#[utoipa::path(post, path = "/api/v1/projects/{id}/protected_branches", request_body = ProtectBranch, responses((status = 200, body = [ProtectedBranchDto])), tag = "projects")]
 pub async fn protect_branch(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -331,6 +354,8 @@ pub async fn protect_branch(
     Ok(Json(forgust_db::protected_branches::list(&state.db, proj.id).await?.into_iter().map(Into::into).collect()))
 }
 
+/// Remove a branch protection rule (Maintainers).
+#[utoipa::path(delete, path = "/api/v1/projects/{id}/protected_branches/{pb_id}", responses((status = 200)), tag = "projects")]
 pub async fn unprotect_branch(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -359,6 +384,8 @@ fn branch_rule(b: &forgust_db::protected_branches::ProtectedBranch) -> Value {
 
 // ------------------------------------------------------------------ deploy keys and tokens
 
+/// The project's deploy keys (Maintainers).
+#[utoipa::path(get, path = "/api/v1/projects/{id}/deploy_keys", responses((status = 200, body = [DeployKey])), tag = "projects")]
 pub async fn deploy_keys(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -376,6 +403,8 @@ pub struct AddDeployKey {
     pub can_push: bool,
 }
 
+/// Add a deploy key, or attach one another project uses (Maintainers; needs a signed-in browser session).
+#[utoipa::path(post, path = "/api/v1/projects/{id}/deploy_keys", request_body = AddDeployKey, responses((status = 200, body = [DeployKey])), tag = "projects")]
 pub async fn add_deploy_key(
     State(state): State<AppState>,
     SignedIn(u, p): SignedIn,
@@ -409,6 +438,8 @@ pub async fn add_deploy_key(
     Ok(Json(forgust_db::ssh_keys::deploy_keys_for_project(&state.db, proj.id).await?))
 }
 
+/// Detach a deploy key from the project (Maintainers); a key no project uses any more is deleted.
+#[utoipa::path(delete, path = "/api/v1/projects/{id}/deploy_keys/{key_id}", responses((status = 200)), tag = "projects")]
 pub async fn remove_deploy_key(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -423,6 +454,8 @@ pub async fn remove_deploy_key(
     Ok(Json(json!({ "ok": true })))
 }
 
+/// The project's deploy tokens (Maintainers).
+#[utoipa::path(get, path = "/api/v1/projects/{id}/deploy_tokens", responses((status = 200, body = [DeployToken])), tag = "projects")]
 pub async fn list_deploy_tokens(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -432,6 +465,8 @@ pub async fn list_deploy_tokens(
     Ok(Json(forgust_db::tokens::list_deploy_tokens(&state.db, Some(proj.id), None).await?))
 }
 
+/// Create a deploy token; the answer is the only time it is shown (Maintainers; needs a signed-in browser session).
+#[utoipa::path(post, path = "/api/v1/projects/{id}/deploy_tokens", request_body = CreateDeployToken, responses((status = 200, body = NewToken)), tag = "projects")]
 pub async fn create_deploy_token(
     State(state): State<AppState>,
     SignedIn(u, p): SignedIn,
@@ -444,6 +479,8 @@ pub async fn create_deploy_token(
     Ok(Json(create_deploy(&state, &p, Some(proj.id), None, req).await?))
 }
 
+/// Revoke a deploy token (Maintainers).
+#[utoipa::path(delete, path = "/api/v1/projects/{id}/deploy_tokens/{token_id}", responses((status = 200)), tag = "projects")]
 pub async fn revoke_deploy_token(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -457,6 +494,8 @@ pub async fn revoke_deploy_token(
     Ok(Json(json!({ "ok": true })))
 }
 
+/// The project's access tokens, held by its bot members (Maintainers).
+#[utoipa::path(get, path = "/api/v1/projects/{id}/access_tokens", responses((status = 200, body = [AccessTokenDto])), tag = "projects")]
 pub async fn list_access_tokens(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -466,6 +505,8 @@ pub async fn list_access_tokens(
     Ok(Json(list_bot_tokens(&state, "project", proj.id).await?))
 }
 
+/// Create a project access token: a bot member with that role, and its token, shown only here (Maintainers; needs a signed-in browser session).
+#[utoipa::path(post, path = "/api/v1/projects/{id}/access_tokens", request_body = CreateAccessToken, responses((status = 200, body = NewToken)), tag = "projects")]
 pub async fn create_access_token(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -476,6 +517,8 @@ pub async fn create_access_token(
     Ok(Json(create_bot_token(&state, &p, members::Source::Project(&proj), req).await?))
 }
 
+/// Revoke a project access token: blocks its bot and removes its membership (Maintainers).
+#[utoipa::path(delete, path = "/api/v1/projects/{id}/access_tokens/{bot_id}", responses((status = 200)), tag = "projects")]
 pub async fn revoke_access_token(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -486,11 +529,14 @@ pub async fn revoke_access_token(
     Ok(Json(json!({ "ok": true })))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::IntoParams)]
 pub struct AuditQuery {
+    /// Only events older than this event id (the next page).
     before: Option<i64>,
 }
 
+/// The project's audit log, newest first, 100 events at a time (Maintainers).
+#[utoipa::path(get, path = "/api/v1/projects/{id}/audit", params(AuditQuery), responses((status = 200, body = [AuditEvent])), tag = "projects")]
 pub async fn audit_log(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -632,6 +678,7 @@ pub async fn pages(State(state): State<AppState>, Viewer(v): Viewer, Path(id): P
 }
 
 /// Take the site down (Maintainers); the next Pages job puts it back.
+#[utoipa::path(delete, path = "/api/v1/projects/{id}/pages", responses((status = 200)), tag = "projects")]
 pub async fn remove_pages(
     State(state): State<AppState>,
     SignedIn(_, principal): SignedIn,

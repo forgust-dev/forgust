@@ -4,8 +4,8 @@ use axum::Json;
 use utoipa::OpenApi;
 
 use super::{
-    ai_review, auth, awards, ci, dto, environments, groups, imports, issues, milestones, mirrors, mr, notifications, projects, registry,
-    releases, renovate, repo, review, search, security, smart_view, tests, user,
+    admin, ai_review, auth, avatars, awards, ci, dto, environments, groups, imports, issues, milestones, mirrors, mr, notifications,
+    projects, registry, releases, renovate, repo, review, search, security, smart_view, tests, user,
 };
 
 #[derive(OpenApi)]
@@ -43,6 +43,33 @@ use super::{
         ai_review::get, ai_review::set, ai_review::mr_status, ai_review::mr_request, ai_review::admin_get, ai_review::admin_set, ai_review::admin_models,
         environments::list, environments::show, environments::protected, environments::protect,
         mr::add_to_train, mr::merge_trains,
+        // the rest of the router: every route is documented (code mode's search_api reads this)
+        super::resolve_path, super::highlight_css, super::version, spec,
+        admin::overview, admin::storage, admin::projects, admin::project_maintenance, admin::groups, admin::backups, admin::start_backup, admin::delete_backup,
+        admin::scan_storage, admin::set_default_quota, admin::set_namespace_quota, admin::set_project_quota, admin::health, admin::jobs, admin::users,
+        admin::create_user, admin::update_user, admin::delete_user, admin::reset_two_factor, admin::sign_out, admin::link_identity, admin::unlink_identity,
+        admin::revoke_tokens, admin::resend_confirmation, admin::confirm_email, admin::retry_job, admin::drop_job, admin::runnable, admin::update_status,
+        admin::run_task, admin::test_email, admin::banner_settings, admin::set_banner, admin::banner, admin::settings, admin::update_settings, admin::audit,
+        admin::audit_catalogue,
+        auth::logout, auth::register, auth::providers, auth::oidc_start, auth::oidc_callback, auth::setup_status, auth::setup, auth::impersonate, auth::stop_impersonating,
+        mr::update, mr::close, mr::reopen, mr::remove_from_train, mr::cancel_auto_merge, mr::rebase, mr::approve, mr::unapprove, mr::request_changes, mr::leave_stack,
+        mr::rebase_stack, mr::rerequest_review, mr::commits, mr::create_note, mr::edit_note, mr::delete_note, mr::resolve_note, mr::apply_suggestion, mr::rules,
+        mr::upsert_rule, mr::delete_rule, mr::list_hooks, mr::create_hook, mr::delete_hook, mr::hook_deliveries, mr::events,
+        environments::delete, environments::stop, environments::unprotect, registry::delete_repository, registry::delete_tag, registry::run_cleanup,
+        review::delete_gpg_key, review::unlock, notifications::read_all, notifications::read_one, ci::unschedule_job,
+        projects::update, projects::delete, projects::rename, projects::transfer, projects::archive, projects::unarchive, projects::add_member, projects::remove_member,
+        projects::shares, projects::share, projects::unshare, projects::protect_branch, projects::unprotect_branch, projects::remove_pages, projects::deploy_keys,
+        projects::add_deploy_key, projects::remove_deploy_key, projects::list_deploy_tokens, projects::create_deploy_token, projects::revoke_deploy_token,
+        projects::list_access_tokens, projects::create_access_token, projects::revoke_access_token, projects::audit_log,
+        groups::update, groups::delete, groups::set_policy, groups::rename, groups::transfer, groups::add_member, groups::remove_member, groups::shares, groups::share,
+        groups::unshare, groups::list_access_tokens, groups::create_access_token, groups::revoke_access_token, groups::list_deploy_tokens, groups::create_deploy_token,
+        groups::revoke_deploy_token,
+        user::update_me, user::change_password, user::link_identity, user::unlink_identity, user::add_key, user::delete_key, user::create_token, user::revoke_token,
+        user::totp_setup, user::totp_enable, user::totp_disable, user::recovery_codes, user::recovery_codes_reset, user::webauthn_list, user::webauthn_register_start,
+        user::webauthn_register_finish, user::webauthn_rename, user::webauthn_remove, user::todos_done, user::todo_done, user::search_users, user::resend_confirmation,
+        avatars::user_avatar, avatars::set_my_avatar, avatars::delete_my_avatar, avatars::project_avatar, avatars::set_project_avatar, avatars::delete_project_avatar,
+        avatars::group_avatar, avatars::set_group_avatar, avatars::delete_group_avatar,
+        repo::resolve, repo::raw, repo::readme, repo::archive, repo::compare, repo::delete_branch, repo::tags, repo::files, repo::markdown,
     ),
     components(schemas(
         ci::RunnerDto, ci::NewRunnerToken, ci::RunnerBody, ci::JobDto, ci::PipelineDetail, ci::PipelineSummary, ci::KeyValue,
@@ -93,10 +120,12 @@ use super::{
         ai_review::AiReviewSettings, ai_review::AiReviewSettingsBody, ai_review::AiReviewRun, ai_review::AiReviewStatus,
         ai_review::AdminAiReview, ai_review::AdminAiReviewStatus, ai_review::AdminAiReviewModelsBody, ai_review::AdminAiReviewModels,
         environments::EnvironmentDetail, environments::ProtectEnvironment, forgust_db::environments::Environment,
+        mr::RequestChangesBody, notifications::Inbox, forgust_db::notifications::Notification, super::admin::AuditCatalogue,
+        crate::services::audit_events::EventType, super::admin::CodeIndexStorage,
         forgust_db::environments::EnvironmentSummary, environments::EnvironmentRow, forgust_db::environments::Deployment, forgust_db::environments::ProtectedEnvironment,
         ci::JobEnvironment, forgust_db::ci::PipelineLink, forgust_db::merge_trains::Car,
     )),
-    tags((name = "auth"), (name = "user"), (name = "groups"), (name = "projects"), (name = "repository"), (name = "merge_requests"), (name = "issues"), (name = "releases"), (name = "imports"), (name = "registry"))
+    tags((name = "admin"), (name = "auth"), (name = "user"), (name = "groups"), (name = "projects"), (name = "repository"), (name = "merge_requests"), (name = "issues"), (name = "releases"), (name = "imports"), (name = "registry"))
 )]
 pub struct ApiDoc;
 
@@ -104,6 +133,8 @@ pub fn document() -> utoipa::openapi::OpenApi {
     ApiDoc::openapi()
 }
 
+/// This document: the OpenAPI description of `/api/v1`.
+#[utoipa::path(get, path = "/api/v1/openapi.json", responses((status = 200)), tag = "auth")]
 pub async fn spec() -> Json<utoipa::openapi::OpenApi> {
     Json(document())
 }
@@ -122,5 +153,39 @@ mod committed {
             committed == generated,
             "web/openapi.json is out of date: run `cargo run -p forgust-server -- openapi > web/openapi.json`, then `(cd web && npm run gen:api)`"
         );
+    }
+
+    /// Every route of the router is in the document: the MCP server's code
+    /// mode finds endpoints there (`search_api`), so one left out is one an
+    /// assistant cannot find. Read from the router's source, `.route(...)` by
+    /// `.route(...)`.
+    #[test]
+    fn every_route_is_documented() {
+        let src = include_str!("mod.rs");
+        let doc = serde_json::to_value(super::document()).unwrap();
+        let method = regex::Regex::new(r"\b(get|post|put|patch|delete)\(").unwrap();
+        let mut missing = Vec::new();
+        for (start, _) in src.match_indices(".route(\"") {
+            let rest = &src[start + 8..];
+            let path = &rest[..rest.find('"').unwrap()];
+            // the call's arguments, up to its closing parenthesis
+            let mut depth = 1;
+            let end = rest.char_indices().find(|&(_, ch)| {
+                depth += match ch {
+                    '(' => 1,
+                    ')' => -1,
+                    _ => 0,
+                };
+                depth == 0
+            });
+            let args = &rest[path.len()..end.unwrap().0];
+            let documented = format!("/api/v1{}", path.replace("{*", "{"));
+            for m in method.captures_iter(args) {
+                if doc["paths"][&documented][&m[1]].is_null() {
+                    missing.push(format!("{} {documented}", m[1].to_uppercase()));
+                }
+            }
+        }
+        assert!(missing.is_empty(), "routes without #[utoipa::path] (or not in ApiDoc's paths): {missing:#?}");
     }
 }

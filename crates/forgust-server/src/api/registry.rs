@@ -58,6 +58,8 @@ pub async fn tags(State(state): State<AppState>, Viewer(v): Viewer, Path((id, re
     Ok(Json(tags))
 }
 
+/// Delete one tag of an image repository (anyone who may push).
+#[utoipa::path(delete, path = "/api/v1/projects/{id}/registry/repositories/{repository_id}/tags/{tag}", responses((status = 200)), tag = "registry")]
 pub async fn delete_tag(
     State(state): State<AppState>,
     SignedIn(_, principal): SignedIn,
@@ -81,6 +83,7 @@ pub async fn delete_tag(
 }
 
 /// Delete an image repository with all its tags (its layers go with the next sweep).
+#[utoipa::path(delete, path = "/api/v1/projects/{id}/registry/repositories/{repository_id}", responses((status = 200)), tag = "registry")]
 pub async fn delete_repository(
     State(state): State<AppState>,
     SignedIn(_, principal): SignedIn,
@@ -130,6 +133,7 @@ pub async fn set_cleanup_policy(
 }
 
 /// Run the cleanup policy now (it also runs daily): how many tags went.
+#[utoipa::path(post, path = "/api/v1/projects/{id}/registry/cleanup", responses((status = 200)), tag = "registry")]
 pub async fn run_cleanup(
     State(state): State<AppState>,
     SignedIn(_, principal): SignedIn,

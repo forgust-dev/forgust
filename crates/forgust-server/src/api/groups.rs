@@ -102,6 +102,8 @@ pub struct UpdateGroup {
     pub visibility: String,
 }
 
+/// Change the group's name, description or visibility (Owners only).
+#[utoipa::path(put, path = "/api/v1/groups/{id}", request_body = UpdateGroup, responses((status = 200, body = GroupDto)), tag = "groups")]
 pub async fn update(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -122,6 +124,8 @@ pub struct PolicyRequest {
     pub subgroup_creation_level: String,
 }
 
+/// Set an organization's policy: maximum visibility, two-factor, who creates projects and subgroups (Owners of a top-level group).
+#[utoipa::path(put, path = "/api/v1/groups/{id}/policy", request_body = PolicyRequest, responses((status = 200)), tag = "groups")]
 pub async fn set_policy(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -153,6 +157,8 @@ pub struct NewPath {
     pub path: String,
 }
 
+/// Change the group's path (Owners only).
+#[utoipa::path(post, path = "/api/v1/groups/{id}/path", request_body = NewPath, responses((status = 200, body = GroupDto)), tag = "groups")]
 pub async fn rename(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -170,6 +176,8 @@ pub struct TransferGroup {
     pub parent_id: Option<i64>,
 }
 
+/// Move the group under another group, or make it an organization (Owners only).
+#[utoipa::path(post, path = "/api/v1/groups/{id}/transfer", request_body = TransferGroup, responses((status = 200, body = GroupDto)), tag = "groups")]
 pub async fn transfer(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -181,6 +189,8 @@ pub async fn transfer(
     Ok(Json(GroupDto::from(&ns, &state.cfg)))
 }
 
+/// Delete the group (Owners only); its subgroups and projects must be gone first.
+#[utoipa::path(delete, path = "/api/v1/groups/{id}", responses((status = 200)), tag = "groups")]
 pub async fn delete(State(state): State<AppState>, SignedIn(_, p): SignedIn, Path(id): Path<String>) -> ApiResult<Json<Value>> {
     let ns = load_namespace(&state, &id).await?;
     groups::delete(&state, &p, &ns).await?;
@@ -253,6 +263,8 @@ pub async fn resolve_member(state: &AppState, req: &AddMember) -> ApiResult<i64>
     Ok(forgust_db::users::find_by_username(&state.db, name).await?.ok_or(ApiError::NotFound)?.id)
 }
 
+/// Add a member or change their role (Maintainers; not above their own role).
+#[utoipa::path(post, path = "/api/v1/groups/{id}/members", request_body = AddMember, responses((status = 200)), tag = "groups")]
 pub async fn add_member(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -265,6 +277,8 @@ pub async fn add_member(
     Ok(Json(json!({ "ok": true })))
 }
 
+/// Remove a member (Maintainers, not one above them); anyone may leave. A group keeps at least one Owner.
+#[utoipa::path(delete, path = "/api/v1/groups/{id}/members/{user_id}", responses((status = 200)), tag = "groups")]
 pub async fn remove_member(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -275,6 +289,8 @@ pub async fn remove_member(
     Ok(Json(json!({ "ok": true })))
 }
 
+/// Groups this group is shared with (those the viewer may see).
+#[utoipa::path(get, path = "/api/v1/groups/{id}/shares", responses((status = 200, body = [ShareDto])), tag = "groups")]
 pub async fn shares(State(state): State<AppState>, SignedIn(_, p): SignedIn, Path(id): Path<String>) -> ApiResult<Json<Vec<ShareDto>>> {
     let ns = group_for(&state, &p, &id, GroupAction::Read).await?;
     Ok(Json(visible_shares(&state, &p, forgust_db::links::group_shares(&state.db, ns.id).await?).await?))
@@ -301,6 +317,8 @@ pub struct ShareRequest {
     pub expires_at: Option<DateTime<Utc>>,
 }
 
+/// Share the group with another group, capped at a role (Maintainers; not above their own role).
+#[utoipa::path(post, path = "/api/v1/groups/{id}/shares", request_body = ShareRequest, responses((status = 200)), tag = "groups")]
 pub async fn share(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -313,6 +331,8 @@ pub async fn share(
     Ok(Json(json!({ "ok": true })))
 }
 
+/// Stop sharing the group with another group (Maintainers).
+#[utoipa::path(delete, path = "/api/v1/groups/{id}/shares/{group_id}", responses((status = 200)), tag = "groups")]
 pub async fn unshare(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -414,6 +434,8 @@ pub async fn revoke_bot(state: &AppState, principal: &Principal, source: members
     Ok(())
 }
 
+/// The group's access tokens, held by its bot members (Owners only).
+#[utoipa::path(get, path = "/api/v1/groups/{id}/access_tokens", responses((status = 200, body = [AccessTokenDto])), tag = "groups")]
 pub async fn list_access_tokens(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -423,6 +445,8 @@ pub async fn list_access_tokens(
     Ok(Json(list_bot_tokens(&state, "namespace", ns.id).await?))
 }
 
+/// Create a group access token: a bot member with that role, and its token, shown only here (Owners only; needs a signed-in browser session).
+#[utoipa::path(post, path = "/api/v1/groups/{id}/access_tokens", request_body = CreateAccessToken, responses((status = 200, body = NewToken)), tag = "groups")]
 pub async fn create_access_token(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -433,6 +457,8 @@ pub async fn create_access_token(
     Ok(Json(create_bot_token(&state, &p, members::Source::Group(&ns), req).await?))
 }
 
+/// Revoke a group access token: blocks its bot and removes its membership (Owners only).
+#[utoipa::path(delete, path = "/api/v1/groups/{id}/access_tokens/{bot_id}", responses((status = 200)), tag = "groups")]
 pub async fn revoke_access_token(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -483,6 +509,8 @@ pub async fn create_deploy(
     Ok(NewToken { id, token, username: Some(username) })
 }
 
+/// The group's deploy tokens (Owners only).
+#[utoipa::path(get, path = "/api/v1/groups/{id}/deploy_tokens", responses((status = 200, body = [DeployToken])), tag = "groups")]
 pub async fn list_deploy_tokens(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -492,6 +520,8 @@ pub async fn list_deploy_tokens(
     Ok(Json(forgust_db::tokens::list_deploy_tokens(&state.db, None, Some(ns.id)).await?))
 }
 
+/// Create a deploy token for the group; the answer is the only time it is shown (Owners only; needs a signed-in browser session).
+#[utoipa::path(post, path = "/api/v1/groups/{id}/deploy_tokens", request_body = CreateDeployToken, responses((status = 200, body = NewToken)), tag = "groups")]
 pub async fn create_deploy_token(
     State(state): State<AppState>,
     SignedIn(u, p): SignedIn,
@@ -504,6 +534,8 @@ pub async fn create_deploy_token(
     Ok(Json(create_deploy(&state, &p, None, Some(ns.id), req).await?))
 }
 
+/// Revoke a deploy token (Owners only).
+#[utoipa::path(delete, path = "/api/v1/groups/{id}/deploy_tokens/{token_id}", responses((status = 200)), tag = "groups")]
 pub async fn revoke_deploy_token(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,

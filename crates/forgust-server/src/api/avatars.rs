@@ -44,6 +44,7 @@ fn done() -> Response {
 
 /// A person's avatar, by username. Anyone may fetch it; unknown usernames and
 /// people without one both answer 404.
+#[utoipa::path(get, path = "/api/v1/users/{username}/avatar", responses((status = 200, content_type = "image/png"), (status = 304, description = "Unchanged (If-None-Match)"), (status = 404, description = "No avatar")), tag = "user")]
 pub async fn user_avatar(State(state): State<AppState>, headers: HeaderMap, Path(username): Path<String>) -> ApiResult<Response> {
     let u = forgust_db::users::find_by_username(&state.db, &username).await?.filter(|u| u.is_active());
     match u {
@@ -52,16 +53,22 @@ pub async fn user_avatar(State(state): State<AppState>, headers: HeaderMap, Path
     }
 }
 
+/// Set your avatar from a PNG, JPEG, GIF or WebP image (at most 5 MB, sent as the body), stored as a 256 px square PNG.
+#[utoipa::path(put, path = "/api/v1/user/avatar", request_body(description = "The image as the raw body: PNG, JPEG, GIF or WebP, at most 5 MB", content((Vec<u8> = "image/png"), (Vec<u8> = "image/jpeg"), (Vec<u8> = "image/gif"), (Vec<u8> = "image/webp"))), responses((status = 204)), tag = "user")]
 pub async fn set_my_avatar(State(state): State<AppState>, SignedIn(u, _): SignedIn, body: Bytes) -> ApiResult<Response> {
     avatars::set(&state, Owner::User(u.id), &body).await?;
     Ok(done())
 }
 
+/// Remove your avatar.
+#[utoipa::path(delete, path = "/api/v1/user/avatar", responses((status = 204)), tag = "user")]
 pub async fn delete_my_avatar(State(state): State<AppState>, SignedIn(u, _): SignedIn) -> ApiResult<Response> {
     avatars::remove(&state, Owner::User(u.id)).await?;
     Ok(done())
 }
 
+/// A project's avatar (PNG), for those who can see the project; 404 when it has none.
+#[utoipa::path(get, path = "/api/v1/projects/{id}/avatar", responses((status = 200, content_type = "image/png"), (status = 304, description = "Unchanged (If-None-Match)"), (status = 404, description = "No avatar")), tag = "projects")]
 pub async fn project_avatar(
     State(state): State<AppState>,
     Viewer(v): Viewer,
@@ -73,6 +80,8 @@ pub async fn project_avatar(
 }
 
 /// Maintainers set a project's avatar.
+/// The body is a PNG, JPEG, GIF or WebP image (at most 5 MB), stored as a 256 px square PNG.
+#[utoipa::path(put, path = "/api/v1/projects/{id}/avatar", request_body(description = "The image as the raw body: PNG, JPEG, GIF or WebP, at most 5 MB", content((Vec<u8> = "image/png"), (Vec<u8> = "image/jpeg"), (Vec<u8> = "image/gif"), (Vec<u8> = "image/webp"))), responses((status = 204)), tag = "projects")]
 pub async fn set_project_avatar(
     State(state): State<AppState>,
     SignedIn(_, v): SignedIn,
@@ -84,12 +93,16 @@ pub async fn set_project_avatar(
     Ok(done())
 }
 
+/// Maintainers remove a project's avatar.
+#[utoipa::path(delete, path = "/api/v1/projects/{id}/avatar", responses((status = 204)), tag = "projects")]
 pub async fn delete_project_avatar(State(state): State<AppState>, SignedIn(_, v): SignedIn, Path(id): Path<String>) -> ApiResult<Response> {
     let p = project_for(&state, &v, &id, ProjectAction::Admin).await?;
     avatars::remove(&state, Owner::Project(p.id)).await?;
     Ok(done())
 }
 
+/// A group's avatar (PNG), for those who can see the group; 404 when it has none.
+#[utoipa::path(get, path = "/api/v1/groups/{id}/avatar", responses((status = 200, content_type = "image/png"), (status = 304, description = "Unchanged (If-None-Match)"), (status = 404, description = "No avatar")), tag = "groups")]
 pub async fn group_avatar(
     State(state): State<AppState>,
     Viewer(v): Viewer,
@@ -100,6 +113,8 @@ pub async fn group_avatar(
     serve(&state, Owner::Group(g.id), g.avatar_at.map(|t| t.timestamp()), &headers).await
 }
 
+/// Owners set a group's avatar from a PNG, JPEG, GIF or WebP image (at most 5 MB, sent as the body), stored as a 256 px square PNG.
+#[utoipa::path(put, path = "/api/v1/groups/{id}/avatar", request_body(description = "The image as the raw body: PNG, JPEG, GIF or WebP, at most 5 MB", content((Vec<u8> = "image/png"), (Vec<u8> = "image/jpeg"), (Vec<u8> = "image/gif"), (Vec<u8> = "image/webp"))), responses((status = 204)), tag = "groups")]
 pub async fn set_group_avatar(
     State(state): State<AppState>,
     SignedIn(_, v): SignedIn,
@@ -111,6 +126,8 @@ pub async fn set_group_avatar(
     Ok(done())
 }
 
+/// Owners remove a group's avatar.
+#[utoipa::path(delete, path = "/api/v1/groups/{id}/avatar", responses((status = 204)), tag = "groups")]
 pub async fn delete_group_avatar(State(state): State<AppState>, SignedIn(_, v): SignedIn, Path(id): Path<String>) -> ApiResult<Response> {
     let g = group_for(&state, &v, &id, GroupAction::Admin).await?;
     avatars::remove(&state, Owner::Group(g.id)).await?;

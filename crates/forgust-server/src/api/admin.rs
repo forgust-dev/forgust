@@ -29,6 +29,8 @@ pub struct Overview {
     pub renovate_runs: i64,
 }
 
+/// The admin dashboard: users, version, instance counts, CI and dependency update activity.
+#[utoipa::path(get, path = "/api/v1/admin/overview", responses((status = 200, body = Overview)), tag = "admin")]
 pub async fn overview(State(state): State<AppState>, Admin(..): Admin) -> ApiResult<Json<Overview>> {
     let (counts, ci, renovate_projects, renovate_runs) = tokio::try_join!(
         forgust_db::admin::counts(&state.db),
@@ -102,6 +104,7 @@ async fn code_index_storage(state: &AppState) -> ApiResult<Option<CodeIndexStora
 }
 
 /// What the instance keeps, by kind and by project.
+#[utoipa::path(get, path = "/api/v1/admin/storage", responses((status = 200, body = StorageOverview)), tag = "admin")]
 pub async fn storage(State(state): State<AppState>, Admin(..): Admin) -> ApiResult<Json<StorageOverview>> {
     let (kinds, projects, namespaces, scan) = tokio::try_join!(
         forgust_db::admin::storage_kinds(&state.db),
@@ -158,6 +161,7 @@ async fn quotas_changed(state: &AppState) {
 }
 
 /// The storage quota of each top-level group and personal namespace without its own.
+#[utoipa::path(put, path = "/api/v1/admin/storage/quota", request_body = SetQuota, responses((status = 200)), tag = "admin")]
 pub async fn set_default_quota(
     State(state): State<AppState>,
     Admin(_, p): Admin,
@@ -171,6 +175,8 @@ pub async fn set_default_quota(
     Ok(Json(json!({ "bytes": bytes })))
 }
 
+/// Set the storage quota of a top-level group or personal namespace (none: the instance default, 0: no quota).
+#[utoipa::path(put, path = "/api/v1/admin/namespaces/{id}/quota", request_body = SetQuota, responses((status = 200)), tag = "admin")]
 pub async fn set_namespace_quota(
     State(state): State<AppState>,
     Admin(_, p): Admin,
@@ -188,6 +194,8 @@ pub async fn set_namespace_quota(
     Ok(Json(json!({ "bytes": req.bytes })))
 }
 
+/// Set a project's storage quota (none or 0: no quota).
+#[utoipa::path(put, path = "/api/v1/admin/projects/{id}/quota", request_body = SetQuota, responses((status = 200)), tag = "admin")]
 pub async fn set_project_quota(
     State(state): State<AppState>,
     Admin(_, p): Admin,
@@ -204,6 +212,7 @@ pub async fn set_project_quota(
 }
 
 /// List the blob store by prefix in the background (one scan at a time).
+#[utoipa::path(post, path = "/api/v1/admin/storage/scan", responses((status = 200)), tag = "admin")]
 pub async fn scan_storage(State(state): State<AppState>, Admin(_, p): Admin) -> ApiResult<Json<serde_json::Value>> {
     let mut tx = state.db.begin().await?;
     if !forgust_db::admin::start_blob_scan(&mut *tx).await? {
@@ -235,6 +244,7 @@ fn check(name: &str, status: &str, detail: impl Into<String>, millis: Option<u64
 }
 
 /// Is every part of the instance working: database, blob store, email, git, workers, runners.
+#[utoipa::path(get, path = "/api/v1/admin/health", responses((status = 200, body = Health)), tag = "admin")]
 pub async fn health(State(state): State<AppState>, Admin(..): Admin) -> ApiResult<Json<Health>> {
     use sqlx::Row;
     let mut checks = Vec::new();
@@ -350,6 +360,7 @@ pub struct JobsOverview {
 }
 
 /// Run a failed job again now.
+#[utoipa::path(post, path = "/api/v1/admin/jobs/{job_id}/retry", responses((status = 200)), tag = "admin")]
 pub async fn retry_job(State(state): State<AppState>, Admin(_, p): Admin, Path(id): Path<i64>) -> ApiResult<Json<serde_json::Value>> {
     if !forgust_db::admin::retry_job(&state.db, id).await? {
         return Err(ApiError::conflict("only a failed job a worker does not hold can be retried"));
@@ -359,6 +370,7 @@ pub async fn retry_job(State(state): State<AppState>, Admin(_, p): Admin, Path(i
 }
 
 /// Drop a failed job.
+#[utoipa::path(delete, path = "/api/v1/admin/jobs/{job_id}", responses((status = 204)), tag = "admin")]
 pub async fn drop_job(State(state): State<AppState>, Admin(_, p): Admin, Path(id): Path<i64>) -> ApiResult<axum::http::StatusCode> {
     if !forgust_db::admin::drop_job(&state.db, id).await? {
         return Err(ApiError::conflict("only a failed job a worker does not hold can be dropped"));
@@ -384,11 +396,14 @@ pub struct Runnable {
     pub description: String,
 }
 
+/// The scheduled tasks an administrator may run now.
+#[utoipa::path(get, path = "/api/v1/admin/tasks", responses((status = 200, body = [Runnable])), tag = "admin")]
 pub async fn runnable(Admin(..): Admin) -> Json<Vec<Runnable>> {
     Json(RUNNABLE.iter().map(|(t, d)| Runnable { task: (*t).into(), description: (*d).into() }).collect())
 }
 
 /// Run a scheduled task now (queued; at most one waits at a time).
+#[utoipa::path(post, path = "/api/v1/admin/tasks/{task}", responses((status = 200)), tag = "admin")]
 pub async fn run_task(State(state): State<AppState>, Admin(_, p): Admin, Path(task): Path<String>) -> ApiResult<Json<serde_json::Value>> {
     let Some((name, _)) = RUNNABLE.iter().find(|(t, _)| *t == task) else { return Err(ApiError::NotFound) };
     let req = crate::jobs::JobRequest {
@@ -412,6 +427,7 @@ pub struct TestEmail {
 }
 
 /// Send a test email now (not queued), so the answer says whether it left.
+#[utoipa::path(post, path = "/api/v1/admin/health/email", request_body = TestEmail, responses((status = 200)), tag = "admin")]
 pub async fn test_email(
     State(state): State<AppState>,
     Admin(me, p): Admin,
@@ -432,6 +448,7 @@ pub async fn test_email(
 }
 
 /// The banner everyone sees (none when empty or ended). Public: signed-out pages show it too.
+#[utoipa::path(get, path = "/api/v1/banner", responses((status = 200, body = Option<forgust_db::admin::Banner>)), tag = "admin")]
 pub async fn banner(State(state): State<AppState>) -> ApiResult<Json<Option<forgust_db::admin::Banner>>> {
     let b = forgust_db::admin::banner(&state.db).await?;
     let live = !b.text.trim().is_empty() && b.until.is_none_or(|u| u > chrono::Utc::now());
@@ -439,10 +456,13 @@ pub async fn banner(State(state): State<AppState>) -> ApiResult<Json<Option<forg
 }
 
 /// The banner as set (also when ended), for the admin's form.
+#[utoipa::path(get, path = "/api/v1/admin/banner", responses((status = 200, body = forgust_db::admin::Banner)), tag = "admin")]
 pub async fn banner_settings(State(state): State<AppState>, Admin(..): Admin) -> ApiResult<Json<forgust_db::admin::Banner>> {
     Ok(Json(forgust_db::admin::banner(&state.db).await?))
 }
 
+/// Set the banner everyone sees: one line of at most 500 characters, tone info or warn, until an optional time.
+#[utoipa::path(put, path = "/api/v1/admin/banner", request_body = forgust_db::admin::Banner, responses((status = 200, body = forgust_db::admin::Banner)), tag = "admin")]
 pub async fn set_banner(
     State(state): State<AppState>,
     Admin(_, p): Admin,
@@ -461,8 +481,9 @@ pub async fn set_banner(
     Ok(Json(b))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::IntoParams)]
 pub struct ListQuery {
+    /// Only those whose path or name matches.
     #[serde(default)]
     search: String,
     /// projects: size, activity (default) or name
@@ -475,6 +496,7 @@ pub struct ListQuery {
 }
 
 /// Every project, with what it keeps and how busy it is.
+#[utoipa::path(get, path = "/api/v1/admin/projects", params(ListQuery), responses((status = 200, body = [forgust_db::admin::AdminProject])), tag = "admin")]
 pub async fn projects(
     State(state): State<AppState>,
     Admin(..): Admin,
@@ -485,6 +507,7 @@ pub async fn projects(
 }
 
 /// Every group.
+#[utoipa::path(get, path = "/api/v1/admin/groups", params(ListQuery), responses((status = 200, body = [forgust_db::admin::AdminGroup])), tag = "admin")]
 pub async fn groups(
     State(state): State<AppState>,
     Admin(..): Admin,
@@ -495,6 +518,7 @@ pub async fn groups(
 }
 
 /// Repack a project's repository now (full maintenance, queued with its pushes).
+#[utoipa::path(post, path = "/api/v1/admin/projects/{id}/maintenance", responses((status = 200)), tag = "admin")]
 pub async fn project_maintenance(
     State(state): State<AppState>,
     Admin(_, p): Admin,
@@ -551,6 +575,7 @@ fn valid_backup_name(name: &str) -> bool {
 }
 
 /// Backups made from here (the database and the repositories; not the blob store).
+#[utoipa::path(get, path = "/api/v1/admin/backups", responses((status = 200, body = Backups)), tag = "admin")]
 pub async fn backups(State(state): State<AppState>, Admin(..): Admin) -> ApiResult<Json<Backups>> {
     use sqlx::Row;
     let dir = state.cfg.backups_dir();
@@ -586,6 +611,7 @@ pub async fn backups(State(state): State<AppState>, Admin(..): Admin) -> ApiResu
 }
 
 /// Back up the database and every repository now, in the background.
+#[utoipa::path(post, path = "/api/v1/admin/backups", responses((status = 200)), tag = "admin")]
 pub async fn start_backup(State(state): State<AppState>, Admin(_, p): Admin) -> ApiResult<Json<serde_json::Value>> {
     let mut conn = state.db.acquire().await?;
     state.jobs.enqueue(&mut conn, crate::jobs::Backup.request()).await.map_err(ApiError::Internal)?;
@@ -594,6 +620,7 @@ pub async fn start_backup(State(state): State<AppState>, Admin(_, p): Admin) -> 
 }
 
 /// Delete a backup made from here.
+#[utoipa::path(delete, path = "/api/v1/admin/backups/{name}", responses((status = 204)), tag = "admin")]
 pub async fn delete_backup(
     State(state): State<AppState>,
     Admin(_, p): Admin,
@@ -612,12 +639,13 @@ pub async fn delete_backup(
 }
 
 /// The background job queue.
+#[utoipa::path(get, path = "/api/v1/admin/jobs", responses((status = 200, body = JobsOverview)), tag = "admin")]
 pub async fn jobs(State(state): State<AppState>, Admin(..): Admin) -> ApiResult<Json<JobsOverview>> {
     let (queues, failed) = tokio::try_join!(forgust_db::admin::job_queues(&state.db), forgust_db::admin::failed_jobs(&state.db, 100))?;
     Ok(Json(JobsOverview { queues, failed }))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::IntoParams)]
 pub struct UserQuery {
     /// all (people), admins, blocked, external, unconfirmed, two_factor_off, bots
     #[serde(default)]
@@ -637,6 +665,8 @@ fn per_page() -> i64 {
     50
 }
 
+/// List users, by filter and search (administrators only).
+#[utoipa::path(get, path = "/api/v1/admin/users", params(UserQuery), responses((status = 200, body = [forgust_db::admin::AdminUser])), tag = "admin")]
 pub async fn users(
     State(state): State<AppState>,
     Admin(..): Admin,
@@ -655,7 +685,7 @@ async fn person(state: &AppState, id: i64) -> ApiResult<forgust_db::users::User>
     Ok(u)
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::IntoParams)]
 pub struct DeleteUserQuery {
     /// Delete their personal projects too (else they block the deletion).
     #[serde(default)]
@@ -666,6 +696,7 @@ pub struct DeleteUserQuery {
 /// stays, without its author; their memberships, keys, tokens, approvals and
 /// to-dos go. Refused for yourself, the only Owner of a group, and while they
 /// have personal projects (unless those go too).
+#[utoipa::path(delete, path = "/api/v1/admin/users/{id}", params(DeleteUserQuery), responses((status = 200)), tag = "admin")]
 pub async fn delete_user(
     State(state): State<AppState>,
     Admin(me, p): Admin,
@@ -715,6 +746,7 @@ pub async fn delete_user(
 /// Turn two-factor authentication off (a lost authenticator or security key):
 /// the app, the recovery codes, security keys and passkeys go, and their
 /// sessions end. They sign in with their password and set it up again.
+#[utoipa::path(post, path = "/api/v1/admin/users/{id}/reset_two_factor", responses((status = 200)), tag = "admin")]
 pub async fn reset_two_factor(
     State(state): State<AppState>,
     Admin(me, p): Admin,
@@ -735,6 +767,7 @@ pub async fn reset_two_factor(
 }
 
 /// End every session of a user (they sign in again).
+#[utoipa::path(post, path = "/api/v1/admin/users/{id}/sign_out", responses((status = 200)), tag = "admin")]
 pub async fn sign_out(State(state): State<AppState>, Admin(me, p): Admin, Path(id): Path<i64>) -> ApiResult<Json<serde_json::Value>> {
     let u = person(&state, id).await?;
     if u.id == me.id {
@@ -746,6 +779,7 @@ pub async fn sign_out(State(state): State<AppState>, Admin(me, p): Admin, Path(i
 }
 
 /// Revoke every personal access token of a user.
+#[utoipa::path(post, path = "/api/v1/admin/users/{id}/revoke_tokens", responses((status = 200)), tag = "admin")]
 pub async fn revoke_tokens(State(state): State<AppState>, Admin(_, p): Admin, Path(id): Path<i64>) -> ApiResult<Json<serde_json::Value>> {
     let u = person(&state, id).await?;
     let n = forgust_db::admin::revoke_personal_tokens(&state.db, u.id).await?;
@@ -763,6 +797,7 @@ pub struct LinkIdentity {
 
 /// Link a provider identity to someone's account, for them (they can also do
 /// it themselves, from their settings).
+#[utoipa::path(post, path = "/api/v1/admin/users/{id}/identities", request_body = LinkIdentity, responses((status = 200)), tag = "admin")]
 pub async fn link_identity(
     State(state): State<AppState>,
     Admin(me, p): Admin,
@@ -791,6 +826,7 @@ pub async fn link_identity(
 }
 
 /// Unlink a provider from someone's account: they no longer sign in through it.
+#[utoipa::path(delete, path = "/api/v1/admin/users/{id}/identities/{provider}", responses((status = 200)), tag = "admin")]
 pub async fn unlink_identity(
     State(state): State<AppState>,
     Admin(_, p): Admin,
@@ -805,6 +841,7 @@ pub async fn unlink_identity(
 }
 
 /// Email the confirmation link again (to the new address when one waits).
+#[utoipa::path(post, path = "/api/v1/admin/users/{id}/resend_confirmation", responses((status = 200)), tag = "admin")]
 pub async fn resend_confirmation(
     State(state): State<AppState>,
     Admin(_, p): Admin,
@@ -831,6 +868,7 @@ pub struct ConfirmUserEmail {
 
 /// Confirm the account's address without a link: the administrator vouches
 /// that it is the user's (an instance without email has no other way).
+#[utoipa::path(post, path = "/api/v1/admin/users/{id}/confirm_email", request_body = ConfirmUserEmail, responses((status = 200)), tag = "admin")]
 pub async fn confirm_email(
     State(state): State<AppState>,
     Admin(_, p): Admin,
@@ -866,6 +904,8 @@ pub struct CreateUser {
     pub is_admin: bool,
 }
 
+/// Create a user (administrators only); their email counts as confirmed.
+#[utoipa::path(post, path = "/api/v1/admin/users", request_body = CreateUser, responses((status = 200, body = UserDto)), tag = "admin")]
 pub async fn create_user(State(state): State<AppState>, Admin(_, p): Admin, Json(req): Json<CreateUser>) -> ApiResult<Json<UserDto>> {
     let mut tx = state.db.begin().await?;
     let u = users::create(
@@ -910,6 +950,8 @@ fn own_ways_in(me: &forgust_db::users::User, p: &Principal, id: i64) -> ApiResul
     Ok(())
 }
 
+/// Change a user's admin rights, external flag, state (active or blocked), password or email (confirmed at once); blocking or a new password ends their sessions.
+#[utoipa::path(put, path = "/api/v1/admin/users/{id}", request_body = UpdateUser, responses((status = 200, body = UserDto)), tag = "admin")]
 pub async fn update_user(
     State(state): State<AppState>,
     Admin(me, p): Admin,
@@ -998,6 +1040,8 @@ pub async fn update_user(
     Ok(Json(UserDto::from(&u, true)))
 }
 
+/// The instance settings (sign-up, personal projects, default branch, MCP, update check).
+#[utoipa::path(get, path = "/api/v1/admin/settings", responses((status = 200, body = InstanceSettings)), tag = "admin")]
 pub async fn settings(State(state): State<AppState>, Admin(..): Admin) -> ApiResult<Json<InstanceSettings>> {
     Ok(Json(forgust_db::settings::get(&state.db).await?))
 }
@@ -1015,6 +1059,8 @@ pub struct UpdateInstanceSettings {
     pub auto_confirm_emails: Option<bool>,
 }
 
+/// Save the instance settings; a switch left out keeps its value.
+#[utoipa::path(put, path = "/api/v1/admin/settings", request_body = UpdateInstanceSettings, responses((status = 200, body = InstanceSettings)), tag = "admin")]
 pub async fn update_settings(
     State(state): State<AppState>,
     Admin(_, p): Admin,
@@ -1059,6 +1105,7 @@ pub struct UpdateStatus {
 }
 
 /// Whether a newer Forgust release is out.
+#[utoipa::path(get, path = "/api/v1/admin/update", responses((status = 200, body = UpdateStatus)), tag = "admin")]
 pub async fn update_status(State(state): State<AppState>, Admin(..): Admin) -> ApiResult<Json<UpdateStatus>> {
     let current = env!("CARGO_PKG_VERSION");
     let (available, url) = match services::updates::latest(&state).await? {
@@ -1068,24 +1115,30 @@ pub async fn update_status(State(state): State<AppState>, Admin(..): Admin) -> A
     Ok(Json(UpdateStatus { current: current.into(), available, url }))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::IntoParams)]
 pub struct AuditQuery {
+    /// Only events on this kind of target (`user`, `project`, ...).
     target_type: Option<String>,
+    /// Only events on this target.
     target_id: Option<i64>,
+    /// Only events older than this event id (the next page).
     before: Option<i64>,
 }
 
+/// The audit log, newest first (200 events), optionally for one target and before an event id.
+#[utoipa::path(get, path = "/api/v1/admin/audit", params(AuditQuery), responses((status = 200, body = [AuditEvent])), tag = "admin")]
 pub async fn audit(State(state): State<AppState>, Admin(..): Admin, Query(q): Query<AuditQuery>) -> ApiResult<Json<Vec<AuditEvent>>> {
     Ok(Json(forgust_db::audit::list(&state.db, q.target_type.as_deref(), q.target_id, 200, q.before).await?))
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct AuditCatalogue {
     version: u32,
     events: &'static [services::audit_events::EventType],
 }
 
 /// Every event the audit log can hold, with its fields.
+#[utoipa::path(get, path = "/api/v1/admin/audit/catalogue", responses((status = 200, body = AuditCatalogue)), tag = "admin")]
 pub async fn audit_catalogue(Admin(..): Admin) -> Json<AuditCatalogue> {
     Json(AuditCatalogue { version: services::audit_events::VERSION, events: services::audit_events::EVENTS })
 }

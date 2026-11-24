@@ -87,6 +87,7 @@ pub async fn show(
 }
 
 /// Stop an environment: its `on_stop` job runs (as you), or it is marked stopped.
+#[utoipa::path(post, path = "/api/v1/projects/{id}/environments/{env_id}/stop", responses((status = 200, body = Environment)), tag = "ci")]
 pub async fn stop(
     State(state): State<AppState>,
     SignedIn(me, principal): SignedIn,
@@ -103,6 +104,7 @@ pub async fn stop(
 }
 
 /// Delete a stopped environment and its deployment history.
+#[utoipa::path(delete, path = "/api/v1/projects/{id}/environments/{env_id}", responses((status = 200)), tag = "ci")]
 pub async fn delete(
     State(state): State<AppState>,
     SignedIn(_, principal): SignedIn,
@@ -159,6 +161,8 @@ pub async fn protect(
     Ok(Json(edb::protected(&state.db, p.id).await?))
 }
 
+/// Remove an environment's protection (project admins).
+#[utoipa::path(delete, path = "/api/v1/projects/{id}/protected_environments/{pe_id}", responses((status = 200)), tag = "ci")]
 pub async fn unprotect(
     State(state): State<AppState>,
     SignedIn(_, principal): SignedIn,

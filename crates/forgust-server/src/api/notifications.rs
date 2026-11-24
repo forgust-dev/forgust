@@ -205,11 +205,13 @@ async fn read(state: &AppState, user_id: i64, id: Option<i64>) -> ApiResult<Json
 }
 
 /// Mark one notification read.
+#[utoipa::path(post, path = "/api/v1/user/notifications/{id}/read", responses((status = 200, body = Inbox)), tag = "user")]
 pub async fn read_one(State(state): State<AppState>, SignedIn(u, _): SignedIn, Path(id): Path<i64>) -> ApiResult<Json<Inbox>> {
     read(&state, u.id, Some(id)).await
 }
 
 /// Mark every notification read.
+#[utoipa::path(post, path = "/api/v1/user/notifications/read", responses((status = 200, body = Inbox)), tag = "user")]
 pub async fn read_all(State(state): State<AppState>, SignedIn(u, _): SignedIn) -> ApiResult<Json<Inbox>> {
     read(&state, u.id, None).await
 }

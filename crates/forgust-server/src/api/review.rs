@@ -81,6 +81,8 @@ pub async fn add_gpg_key(State(state): State<AppState>, SignedIn(u, p): SignedIn
     Ok(Json(keys.into_iter().find(|k| k.id == id).ok_or(ApiError::NotFound)?))
 }
 
+/// Remove one of the caller's GPG keys.
+#[utoipa::path(delete, path = "/api/v1/user/gpg_keys/{id}", responses((status = 200)), tag = "user")]
 pub async fn delete_gpg_key(State(state): State<AppState>, SignedIn(u, p): SignedIn, Path(id): Path<i64>) -> ApiResult<Json<Value>> {
     super::user::require_interactive(&u, &p)?;
     if !forgust_db::gpg_keys::delete_for_user(&state.db, u.id, id).await? {
@@ -156,6 +158,7 @@ pub async fn lfs_locks(State(state): State<AppState>, Viewer(v): Viewer, Path(id
 }
 
 /// Remove a lock: its owner, or a Maintainer for anyone's.
+#[utoipa::path(delete, path = "/api/v1/projects/{id}/lfs_locks/{lock_id}", responses((status = 200)), tag = "repository")]
 pub async fn unlock(
     State(state): State<AppState>,
     SignedIn(u, principal): SignedIn,

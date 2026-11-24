@@ -41,6 +41,280 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The audit log, newest first (200 events), optionally for one target and before an event id. */
+        get: operations["audit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/audit/catalogue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every event the audit log can hold, with its fields. */
+        get: operations["audit_catalogue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/backups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Backups made from here (the database and the repositories; not the blob store). */
+        get: operations["backups"];
+        put?: never;
+        /** Back up the database and every repository now, in the background. */
+        post: operations["start_backup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/backups/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a backup made from here. */
+        delete: operations["delete_backup"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/banner": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The banner as set (also when ended), for the admin's form. */
+        get: operations["banner_settings"];
+        /** Set the banner everyone sees: one line of at most 500 characters, tone info or warn, until an optional time. */
+        put: operations["set_banner"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every group. */
+        get: operations["groups"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Is every part of the instance working: database, blob store, email, git, workers, runners. */
+        get: operations["health"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/health/email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send a test email now (not queued), so the answer says whether it left. */
+        post: operations["test_email"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The background job queue. */
+        get: operations["jobs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/jobs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Drop a failed job. */
+        delete: operations["drop_job"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/jobs/{job_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run a failed job again now. */
+        post: operations["retry_job"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/namespaces/{id}/quota": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set the storage quota of a top-level group or personal namespace (none: the instance default, 0: no quota). */
+        put: operations["set_namespace_quota"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The admin dashboard: users, version, instance counts, CI and dependency update activity. */
+        get: operations["overview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every project, with what it keeps and how busy it is. */
+        get: operations["projects"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/projects/{id}/maintenance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Repack a project's repository now (full maintenance, queued with its pushes). */
+        post: operations["project_maintenance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/projects/{id}/quota": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set a project's storage quota (none or 0: no quota). */
+        put: operations["set_project_quota"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/renovate": {
         parameters: {
             query?: never;
@@ -123,6 +397,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The instance settings (sign-up, personal projects, default branch, MCP, update check). */
+        get: operations["settings"];
+        /** Save the instance settings; a switch left out keeps its value. */
+        put: operations["update_settings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/smart_view": {
         parameters: {
             query?: never;
@@ -134,6 +426,302 @@ export interface paths {
         get: operations["admin_get"];
         put: operations["admin_set"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/storage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What the instance keeps, by kind and by project. */
+        get: operations["storage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/storage/quota": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** The storage quota of each top-level group and personal namespace without its own. */
+        put: operations["set_default_quota"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/storage/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** List the blob store by prefix in the background (one scan at a time). */
+        post: operations["scan_storage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The scheduled tasks an administrator may run now. */
+        get: operations["runnable"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/tasks/{task}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run a scheduled task now (queued; at most one waits at a time). */
+        post: operations["run_task"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether a newer Forgust release is out. */
+        get: operations["update_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List users, by filter and search (administrators only). */
+        get: operations["users"];
+        put?: never;
+        /** Create a user (administrators only); their email counts as confirmed. */
+        post: operations["create_user"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Change a user's admin rights, external flag, state (active or blocked), password or email (confirmed at once); blocking or a new password ends their sessions. */
+        put: operations["update_user"];
+        post?: never;
+        /**
+         * Delete a person. What they wrote (merge requests, issues, comments, pipelines)
+         *     stays, without its author; their memberships, keys, tokens, approvals and
+         *     to-dos go. Refused for yourself, the only Owner of a group, and while they
+         *     have personal projects (unless those go too).
+         */
+        delete: operations["delete_user"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{id}/confirm_email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm the account's address without a link: the administrator vouches
+         *     that it is the user's (an instance without email has no other way).
+         */
+        post: operations["confirm_email"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{id}/identities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Link a provider identity to someone's account, for them (they can also do
+         *     it themselves, from their settings).
+         */
+        post: operations["link_identity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{id}/identities/{provider}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Unlink a provider from someone's account: they no longer sign in through it. */
+        delete: operations["unlink_identity"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{id}/impersonate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * An administrator signs in as someone else, for an hour (Admin > Users), to
+         *     see what they see. Only an active person who is not an administrator; only
+         *     from the administrator's own browser session. The administrator's session
+         *     ends; stopping starts a new one. While it lasts, nothing that mints
+         *     credentials or changes the account works, and the audit log names the
+         *     administrator on every change.
+         */
+        post: operations["impersonate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{id}/resend_confirmation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Email the confirmation link again (to the new address when one waits). */
+        post: operations["resend_confirmation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{id}/reset_two_factor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Turn two-factor authentication off (a lost authenticator or security key):
+         *     the app, the recovery codes, security keys and passkeys go, and their
+         *     sessions end. They sign in with their password and set it up again.
+         */
+        post: operations["reset_two_factor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{id}/revoke_tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke every personal access token of a user. */
+        post: operations["revoke_tokens"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{id}/sign_out": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End every session of a user (they sign in again). */
+        post: operations["sign_out"];
         delete?: never;
         options?: never;
         head?: never;
@@ -263,6 +851,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign out: end this session and clear its cookie. */
+        post: operations["logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/oidc/{name}/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Where the provider sends the browser back: signs in (or asks for the second factor), or links the identity when started from the settings, then redirects. */
+        get: operations["oidc_callback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/oidc/{name}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Start a sign-in through a provider: redirects the browser to it. */
+        get: operations["oidc_start"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/passkey/finish": {
         parameters: {
             query?: never;
@@ -337,6 +976,96 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The configured sign-in providers (OpenID Connect). */
+        get: operations["providers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create an account and sign in (only when sign-up is enabled); a confirmation link is emailed when the instance sends email. */
+        post: operations["register"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/stop_impersonating": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End an impersonation: back to the administrator's own (new) session. */
+        post: operations["stop_impersonating"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/banner": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The banner everyone sees (none when empty or ended). Public: signed-out pages show it too. */
+        get: operations["banner"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live updates: a server-sent events stream for the web app, not a JSON answer.
+         * @description One SSE stream per browser tab (architecture: Frontend). The tab lists the
+         *     projects it shows; events of other projects, or of projects the viewer cannot
+         *     read, are never sent. Topics change by reconnecting with a new list.
+         */
+        get: operations["events"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/groups": {
         parameters: {
             query?: never;
@@ -361,9 +1090,100 @@ export interface paths {
             cookie?: never;
         };
         get: operations["show"];
+        /** Change the group's name, description or visibility (Owners only). */
+        put: operations["update"];
+        post?: never;
+        /** Delete the group (Owners only); its subgroups and projects must be gone first. */
+        delete: operations["delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/groups/{id}/access_tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The group's access tokens, held by its bot members (Owners only). */
+        get: operations["list_access_tokens"];
+        put?: never;
+        /** Create a group access token: a bot member with that role, and its token, shown only here (Owners only; needs a signed-in browser session). */
+        post: operations["create_access_token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/groups/{id}/access_tokens/{bot_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
         put?: never;
         post?: never;
+        /** Revoke a group access token: blocks its bot and removes its membership (Owners only). */
+        delete: operations["revoke_access_token"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/groups/{id}/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A group's avatar (PNG), for those who can see the group; 404 when it has none. */
+        get: operations["group_avatar"];
+        /** Owners set a group's avatar from a PNG, JPEG, GIF or WebP image (at most 5 MB, sent as the body), stored as a 256 px square PNG. */
+        put: operations["set_group_avatar"];
+        post?: never;
+        /** Owners remove a group's avatar. */
+        delete: operations["delete_group_avatar"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/groups/{id}/deploy_tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The group's deploy tokens (Owners only). */
+        get: operations["list_deploy_tokens"];
+        put?: never;
+        /** Create a deploy token for the group; the answer is the only time it is shown (Owners only; needs a signed-in browser session). */
+        post: operations["create_deploy_token"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/groups/{id}/deploy_tokens/{token_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke a deploy token (Owners only). */
+        delete: operations["revoke_deploy_token"];
         options?: never;
         head?: never;
         patch?: never;
@@ -378,6 +1198,58 @@ export interface paths {
         };
         get: operations["members"];
         put?: never;
+        /** Add a member or change their role (Maintainers; not above their own role). */
+        post: operations["add_member"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/groups/{id}/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a member (Maintainers, not one above them); anyone may leave. A group keeps at least one Owner. */
+        delete: operations["remove_member"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/groups/{id}/path": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Change the group's path (Owners only). */
+        post: operations["rename"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/groups/{id}/policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set an organization's policy: maximum visibility, two-factor, who creates projects and subgroups (Owners of a top-level group). */
+        put: operations["set_policy"];
         post?: never;
         delete?: never;
         options?: never;
@@ -471,6 +1343,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/groups/{id}/shares": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Groups this group is shared with (those the viewer may see). */
+        get: operations["shares"];
+        put?: never;
+        /** Share the group with another group, capped at a role (Maintainers; not above their own role). */
+        post: operations["share"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/groups/{id}/shares/{group_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Stop sharing the group with another group (Maintainers). */
+        delete: operations["unshare"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/groups/{id}/storage": {
         parameters: {
             query?: never;
@@ -504,6 +1411,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/groups/{id}/transfer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move the group under another group, or make it an organization (Owners only). */
+        post: operations["transfer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/groups/{id}/variables": {
         parameters: {
             query?: never;
@@ -531,6 +1455,23 @@ export interface paths {
         put?: never;
         post?: never;
         delete: operations["delete_group_variable"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/highlight.css": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The style sheet of syntax highlighting (for the web app). */
+        get: operations["highlight_css"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -709,6 +1650,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/openapi.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** This document: the OpenAPI description of `/api/v1`. */
+        get: operations["spec"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects": {
         parameters: {
             query?: never;
@@ -733,9 +1691,46 @@ export interface paths {
             cookie?: never;
         };
         get: operations["show"];
+        /** Change the project's name, description, visibility or default branch (Maintainers; visibility is the Owners' call). */
+        put: operations["update"];
+        post?: never;
+        /** Delete the project (Owners only). */
+        delete: operations["delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/access_tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The project's access tokens, held by its bot members (Maintainers). */
+        get: operations["list_access_tokens"];
+        put?: never;
+        /** Create a project access token: a bot member with that role, and its token, shown only here (Maintainers; needs a signed-in browser session). */
+        post: operations["create_access_token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/access_tokens/{bot_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /** Revoke a project access token: blocks its bot and removes its membership (Maintainers). */
+        delete: operations["revoke_access_token"];
         options?: never;
         head?: never;
         patch?: never;
@@ -754,6 +1749,97 @@ export interface paths {
         put: operations["set"];
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/approval_rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The project's approval rules. */
+        get: operations["rules"];
+        put?: never;
+        /** Add an approval rule, or change the one with that name (project admins); answers every rule. */
+        post: operations["upsert_rule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/approval_rules/{rule_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete an approval rule (project admins). */
+        delete: operations["delete_rule"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive the project: read-only for everyone until its Owner unarchives it. */
+        post: operations["archive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The project's audit log, newest first, 100 events at a time (Maintainers). */
+        get: operations["audit_log"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A project's avatar (PNG), for those who can see the project; 404 when it has none. */
+        get: operations["project_avatar"];
+        /**
+         * Maintainers set a project's avatar.
+         *     The body is a PNG, JPEG, GIF or WebP image (at most 5 MB), stored as a 256 px square PNG.
+         */
+        put: operations["set_project_avatar"];
+        post?: never;
+        /** Maintainers remove a project's avatar. */
+        delete: operations["delete_project_avatar"];
         options?: never;
         head?: never;
         patch?: never;
@@ -792,6 +1878,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/deploy_keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The project's deploy keys (Maintainers). */
+        get: operations["deploy_keys"];
+        put?: never;
+        /** Add a deploy key, or attach one another project uses (Maintainers; needs a signed-in browser session). */
+        post: operations["add_deploy_key"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/deploy_keys/{key_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Detach a deploy key from the project (Maintainers); a key no project uses any more is deleted. */
+        delete: operations["remove_deploy_key"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/deploy_tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The project's deploy tokens (Maintainers). */
+        get: operations["list_deploy_tokens"];
+        put?: never;
+        /** Create a deploy token; the answer is the only time it is shown (Maintainers; needs a signed-in browser session). */
+        post: operations["create_deploy_token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/deploy_tokens/{token_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke a deploy token (Maintainers). */
+        delete: operations["revoke_deploy_token"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/environments": {
         parameters: {
             query?: never;
@@ -818,6 +1974,24 @@ export interface paths {
         get: operations["show"];
         put?: never;
         post?: never;
+        /** Delete a stopped environment and its deployment history. */
+        delete: operations["delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/environments/{env_id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop an environment: its `on_stop` job runs (as you), or it is marked stopped. */
+        post: operations["stop"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1087,6 +2261,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/jobs/{job_id}/unschedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** A delayed job waits for someone instead (it becomes manual). */
+        post: operations["unschedule_job"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/labels": {
         parameters: {
             query?: never;
@@ -1135,6 +2326,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/lfs_locks/{lock_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a lock: its owner, or a Maintainer for anyone's. */
+        delete: operations["unlock"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/markdown": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Comment previews: the same sanitized renderer the server uses everywhere. */
+        post: operations["markdown"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/members": {
         parameters: {
             query?: never;
@@ -1144,8 +2369,26 @@ export interface paths {
         };
         get: operations["members"];
         put?: never;
-        post?: never;
+        /** Add a member or change their role (Maintainers; not above their own role). */
+        post: operations["add_member"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a member (Maintainers, not one above them); anyone may leave. */
+        delete: operations["remove_member"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1175,7 +2418,8 @@ export interface paths {
             cookie?: never;
         };
         get: operations["show"];
-        put?: never;
+        /** Edit a merge request: title, description, draft, target branch, assignees, reviewers, milestone, source branch removal. */
+        put: operations["update"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1201,6 +2445,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/merge_requests/{iid}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve the merge request as the caller. */
+        post: operations["approve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/merge_requests/{iid}/auto_merge": {
         parameters: {
             query?: never;
@@ -1212,7 +2473,8 @@ export interface paths {
         put?: never;
         /** Merge when every check passes (at once when they already do). */
         post: operations["auto_merge"];
-        delete?: never;
+        /** Turn auto-merge off (who set it, the author, or someone who may merge). */
+        delete: operations["cancel_auto_merge"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1238,6 +2500,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/merge_requests/{iid}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close a merge request (not a merged one). */
+        post: operations["close"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/merge_requests/{iid}/code_owners": {
         parameters: {
             query?: never;
@@ -1246,6 +2525,23 @@ export interface paths {
             cookie?: never;
         };
         get: operations["code_owners"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/merge_requests/{iid}/commits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The commits of one version of a merge request (the latest by default), up to 500. */
+        get: operations["commits"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1329,7 +2625,8 @@ export interface paths {
         put?: never;
         /** Put the merge request on its target's merge train. */
         post: operations["add_to_train"];
-        delete?: never;
+        /** Take the merge request off its merge train (whoever added it, or someone who may merge). */
+        delete: operations["remove_from_train"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1344,7 +2641,60 @@ export interface paths {
         };
         get: operations["notes"];
         put?: never;
+        /** Comment on a merge request, reply to a thread (`parent_id`) or comment on a diff line (`position`). */
+        post: operations["create_note"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/merge_requests/{iid}/notes/{note_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Edit a comment on a merge request (its author only). */
+        put: operations["edit_note"];
         post?: never;
+        /** Delete a comment on a merge request (its author, or a Maintainer). */
+        delete: operations["delete_note"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/merge_requests/{iid}/notes/{note_id}/apply_suggestion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Commit a comment's suggested change to the source branch. */
+        post: operations["apply_suggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/merge_requests/{iid}/notes/{note_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve or reopen a thread by its first comment (the MR's or the thread's author, or anyone who may push). */
+        post: operations["resolve_note"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1384,6 +2734,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/merge_requests/{iid}/rebase": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rebase an open merge request's source branch onto its target; answers the new `head_sha`. */
+        post: operations["rebase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/merge_requests/{iid}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopen a closed merge request, unless another one is open for the same branches. */
+        post: operations["reopen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/merge_requests/{iid}/request_changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Block merging until the caller approves or is asked to review again. */
+        post: operations["request_changes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/merge_requests/{iid}/reviewers/{user_id}/rerequest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask a reviewer to look again. */
+        post: operations["rerequest_review"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/merge_requests/{iid}/security": {
         parameters: {
             query?: never;
@@ -1411,6 +2829,24 @@ export interface paths {
         /** Put this MR on top of another (ADR-0019). */
         put: operations["stack_on"];
         post?: never;
+        /** Take this MR, and the layers above it, out of its stack. */
+        delete: operations["leave_stack"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/merge_requests/{iid}/stack/rebase": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rebase every open layer of the stack onto the branch below it. */
+        post: operations["rebase_stack"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1427,6 +2863,23 @@ export interface paths {
         get: operations["mr_tests"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/merge_requests/{iid}/unapprove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Take back the caller's approval of the merge request. */
+        post: operations["unapprove"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1582,6 +3035,24 @@ export interface paths {
         get: operations["pages"];
         put?: never;
         post?: never;
+        /** Take the site down (Maintainers); the next Pages job puts it back. */
+        delete: operations["remove_pages"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/path": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Change the project's path (Owners only). */
+        post: operations["rename"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1745,8 +3216,26 @@ export interface paths {
         };
         get: operations["protected_branches"];
         put?: never;
-        post?: never;
+        /** Protect branches matching a name or glob, or change their rule (Maintainers). */
+        post: operations["protect_branch"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/protected_branches/{pb_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a branch protection rule (Maintainers). */
+        delete: operations["unprotect_branch"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1763,6 +3252,23 @@ export interface paths {
         put?: never;
         post: operations["protect"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/protected_environments/{pe_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove an environment's protection (project admins). */
+        delete: operations["unprotect"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1833,6 +3339,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/registry/cleanup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run the cleanup policy now (it also runs daily): how many tags went. */
+        post: operations["run_cleanup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/registry/cleanup_policy": {
         parameters: {
             query?: never;
@@ -1849,6 +3372,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/registry/repositories/{repository_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete an image repository with all its tags (its layers go with the next sweep). */
+        delete: operations["delete_repository"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/registry/repositories/{repository_id}/tags": {
         parameters: {
             query?: never;
@@ -1860,6 +3400,23 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/registry/repositories/{repository_id}/tags/{tag}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete one tag of an image repository (anyone who may push). */
+        delete: operations["delete_tag"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2000,6 +3557,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/repository/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download the repository at a ref (the default branch by default) as a tar.gz, tar or zip archive. */
+        get: operations["archive"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/repository/blame": {
         parameters: {
             query?: never;
@@ -2044,6 +3618,23 @@ export interface paths {
         /** Create a branch (Developer+; protected patterns apply as for a push). */
         post: operations["create_branch"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/repository/branches/{branch}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a branch (Developer+; protected patterns apply as for a push); never the default branch. */
+        delete: operations["delete_branch"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2115,6 +3706,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/repository/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Compare two refs: the commits between them (at most 250) and the diff, from their merge base unless `straight`. */
+        get: operations["compare"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/repository/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every file path at a ref, for the "go to file" finder. */
+        get: operations["files"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/repository/last_commits": {
         parameters: {
             query?: never;
@@ -2176,18 +3801,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{id}/repository/map/history": {
+    "/api/v1/projects/{id}/repository/raw": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * The history of the Smart View's map: what each commit of the default branch changed to it,
-         *     with the merge request that brought it, and who made it.
-         */
-        get: operations["history"];
+        /** Raw file. Never served as HTML; LFS pointers resolve to the stored object. */
+        get: operations["raw"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/repository/readme": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The README of a folder at a ref (default branch, top folder by default), rendered to HTML; null when there is none. */
+        get: operations["readme"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/repository/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Split `feature/x/src/main.rs` into ref `feature/x` and path `src/main.rs`. */
+        get: operations["resolve"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2239,7 +3895,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** The repository's tags, a page at a time, filtered by name; `x-total` gives how many match. */
+        get: operations["tags"];
         put?: never;
         /** Create a tag (Developer+); a message makes it annotated. */
         post: operations["create_tag"];
@@ -2395,6 +4052,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/shares": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Groups the project is shared with (those the viewer may see). */
+        get: operations["shares"];
+        put?: never;
+        /** Share the project with a group, capped at a role (Maintainers; not above their own role). */
+        post: operations["share"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/shares/{group_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Stop sharing the project with a group (Maintainers). */
+        delete: operations["unshare"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/smart_view": {
         parameters: {
             query?: never;
@@ -2448,6 +4140,40 @@ export interface paths {
         get: operations["templates"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/transfer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move the project to another namespace (Owners only, and who may create projects there). */
+        post: operations["transfer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{id}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unarchive the project (Owners only). */
+        post: operations["unarchive"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2518,6 +4244,26 @@ export interface paths {
         put?: never;
         post?: never;
         delete: operations["delete_project_variable"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Resolve a URL path to a project, group or user namespace (used by the web app
+         *     for GitLab-shaped URLs). Old paths report where they moved.
+         */
+        get: operations["resolve_path"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2629,6 +4375,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether the instance still needs its first administrator, and whether email and passkeys work. */
+        get: operations["setup_status"];
+        put?: never;
+        /** Create the first administrator (only while there are no users). */
+        post: operations["setup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/unsubscribe/{user_id}/{project_id}/{sig}": {
         parameters: {
             query?: never;
@@ -2658,7 +4422,8 @@ export interface paths {
             cookie?: never;
         };
         get: operations["me"];
-        put?: never;
+        /** Update your name and email (needs a signed-in browser session of the account); a new address needs the current password and takes over once confirmed from its inbox. */
+        put: operations["update_me"];
         post?: never;
         delete?: never;
         options?: never;
@@ -2666,17 +4431,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/user/emails": {
+    "/api/v1/user/avatar": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Your other email addresses: commits made with a confirmed one show as yours. */
-        get: operations["list_emails"];
-        put?: never;
+        get?: never;
+        /** Set your avatar from a PNG, JPEG, GIF or WebP image (at most 5 MB, sent as the body), stored as a 256 px square PNG. */
+        put: operations["set_my_avatar"];
         post?: never;
+        /** Remove your avatar. */
+        delete: operations["delete_my_avatar"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/email/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send the confirmation link again: for the new address waiting, else for
+         *     the account's own unconfirmed one.
+         *     It needs a signed-in browser session of the account; only with email on.
+         */
+        post: operations["resend_confirmation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2699,6 +4486,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/user/gpg_keys/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove one of the caller's GPG keys. */
+        delete: operations["delete_gpg_key"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/user/identities": {
         parameters: {
             query?: never;
@@ -2715,6 +4519,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/user/identities/{name}/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start linking a provider to the signed-in account: the provider's sign-in,
+         *     whose callback adds the identity to this account. Asked for with the
+         *     password, like any new way into the account.
+         *     It needs a signed-in browser session of the account and, with email on, a confirmed address.
+         */
+        post: operations["link_identity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/identities/{name}/unlink": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unlink a provider. Never the last way in: an account without a password
+         *     keeps at least one provider.
+         *     It needs a signed-in browser session of the account and the password.
+         */
+        post: operations["unlink_identity"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/user/keys": {
         parameters: {
             query?: never;
@@ -2724,8 +4571,26 @@ export interface paths {
         };
         get: operations["list_keys"];
         put?: never;
-        post?: never;
+        /** Add an SSH key to your account (needs a signed-in browser session of the account and, with email on, a confirmed address). */
+        post: operations["add_key"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/keys/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove one of your SSH keys (needs a signed-in browser session of the account). */
+        delete: operations["delete_key"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2775,6 +4640,57 @@ export interface paths {
         /** The caller's notifications in the app. */
         get: operations["inbox"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/notifications/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark every notification read. */
+        post: operations["read_all"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/notifications/{id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark one notification read. */
+        post: operations["read_one"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Change your password with the current one (needs a signed-in browser session of the account); your other sessions are signed out. */
+        put: operations["change_password"];
         post?: never;
         delete?: never;
         options?: never;
@@ -2835,6 +4751,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/user/todos/done": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark every pending to-do done. */
+        post: operations["todos_done"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/todos/{id}/done": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark one to-do done. */
+        post: operations["todo_done"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/user/tokens": {
         parameters: {
             query?: never;
@@ -2844,7 +4794,200 @@ export interface paths {
         };
         get: operations["list_tokens"];
         put?: never;
+        /** Create a personal access token, shown this once (needs a signed-in browser session of the account and, with email on, a confirmed address); `admin_mode` is for administrators. */
+        post: operations["create_token"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/tokens/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
         post?: never;
+        /** Revoke one of your personal access tokens (needs a signed-in browser session of the account). */
+        delete: operations["revoke_token"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/two_factor/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Turn off two-factor authentication with the password (needs a signed-in browser session of the account). */
+        post: operations["totp_disable"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/two_factor/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Turn on two-factor authentication with a code of the app set up first and the password (needs a signed-in browser session of the account); answers the recovery codes, shown this once. */
+        post: operations["totp_enable"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/two_factor/recovery_codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How many unused two-factor recovery codes you have left (needs a signed-in browser session of the account). */
+        get: operations["recovery_codes"];
+        put?: never;
+        /**
+         * New recovery codes; the old ones stop working.
+         *     It needs a signed-in browser session of the account, the password and two-factor turned on.
+         */
+        post: operations["recovery_codes_reset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/two_factor/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start enrolment: store a new (not yet enabled) secret. Asked for with the
+         *     password, like enabling it: a borrowed session must not be able to put its
+         *     own secret on the account. An account without a password keeps its recent
+         *     sign-in for the enabling.
+         *     It needs a signed-in browser session of the account.
+         */
+        post: operations["totp_setup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/webauthn": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Your security keys and passkeys, and whether they work on this instance. */
+        get: operations["webauthn_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/webauthn/register/finish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Finish adding a security key or a passkey, from the session that started it.
+         *     It needs a signed-in browser session of the account; the first security key brings the recovery codes, shown this once.
+         */
+        post: operations["webauthn_register_finish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/webauthn/register/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start adding a security key or a passkey. The authenticator is asked not to
+         *     make a second credential for the account; a passkey must be one it can
+         *     offer with no username (discoverable) and that verifies its user.
+         *     It needs a signed-in browser session of the account, the password and, with email on, a confirmed address.
+         */
+        post: operations["webauthn_register_start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/webauthn/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Rename one of your security keys or passkeys (needs a signed-in browser session of the account). */
+        put: operations["webauthn_rename"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/webauthn/{id}/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove a security key or a passkey (the password again). With the last
+         *     second factor go the recovery codes.
+         *     It needs a signed-in browser session of the account.
+         */
+        post: operations["webauthn_remove"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2860,6 +5003,26 @@ export interface paths {
         };
         /** "Your work": what is waiting for you, across projects. */
         get: operations["work"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * User picker for member dialogs.
+         *     The search matches usernames and names; administrators also see (and match) emails, and blocked users.
+         */
+        get: operations["search_users"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2885,6 +5048,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/{username}/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A person's avatar, by username. Anyone may fetch it; unknown usernames and
+         *     people without one both answer 404.
+         */
+        get: operations["user_avatar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/{username}/contributions": {
         parameters: {
             query?: never;
@@ -2897,6 +5080,75 @@ export interface paths {
          *     the viewer can see.
          */
         get: operations["contributions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/version": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The server's name and version. */
+        get: operations["version"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/{kind}/{id}/hooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The webhooks of a project or a group (`{kind}`: `projects` or `groups`; admins). */
+        get: operations["list_hooks"];
+        put?: never;
+        /** Add a webhook to a project or a group (`{kind}`: `projects` or `groups`; admins); answers every webhook. */
+        post: operations["create_hook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/{kind}/{id}/hooks/{hook_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a webhook of a project or a group (`{kind}`: `projects` or `groups`; admins). */
+        delete: operations["delete_hook"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/{kind}/{id}/hooks/{hook_id}/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A webhook's recent deliveries (`{kind}`: `projects` or `groups`; admins). */
+        get: operations["hook_deliveries"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2973,14 +5225,6 @@ export interface components {
             can_push?: boolean;
             key: string;
             title: string;
-        };
-        AddEmail: {
-            /**
-             * @description Needed when the address is confirmed as it is added (an instance that
-             *     sends no email): a borrowed session must not be able to claim one.
-             */
-            current_password?: string;
-            email: string;
         };
         AddGpgKey: {
             /** @description The armored public key (`gpg --armor --export <id>`). */
@@ -3170,13 +5414,6 @@ export interface components {
             /** Format: date-time */
             last_sign_in_at?: string | null;
             name: string;
-            /**
-             * Format: int64
-             * @description Its other email addresses, and how many of them wait for confirmation.
-             */
-            other_emails: number;
-            /** Format: int64 */
-            other_emails_unconfirmed: number;
             /** @description Sign-in providers linked to the account. */
             providers: string[];
             /**
@@ -3296,6 +5533,11 @@ export interface components {
             path: string;
             /** @description The archive has more entries than can be listed. */
             truncated: boolean;
+        };
+        AuditCatalogue: {
+            events: components["schemas"]["EventType"][];
+            /** Format: int32 */
+            version: number;
         };
         AuditEvent: {
             action: string;
@@ -3439,38 +5681,11 @@ export interface components {
             /** Format: date-time */
             started_at: string;
         };
-        BlockChange: {
-            block: components["schemas"]["MapBlock"];
-            kind_before: components["schemas"]["MapKind"];
-            role_before?: components["schemas"]["MapRole"] | null;
-        };
         BranchDto: {
-            /**
-             * Format: int64
-             * @description With `details`: commits on this branch that the default branch has not.
-             */
-            ahead?: number | null;
-            /**
-             * Format: int64
-             * @description With `details`: commits on the default branch that this branch has not.
-             */
-            behind?: number | null;
             commit?: components["schemas"]["CommitSummary"] | null;
             default: boolean;
-            merge_request?: components["schemas"]["BranchMergeRequest"] | null;
             name: string;
-            pipeline?: components["schemas"]["BranchPipeline"] | null;
             protected: boolean;
-        };
-        BranchMergeRequest: {
-            /** Format: int64 */
-            iid: number;
-            title: string;
-        };
-        BranchPipeline: {
-            /** Format: int64 */
-            iid: number;
-            status: string;
         };
         Breadcrumb: {
             full_path: string;
@@ -3543,51 +5758,6 @@ export interface components {
             screen: boolean;
             /** @description The bell in the app. */
             web: boolean;
-        };
-        ChapterAuthor: {
-            name: string;
-            /** @description Their account, by their verified email. */
-            username?: string | null;
-        };
-        /** @description A block as it was then: enough to draw it. */
-        ChapterBlock: {
-            id: string;
-            kind: components["schemas"]["MapKind"];
-            name: string;
-            role?: components["schemas"]["MapRole"] | null;
-        };
-        /**
-         * @description What a commit changed to the map. A block found again under another id is renamed rather
-         *     than removed and added; a role is a guess whose changes are not told, a kind's are.
-         */
-        ChapterChanges: {
-            blocks_added: components["schemas"]["ChapterBlock"][];
-            blocks_removed: components["schemas"]["ChapterBlock"][];
-            blocks_renamed: components["schemas"]["ChapterRename"][];
-            kinds_changed: components["schemas"]["ChapterKind"][];
-            links_added: components["schemas"]["MapLink"][];
-            links_removed: components["schemas"]["MapLink"][];
-        };
-        ChapterKind: {
-            from: components["schemas"]["MapKind"];
-            id: string;
-            to: components["schemas"]["MapKind"];
-        };
-        ChapterMergeRequest: {
-            /**
-             * Format: int64
-             * @description Its comments, not the system's.
-             */
-            comments: number;
-            /** @description The start of its description: why it was made. None without one. */
-            description?: string | null;
-            /** Format: int64 */
-            iid: number;
-            title: string;
-        };
-        ChapterRename: {
-            from: components["schemas"]["ChapterBlock"];
-            to: components["schemas"]["ChapterBlock"];
         };
         CiActivity: {
             /** @description Most pipelines in the last 30 days. */
@@ -4137,6 +6307,22 @@ export interface components {
         EnvironmentSummary: components["schemas"]["Environment"] & {
             last_deployment?: components["schemas"]["Deployment"] | null;
         };
+        EventType: {
+            /** @description Area, for grouping in the docs. */
+            area: string;
+            description: string;
+            /**
+             * @description Keys of `details` (besides the conventional ones); `["*"]`: the
+             *     whole of some settings object, whatever its keys.
+             */
+            fields: string[];
+            name: string;
+            /**
+             * @description `target_type`s it is written with (`project`, `namespace`, `user`);
+             *     empty: none (instance-wide).
+             */
+            targets: string[];
+        };
         /** @description Projects with open critical or high findings on their default branch. */
         ExposedProject: {
             /** Format: int64 */
@@ -4352,11 +6538,6 @@ export interface components {
             /** @description ok, warn or fail */
             status: string;
         };
-        HistoryStart: {
-            /** Format: date-time */
-            at: string;
-            commit: string;
-        };
         HookBody: {
             /** @description push, merge_request, note, release, pipeline, build */
             events: string[];
@@ -4489,11 +6670,6 @@ export interface components {
         };
         InstanceSettings: {
             allow_personal_projects: boolean;
-            /**
-             * @description While the instance sends no email and sign-up is closed, the addresses
-             *     people add to their account are confirmed at once.
-             */
-            auto_confirm_emails: boolean;
             default_branch_name: string;
             /** @description The MCP server's code mode: scripts an assistant writes, run in a sandbox. */
             mcp_code_mode: boolean;
@@ -4872,49 +7048,6 @@ export interface components {
             /** @description The folders or files whose files are its own. */
             roots: components["schemas"]["MapPath"][];
         };
-        /**
-         * @description What a merge request changes to the map: its head's against the default branch's, only what
-         *     the files it changes tell (a manifest, the file a link is read in, assay.toml). What the
-         *     default branch changed since the merge request left it is not the merge request's.
-         */
-        MapChanges: {
-            blocks_added: components["schemas"]["MapBlock"][];
-            /** @description A block whose kind or role changes: as it is at the head. */
-            blocks_changed: components["schemas"]["BlockChange"][];
-            blocks_removed: components["schemas"]["MapBlock"][];
-            /** @description A block found again under another id: once merged, as the history tells it. */
-            blocks_renamed: components["schemas"]["ChapterRename"][];
-            links_added: components["schemas"]["MapLink"][];
-            links_removed: components["schemas"]["MapLink"][];
-        };
-        /** @description A commit that changed the map, and what it changed. */
-        MapChapter: {
-            /**
-             * Format: date-time
-             * @description When they reached the default branch.
-             */
-            at: string;
-            author: components["schemas"]["ChapterAuthor"];
-            changes: components["schemas"]["ChapterChanges"];
-            /** @description The commit that made the changes. */
-            commit: string;
-            /** @description The default branch's merge commit that brought them, when it was made on the branch merged. */
-            merge_commit?: string | null;
-            merge_request?: components["schemas"]["ChapterMergeRequest"] | null;
-            /** @description The first line of the commit's message. */
-            title: string;
-        };
-        /**
-         * @description What the commits of the default branch changed to the map, as the map jobs read it. Empty
-         *     until one has (the Smart View off, or no job of the default branch since it came).
-         */
-        MapHistory: {
-            /** @description The commits that changed the map, oldest first. A revert and what it undid are left out. */
-            chapters: components["schemas"]["MapChapter"][];
-            /** @description The last commit read. */
-            head?: string | null;
-            start?: components["schemas"]["HistoryStart"] | null;
-        };
         /** @enum {string} */
         MapKind: "rust" | "node" | "python" | "go" | "docker" | "service" | "helm" | "kubernetes" | "ansible" | "terraform" | "pulumi" | "migrations" | "ci" | "docs" | "other";
         MapLanguage: {
@@ -5196,7 +7329,6 @@ export interface components {
         MrBlocks: {
             /** @description The most changed first. */
             blocks: components["schemas"]["MrBlock"][];
-            changes?: components["schemas"]["MapChanges"] | null;
             /**
              * @description The commit of the map they are read from: its head once a job mapped it, else the
              *     default branch's (empty without a map: the Smart View is off, or no job has run yet).
@@ -5486,10 +7618,7 @@ export interface components {
             target_type: string;
             title: string;
         };
-        /**
-         * @description What an import brings besides the repository (all on by default, but the mirror and the
-         *     Smart View: the import page turns the Smart View on).
-         */
+        /** @description What an import brings besides the repository (all on by default). */
         Options: {
             /** @default true */
             issues: boolean;
@@ -5515,12 +7644,6 @@ export interface components {
             mirror: boolean;
             /** @default true */
             protected_branches: boolean;
-            /**
-             * @description Turn the Smart View on: the code is mapped, and the map's history read, which the merge
-             *     requests imported tell (off by default, for who calls the API; on in the import page).
-             * @default false
-             */
-            smart_view: boolean;
             /**
              * @description CI/CD variables (Owners of the target group only).
              * @default true
@@ -6209,6 +8332,10 @@ export interface components {
             tags_count: number;
             /** Format: date-time */
             updated_at?: string | null;
+        };
+        RequestChangesBody: {
+            /** @description What to change: posted as a comment that carries the verdict. */
+            body?: string | null;
         };
         ResetPassword: {
             password: string;
@@ -6974,7 +9101,6 @@ export interface components {
          */
         UpdateInstanceSettings: {
             allow_personal_projects: boolean;
-            auto_confirm_emails?: boolean | null;
             default_branch_name: string;
             mcp_code_mode?: boolean | null;
             mcp_enabled?: boolean | null;
@@ -7105,23 +9231,6 @@ export interface components {
             unconfirmed_email?: string | null;
             user_type: string;
             username: string;
-        };
-        UserEmail: {
-            /**
-             * Format: date-time
-             * @description When it was confirmed (None: not yet).
-             */
-            confirmed_at?: string | null;
-            /**
-             * @description How: `link` (from its inbox), `admin` (an administrator vouched for
-             *     it) or `auto` (the instance trusted it, sending no email).
-             */
-            confirmed_by?: string | null;
-            /** Format: date-time */
-            created_at: string;
-            email: string;
-            /** Format: int64 */
-            id: number;
         };
         VariableBody: {
             description?: string;
@@ -7353,6 +9462,369 @@ export interface operations {
             };
         };
     };
+    audit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Only events on this kind of target (`user`, `project`, ...). */
+                target_type: string | null;
+                /** @description Only events on this target. */
+                target_id: number | null;
+                /** @description Only events older than this event id (the next page). */
+                before: number | null;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditEvent"][];
+                };
+            };
+        };
+    };
+    audit_catalogue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditCatalogue"];
+                };
+            };
+        };
+    };
+    backups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Backups"];
+                };
+            };
+        };
+    };
+    start_backup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_backup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    banner_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Banner"];
+                };
+            };
+        };
+    };
+    set_banner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Banner"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Banner"];
+                };
+            };
+        };
+    };
+    groups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Only those whose path or name matches. */
+                search: string;
+                /** @description projects: size, activity (default) or name */
+                sort: string;
+                page: number;
+                per_page: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminGroup"][];
+                };
+            };
+        };
+    };
+    health: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Health"];
+                };
+            };
+        };
+    };
+    test_email: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestEmail"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    jobs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobsOverview"];
+                };
+            };
+        };
+    };
+    drop_job: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    retry_job: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    set_namespace_quota: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetQuota"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    overview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Overview"];
+                };
+            };
+        };
+    };
+    projects: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Only those whose path or name matches. */
+                search: string;
+                /** @description projects: size, activity (default) or name */
+                sort: string;
+                page: number;
+                per_page: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminProject"][];
+                };
+            };
+        };
+    };
+    project_maintenance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    set_project_quota: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetQuota"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     admin_get: {
         parameters: {
             query?: never;
@@ -7538,6 +10010,48 @@ export interface operations {
             };
         };
     };
+    settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceSettings"];
+                };
+            };
+        };
+    };
+    update_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateInstanceSettings"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceSettings"];
+                };
+            };
+        };
+    };
     admin_get: {
         parameters: {
             query?: never;
@@ -7577,6 +10091,353 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AdminSmartViewStatus"];
                 };
+            };
+        };
+    };
+    storage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageOverview"];
+                };
+            };
+        };
+    };
+    set_default_quota: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetQuota"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    scan_storage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    runnable: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Runnable"][];
+                };
+            };
+        };
+    };
+    run_task: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateStatus"];
+                };
+            };
+        };
+    };
+    users: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description all (people), admins, blocked, external, unconfirmed, two_factor_off, bots */
+                filter: string;
+                search: string;
+                page: number;
+                per_page: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUser"][];
+                };
+            };
+        };
+    };
+    create_user: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateUser"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserDto"];
+                };
+            };
+        };
+    };
+    update_user: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateUser"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserDto"];
+                };
+            };
+        };
+    };
+    delete_user: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Delete their personal projects too (else they block the deletion). */
+                delete_projects: boolean;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    confirm_email: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmUserEmail"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    link_identity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinkIdentity"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    unlink_identity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    impersonate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    resend_confirmation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reset_two_factor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    revoke_tokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    sign_out: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -7739,6 +10600,66 @@ export interface operations {
             };
         };
     };
+    logout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    oidc_callback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The authorization code the provider gave. */
+                code: string | null;
+                /** @description The state the sign-in was started with. */
+                state: string | null;
+                /** @description The provider's error, when it refused or the sign-in was cancelled. */
+                error: string | null;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description To the app, the second factor, the settings, or the sign-in page with the error */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    oidc_start: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description To the provider, or back to the sign-in page with the error */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     passkey_finish: {
         parameters: {
             query?: never;
@@ -7823,6 +10744,106 @@ export interface operations {
             };
         };
     };
+    providers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Provider"][];
+                };
+            };
+        };
+    };
+    register: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResponse"];
+                };
+            };
+        };
+    };
+    stop_impersonating: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    banner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Banner"] | null;
+                };
+            };
+        };
+    };
+    events: {
+        parameters: {
+            query?: {
+                /** @description Projects to watch, comma-separated IDs (at most 20); none: only the caller's own events */
+                projects?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
+                };
+            };
+        };
+    };
     list_top: {
         parameters: {
             query?: never;
@@ -7887,6 +10908,239 @@ export interface operations {
             };
         };
     };
+    update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateGroup"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupDto"];
+                };
+            };
+        };
+    };
+    delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_access_tokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessTokenDto"][];
+                };
+            };
+        };
+    };
+    create_access_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAccessToken"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewToken"];
+                };
+            };
+        };
+    };
+    revoke_access_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    group_avatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": unknown;
+                };
+            };
+            /** @description Unchanged (If-None-Match) */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No avatar */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    set_group_avatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The image as the raw body: PNG, JPEG, GIF or WebP, at most 5 MB */
+        requestBody: {
+            content: {
+                "image/gif": number[];
+                "image/jpeg": number[];
+                "image/png": number[];
+                "image/webp": number[];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_group_avatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_deploy_tokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeployToken"][];
+                };
+            };
+        };
+    };
+    create_deploy_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDeployToken"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewToken"];
+                };
+            };
+        };
+    };
+    revoke_deploy_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     members: {
         parameters: {
             query?: never;
@@ -7903,6 +11157,88 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MemberDto"][];
                 };
+            };
+        };
+    };
+    add_member: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddMember"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    remove_member: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    rename: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewPath"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupDto"];
+                };
+            };
+        };
+    };
+    set_policy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -8070,6 +11406,63 @@ export interface operations {
             };
         };
     };
+    shares: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShareDto"][];
+                };
+            };
+        };
+    };
+    share: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShareRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    unshare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     storage: {
         parameters: {
             query?: never;
@@ -8104,6 +11497,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GroupDto"][];
+                };
+            };
+        };
+    };
+    transfer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferGroup"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupDto"];
                 };
             };
         };
@@ -8164,6 +11580,25 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    highlight_css: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/css": unknown;
+                };
             };
         };
     };
@@ -8430,6 +11865,23 @@ export interface operations {
             };
         };
     };
+    spec: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     explore: {
         parameters: {
             query?: never;
@@ -8491,6 +11943,105 @@ export interface operations {
             };
         };
     };
+    update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProject"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectDto"];
+                };
+            };
+        };
+    };
+    delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_access_tokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessTokenDto"][];
+                };
+            };
+        };
+    };
+    create_access_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAccessToken"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewToken"];
+                };
+            };
+        };
+    };
+    revoke_access_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     get: {
         parameters: {
             query?: never;
@@ -8530,6 +12081,179 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AiReviewSettings"];
                 };
+            };
+        };
+    };
+    rules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRule"][];
+                };
+            };
+        };
+    };
+    upsert_rule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RuleBody"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRule"][];
+                };
+            };
+        };
+    };
+    delete_rule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    archive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    audit_log: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Only events older than this event id (the next page). */
+                before: number | null;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditEvent"][];
+                };
+            };
+        };
+    };
+    project_avatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": unknown;
+                };
+            };
+            /** @description Unchanged (If-None-Match) */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No avatar */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    set_project_avatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The image as the raw body: PNG, JPEG, GIF or WebP, at most 5 MB */
+        requestBody: {
+            content: {
+                "image/gif": number[];
+                "image/jpeg": number[];
+                "image/png": number[];
+                "image/webp": number[];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_project_avatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -8594,6 +12318,124 @@ export interface operations {
             };
         };
     };
+    deploy_keys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeployKey"][];
+                };
+            };
+        };
+    };
+    add_deploy_key: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddDeployKey"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeployKey"][];
+                };
+            };
+        };
+    };
+    remove_deploy_key: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_deploy_tokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeployToken"][];
+                };
+            };
+        };
+    };
+    create_deploy_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDeployToken"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewToken"];
+                };
+            };
+        };
+    };
+    revoke_deploy_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list: {
         parameters: {
             query?: never;
@@ -8628,6 +12470,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnvironmentDetail"];
+                };
+            };
+        };
+    };
+    delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    stop: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Environment"];
                 };
             };
         };
@@ -9064,6 +12942,25 @@ export interface operations {
             };
         };
     };
+    unschedule_job: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobDto"];
+                };
+            };
+        };
+    };
     labels: {
         parameters: {
             query?: never;
@@ -9165,6 +13062,46 @@ export interface operations {
             };
         };
     };
+    unlock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    markdown: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MarkdownBody"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MarkdownHtml"];
+                };
+            };
+        };
+    };
     members: {
         parameters: {
             query?: never;
@@ -9181,6 +13118,44 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MemberDto"][];
                 };
+            };
+        };
+    };
+    add_member: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddMember"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    remove_member: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -9245,6 +13220,29 @@ export interface operations {
             };
         };
     };
+    update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMr"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MergeRequest"];
+                };
+            };
+        };
+    };
     mr_status: {
         parameters: {
             query?: never;
@@ -9283,6 +13281,23 @@ export interface operations {
             };
         };
     };
+    approve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     auto_merge: {
         parameters: {
             query?: never;
@@ -9306,6 +13321,25 @@ export interface operations {
             };
         };
     };
+    cancel_auto_merge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MergeRequest"];
+                };
+            };
+        };
+    };
     mr_blocks: {
         parameters: {
             query?: never;
@@ -9325,6 +13359,25 @@ export interface operations {
             };
         };
     };
+    close: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MergeRequest"];
+                };
+            };
+        };
+    };
     code_owners: {
         parameters: {
             query?: never;
@@ -9340,6 +13393,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CodeOwners"];
+                };
+            };
+        };
+    };
+    commits: {
+        parameters: {
+            query?: {
+                /** @description A diff version; the latest without one */
+                version?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommitInfo"][];
                 };
             };
         };
@@ -9447,6 +13522,23 @@ export interface operations {
             };
         };
     };
+    remove_from_train: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     notes: {
         parameters: {
             query?: never;
@@ -9463,6 +13555,105 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["NoteDto"][];
                 };
+            };
+        };
+    };
+    create_note: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateNote"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Note"];
+                };
+            };
+        };
+    };
+    edit_note: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditNote"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_note: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    apply_suggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    resolve_note: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveBody"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -9527,6 +13718,80 @@ export interface operations {
             };
         };
     };
+    rebase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reopen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MergeRequest"];
+                };
+            };
+        };
+    };
+    request_changes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestChangesBody"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    rerequest_review: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     merge_request: {
         parameters: {
             query?: never;
@@ -9569,6 +13834,40 @@ export interface operations {
             };
         };
     };
+    leave_stack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    rebase_stack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     mr_tests: {
         parameters: {
             query?: never;
@@ -9585,6 +13884,23 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["MrTests"];
                 };
+            };
+        };
+    };
+    unapprove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -9891,6 +14207,46 @@ export interface operations {
             };
         };
     };
+    remove_pages: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    rename: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewPath"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectDto"];
+                };
+            };
+        };
+    };
     list_schedules: {
         parameters: {
             query?: never;
@@ -10146,6 +14502,46 @@ export interface operations {
             };
         };
     };
+    protect_branch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProtectBranch"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProtectedBranchDto"][];
+                };
+            };
+        };
+    };
+    unprotect_branch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     protected: {
         parameters: {
             query?: never;
@@ -10185,6 +14581,23 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ProtectedEnvironment"][];
                 };
+            };
+        };
+    };
+    unprotect: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -10308,6 +14721,23 @@ export interface operations {
             };
         };
     };
+    run_cleanup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     cleanup_policy: {
         parameters: {
             query?: never;
@@ -10350,6 +14780,23 @@ export interface operations {
             };
         };
     };
+    delete_repository: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     tags: {
         parameters: {
             query?: never;
@@ -10366,6 +14813,23 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Tag"][];
                 };
+            };
+        };
+    };
+    delete_tag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -10630,6 +15094,32 @@ export interface operations {
             };
         };
     };
+    archive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Branch, tag or commit; the default branch without one. */
+                ref: string | null;
+                /** @description `tar.gz` (default), `tar` or `zip`. */
+                format: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/gzip": unknown;
+                    "application/x-tar": unknown;
+                    "application/zip": unknown;
+                };
+            };
+        };
+    };
     blame: {
         parameters: {
             query?: never;
@@ -10701,6 +15191,23 @@ export interface operations {
         };
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_branch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10807,6 +15314,58 @@ export interface operations {
             };
         };
     };
+    compare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Branch, tag or commit to compare from. */
+                from: string;
+                /** @description Branch, tag or commit to compare to. */
+                to: string;
+                /** @description `true`: diff `from..to` directly; default compares from the merge base. */
+                straight: boolean;
+                /** @description Diff files to skip (paging). */
+                offset: number;
+                /** @description Diff files in this page; at most the instance's limit, which is the default. */
+                limit: number | null;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompareResponse"];
+                };
+            };
+        };
+    };
+    files: {
+        parameters: {
+            query?: {
+                /** @description Branch, tag or commit; the default branch without one */
+                ref?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileList"];
+                };
+            };
+        };
+    };
     last_commits: {
         parameters: {
             query?: never;
@@ -10870,11 +15429,48 @@ export interface operations {
             };
         };
     };
-    history: {
+    raw: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                /** @description Branch, tag or commit; the default branch without one. */
+                ref: string | null;
+                /** @description A path in the repository; the top folder without one. */
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The file: images and PDFs as such, text as text/plain, the rest as application/octet-stream */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": unknown;
+                    "text/plain": unknown;
+                    "image/png": unknown;
+                    "image/jpeg": unknown;
+                    "image/gif": unknown;
+                    "image/webp": unknown;
+                    "image/svg+xml": unknown;
+                    "application/pdf": unknown;
+                };
+            };
+        };
+    };
+    readme: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Branch, tag or commit; the default branch without one. */
+                ref: string | null;
+                /** @description A path in the repository; the top folder without one. */
+                path: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -10884,7 +15480,32 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MapHistory"];
+                    "application/json": components["schemas"]["ReadmeResponse"] | null;
+                };
+            };
+        };
+    };
+    resolve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /**
+                 * @description `<ref>/<path>` as found in `/-/tree/` and `/-/blob/` URLs; refs may contain
+                 *     slashes, so the longest prefix that names a ref wins.
+                 */
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefResolved"];
                 };
             };
         };
@@ -10929,6 +15550,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RepoStats"];
+                };
+            };
+        };
+    };
+    tags: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Part of the name. */
+                search: string;
+                /** @description Page, from 1. */
+                page: number;
+                /** @description At most 100; 40 by default. */
+                per_page: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    /** @description Tags matching the search */
+                    "x-total"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagDto"][];
                 };
             };
         };
@@ -11175,6 +15824,63 @@ export interface operations {
             };
         };
     };
+    shares: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShareDto"][];
+                };
+            };
+        };
+    };
+    share: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShareRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    unshare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     get: {
         parameters: {
             query?: never;
@@ -11252,6 +15958,46 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["DescriptionTemplate"][];
                 };
+            };
+        };
+    };
+    transfer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferProject"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectDto"];
+                };
+            };
+        };
+    };
+    unarchive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -11349,6 +16095,28 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    resolve_path: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description A URL path: group/project, a group or a username. */
+                path: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Resolved"];
+                };
             };
         };
     };
@@ -11506,6 +16274,48 @@ export interface operations {
             };
         };
     };
+    setup_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupStatus"];
+                };
+            };
+        };
+    };
+    setup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetupRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LoginResponse"];
+                };
+            };
+        };
+    };
     unsubscribe_info: {
         parameters: {
             query?: never;
@@ -11563,7 +16373,72 @@ export interface operations {
             };
         };
     };
-    list_emails: {
+    update_me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateMe"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserDto"];
+                };
+            };
+        };
+    };
+    set_my_avatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description The image as the raw body: PNG, JPEG, GIF or WebP, at most 5 MB */
+        requestBody: {
+            content: {
+                "image/gif": number[];
+                "image/jpeg": number[];
+                "image/png": number[];
+                "image/webp": number[];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_my_avatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    resend_confirmation: {
         parameters: {
             query?: never;
             header?: never;
@@ -11576,9 +16451,7 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["UserEmail"][];
-                };
+                content?: never;
             };
         };
     };
@@ -11624,6 +16497,23 @@ export interface operations {
             };
         };
     };
+    delete_gpg_key: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_identities: {
         parameters: {
             query?: never;
@@ -11643,6 +16533,50 @@ export interface operations {
             };
         };
     };
+    link_identity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmPassword"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkStart"];
+                };
+            };
+        };
+    };
+    unlink_identity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmPassword"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_keys: {
         parameters: {
             query?: never;
@@ -11659,6 +16593,46 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SshKey"][];
                 };
+            };
+        };
+    };
+    add_key: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddKey"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SshKey"];
+                };
+            };
+        };
+    };
+    delete_key: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -11765,6 +16739,65 @@ export interface operations {
             };
         };
     };
+    read_all: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Inbox"];
+                };
+            };
+        };
+    };
+    read_one: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Inbox"];
+                };
+            };
+        };
+    };
+    change_password: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePassword"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     my_project_states: {
         parameters: {
             query?: never;
@@ -11822,6 +16855,40 @@ export interface operations {
             };
         };
     };
+    todos_done: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    todo_done: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     list_tokens: {
         parameters: {
             query?: never;
@@ -11837,6 +16904,266 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AccessToken"][];
+                };
+            };
+        };
+    };
+    create_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateToken"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewToken"];
+                };
+            };
+        };
+    };
+    revoke_token: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    totp_disable: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TotpDisable"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserDto"];
+                };
+            };
+        };
+    };
+    totp_enable: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TotpCode"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TotpEnabled"];
+                };
+            };
+        };
+    };
+    recovery_codes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecoveryCodesLeft"];
+                };
+            };
+        };
+    };
+    recovery_codes_reset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmPassword"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NewRecoveryCodes"];
+                };
+            };
+        };
+    };
+    totp_setup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmPassword"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TotpSetup"];
+                };
+            };
+        };
+    };
+    webauthn_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebauthnCredentials"];
+                };
+            };
+        };
+    };
+    webauthn_register_finish: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebauthnRegisterFinish"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebauthnRegistered"];
+                };
+            };
+        };
+    };
+    webauthn_register_start: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebauthnRegisterStart"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebauthnRegistration"];
+                };
+            };
+        };
+    };
+    webauthn_rename: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebauthnRename"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    webauthn_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmPassword"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserDto"];
                 };
             };
         };
@@ -11860,6 +17187,32 @@ export interface operations {
             };
         };
     };
+    search_users: {
+        parameters: {
+            query?: {
+                /** @description Part of a username or name */
+                search?: string;
+                /** @description Page, from 1 */
+                page?: number;
+                /** @description At most 100; 20 by default */
+                per_page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserDto"][];
+                };
+            };
+        };
+    };
     profile: {
         parameters: {
             query?: never;
@@ -11879,6 +17232,39 @@ export interface operations {
             };
         };
     };
+    user_avatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": unknown;
+                };
+            };
+            /** @description Unchanged (If-None-Match) */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No avatar */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     contributions: {
         parameters: {
             query?: never;
@@ -11894,6 +17280,101 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Contributions"];
+                };
+            };
+        };
+    };
+    version: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_hooks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Webhook"][];
+                };
+            };
+        };
+    };
+    create_hook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HookBody"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Webhook"][];
+                };
+            };
+        };
+    };
+    delete_hook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    hook_deliveries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Delivery"][];
                 };
             };
         };
