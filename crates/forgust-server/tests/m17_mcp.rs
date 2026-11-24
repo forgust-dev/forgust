@@ -339,7 +339,7 @@ async fn typed_answers_and_code_mode(pool: sqlx::PgPool) {
     let (_org, _sub, p) = org_project(&owner).await;
     owner.ok_post(&format!("/api/v1/projects/{p}/members"), json!({ "username": "gus", "access_level": "guest" })).await;
     owner.ok_post(&format!("/api/v1/projects/{p}/issues"), json!({ "title": "First" })).await;
-    let read = Mcp::new(&srv, Some(&token(&owner, "read", &["mcp"]).await));
+    let read = Mcp::new(&srv, Some(&token(&owner, "read", &["read_api"]).await));
     let write = Mcp::new(&srv, Some(&token(&owner, "write", &["api"]).await));
     let call = |m: &Mcp, name: &str, args: Value| {
         let (m, name) = (Mcp { base: m.base.clone(), token: m.token.clone(), http: m.http.clone() }, name.to_string());
@@ -386,7 +386,14 @@ async fn typed_answers_and_code_mode(pool: sqlx::PgPool) {
     let r = call(&read, "search_api", json!({ "code": "Object.keys(spec.paths).filter((p) => p.endsWith('/issues'))" })).await;
     assert!(r["structuredContent"]["result"].as_array().unwrap().iter().any(|x| x == "/api/v1/projects/{id}/issues"), "{r}");
 
-    // execute_api: many calls, one answer, as the token's user (an `mcp` token reads)
+    // an `mcp` token (what OAuth clients get) has no execute_api: /api/v1 needs read_api or api
+    let mcp_only = Mcp::new(&srv, Some(&token(&owner, "mcp", &["mcp"]).await));
+    let names = mcp_only.tools().await;
+    assert!(names.contains(&"search_api".to_string()) && !names.contains(&"execute_api".to_string()), "{names:?}");
+    let (err, text) = mcp_only.call("execute_api", json!({ "code": format!("forgust.get('/projects/{p}/variables')") })).await;
+    assert!(err && text.contains("read_api"), "{text}");
+
+    // execute_api: many calls, one answer, as the token's user (a `read_api` token reads)
     let code = format!(
         "const r = await forgust.get('/api/v1/projects/{p}/issues?state=all');\nconst list = r.issues ?? r.items ?? r;\nconsole.log(list.length);\n\
          const me = await forgust.get('/user');\nreturn {{ me: me.username, titles: list.map((i) => i.title).sort() }};"

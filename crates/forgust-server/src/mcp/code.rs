@@ -3,8 +3,9 @@
 //! has no files, network, timers or modules, at most `MEMORY` bytes and
 //! `TIME`. `search_api` reads the OpenAPI document; `execute_api`'s one way
 //! out is `forgust.request`, which calls the `/api/v1` router in-process as
-//! the caller: the same handlers and checks as over HTTP, writes only for a
-//! token with the `api` scope, each call against the token's rate limit.
+//! the caller: the same handlers and checks as over HTTP, for a token with
+//! the `read_api` scope (reads) or the `api` scope (writes too), each call
+//! against the token's rate limit.
 
 use std::cell::{Cell, RefCell};
 use std::net::{IpAddr, SocketAddr};

@@ -42,6 +42,10 @@ pub struct Caller {
     /// The token carries `api`: code mode may change things too (an OAuth
     /// client's `mcp_write` keeps to the write tools the person consented to).
     pub api: bool,
+    /// The token carries `read_api` (or `api`): `execute_api` may call
+    /// `/api/v1`, as the token could over HTTP. An `mcp` token, the one OAuth
+    /// clients get, keeps to the MCP tools the person consented to.
+    pub read_api: bool,
     /// An administrator turned code mode on (`search_api`, `execute_api`).
     pub code_mode: bool,
     /// `?tools=code`: list only the code mode tools.
@@ -119,7 +123,20 @@ async fn caller(state: &AppState, path: &str, headers: &HeaderMap, ip: crate::au
     let token_id = forgust_db::tokens::mark_used_by_mcp(&state.db, &hash).await.ok().flatten();
     let write = principal.has_scope("api") || principal.has_scope("mcp_write");
     let api = principal.has_scope("api");
-    Ok(Caller { state: state.clone(), user, principal, write, api, code_mode: false, code_only: false, ip: ip.0, token_id, rate_key })
+    let read_api = principal.has_scope("read_api");
+    Ok(Caller {
+        state: state.clone(),
+        user,
+        principal,
+        write,
+        api,
+        read_api,
+        code_mode: false,
+        code_only: false,
+        ip: ip.0,
+        token_id,
+        rate_key,
+    })
 }
 
 /// `POST /api/v4/mcp`: one JSON-RPC message (or a batch), one answer.

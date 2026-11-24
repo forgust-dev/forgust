@@ -78,9 +78,9 @@ Off until an administrator turns it on (Admin, Settings). Its `search_api` and
 - **The one way out** is `forgust.request`. It calls the `/api/v1` router in-process
   as the token's user, through the same handlers and permission checks as over HTTP.
   It cannot reach another host or another part of the server.
-- **Scopes:** every MCP token may read (GET). Only a token with the `api` scope may
-  change things. An OAuth client's `mcp_write` keeps to the write tools the person
-  allowed. The admin API still needs `admin_mode`, and credentials are never made
+- **Scopes:** `execute_api` needs a token that may use `/api/v1`: `read_api` to read
+  (GET), `api` to change things too. An `mcp` token, the one OAuth clients get, has no
+  `execute_api`, and `mcp_write` keeps to the write tools the person allowed. The admin API still needs `admin_mode`, and credentials are never made
   with a token.
 - **Limits:** a run makes at most 50 calls, and each call counts against the token's
   MCP rate limit (120 a minute). Each change is audited (`mcp_tool_call`, with the

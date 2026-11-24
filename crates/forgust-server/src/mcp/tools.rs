@@ -392,8 +392,8 @@ fn build_defs() -> Vec<Def> {
                           `await forgust.get(path)`, `forgust.post(path, body)`, `.put`, `.patch`, `.delete`, or \
                           `forgust.request(method, path, body)`: `path` as in search_api (`/api/v1/projects/{id}...`, with a query string \
                           if needed; encode a group/project path as %2F), the answer's JSON back; a failed call throws (`e.status`, `e.message`). \
-                          `console.log` is kept. No network, files or timers; at most 50 calls and 30 s a run. Tokens with the `api` scope \
-                          may change things; others only read (GET).",
+                          `console.log` is kept. No network, files or timers; at most 50 calls and 30 s a run. Needs a token with the \
+                          `read_api` scope (reads, GET) or the `api` scope (changes too).",
             write: false,
             schema: code_schema(),
         },
@@ -450,11 +450,13 @@ fn structured(v: Value, len: usize) -> Value {
 static DEFS: std::sync::LazyLock<Vec<Def>> = std::sync::LazyLock::new(build_defs);
 
 /// What `tools/list` answers: write tools only for tokens that may write,
-/// code mode's only when it is on (and only them for `?tools=code`).
+/// code mode's only when it is on (and only them for `?tools=code`),
+/// `execute_api` only for tokens that may call `/api/v1`.
 pub fn list(c: &Caller) -> Vec<Value> {
     DEFS.iter()
         .filter(|d| c.write || !d.write)
         .filter(|d| if is_code(d.name) { c.code_mode } else { !c.code_only })
+        .filter(|d| d.name != "execute_api" || c.read_api)
         .map(|d| {
             // execute_api changes things when the token may (DELETE too)
             let changes = d.write || (d.name == "execute_api" && c.api);
@@ -680,6 +682,11 @@ pub async fn call(c: &Caller, name: &str, args: &Value) -> Value {
     }
     if is_code(name) && !c.code_mode {
         return error("code mode is off: an administrator can turn it on (Admin, Settings)");
+    }
+    if name == "execute_api" && !c.read_api {
+        return error(
+            "execute_api calls /api/v1 as you: it needs a token with the read_api or api scope (an mcp token keeps to the other tools)",
+        );
     }
     match run(c, name, args).await {
         Ok(v) if def.write => {
