@@ -4812,8 +4812,6 @@ export interface components {
             blocks_removed: components["schemas"]["MapBlock"][];
             links_added: components["schemas"]["MapLink"][];
             links_removed: components["schemas"]["MapLink"][];
-            /** @description The links breaking a rule that it brings: not on the default branch. */
-            violations: components["schemas"]["MapViolation"][];
         };
         /** @enum {string} */
         MapKind: "rust" | "node" | "python" | "go" | "docker" | "service" | "helm" | "kubernetes" | "ansible" | "terraform" | "pulumi" | "migrations" | "ci" | "docs" | "other";
@@ -4880,20 +4878,6 @@ export interface components {
         };
         /** @enum {string} */
         MapRunState: "pending" | "failed";
-        /** @description A link that breaks a rule of assay.toml: its blocks must not need each other. */
-        MapViolation: {
-            from: string;
-            /** @description A guess, which breaks only the rules that say so (`guesses = true`). */
-            inferred: boolean;
-            kind: components["schemas"]["MapLinkKind"];
-            /** @description The rule's place in assay.toml, from 1. */
-            rule: number;
-            to: string;
-            /** @description The file that tells the link. */
-            via: string;
-            /** @description Why the rule is there, as assay.toml says. */
-            why?: string | null;
-        };
         /** @description A note's position on another version of the MR. */
         MappedPosition: {
             /** Format: int32 */
@@ -6048,8 +6032,6 @@ export interface components {
             /** @description How many files are in no block (READMEs, a workspace's manifest…), and the first ones. */
             unassigned: number;
             unassigned_sample: string[];
-            /** @description The links that break a rule of assay.toml (`[[rules]]`). */
-            violations: components["schemas"]["MapViolation"][];
             /**
              * @description What could not be read: a manifest that does not parse, a block assay.toml names but
              *     that is not there…

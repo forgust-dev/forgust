@@ -662,32 +662,3 @@ fn blocks_that_hold_each_other_make_no_loop() {
     assert!(a.is_none() || b.is_none(), "a in {a:?}, b in {b:?}");
     assert!(a.as_deref() == Some("b") || b.as_deref() == Some("a"), "one is still inside the other");
 }
-
-/// assay.toml's rules: a link that breaks one is a violation, a guess only when the rule says;
-/// a selector that cannot be read is a warning.
-#[test]
-fn checks_the_rules() {
-    let files: Vec<(&str, &str)> = vec![
-        ("web/package.json", "{\"name\": \"web\", \"dependencies\": {\"react\": \"19\", \"db-client\": \"*\"}}\n"),
-        ("db-client/package.json", "{\"name\": \"db-client\", \"main\": \"index.js\"}\n"),
-        (
-            "compose.yml",
-            "services:\n  web:\n    image: node:22\n    environment:\n      DATABASE_URL: postgres://app@db:5432/app\n  db:\n    image: postgres:17\n",
-        ),
-        (
-            "assay.toml",
-            "[[rules]]\nfrom = [\"web\"]\ndeny = [\"db-*\"]\nwhy = \"Through the API\"\n\n[[rules]]\nfrom = [\"kind:service\"]\ndeny = [\"role:database\"]\n\n[[rules]]\nfrom = [\"web-service\"]\ndeny = [\"role:database\"]\nguesses = true\n\n[[rules]]\nfrom = [\"role:nothing\"]\ndeny = [\"db\"]\n",
-        ),
-    ];
-    let map = forgust_assay::map(&repo("rules", &files), &Options { people: false, days: None, name: None }).unwrap();
-    let got: Vec<(usize, &str, &str, Certainty)> =
-        map.violations.iter().map(|v| (v.rule, v.from.as_str(), v.to.as_str(), v.certainty)).collect();
-    assert_eq!(
-        got,
-        [(1, "web", "db-client", Certainty::Declared), (3, "web-service", "db", Certainty::Inferred)],
-        "a guess breaks only rule 3"
-    );
-    assert_eq!(map.violations[0].why.as_deref(), Some("Through the API"));
-    assert_eq!(map.violations[0].via, "web/package.json");
-    assert!(map.warnings.iter().any(|w| w.contains("rule 4") && w.contains("no role `nothing`")), "{:?}", map.warnings);
-}

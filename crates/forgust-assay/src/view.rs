@@ -31,7 +31,6 @@ mod tests {
             links: Vec::new(),
             unassigned: Unassigned { files: 1, sample: vec!["</script><b>x".to_string()] },
             warnings: Vec::new(),
-            violations: Vec::new(),
         };
         let html = page(&map, "a <b> & c");
         assert!(html.contains("<title>a &lt;b&gt; &amp; c · assay</title>"));

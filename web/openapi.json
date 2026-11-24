@@ -11255,8 +11255,7 @@
           "blocks_removed",
           "blocks_changed",
           "links_added",
-          "links_removed",
-          "violations"
+          "links_removed"
         ],
         "properties": {
           "blocks_added": {
@@ -11289,13 +11288,6 @@
             "items": {
               "$ref": "#/components/schemas/MapLink"
             }
-          },
-          "violations": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MapViolation"
-            },
-            "description": "The links breaking a rule that it brings: not on the default branch."
           }
         }
       },
@@ -11507,49 +11499,6 @@
           "pending",
           "failed"
         ]
-      },
-      "MapViolation": {
-        "type": "object",
-        "description": "A link that breaks a rule of assay.toml: its blocks must not need each other.",
-        "required": [
-          "rule",
-          "from",
-          "to",
-          "kind",
-          "inferred",
-          "via"
-        ],
-        "properties": {
-          "from": {
-            "type": "string"
-          },
-          "inferred": {
-            "type": "boolean",
-            "description": "A guess, which breaks only the rules that say so (`guesses = true`)."
-          },
-          "kind": {
-            "$ref": "#/components/schemas/MapLinkKind"
-          },
-          "rule": {
-            "type": "integer",
-            "description": "The rule's place in assay.toml, from 1.",
-            "minimum": 0
-          },
-          "to": {
-            "type": "string"
-          },
-          "via": {
-            "type": "string",
-            "description": "The file that tells the link."
-          },
-          "why": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Why the rule is there, as assay.toml says."
-          }
-        }
       },
       "MappedPosition": {
         "type": "object",
@@ -15070,7 +15019,6 @@
           "unassigned",
           "unassigned_sample",
           "warnings",
-          "violations",
           "config_file",
           "days"
         ],
@@ -15123,13 +15071,6 @@
             "items": {
               "type": "string"
             }
-          },
-          "violations": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MapViolation"
-            },
-            "description": "The links that break a rule of assay.toml (`[[rules]]`)."
           },
           "warnings": {
             "type": "array",

@@ -12,7 +12,6 @@ cargo run -p forgust-assay -- map ../some-repo --pretty   # the JSON (schema 1)
 
 ```
 assay view [PATH] [-o FILE] [--open] [--no-people] [--days N]
-assay check [PATH]
 assay map [PATH] [--text | --pretty] [--no-people] [--days N]
 assay report [PATH] [-o FILE] [--name NAME]
 ```
@@ -112,26 +111,6 @@ remove = true
 [people]
 exclude = ["someone@example.com"]
 days = 180
-```
-
-## Rules between blocks
-
-assay.toml's `[[rules]]` say what blocks must not need. `from` and `deny` name blocks by id, by a glob of ids (`acme-*`), by `role:<role>` or by `kind:<kind>`. Only declared links break a rule, unless it says `guesses = true`.
-
-```toml
-[[rules]]
-from = ["acme-storefront", "acme-backoffice"]
-deny = ["role:database", "acme-db-*"]
-why = "The apps go through the API"
-```
-
-The map lists the links that break one (`violations`: the rule's place from 1, its `why`, the link and the file it is read in), and so does `assay map --text`. `assay check` prints them and fails when there is any: a step of any CI, in the image.
-
-```yaml
-architecture:
-  image: ghcr.io/forgust-dev/forgust-assay:0.7.0
-  script:
-    - assay check
 ```
 
 ## As a library

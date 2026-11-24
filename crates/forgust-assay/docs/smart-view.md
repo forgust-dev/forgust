@@ -257,7 +257,6 @@ L'impact sur les PR est la brique qui apporte de la valeur au quotidien, pas seu
 Peu chers une fois le socle en place, parce qu'ils réutilisent la carte fichiers → blocs et le graphe.
 
 - **Simulation d'impact** : on demande « si je change le schéma de la table `users`, qu'est-ce qui casse ? ». C'est le calcul de l'impact sur les PR, mais sans PR : la vue liste les blocs, tests, référents et repos touchés avant qu'une ligne soit écrite. **Première version faite** : « If it changes » donne la chaîne des blocs qui dépendent d'un bloc, avec leurs personnes et leurs jobs ; il manque les tests et les autres repos.
-- **Règles entre blocs** : déclarer par exemple « le Web ne doit pas appeler la BDD directement », et la CI bloque une PR qui viole la règle. L'idée la plus sous-estimée, parce qu'elle garde la vue juste dans le temps. **Première version faite** (voir « Idées détaillées ») : les règles d'`assay.toml`, montrées dans la carte et la MR, et `assay check` ; il manque la condition de merge.
 - **Issues et PR classées par bloc** : chaque issue est rattachée à un ou plusieurs blocs, automatiquement ou à la main. On voit la dette et les bugs ouverts par zone du code.
 - **Santé par bloc** : statut CI, couverture de tests, dépendances obsolètes, issues ouvertes. Deux onglets en plus :
   - **Coût** : temps de CI consommé, taille de l'image Docker, temps de build.
@@ -270,7 +269,7 @@ Peu chers une fois le socle en place, parce qu'ils réutilisent la carte fichier
 
 ## Idées détaillées
 
-Trois idées qui ne coûtent presque rien depuis que chaque merge request ouverte a sa carte, à côté de celle de la branche par défaut. **Faites toutes les trois** ; ce qui reste est dit à la fin de chacune.
+Deux idées qui ne coûtent presque rien une fois la carte là, sans rien à configurer. **Faites toutes les deux.** Une troisième, les règles entre blocs, a été faite puis retirée : voir « À repousser loin ».
 
 ### Ce que la merge request change à la carte
 
@@ -283,29 +282,6 @@ Les deux cartes existent déjà : c'est une différence d'ensembles d'identifian
 
 **Fait** : `GET /merge_requests/{iid}/blocks` donne `changes`, et la MR l'affiche sous ses blocs (« Map changes »). Un changement n'est compté à la MR que si un fichier qu'elle change le dit : le manifeste du bloc, le fichier où le lien est lu (`via`), ou `assay.toml`. Ce que la branche par défaut a changé depuis que la MR l'a quittée n'apparaît donc pas à l'envers. Il n'y a rien tant que la tête de la MR n'a pas sa carte.
 
-### Les règles entre blocs, dans `assay.toml`
-
-Une forme simple, lue par assay au même passage que le reste :
-
-```toml
-[[rules]]                         # le front ne parle pas à la base
-from = ["acme-storefront", "acme-backoffice"]
-deny = ["role:database", "acme-db-*"]   # un bloc, un motif d'identifiants, `role:` ou `kind:`
-why = "Tout passe par l'API"
-
-[[rules]]
-from = ["kind:service"]
-deny = ["role:database"]
-guesses = true                    # les suppositions comptent aussi (par défaut, seulement les liens déclarés)
-```
-
-- assay vérifie les règles sur sa carte et met les liens fautifs dans la carte (`violations`), avec le numéro de la règle, son `why` et le fichier qui dit le lien (`via`). Un sélecteur illisible (`role:rien`) est un avertissement, et sa règle n'est pas vérifiée.
-- La Smart View les montre en tête de la carte, et dans le panneau des blocs concernés (« Breaks a rule »). La MR montre celles qu'elle apporte, en rouge dans « Map changes ».
-- La même vérification sert hors de Forgust : `assay check` liste les liens fautifs et sort en erreur, dans l'image, dans n'importe quelle CI.
-- Les liens supposés (`connects`, `runs` par le nom) ne comptent qu'avec `guesses = true` : une règle ne doit pas tomber sur une devinette.
-
-**Reste à faire** : en faire une condition de merge, réglable par projet, comme le pipeline. Pour l'instant la MR le dit, elle ne bloque pas.
-
 ### Le savoir à partager
 
 Une vue « à partager » liste les blocs connus d'une seule personne (bus factor 1, au moins cinq commits) pour lesquels aucune *autre* personne n'est déclarée : un CODEOWNERS qui nomme la même personne laisse le savoir dans une seule tête. Ils sont triés par ce qui en dépend : un bloc dont dix autres dépendent passe avant une page de doc. Chaque ligne propose « I know it » (se déclarer référent) ou d'ouvrir une issue « Share what we know of <bloc> » qui nomme la personne. Elle reste présentée comme une liste de choses à transmettre, jamais comme un classement des personnes.
@@ -314,7 +290,7 @@ Une vue « à partager » liste les blocs connus d'une seule personne (bus facto
 
 ### L'essayer sur la démo
 
-Le seed ajoute la règle au `assay.toml` du monorepo et ouvre une MR qui la casse (« Show the stock on the product page ») : le storefront y lit le stock avec un nouveau paquet `@acme/db-client`. La MR montre un bloc ajouté, un lien ajouté et la règle cassée. La vue « To share » montre le worker, que Frank est seul à connaître.
+Le seed ouvre sur le monorepo une MR où le storefront lit le stock avec un nouveau paquet `@acme/db-client` (« Show the stock on the product page ») : elle montre le bloc ajouté et le nouveau lien, celui qu'un relecteur refuserait. La vue « To share » montre le worker, que Frank est seul à connaître.
 
 ## Priorité 3 — Les gros paris
 
@@ -329,4 +305,5 @@ Forte valeur, mais coûteux ou dépendants d'autres briques : à lancer une fois
 
 ## À repousser loin
 
+- **Règles entre blocs** : déclarer dans `assay.toml` ce qu'un bloc ne doit pas utiliser (« les apps passent par l'API »), et le signaler dans la carte et la MR. Une première version a été faite puis retirée (2026-11-24). C'était la seule partie d'`assay.toml` à écrire à la main, dans un petit langage : identifiants qu'assay génère, motifs, `role:`, `kind:`. Une règle ne visait plus rien, sans le dire, dès qu'un paquet était renommé, et les liens seulement devinés lui échappaient. « Ce que la merge request change à la carte » en donne l'essentiel sans rien configurer : le relecteur lit le nouveau lien et peut le refuser. Les gros monorepos qui en ont besoin ont déjà mieux, au niveau des imports (Nx, dependency-cruiser, ArchUnit, import-linter).
 - **Édition inverse** : on ajoute un bloc « worker » sur la vue et on le relie à la file de messages ; la forge génère une PR avec le dossier, le `Dockerfile`, la CI et l'entrée dans `blocks.toml`. Géniale en démo, mais peu utilisée au quotidien, et les templates par stack coûtent cher à maintenir.

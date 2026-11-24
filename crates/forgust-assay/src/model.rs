@@ -20,24 +20,6 @@ pub struct RepoMap {
     /// What could not be read (a manifest that does not parse), and was left out.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
-    /// The links that break a rule of assay.toml.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub violations: Vec<Violation>,
-}
-
-/// A link that breaks a rule of assay.toml (`[[rules]]`).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Violation {
-    /// The rule's place in assay.toml, from 1.
-    pub rule: usize,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub why: Option<String>,
-    pub from: String,
-    pub to: String,
-    pub kind: LinkKind,
-    pub certainty: Certainty,
-    /// The file that tells the link.
-    pub via: String,
 }
 
 /// What a block is, by what tells it.

@@ -54,8 +54,6 @@ pub struct RepoMap {
     /// What could not be read: a manifest that does not parse, a block assay.toml names but
     /// that is not there…
     pub warnings: Vec<String>,
-    /// The links that break a rule of assay.toml (`[[rules]]`).
-    pub violations: Vec<MapViolation>,
     /// Why assay.toml could not be read: nothing is mapped until it is fixed.
     pub config_error: Option<String>,
     /// The repository has an assay.toml at its top (corrections go there, else in a new one).
@@ -186,22 +184,6 @@ pub struct MapLink {
     /// an image by its name), not declared.
     pub inferred: bool,
     /// The file that says so.
-    pub via: String,
-}
-
-/// A link that breaks a rule of assay.toml: its blocks must not need each other.
-#[derive(Serialize, Deserialize, ToSchema, Clone)]
-pub struct MapViolation {
-    /// The rule's place in assay.toml, from 1.
-    pub rule: usize,
-    /// Why the rule is there, as assay.toml says.
-    pub why: Option<String>,
-    pub from: String,
-    pub to: String,
-    pub kind: MapLinkKind,
-    /// A guess, which breaks only the rules that say so (`guesses = true`).
-    pub inferred: bool,
-    /// The file that tells the link.
     pub via: String,
 }
 
@@ -383,8 +365,6 @@ pub struct MapChanges {
     pub blocks_changed: Vec<BlockChange>,
     pub links_added: Vec<MapLink>,
     pub links_removed: Vec<MapLink>,
-    /// The links breaking a rule that it brings: not on the default branch.
-    pub violations: Vec<MapViolation>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -420,10 +400,6 @@ fn map_changes(base: &RepoMap, head: &RepoMap, changed: &[String]) -> MapChanges
     let head_links: HashSet<_> = head.links.iter().map(key).collect();
     out.links_added = head.links.iter().filter(|l| !base_links.contains(&key(l)) && its_link(&l.via)).cloned().collect();
     out.links_removed = base.links.iter().filter(|l| !head_links.contains(&key(l)) && its_link(&l.via)).cloned().collect();
-    let vkey = |v: &MapViolation| (v.rule, v.from.clone(), v.to.clone(), serde_json::to_string(&v.kind).unwrap_or_default());
-    let base_violations: HashSet<_> = base.violations.iter().map(vkey).collect();
-    out.violations =
-        head.violations.iter().filter(|v| !base_violations.contains(&vkey(v)) && (its_link(&v.via) || config)).cloned().collect();
     out
 }
 
@@ -558,7 +534,6 @@ async fn present(state: &AppState, p: &Project, row: &db::Map, report: svc::repo
         unassigned: 0,
         unassigned_sample: Vec::new(),
         warnings: Vec::new(),
-        violations: Vec::new(),
         config_error: report.error,
         config_file: report.config_file,
         days: report.days,
@@ -593,19 +568,6 @@ async fn present(state: &AppState, p: &Project, row: &db::Map, report: svc::repo
     out.unassigned = map.unassigned.files;
     out.unassigned_sample = map.unassigned.sample;
     out.warnings = map.warnings;
-    out.violations = map
-        .violations
-        .into_iter()
-        .map(|v| MapViolation {
-            rule: v.rule,
-            why: v.why,
-            from: v.from,
-            to: v.to,
-            kind: link_kind(v.kind),
-            inferred: v.certainty == forgust_assay::Certainty::Inferred,
-            via: v.via,
-        })
-        .collect();
     ShownMap { map: out, left_out: excludes }
 }
 
@@ -942,7 +904,7 @@ mod tests {
         MapLink { from: from.to_string(), to: to.to_string(), kind: MapLinkKind::Uses, inferred: false, via: via.to_string() }
     }
 
-    fn map(blocks: Vec<MapBlock>, links: Vec<MapLink>, violations: Vec<MapViolation>) -> RepoMap {
+    fn map(blocks: Vec<MapBlock>, links: Vec<MapLink>) -> RepoMap {
         RepoMap {
             commit: String::new(),
             git_ref: String::new(),
@@ -951,7 +913,6 @@ mod tests {
             unassigned: 0,
             unassigned_sample: Vec::new(),
             warnings: Vec::new(),
-            violations,
             config_error: None,
             config_file: true,
             days: 365,
@@ -960,15 +921,6 @@ mod tests {
 
     #[test]
     fn what_a_merge_request_changes_to_the_map() {
-        let breaks = MapViolation {
-            rule: 1,
-            why: None,
-            from: "web".to_string(),
-            to: "db".to_string(),
-            kind: MapLinkKind::Uses,
-            inferred: false,
-            via: "web/package.json".to_string(),
-        };
         let base = map(
             vec![
                 block("web", MapKind::Node, "web/package.json"),
@@ -976,7 +928,6 @@ mod tests {
                 block("main-only", MapKind::Go, "x/go.mod"),
             ],
             vec![link("web", "old", "web/package.json")],
-            Vec::new(),
         );
         // the default branch moved on (`main-only`, `new-on-main`): none of that is the merge request's
         let mut lib = block("billing", MapKind::Rust, "billing/Cargo.toml");
@@ -984,7 +935,6 @@ mod tests {
         let head = map(
             vec![block("web", MapKind::Node, "web/package.json"), lib, block("db", MapKind::Node, "db/package.json")],
             vec![link("web", "billing", "web/package.json"), link("web", "db", "web/package.json"), link("x", "y", "x/go.mod")],
-            vec![breaks],
         );
         let changed = ["web/package.json", "billing/Cargo.toml", "billing/src/lib.rs", "old/Cargo.toml"].map(str::to_string);
         let c = map_changes(&base, &head, &changed);
@@ -994,7 +944,6 @@ mod tests {
         let links = |ls: &[MapLink]| ls.iter().map(|l| format!("{}>{}", l.from, l.to)).collect::<Vec<_>>();
         assert_eq!(links(&c.links_added), ["web>billing", "web>db"]);
         assert_eq!(links(&c.links_removed), ["web>old"]);
-        assert_eq!(c.violations.len(), 1);
         assert!(c.blocks_changed.is_empty());
     }
 }

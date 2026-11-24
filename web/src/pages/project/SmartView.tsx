@@ -25,7 +25,6 @@ import {
   Pencil,
   Search,
   Server,
-  ShieldAlert,
   SquareTerminal,
   Table2,
   Users,
@@ -587,7 +586,6 @@ function MapView({ ctx, gitRef, map, lay, found, words }: { ctx: Ctx; gitRef: st
         </span>
         {!list && lay.drawn.length > 0 && <Legend />}
       </div>
-      {map.violations.length > 0 && <Broken map={map} byId={byId} select={select} />}
       {share && <ToShare ctx={ctx} map={map} lay={lay} select={select} me={user?.username} fix={ctx.p.can_write_repository ? fix : undefined} onClose={() => setParam("share", null)} />}
       <p className="smart-guide">{framed && "From left to right: what runs, what it is built from, the code, its data. "}Choose a block to see what it needs and who to ask.</p>
       {mr && touched.data && (
@@ -1271,7 +1269,6 @@ function Details({ ctx, gitRef, map, lay, b, jobs, pipeline, waits, chain, setCh
           <ul>{neededBy.map((e) => row(e.from, verb(e), e))}</ul>
         </Part>
       )}
-      <BrokenHere b={b} map={map} go={go} />
       <Impact b={b} lay={lay} byId={byId} usedBy={new Set(neededBy.map((e) => e.from))} chain={chain} setChain={setChain} go={go} />
       {fix && <Fix key={b.id} b={b} map={map} me={me} fix={fix} />}
     </aside>
@@ -1494,64 +1491,6 @@ function Legend() {
   );
 }
 
-/** The files in no block, what could not be read, and how to correct the map. */
-/** The links that break a rule of assay.toml (`[[rules]]`), over the map. */
-function Broken({ map, byId, select }: { map: S["RepoMap"]; byId: Map<string, Block>; select: (id: string) => void }) {
-  const name = (id: string) => (
-    <button type="button" className="smart-go" onClick={() => select(id)}>
-      {byId.has(id) ? title(byId.get(id)!) : id}
-    </button>
-  );
-  const shown = map.violations.slice(0, 5);
-  return (
-    <div className="smart-broken" role="status">
-      <ShieldAlert size={15} aria-hidden />
-      <div className="grow">
-        <strong>{plural(map.violations.length, "link breaks", "links break")} a rule of assay.toml</strong>
-        <ul>
-          {shown.map((v) => (
-            <li key={`${v.rule}:${v.from}:${v.to}:${v.kind}`}>
-              {name(v.from)} {VERB[v.kind]} {name(v.to)}
-              {v.inferred && " (a guess)"}
-              <span className="meta">
-                {" "}
-                · rule {v.rule}
-                {v.why && `: ${v.why}`} · <code>{v.via}</code>
-              </span>
-            </li>
-          ))}
-        </ul>
-        {map.violations.length > shown.length && <span className="meta">and {map.violations.length - shown.length} more</span>}
-      </div>
-    </div>
-  );
-}
-
-/** In a block's details: the rules its links break, its own or those reaching it. */
-function BrokenHere({ b, map, go }: { b: Block; map: S["RepoMap"]; go: (id: string) => ReactNode }) {
-  const here = map.violations.filter((v) => v.from === b.id || v.to === b.id);
-  if (!here.length) return null;
-  return (
-    <Part icon={ShieldAlert} title="Breaks a rule" count={here.length} className="smart-broken-part">
-      <ul>
-        {here.map((v) => (
-          <li key={`${v.rule}:${v.from}:${v.to}:${v.kind}`}>
-            <span className="grow">
-              <span className="smart-line">
-                {v.from === b.id ? <>{VERB[v.kind]} {go(v.to)}</> : <>{go(v.from)} {VERB[v.kind]} it</>}
-              </span>
-              <span className="smart-sub">
-                Rule {v.rule}
-                {v.why && `: ${v.why}`} · {v.via}
-              </span>
-            </span>
-          </li>
-        ))}
-      </ul>
-    </Part>
-  );
-}
-
 /** The blocks only one person knows, with no one else named for them (CODEOWNERS naming that
  *  same person keeps it in one head): the most depended on first. What to share, never a
  *  ranking of people. */
@@ -1628,6 +1567,7 @@ function ToShare({
   );
 }
 
+/** The files in no block, what could not be read, and how to correct the map. */
 function Notes({ ctx, gitRef, map }: { ctx: Ctx; gitRef: string; map: S["RepoMap"] }) {
   return (
     <div className="smart-notes">

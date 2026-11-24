@@ -20,6 +20,3 @@ export function whoKnows(b: S["MapBlock"], max: number): string[] {
 
 /** What a link does, as a sentence says it: `web uses db`. */
 export const LINK_VERB: Record<S["MapLinkKind"], string> = { uses: "uses", builds: "builds", runs: "runs", depends_on: "depends on", connects: "connects to", calls: "calls" };
-
-/** A link as a sentence, by the blocks' ids. */
-export const linkSentence = (l: { from: string; to: string; kind: S["MapLinkKind"] }) => `${l.from} ${LINK_VERB[l.kind]} ${l.to}`;
