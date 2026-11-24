@@ -340,12 +340,20 @@ impl Host {
         // a change is audited once it is made, whatever becomes of its answer
         if status.is_success() && method != Method::GET {
             let route = resp.extensions().get::<MatchedPath>().map_or("(no route)", MatchedPath::as_str);
+            let project = self.handle.block_on(self.project_of(route, path));
             let details = json!({
                 "tool": "execute_api", "via": "mcp", "token_id": self.token_id, "method": method.as_str(),
                 "route": route,
             });
             let ip = self.ip.map(|ip| ip.to_string());
-            let audit = crate::services::audit(&self.state, &self.principal, "mcp_tool_call", None, details, ip.as_deref());
+            let audit = crate::services::audit(
+                &self.state,
+                &self.principal,
+                "mcp_tool_call",
+                project.map(|id| ("project", id)),
+                details,
+                ip.as_deref(),
+            );
             self.handle.block_on(audit);
         }
         // a stream (server-sent events) never ends: refused, not waited for
@@ -363,6 +371,18 @@ impl Host {
             Err(_) => Value::String(format!("({} bytes of binary data)", bytes.len())),
         });
         Ok((status.as_u16(), body))
+    }
+
+    /// The project a `/projects/{id}/...` call changed, for its audit row
+    /// (the project's log shows it): from the path the script called.
+    async fn project_of(&self, route: &str, path: &str) -> Option<i64> {
+        route.strip_prefix("/projects/{id}")?;
+        let id = path.split(['?', '#']).next()?.strip_prefix("/projects/")?.split('/').next()?;
+        let id = percent_encoding::percent_decode_str(id).decode_utf8().ok()?;
+        match id.parse() {
+            Ok(n) => Some(n),
+            Err(_) => crate::api::load_project(&self.state, &id).await.ok().map(|p| p.id),
+        }
     }
 }
 

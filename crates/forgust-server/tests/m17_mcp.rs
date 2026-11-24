@@ -428,15 +428,17 @@ async fn typed_answers_and_code_mode(pool: sqlx::PgPool) {
     let (err, text) = a.call("execute_api", json!({ "code": "forgust.get('/admin/settings')" })).await;
     assert!(err && text.contains("admin_mode"), "{text}");
 
-    // `api` tokens change things, each change audited by route
-    let code = format!("const i = await forgust.post('/api/v1/projects/{p}/issues', {{ title: 'From a script' }});\nreturn i.iid;");
+    // `api` tokens change things, each change audited by route, in the project's log
+    let code = "const i = await forgust.post('/api/v1/projects/acme%2Fplatform%2Fapi/issues', { title: 'From a script' });\nreturn i.iid;";
     let r = call(&write, "execute_api", json!({ "code": code })).await;
     assert_eq!(r["structuredContent"]["result"], 3, "{r}");
-    let details: Value =
-        sqlx::query_scalar("SELECT details FROM audit_events WHERE action = 'mcp_tool_call' AND details->>'tool' = 'execute_api'")
-            .fetch_one(&srv.state.db)
-            .await
-            .unwrap();
+    let (details, target_type, target_id): (Value, Option<String>, Option<i64>) = sqlx::query_as(
+        "SELECT details, target_type, target_id FROM audit_events WHERE action = 'mcp_tool_call' AND details->>'tool' = 'execute_api'",
+    )
+    .fetch_one(&srv.state.db)
+    .await
+    .unwrap();
+    assert_eq!((target_type.as_deref(), target_id), (Some("project"), Some(p)));
     assert_eq!(details["method"], "POST");
     assert_eq!(details["route"], "/projects/{id}/issues", "{details}");
     assert!(details["token_id"].is_number(), "{details}");
