@@ -1180,6 +1180,24 @@ a.milestone-chip:hover {
 .markdown summary {
   cursor: pointer;
 }
+/* a task list: each box stands where the bullet would */
+.markdown li:has(> input[type="checkbox"]:first-child),
+.markdown li:has(> p:first-child > input[type="checkbox"]:first-child) {
+  list-style: none;
+}
+.markdown li > input[type="checkbox"]:first-child,
+.markdown li > p:first-child > input[type="checkbox"]:first-child {
+  margin: 0 0.5em 0.2em -1.5em;
+  vertical-align: middle;
+}
+/* footnotes (their items read user-content-fn-…): set apart below the text, smaller */
+.markdown ol:has(> li[id^="user-content-fn-"]) {
+  margin: 24px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-muted);
+}
 .markdown td,
 .markdown th {
   border: 1px solid var(--border);
