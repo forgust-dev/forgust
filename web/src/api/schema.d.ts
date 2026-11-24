@@ -3574,6 +3574,13 @@ export interface components {
             to: components["schemas"]["MapKind"];
         };
         ChapterMergeRequest: {
+            /**
+             * Format: int64
+             * @description Its comments, not the system's.
+             */
+            comments: number;
+            /** @description The start of its description: why it was made. None without one. */
+            description?: string | null;
             /** Format: int64 */
             iid: number;
             title: string;
@@ -4873,6 +4880,8 @@ export interface components {
             /** @description A block whose kind or role changes: as it is at the head. */
             blocks_changed: components["schemas"]["BlockChange"][];
             blocks_removed: components["schemas"]["MapBlock"][];
+            /** @description A block found again under another id: once merged, as the history tells it. */
+            blocks_renamed: components["schemas"]["ChapterRename"][];
             links_added: components["schemas"]["MapLink"][];
             links_removed: components["schemas"]["MapLink"][];
         };
@@ -5475,7 +5484,10 @@ export interface components {
             target_type: string;
             title: string;
         };
-        /** @description What an import brings besides the repository (all on by default). */
+        /**
+         * @description What an import brings besides the repository (all on by default, but the mirror and the
+         *     Smart View: the import page turns the Smart View on).
+         */
         Options: {
             /** @default true */
             issues: boolean;
@@ -5501,6 +5513,12 @@ export interface components {
             mirror: boolean;
             /** @default true */
             protected_branches: boolean;
+            /**
+             * @description Turn the Smart View on: the code is mapped, and the map's history read, which the merge
+             *     requests imported tell (off by default, for who calls the API; on in the import page).
+             * @default false
+             */
+            smart_view: boolean;
             /**
              * @description CI/CD variables (Owners of the target group only).
              * @default true

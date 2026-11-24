@@ -493,8 +493,11 @@ async fn the_default_branch_keeps_its_history(pool: sqlx::PgPool) {
     );
     let worker = must(git(&work, &["rev-parse", "HEAD"]).await).trim().to_string();
     must(git(&work, &["push", "-q", &srv.http_url("dave", "acme/platform/api"), "feature/worker"]).await);
-    dev.ok_post(&format!("/api/v1/projects/{p}/merge_requests"), json!({ "source_branch": "feature/worker", "title": "Add a worker" }))
-        .await;
+    dev.ok_post(
+        &format!("/api/v1/projects/{p}/merge_requests"),
+        json!({ "source_branch": "feature/worker", "title": "Add a worker", "description": "Runs the slow jobs off the request path.\n\nMore below." }),
+    )
+    .await;
     wait_jobs(&srv.state).await;
     let job = request(&srv, &runner).await.expect("the merge request's map job waits");
     assert!(!job.to_string().contains("--history"), "{job}");
@@ -505,6 +508,7 @@ async fn the_default_branch_keeps_its_history(pool: sqlx::PgPool) {
     // Olivia merges it: the next job reads on from the last commit read, and the worker's commit
     // is told with the merge request merged as its merge
     let mr = format!("/api/v1/projects/{p}/merge_requests/1");
+    owner.ok_post(&format!("{mr}/notes"), json!({ "body": "Looks good" })).await;
     let st = owner.ok_get(&format!("{mr}/merge_status")).await;
     owner.ok_post(&format!("{mr}/merge"), json!({ "method": "merge", "sha": st["head_sha"] })).await;
     wait_jobs(&srv.state).await;
@@ -520,9 +524,18 @@ async fn the_default_branch_keeps_its_history(pool: sqlx::PgPool) {
     assert_eq!(titles(&h), ["an api on a core", "a worker"]);
     let c = &h["chapters"][1];
     assert_eq!((&c["commit"], &c["merge_commit"]), (&json!(worker), &json!(merge)));
-    assert_eq!(c["merge_request"], json!({ "iid": 1, "title": "Add a worker" }));
+    assert_eq!(
+        c["merge_request"],
+        json!({ "iid": 1, "title": "Add a worker", "description": "Runs the slow jobs off the request path.", "comments": 1 })
+    );
     assert_eq!(c["author"], json!({ "name": "Dave", "username": "dave" }));
     assert_eq!(c["changes"]["links_added"][0]["from"], "worker");
+    // merged, its own map gone: what it changed to the map, as the history tells it
+    forgust_server::services::smart_view::sweep(&srv.state).await.unwrap();
+    let changes = owner.ok_get(&format!("{mr}/blocks")).await["changes"].clone();
+    let added: Vec<&str> = changes["blocks_added"].as_array().unwrap().iter().map(|b| b["id"].as_str().unwrap()).collect();
+    assert_eq!(added, ["worker"], "{changes}");
+    assert_eq!((&changes["links_added"][0]["from"], &changes["links_added"][0]["to"]), (&json!("worker"), &json!("core")));
 
     // reverted: the revert and what it undid tell nothing
     must(git(&work, &["revert", "--no-edit", "-m", "1", &merge]).await);

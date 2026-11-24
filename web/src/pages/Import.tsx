@@ -33,7 +33,7 @@ const STATUS_TEXT: Record<string, string> = {
   canceled: "Canceled",
 };
 
-const OPTION_LABELS: [Exclude<keyof S["Options"], "mirror">, string, string][] = [
+const OPTION_LABELS: [Exclude<keyof S["Options"], "mirror" | "smart_view">, string, string][] = [
   ["merge_requests", "Merge requests", "with their comments and review threads"],
   ["issues", "Issues", "with their comments"],
   ["labels", "Labels", ""],
@@ -43,7 +43,7 @@ const OPTION_LABELS: [Exclude<keyof S["Options"], "mirror">, string, string][] =
   ["members", "Members", "matched by email; Owners of the target group only"],
 ];
 
-const ALL_OPTIONS: S["Options"] = { issues: true, merge_requests: true, labels: true, lfs: true, variables: true, protected_branches: true, members: true, mirror: false };
+const ALL_OPTIONS: S["Options"] = { issues: true, merge_requests: true, labels: true, lfs: true, variables: true, protected_branches: true, members: true, mirror: false, smart_view: true };
 
 /** Where an http(s) address points (`https://www.github.com/a/b` → github.com). */
 const parseUrl = (raw: string): { origin: string; host: string } | null => {
@@ -236,6 +236,10 @@ function BringAlong({ options, setOptions }: { options: S["Options"]; setOptions
           {" "}
           · a pull mirror: its branches and tags keep following the source (read-only here), with the token kept for it. Issues and merge requests come over once.
         </span>
+      </label>
+      <label className="check">
+        <input type="checkbox" checked={options.smart_view ?? false} onChange={(e) => setOptions({ ...options, smart_view: e.target.checked })} /> Map it in the Smart View
+        <span className="faint small"> · its parts, who knows them, and its history: each change told with the merge request that made it</span>
       </label>
     </Section>
   );

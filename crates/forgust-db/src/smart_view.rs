@@ -397,7 +397,8 @@ pub async fn history(e: impl PgExecutor<'_>, project_id: i64) -> Result<Option<H
         .await
 }
 
-/// A commit that changed the map, with the merge request merged as it (a squash) or as its merge.
+/// A commit that changed the map, with the merge request merged as it (a squash) or as its merge:
+/// its title, its description, and how many comments it had (not the system's).
 #[derive(Debug, Clone)]
 pub struct Chapter {
     pub sha: String,
@@ -409,6 +410,8 @@ pub struct Chapter {
     pub changes: serde_json::Value,
     pub mr_iid: Option<i64>,
     pub mr_title: Option<String>,
+    pub mr_description: Option<String>,
+    pub mr_comments: Option<i64>,
 }
 
 /// The chapters kept of a project's history, oldest first.
@@ -416,10 +419,12 @@ pub async fn chapters(e: impl PgExecutor<'_>, project_id: i64) -> Result<Vec<Cha
     sqlx::query_as!(
         Chapter,
         r#"SELECT c.sha, c.merge_sha, c.author_name, c.author_email, c.at, c.title, c.changes,
-                  mr.iid AS "mr_iid?", mr.title AS "mr_title?"
+                  mr.iid AS "mr_iid?", mr.title AS "mr_title?", mr.description AS "mr_description?", mr.comments AS "mr_comments?"
              FROM smart_view_chapters c
              LEFT JOIN LATERAL (
-                  SELECT m.iid, m.title FROM merge_requests m
+                  SELECT m.iid, m.title, m.description,
+                         (SELECT count(*) FROM notes n WHERE n.merge_request_id = m.id AND NOT n.system) AS comments
+                    FROM merge_requests m
                    WHERE m.project_id = c.project_id AND m.state = 'merged' AND m.merge_commit_sha IN (c.sha, c.merge_sha)
                    -- the merge request of the commit itself first: a squash merged into a release branch
                    ORDER BY m.merge_commit_sha = c.sha DESC, m.id DESC

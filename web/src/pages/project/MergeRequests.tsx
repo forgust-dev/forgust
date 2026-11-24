@@ -1418,6 +1418,7 @@ function MapChangesFact({ ctx, m, c }: { ctx: Ctx; m: S["MrDetail"]; c: S["MapCh
   const at = (id: string) => <Link to={`${ctx.web}/-/smart_view${qs({ mr: m.iid, block: id })}`}>{id}</Link>;
   for (const b of c.blocks_added) lines.push(<div key={`a${b.id}`} className="small">Adds the block {at(b.id)}</div>);
   for (const b of c.blocks_removed) lines.push(<div key={`r${b.id}`} className="small">Removes the block <b>{b.id}</b></div>);
+  for (const r of c.blocks_renamed) lines.push(<div key={`n${r.to.id}`} className="small">Renames the block <b>{r.from.name}</b> to {at(r.to.id)}</div>);
   for (const ch of c.blocks_changed) {
     // its kind when that changes, else its role: one compared with the same, never with the other
     const [is, was] = ch.block.kind !== ch.kind_before ? [ch.block.kind, ch.kind_before] : [ch.block.role ?? "no role", ch.role_before ?? "no role"];

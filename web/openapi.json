@@ -7193,9 +7193,22 @@
         "type": "object",
         "required": [
           "iid",
-          "title"
+          "title",
+          "comments"
         ],
         "properties": {
+          "comments": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Its comments, not the system's."
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The start of its description: why it was made. None without one."
+          },
           "iid": {
             "type": "integer",
             "format": "int64"
@@ -11438,6 +11451,7 @@
           "blocks_added",
           "blocks_removed",
           "blocks_changed",
+          "blocks_renamed",
           "links_added",
           "links_removed"
         ],
@@ -11460,6 +11474,13 @@
             "items": {
               "$ref": "#/components/schemas/MapBlock"
             }
+          },
+          "blocks_renamed": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChapterRename"
+            },
+            "description": "A block found again under another id: once merged, as the history tells it."
           },
           "links_added": {
             "type": "array",
@@ -13418,7 +13439,7 @@
       },
       "Options": {
         "type": "object",
-        "description": "What an import brings besides the repository (all on by default).",
+        "description": "What an import brings besides the repository (all on by default, but the mirror and the\nSmart View: the import page turns the Smart View on).",
         "properties": {
           "issues": {
             "type": "boolean",
@@ -13450,6 +13471,11 @@
           "protected_branches": {
             "type": "boolean",
             "default": true
+          },
+          "smart_view": {
+            "type": "boolean",
+            "description": "Turn the Smart View on: the code is mapped, and the map's history read, which the merge\nrequests imported tell (off by default, for who calls the API; on in the import page).",
+            "default": false
           },
           "variables": {
             "type": "boolean",
