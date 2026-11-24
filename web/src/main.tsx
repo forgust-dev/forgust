@@ -47,7 +47,7 @@ setOnMineChanged(() => refreshMine(queryClient));
 function RequireUser({ children }: { children: ReactElement }) {
   const { user, loading } = useSession();
   const loc = useLocation();
-  if (loading) return <Spinner />;
+  if (loading) return <Spinner page />;
   if (!user) return <Navigate to={`/login?next=${encodeURIComponent(loc.pathname + loc.search)}`} replace />;
   return children;
 }
@@ -66,7 +66,7 @@ function App() {
         fallback={
           <>
             <KeepNav />
-            <Spinner />
+            <Spinner page />
           </>
         }
       >

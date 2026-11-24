@@ -898,6 +898,43 @@ form.stack {
     opacity: 0;
   }
 }
+/* a page loading (the session, its code, then its data): a line running under the top bar, which
+   the page building up beneath does not move; shown, like the spinner, once the wait has lasted */
+.page-loading {
+  position: fixed;
+  top: var(--topbar-h);
+  right: 0;
+  left: 0;
+  z-index: 31;
+  height: 2px;
+  overflow: hidden;
+  pointer-events: none;
+  animation: spinner-in 200ms var(--ease-out) both;
+}
+.page-loading > span {
+  display: block;
+  width: 30%;
+  height: 100%;
+  border-radius: 1px;
+  background: var(--accent);
+  animation: page-loading 1.2s linear infinite;
+}
+@keyframes page-loading {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* still there, no longer running */
+  .page-loading > span {
+    width: 100%;
+    opacity: 0.5;
+    animation: none;
+  }
+}
 .token-box {
   padding: 12px;
   border-radius: var(--radius);
