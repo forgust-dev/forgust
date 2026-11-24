@@ -26,7 +26,7 @@ assay report [PATH] [-o FILE] [--name NAME]
 docker run --rm -v "$PWD:/repo" ghcr.io/forgust-dev/forgust-assay:0.7.0
 ```
 
-Forgust's Smart View runs it by itself: a project that turns the Smart View on (Settings > General) has each new commit of its default branch and of its open merge requests mapped by a job of Forgust's, on the instance's runners, that runs `assay report` in this image and uploads what it writes (`assay-report.json`: the map, which of its paths are files, who opted out) as the job's `smart_view` report. The server keeps the latest map of each and shows it; an administrator sets the image and the runners' tags (Admin > Smart View, or `[smart_view]` in the config file).
+Forgust's Smart View runs it by itself: a project that turns the Smart View on (Settings > Automation) has each new commit of its default branch and of its open merge requests mapped by a job of Forgust's, on the instance's runners, that runs `assay report` in this image and uploads what it writes (`assay-report.json`: the map, which of its paths are files, who opted out) as the job's `smart_view` report. The server keeps the latest map of each and shows it; an administrator sets the image and the runners' tags (Admin > Smart View, or `[smart_view]` in the config file).
 
 A job of your own, on Forgust or GitLab, that keeps the page of the map. The whole history tells who knows each block: a shallow clone only knows its last commits.
 
