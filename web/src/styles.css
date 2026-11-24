@@ -435,6 +435,19 @@ input[type="radio"] {
   padding: 0;
   accent-color: var(--accent);
 }
+/* a box or a round: a click shows its tick, the ring comes from the keyboard only, around its shape */
+input[type="checkbox"]:focus,
+input[type="radio"]:focus {
+  outline: none;
+}
+input[type="checkbox"]:focus-visible,
+input[type="radio"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+input[type="radio"] {
+  border-radius: 50%;
+}
 
 /* select, menus and popovers: Base UI (components/controls.tsx) */
 .select {
