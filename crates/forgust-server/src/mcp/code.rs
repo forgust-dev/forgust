@@ -81,6 +81,10 @@ impl Drop for Slot {
     }
 }
 
+/// `/api/v1`, as `execute_api` calls it, built once: each run only gives it
+/// its state.
+static ROUTER: LazyLock<axum::Router<AppState>> = LazyLock::new(|| crate::api::router().route_layer(middleware::from_fn(keep_route)));
+
 /// The API's OpenAPI document, as `search_api` gives it to scripts.
 static SPEC: LazyLock<String> = LazyLock::new(|| serde_json::to_string(&crate::api::openapi::document()).unwrap_or_default());
 
@@ -136,7 +140,7 @@ pub async fn search(c: &Caller, code: String) -> Result<Value, String> {
 
 pub async fn execute(c: &Caller, code: String) -> Result<Value, String> {
     let host = Host {
-        router: crate::api::router().route_layer(middleware::from_fn(keep_route)).with_state(c.state.clone()),
+        router: ROUTER.clone().with_state(c.state.clone()),
         state: c.state.clone(),
         principal: c.principal.clone(),
         write: c.write,
