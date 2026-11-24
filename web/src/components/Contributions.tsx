@@ -107,7 +107,7 @@ export function ContributionCalendar({ days }: { days: S["Day"][] }) {
 const ACTIVITY: Record<string, { icon: ReactElement; verb: string; tone?: string }> = {
   pushed: { icon: <GitCommitHorizontal size={12} />, verb: "pushed to" },
   opened_merge_request: { icon: <GitMerge size={12} />, verb: "opened" },
-  merged_merge_request: { icon: <GitMerge size={12} />, verb: "merged", tone: "accent" },
+  merged_merge_request: { icon: <GitMerge size={12} />, verb: "merged", tone: "merged" },
   opened_issue: { icon: <CircleDot size={12} />, verb: "opened" },
   closed_issue: { icon: <CircleDot size={12} />, verb: "closed" },
   commented_merge_request: { icon: <MessageSquare size={12} />, verb: "commented on" },

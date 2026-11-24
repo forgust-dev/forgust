@@ -31,10 +31,10 @@ test("run a pipeline from the UI", async ({ page }) => {
   await page.getByLabel("Variable value").fill("1");
   await page.getByRole("button", { name: "Run pipeline" }).click();
   await at(page, new RegExp(`^${P}/-/pipelines/\\d+$`));
-  await expect(page.locator(".status-badge").first()).toContainText("pending");
+  await expect(page.locator(".status-badge").first()).toContainText("Pending");
   // cancel it again
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(page.locator(".status-badge").first()).toContainText("canceled");
+  await expect(page.locator(".status-badge").first()).toContainText("Canceled");
 });
 
 test("CI/CD settings: runner token, variables", async ({ page }) => {

@@ -1,10 +1,11 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
-import { CircleDot, GitMerge, Paperclip } from "lucide-react";
+import { Paperclip } from "lucide-react";
 import { api, qs, type S } from "../api/client";
 import { Avatar, useDebounced } from "./ui";
 import { Markdown } from "./Markdown";
+import { StateMark, issueLook, mrLook } from "./states";
 
 type Trigger = { char: "@" | "#" | "!"; start: number; query: string };
 type Item = {
@@ -390,21 +391,9 @@ export function MarkdownEditor({
                     {it.kind === "user" ? (
                       <Avatar name={it.label} username={it.sub.slice(1)} />
                     ) : it.kind === "issue" ? (
-                      <CircleDot
-                        size={14}
-                        className={it.state === "closed" ? "faint" : "ic-ok"}
-                      />
+                      <StateMark look={issueLook(it.state ?? "opened")} size={14} />
                     ) : (
-                      <GitMerge
-                        size={14}
-                        className={
-                          it.state === "merged"
-                            ? "ic-accent"
-                            : it.state === "closed"
-                              ? "ic-danger"
-                              : "ic-ok"
-                        }
-                      />
+                      <StateMark look={mrLook(it.state ?? "opened")} size={14} />
                     )}
                     <span className="grow ellipsis">{it.label}</span>
                     <span className="faint mono small">{it.sub}</span>

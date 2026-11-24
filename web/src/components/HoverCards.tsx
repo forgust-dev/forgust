@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, CalendarDays, CircleDot, GitBranch, GitCommitHorizontal, GitMerge, Lock, ShieldAlert, ShieldCheck, Tag, Timer } from "lucide-react";
+import { ArrowRight, CalendarDays, GitBranch, GitCommitHorizontal, Lock, ShieldAlert, ShieldCheck, Tag, Timer } from "lucide-react";
 import { api, timeAgo, type S } from "../api/client";
 import { fetchers, keys } from "../prefetch";
 import { Avatar } from "./ui";
@@ -9,6 +9,7 @@ import { LabelList } from "./labels";
 import { StatusIcon, duration, statusLabel } from "../pages/project/ci/Status";
 import { SOURCE } from "../pages/project/ci/Pipelines";
 import { SIGNATURE_TEXT } from "../pages/project/Signatures";
+import { StateMark, StateOf, issueLook, mrLook } from "./states";
 
 type Item = { kind: "mr" | "issue" | "pipeline" | "job"; path: string; iid: number };
 type Target =
@@ -288,12 +289,6 @@ function Loading() {
   return <div className="hover-card-body faint small">Loading…</div>;
 }
 
-const STATE: Record<string, { label: string; cls: string }> = {
-  opened: { label: "Open", cls: "opened" },
-  merged: { label: "Merged", cls: "merged" },
-  closed: { label: "Closed", cls: "closed" },
-};
-
 /** A pipeline (status, title, ref, stages) or a job (status, stage, pipeline, runner). */
 function CiCard({ t }: { t: Item }) {
   const { pid, error: projectError } = useProjectId(t.path);
@@ -399,17 +394,16 @@ function ItemCard({ t }: { t: { kind: "mr" | "issue"; path: string; iid: number 
   if (t.kind === "mr") {
     const m = mr.data;
     if (!m) return <Loading />;
-    const st = m.draft && m.state === "opened" ? { label: "Draft", cls: "draft" } : (STATE[m.state] ?? STATE.opened);
     return (
       <div className="hover-card-body">
         <div className="hover-card-top">
-          <span className={`mr-state ${st.cls}`}>{st.label}</span>
+          <StateOf look={mrLook(m.state, m.draft)} />
           <span className="faint mono small">
             {t.path}!{t.iid}
           </span>
         </div>
         <div className="hover-card-title">
-          <GitMerge size={15} className={m.state === "merged" ? "ic-accent" : m.state === "closed" ? "ic-danger" : "ic-ok"} />
+          <StateMark look={mrLook(m.state, m.draft)} size={15} />
           <span>{m.title}</span>
         </div>
         <div className="hover-card-refs">
@@ -428,17 +422,16 @@ function ItemCard({ t }: { t: { kind: "mr" | "issue"; path: string; iid: number 
   }
   const i = issue.data;
   if (!i) return <Loading />;
-  const st = STATE[i.state] ?? STATE.opened;
   return (
     <div className="hover-card-body">
       <div className="hover-card-top">
-        <span className={`mr-state ${st.cls}`}>{st.label}</span>
+        <StateOf look={issueLook(i.state)} />
         <span className="faint mono small">
           {t.path}#{t.iid}
         </span>
       </div>
       <div className="hover-card-title">
-        <CircleDot size={15} className={i.state === "closed" ? "faint" : "ic-ok"} />
+        <StateMark look={issueLook(i.state)} size={15} />
         <span>{i.title}</span>
       </div>
       {i.labels.length > 0 && <LabelList labels={i.labels} />}

@@ -1,5 +1,5 @@
 import { Component, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { Check, Copy, EyeOff, Loader2, Lock, Search } from "lucide-react";
+import { Check, Copy, EyeOff, Loader2, Lock, Search, type LucideIcon } from "lucide-react";
 import { Link, NavLink } from "react-router-dom";
 import { ApiError, LEVELS, bytes } from "../api/client";
 import { Select } from "./controls";
@@ -106,6 +106,21 @@ export class PageErrorBoundary extends Component<{ resetKey: string; children: R
       </div>
     );
   }
+}
+
+/** What a state means, one color each on every page (styles.css, "states"): fine, broke, waits,
+ *  runs, merged, or nothing to say. */
+export type Tone = "ok" | "danger" | "warn" | "info" | "merged" | "neutral";
+
+/** A thing's state, as the UI convention draws it: a pill tinted with its tone, its icon and its
+ *  word; a spinner (Loader2) turns. `className` adds what styles and tests key on (`mr-state opened`). */
+export function StateBadge({ tone, icon: Icon, children, className, title }: { tone: Tone; icon?: LucideIcon; children: ReactNode; className?: string; title?: string }) {
+  return (
+    <span className={`state tone-${tone}${className ? ` ${className}` : ""}`} title={title}>
+      {Icon && <Icon size={13} aria-hidden className={Icon === Loader2 ? "spin" : undefined} />}
+      {children}
+    </span>
+  );
 }
 
 export function Badge({ children, tone }: { children: ReactNode; tone?: "accent" | "ok" | "warn" }) {

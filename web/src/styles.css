@@ -27,16 +27,11 @@
   --warn: #9a6200;
   --warn-soft: #fdf4dc;
   --warn-border: #e6d29a;
-  --sev-critical: #8a1414;
-  --sev-critical-bg: #f9dada;
-  --sev-high: #b3263f;
-  --sev-high-bg: #fde6ea;
-  --sev-medium: #9a4a00;
-  --sev-medium-bg: #fdebd6;
-  --sev-low: #6f5c00;
-  --sev-low-bg: #f6efcc;
-  --sev-info: #33568c;
-  --sev-info-bg: #e3ecf8;
+  --info: #1f63c7;
+  --info-soft: #e6eefb;
+  --merged: #7a3fc4;
+  --merged-soft: #f1e9fc;
+  --on-tone: #ffffff;
   --add-bg: #e9f7ef;
   --add-num: #c9ecd8;
   --del-bg: #fdeef0;
@@ -70,6 +65,7 @@
   --emph-ok: #8fe0a9;
   --emph-bad: #ff9b8f;
   --emph-warn: #f2c25c;
+  --emph-info: #8db8ff;
   --emph-btn-bg: #ff6500;
   --emph-btn-text: #1c1915;
   --chart-ok: #2f9e5a;
@@ -112,16 +108,11 @@
     --warn: #f2b04f;
     --warn-soft: #3a2c12;
     --warn-border: #5e4818;
-    --sev-critical: #ffb4b4;
-    --sev-critical-bg: #5c1a1d;
-    --sev-high: #f7889c;
-    --sev-high-bg: #3d1c25;
-    --sev-medium: #f4a95f;
-    --sev-medium-bg: #3d2814;
-    --sev-low: #e2cb6a;
-    --sev-low-bg: #332e12;
-    --sev-info: #93b6ec;
-    --sev-info-bg: #1d2a3e;
+    --info: #6aa7ff;
+    --info-soft: #172540;
+    --merged: #b48cf2;
+    --merged-soft: #2a1f3d;
+    --on-tone: #0d0e12;
     --add-bg: #17301f;
     --add-num: #1e4029;
     --del-bg: #3a1c22;
@@ -154,6 +145,7 @@
     --emph-ok: #5fcf98;
     --emph-bad: #f0738a;
     --emph-warn: #f2b04f;
+    --emph-info: #6aa7ff;
     --emph-btn-bg: #ff6500;
     --emph-btn-text: #0d0e12;
     --chart-ok: #5fcf98;
@@ -187,16 +179,11 @@
   --warn: #f2b04f;
   --warn-soft: #3a2c12;
   --warn-border: #5e4818;
-  --sev-critical: #ffb4b4;
-  --sev-critical-bg: #5c1a1d;
-  --sev-high: #f7889c;
-  --sev-high-bg: #3d1c25;
-  --sev-medium: #f4a95f;
-  --sev-medium-bg: #3d2814;
-  --sev-low: #e2cb6a;
-  --sev-low-bg: #332e12;
-  --sev-info: #93b6ec;
-  --sev-info-bg: #1d2a3e;
+  --info: #6aa7ff;
+  --info-soft: #172540;
+  --merged: #b48cf2;
+  --merged-soft: #2a1f3d;
+  --on-tone: #0d0e12;
   --add-bg: #17301f;
   --add-num: #1e4029;
   --del-bg: #3a1c22;
@@ -229,6 +216,7 @@
   --emph-ok: #5fcf98;
   --emph-bad: #f0738a;
   --emph-warn: #f2b04f;
+  --emph-info: #6aa7ff;
   --emph-btn-bg: #ff6500;
   --emph-btn-text: #0d0e12;
   --chart-ok: #5fcf98;
@@ -1233,16 +1221,6 @@ form.stack {
 .thread.boxed:not(.resolved) .thread-head {
   background: var(--warn-soft);
   border-bottom-color: var(--warn-border);
-}
-.thread-state {
-  font-size: 12px;
-  font-weight: 600;
-}
-.thread-state.open {
-  color: var(--warn);
-}
-.thread-state.resolved {
-  color: var(--ok);
 }
 .thread.boxed .thread-notes {
   padding: 8px 12px 10px;
@@ -2724,6 +2702,17 @@ kbd {
 .ic-accent {
   color: var(--accent);
 }
+.ic-merged {
+  color: var(--merged);
+}
+/* a state's icon alone (StateMark): in a dense list, its color says it */
+.state-mark {
+  display: inline-flex;
+  flex: none;
+}
+.ic-info {
+  color: var(--info);
+}
 .tree-row .icon {
   display: inline-flex;
   width: 16px;
@@ -3060,41 +3049,62 @@ kbd {
   color: var(--text-muted);
   font: 13.5px/1.4 var(--sans);
 }
-.mr-state {
+/* ---- states, as the UI convention draws them: one color, one meaning, on every page. A state
+   is a pill tinted with its tone, its icon and its word (StateBadge; `.status-badge` for CI,
+   `.mr-state` for merge requests, issues, environments and commits); in a dense list, its icon
+   alone in the same color (`.ic-*`, `.st-*`). Green: it is fine. Red: it broke. Amber: it waits.
+   Blue: it runs. Violet: merged. Grey: closed, canceled, skipped, and every property. */
+.state,
+.mr-state,
+.status-badge,
+.thread-state,
+.instance-status {
+  --tone: var(--text-muted);
+  --tone-soft: var(--bg-hover);
   display: inline-flex;
+  flex: none;
   align-items: center;
-  gap: 6px;
-  font-weight: 600;
-  text-transform: none;
+  gap: 5px;
+  height: 22px;
+  padding: 0 9px 0 7px;
+  border-radius: 999px;
+  background: var(--tone-soft);
+  color: var(--tone);
+  font: 600 12px/1 var(--sans);
   letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
 }
-.mr-state::before {
-  content: "";
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: currentColor;
+.tone-ok,
+.mr-state.opened,
+.thread-state.resolved,
+.instance-status.ok {
+  --tone: var(--ok);
+  --tone-soft: var(--ok-soft);
 }
-.mr-state.opened {
-  color: var(--ok);
+.tone-danger,
+.instance-status.bad {
+  --tone: var(--danger);
+  --tone-soft: var(--danger-soft);
 }
+.tone-warn,
+.thread-state.open,
+.instance-status.warn {
+  --tone: var(--warn);
+  --tone-soft: var(--warn-soft);
+}
+.tone-info {
+  --tone: var(--info);
+  --tone-soft: var(--info-soft);
+}
+.tone-merged,
 .mr-state.merged {
-  color: var(--accent);
+  --tone: var(--merged);
+  --tone-soft: var(--merged-soft);
 }
-.mr-state.closed {
-  color: var(--danger);
-}
-.mr-state.draft {
-  color: var(--text-muted);
-}
-.mr-status .mr-state {
-  height: 24px;
-  padding: 0 9px;
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, currentColor 12%, var(--bg));
-  font-size: 12.5px;
-  letter-spacing: 0;
-  text-transform: none;
+.tone-neutral {
+  --tone: var(--text-muted);
+  --tone-soft: var(--bg-hover);
 }
 .mr-title {
   margin: 0;
@@ -3354,7 +3364,7 @@ kbd {
 }
 .ready-card .st-running,
 .ready-card .st-canceling {
-  color: var(--emph-link);
+  color: var(--emph-info);
 }
 .ready-card code {
   background: var(--emph-row);
@@ -3576,10 +3586,10 @@ kbd {
   color: var(--ok);
 }
 .mr-mark.merged {
-  color: var(--accent);
+  color: var(--merged);
 }
 .mr-mark.closed {
-  color: var(--danger);
+  color: var(--text-faint);
 }
 
 /* activity log */
@@ -3641,9 +3651,9 @@ kbd {
   background: var(--ok);
   color: #fff;
 }
-.tl-icon.accent {
-  background: var(--accent);
-  color: var(--accent-text);
+.tl-icon.merged {
+  background: var(--merged);
+  color: var(--on-tone);
 }
 .tl-icon.bad {
   background: var(--danger-soft);
@@ -3772,33 +3782,41 @@ kbd {
   display: inline-flex;
   flex: none;
   align-items: center;
+  color: var(--tone);
 }
+/* each CI status's tone: its icon, its dot or its badge takes it */
 .st-success {
-  color: var(--ok);
+  --tone: var(--ok);
+  --tone-soft: var(--ok-soft);
+  color: var(--tone);
 }
 .st-failed {
-  color: var(--danger);
+  --tone: var(--danger);
+  --tone-soft: var(--danger-soft);
+  color: var(--tone);
 }
-.st-warn {
-  color: var(--warn);
-}
-.st-running,
-.st-canceling {
-  color: var(--accent);
-}
+.st-warn,
 .st-pending,
 .st-preparing,
 .st-waiting_for_resource,
 .st-scheduled {
-  color: var(--warn);
+  --tone: var(--warn);
+  --tone-soft: var(--warn-soft);
+  color: var(--tone);
+}
+.st-running,
+.st-canceling {
+  --tone: var(--info);
+  --tone-soft: var(--info-soft);
+  color: var(--tone);
 }
 .st-canceled,
 .st-skipped,
-.st-created {
-  color: var(--text-faint);
-}
+.st-created,
 .st-manual {
-  color: var(--text-muted);
+  --tone: var(--text-muted);
+  --tone-soft: var(--bg-hover);
+  color: var(--tone);
 }
 .spin {
   animation: spin 1.1s linear infinite;
@@ -3813,21 +3831,9 @@ kbd {
     animation: none;
   }
 }
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 24px;
-  padding: 0 9px 0 7px;
-  border: 1px solid currentColor;
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-}
 a.status-badge:hover {
   text-decoration: none;
-  background: var(--bg-hover);
+  background: color-mix(in srgb, var(--tone) 18%, var(--bg));
 }
 .mini-pipeline {
   display: inline-flex;
@@ -4106,19 +4112,6 @@ a.status-badge:hover {
 .ready-ring.mini .track {
   stroke: var(--border);
 }
-.mr-ready {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 8px;
-  color: var(--text-muted);
-  font-size: 12.5px;
-  white-space: nowrap;
-}
-.mr-ready.ok {
-  color: var(--ok);
-  font-weight: 600;
-}
 .decide-label {
   margin: 0;
   padding: 0 10px;
@@ -4304,20 +4297,6 @@ a.status-badge:hover {
   }
 }
 /* the instance card's health: its icon, toned */
-.instance-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-.instance-status.ok {
-  color: var(--ok);
-}
-.instance-status.warn {
-  color: var(--warn);
-}
-.instance-status.bad {
-  color: var(--danger);
-}
 
 /* the admin overview: CI in the middle, the instance's numbers beside it, as the
    project page's right column */
@@ -5282,13 +5261,15 @@ a.row-title:hover,
   white-space: nowrap;
 }
 .draft-tag {
+  display: inline-flex;
   flex: none;
-  padding: 0 6px;
-  border: 1px solid var(--border-strong);
-  border-radius: 4px;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--bg-hover);
   color: var(--text-muted);
-  font: 600 10.5px/18px var(--mono);
-  text-transform: uppercase;
+  font: 600 11.5px/1 var(--sans);
 }
 .mr-row-route {
   display: inline-flex;
@@ -5378,9 +5359,6 @@ a.row-title:hover,
   align-items: center;
   justify-content: center;
   gap: 12px;
-}
-.mr-state.commit {
-  color: var(--text-muted);
 }
 .commit-body pre {
   margin: 4px 0 0;
@@ -7587,38 +7565,37 @@ button.test-case-row:hover {
 }
 
 /* ---------------------------------------------------------------- security findings */
+/* a severity is a state: red when it breaks (critical the loudest, solid), amber to watch, blue
+   to know, grey for what can wait */
 .sev {
-  display: inline-block;
+  --tone: var(--text-muted);
+  --tone-soft: var(--bg-hover);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-width: 64px;
-  padding: 1px 7px;
-  border: 1px solid color-mix(in srgb, currentColor 28%, transparent);
-  border-radius: 4px;
-  font-size: 11.5px;
-  font-weight: 600;
-  text-align: center;
-  color: var(--text-muted);
-  background: var(--bg-hover);
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--tone-soft);
+  color: var(--tone);
+  font: 600 11.5px/1 var(--sans);
 }
-/* tinted, per theme (the tokens): readable in both, critical the strongest */
 .sev-critical {
-  color: var(--sev-critical);
-  background: var(--sev-critical-bg);
+  background: var(--danger);
+  color: var(--on-tone);
 }
 .sev-high {
-  color: var(--sev-high);
-  background: var(--sev-high-bg);
+  --tone: var(--danger);
+  --tone-soft: var(--danger-soft);
 }
 .sev-medium {
-  color: var(--sev-medium);
-  background: var(--sev-medium-bg);
-}
-.sev-low {
-  color: var(--sev-low);
-  background: var(--sev-low-bg);
+  --tone: var(--warn);
+  --tone-soft: var(--warn-soft);
 }
 .sev-info {
-  color: var(--sev-info);
-  background: var(--sev-info-bg);
+  --tone: var(--info);
+  --tone-soft: var(--info-soft);
 }
 .sev-summary {
   display: flex;

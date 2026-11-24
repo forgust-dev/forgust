@@ -10,6 +10,7 @@ import { MarkdownEditor } from "../../components/MarkdownEditor";
 import { useToast } from "../../shell/toast";
 import { useConfirm } from "../../shell/dialog";
 import type { Ctx } from "./Project";
+import { StateMark, mrLook } from "../../components/states";
 
 type M = S["Milestone"];
 
@@ -382,7 +383,7 @@ export function MilestonePage({ ctx, id }: { ctx: Ctx; id: number }) {
                     <div className="list rows">
                       {list.map((r) => (
                         <div className="item" key={r.id}>
-                          <GitMerge size={15} className={r.state === "merged" ? "ic-accent" : r.state === "opened" ? "ic-ok" : "faint"} />
+                          <StateMark look={mrLook(r.state)} size={15} />
                           <Link to={`${ctx.web}/-/merge_requests/${r.iid}`} className="grow ellipsis">
                             {r.title}
                           </Link>

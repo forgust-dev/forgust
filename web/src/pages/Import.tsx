@@ -527,7 +527,7 @@ function StatusIcon({ status, size = 16 }: { status: string; size?: number }) {
   if (status === "failed") return <CircleX size={size} className="ic-danger" aria-label={status} />;
   if (status === "canceled" || status === "skipped") return <Square size={size} className="faint" aria-label={status} />;
   if (status === "pending") return <CircleDashed size={size} className="faint" aria-label={status} />;
-  return <Loader2 size={size} className="spin ic-accent" aria-label={status} />;
+  return <Loader2 size={size} className="spin ic-info" aria-label={status} />;
 }
 
 const STAGES: Record<string, string> = {

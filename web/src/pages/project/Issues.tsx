@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, CircleDot, GitMerge, GitPullRequestClosed, GitPullRequestArrow, MessageSquare, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { CheckCircle2, GitMerge, GitPullRequestClosed, GitPullRequestArrow, MessageSquare, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { api, qs, timeAgo, type S } from "../../api/client";
 import { AuthorLink, Avatar, ConfidentialMark, Empty, ErrorBox, Field, FieldGroup, FilterTabs, ImportedMark, InternalMark, InternalToggle, ListHead, Q, SearchField, authorOf, Pager, useDebounced } from "../../components/ui";
 import { Select, Switch } from "../../components/controls";
@@ -18,19 +18,12 @@ import type { Ctx } from "./Project";
 import { DueDateFact, MilestoneFact, day, overdue, useMilestones } from "./Milestones";
 import { ReactionBar } from "../../components/Reactions";
 import { Markdown } from "../../components/Markdown";
+import { StateMark, StateOf, issueLook } from "../../components/states";
 
 type State = "opened" | "closed" | "all";
 
 function IssueIcon({ state }: { state: string }) {
-  return state === "opened" ? (
-    <span className="row-icon ic-ok" title="Open" aria-label="Open" role="img">
-      <CircleDot size={16} />
-    </span>
-  ) : (
-    <span className="row-icon ic-accent" title="Closed" aria-label="Closed" role="img">
-      <CheckCircle2 size={16} />
-    </span>
-  );
+  return <StateMark look={issueLook(state)} className="row-icon" />;
 }
 
 const PER_PAGE = 50;
@@ -268,7 +261,7 @@ export function IssuePage({ ctx, iid }: { ctx: Ctx; iid: number }) {
         <div className="stack">
           <header className="mr-head">
             <div className="mr-status">
-              <span className={`mr-state ${i.state}`}>{i.state === "opened" ? "Open" : "Closed"}</span>
+              <StateOf look={issueLook(i.state)} />
               {i.confidential && <ConfidentialMark />}
               <span>#{i.iid}</span>
               <span aria-hidden="true">·</span>

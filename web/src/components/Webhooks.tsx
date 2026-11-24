@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, timeAgo, type S } from "../api/client";
-import { Badge, ErrorBox, Field, levelName, Q } from "./ui";
+import { Badge, ErrorBox, Field, levelName, Q, StateBadge } from "./ui";
 import { Select } from "./controls";
+import { CircleCheck, CircleX, Clock } from "lucide-react";
 
 const EVENTS = ["push", "merge_request", "issue", "confidential_issue", "note", "confidential_note", "release", "pipeline", "build"];
 
@@ -126,7 +127,19 @@ function Deliveries({ base, id }: { base: string; id: number }) {
                 {list.map((d) => (
                   <tr key={d.id}>
                     <td>
-                      <Badge tone={d.status === "delivered" ? "ok" : d.status === "failed" ? "warn" : undefined}>{d.status}</Badge>
+                      {d.status === "delivered" ? (
+                        <StateBadge tone="ok" icon={CircleCheck}>
+                          Delivered
+                        </StateBadge>
+                      ) : d.status === "failed" ? (
+                        <StateBadge tone="danger" icon={CircleX}>
+                          Failed
+                        </StateBadge>
+                      ) : (
+                        <StateBadge tone="neutral" icon={Clock}>
+                          {d.status[0].toUpperCase() + d.status.slice(1)}
+                        </StateBadge>
+                      )}
                     </td>
                     <td>
                       <code>{d.event}</code>

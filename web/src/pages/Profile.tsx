@@ -3,13 +3,14 @@ import { Route, Routes, useLocation, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, enc, timeAgo, type S } from "../api/client";
 import { useSession } from "../session";
-import { Avatar, Badge, Card, CopyLabel, ErrorBox, Field, NewSecret, Q, Section, useCopy, useFormRun } from "../components/ui";
+import { Avatar, Badge, Card, CopyLabel, ErrorBox, Field, NewSecret, Q, Section, useCopy, useFormRun, StateBadge } from "../components/ui";
 import { ScopePicker, useCrudList } from "../components/Tokens";
 import { ResendLink } from "../components/ResendLink";
 import { AvatarUpload } from "../components/AvatarUpload";
 import { NotificationDefaults } from "../components/Notifications";
 import { cancelled, createCredential, webauthnSupported } from "../api/webauthn";
 import { profilePage } from "./profilePages";
+import { Ban, CircleCheck, Link2, ShieldCheck, ShieldOff, Unlink } from "lucide-react";
 
 export function Profile() {
   const loc = useLocation();
@@ -358,7 +359,9 @@ function Tokens() {
                       </div>
                       {t.expires_at && <span className="small faint">expires {new Date(t.expires_at).toLocaleDateString()}</span>}
                       {t.revoked ? (
-                        <Badge>revoked</Badge>
+                        <StateBadge tone="neutral" icon={Ban}>
+                          Revoked
+                        </StateBadge>
                       ) : (
                         <button className="btn small danger" onClick={() => revoke.mutate(t.id)}>
                           Revoke
@@ -418,12 +421,36 @@ function Security() {
         </form>
       </Section>
       <Section
-        title={<>Two-factor authentication {user?.two_factor_enabled ? <Badge tone="ok">enabled</Badge> : <Badge>off</Badge>}</>}
+        title={
+          <>
+            Two-factor authentication{" "}
+            {user?.two_factor_enabled ? (
+              <StateBadge tone="ok" icon={ShieldCheck}>
+                Enabled
+              </StateBadge>
+            ) : (
+              <StateBadge tone="neutral" icon={ShieldOff}>
+                Off
+              </StateBadge>
+            )}
+          </>
+        }
         description="Asked for after your password: a code from an authenticator app, or a security key. Some organizations require it."
       >
         <div className="stack">
           {codes && <NewRecoveryCodes codes={codes} onDone={() => setCodes(null)} />}
-          <Card title={<>Authenticator app {user?.totp_enabled && <Badge tone="ok">on</Badge>}</>}>
+          <Card
+            title={
+              <>
+                Authenticator app{" "}
+                {user?.totp_enabled && (
+                  <StateBadge tone="ok" icon={CircleCheck}>
+                    On
+                  </StateBadge>
+                )}
+              </>
+            }
+          >
             {user?.totp_enabled ? (
               <form
                 className="stack"
@@ -716,7 +743,15 @@ function SignInProviders() {
         {providers.data.map((p) => (
           <div key={p.name} className="row wrap">
             <strong>{p.display_name}</strong>
-            {p.linked_at ? <Badge tone="ok">linked {timeAgo(p.linked_at)}</Badge> : <Badge>not linked</Badge>}
+            {p.linked_at ? (
+              <StateBadge tone="ok" icon={Link2}>
+                Linked {timeAgo(p.linked_at)}
+              </StateBadge>
+            ) : (
+              <StateBadge tone="neutral" icon={Unlink}>
+                Not linked
+              </StateBadge>
+            )}
             <span style={{ flex: 1 }} />
             {p.linked_at ? (
               <button

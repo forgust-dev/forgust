@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, LEVELS, timeAgo, type S } from "../api/client";
-import { Badge, Card, ErrorBox, Field, LevelSelect, NewSecret, Q } from "./ui";
+import { Badge, Card, ErrorBox, Field, LevelSelect, NewSecret, Q, StateBadge } from "./ui";
+import { Ban } from "lucide-react";
 
 const SCOPES = ["api", "read_api", "read_repository", "write_repository", "mcp"];
 
@@ -77,7 +78,11 @@ export function AccessTokens({ base }: { base: string }) {
                     <div className="small muted">{t.scopes.join(", ")}</div>
                   </div>
                   <Badge tone="accent">{t.access_level}</Badge>
-                  {t.revoked ? <Badge>revoked</Badge> : <span className="faint small">{t.last_used_at ? `used ${timeAgo(t.last_used_at)}` : "never used"}</span>}
+                  {t.revoked ? (
+                    <StateBadge tone="neutral" icon={Ban}>
+                      Revoked
+                    </StateBadge>
+                  ) : <span className="faint small">{t.last_used_at ? `used ${timeAgo(t.last_used_at)}` : "never used"}</span>}
                   {!t.revoked && (
                     <button className="btn small danger" onClick={() => revoke.mutate(t.bot_user_id)}>
                       Revoke
@@ -150,7 +155,9 @@ export function DeployTokens({ base }: { base: string }) {
                     <div className="small muted">{t.scopes.join(", ")}</div>
                   </div>
                   {t.revoked ? (
-                    <Badge>revoked</Badge>
+                    <StateBadge tone="neutral" icon={Ban}>
+                      Revoked
+                    </StateBadge>
                   ) : (
                     <button className="btn small danger" onClick={() => revoke.mutate(t.id)}>
                       Revoke

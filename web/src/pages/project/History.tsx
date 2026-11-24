@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronUp, FolderCode, GitCommitHorizontal } from "lucide-react";
 import { api, qs, timeAgo, type S } from "../../api/client";
-import { Avatar, Empty, GitPerson, ListHead, Q, ShaCopy, Pager } from "../../components/ui";
+import { Avatar, Empty, GitPerson, ListHead, Q, ShaCopy, Pager, StateBadge } from "../../components/ui";
 import { PagedDiff } from "./Diff";
 import { PathCrumbs, RefPicker, useResolved } from "./Code";
 import type { Ctx } from "./Project";
@@ -161,7 +161,9 @@ export function Commit({ ctx, sha }: { ctx: Ctx; sha: string }) {
           <div className="stack">
             <header className="mr-head commit-head">
               <div className="mr-status">
-                <span className="mr-state commit">Commit</span>
+                <StateBadge tone="neutral" icon={GitCommitHorizontal} className="mr-state commit">
+                  Commit
+                </StateBadge>
                 <span>{commit.id.slice(0, 8)}</span>
                 <span aria-hidden="true">·</span>
                 <span>

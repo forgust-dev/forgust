@@ -6,10 +6,11 @@ import { useSession } from "../../session";
 import { AuthorLink, Avatar, Badge, Empty, ErrorBox, Field, FilterTabs, ImportedMark, InternalMark, InternalToggle, ListHead, Q, SearchField, UserLink, authorOf, noteAuthor, useDebounced } from "../../components/ui";
 import { MarkdownEditor } from "../../components/MarkdownEditor";
 import { TemplatePicker } from "../../components/templates";
+import { StateMark, StateOf, mrLook } from "../../components/states";
 import { EditLabelsButton, LabelList, LabelPicker, MilestoneChip, SystemText, useLabels } from "../../components/labels";
 import { EditPeopleButton, PeopleAvatars, PeopleList, PeoplePicker, ReviewerList } from "../../components/people";
 import { Popover, Segmented, Select, Switch } from "../../components/controls";
-import { ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight, Circle, CircleAlert, Clock3, FileDiff, Dot, GitBranch, GitCommitHorizontal, GitMerge, GitPullRequestClosed, MessageSquare, Milestone as MilestoneIcon, FileWarning, Tag, PanelRightClose, PanelRightOpen, Pencil, RotateCcw, X, XCircle } from "lucide-react";
+import { ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight, Circle, CircleAlert, Clock3, FileDiff, Dot, GitBranch, GitCommitHorizontal, GitMerge, MessageSquare, Milestone as MilestoneIcon, FileWarning, Tag, PanelRightClose, PanelRightOpen, Pencil, RotateCcw, X, XCircle } from "lucide-react";
 import { fetchers, keys, usePrefetch } from "../../prefetch";
 import { StatusIcon, duration, isActive, statusLabel } from "./ci/Status";
 import { isSystemPipeline, usePipeline } from "./ci/Pipelines";
@@ -136,13 +137,7 @@ export function MergeRequestList({ ctx }: { ctx: Ctx }) {
 }
 
 function MrStateIcon({ state, draft }: { state: string; draft: boolean }) {
-  const label = draft && state === "opened" ? "Draft" : state === "opened" ? "Open" : state === "merged" ? "Merged" : "Closed";
-  const cls = state === "opened" ? (draft ? "faint" : "ic-ok") : state === "merged" ? "ic-accent" : "ic-danger";
-  return (
-    <span className={`row-icon ${cls}`} title={label} aria-label={label} role="img">
-      {state === "closed" ? <GitPullRequestClosed size={16} /> : <GitMerge size={16} />}
-    </span>
-  );
+  return <StateMark look={mrLook(state, draft)} className="row-icon" />;
 }
 
 function MrLink({ ctx, m }: { ctx: Ctx; m: S["MergeRequest"] }) {
@@ -283,7 +278,6 @@ function ChangesPreview({ ctx, from, to }: { ctx: Ctx; from: string; to: string 
 
 type Tab = "overview" | "commits" | "diffs";
 
-const STATE_LABEL: Record<string, string> = { opened: "Open", merged: "Merged", closed: "Closed" };
 
 export function MergeRequestPage({ ctx, iid, tab }: { ctx: Ctx; iid: number; tab: Tab }) {
   useLiveUpdates(ctx.p.id);
@@ -302,7 +296,7 @@ export function MergeRequestPage({ ctx, iid, tab }: { ctx: Ctx; iid: number; tab
           <div className="stack" style={{ gap: 0 }}>
             <header className="mr-head">
               <div className="mr-status">
-                <span className={`mr-state ${m.draft && m.state === "opened" ? "draft" : m.state}`}>{m.draft && m.state === "opened" ? "Draft" : (STATE_LABEL[m.state] ?? m.state)}</span>
+                <StateOf look={mrLook(m.state, m.draft)} />
                 <span>!{m.iid}</span>
                 <span aria-hidden="true">·</span>
                 <span>
@@ -1211,7 +1205,7 @@ function threadsOf(notes: S["NoteDto"][]) {
 
 /** Icon and wording for a system note. */
 export function systemEvent(body: string): { icon: ReactNode; tone: string } {
-  if (body.startsWith("merged")) return { icon: <GitMerge size={12} />, tone: "accent" };
+  if (body.startsWith("merged")) return { icon: <GitMerge size={12} />, tone: "merged" };
   if (body === "approved") return { icon: <Check size={12} />, tone: "ok-solid" };
   if (body.startsWith("added version")) return { icon: <GitCommitHorizontal size={12} />, tone: "" };
   if (body === "closed") return { icon: <X size={12} />, tone: "bad" };

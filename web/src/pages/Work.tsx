@@ -1,17 +1,18 @@
 import { useMemo, useState, type ReactElement, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, AtSign, Check, CircleDot, Eye, GitMerge, UserCheck } from "lucide-react";
+import { ArrowRight, AtSign, Check, CircleDot, Eye, UserCheck, CircleCheck, Clock, GitPullRequestDraft } from "lucide-react";
 import type { UseQueryResult } from "@tanstack/react-query";
 import { api, timeAgo, type S } from "../api/client";
-import { Empty, Q, ListHead, Tile, UserLink } from "../components/ui";
+import { Empty, Q, ListHead, Tile, UserLink, StateBadge } from "../components/ui";
 import { ProjectStateBadges, Visibility } from "./Dashboard";
 import { InstanceCard } from "./InstanceCard";
-import { DecideCard, Ring } from "../components/decide";
+import { DecideCard } from "../components/decide";
 import { readinessChecks, readinessScore } from "../components/readiness";
 import { useSession } from "../session";
 import { useToast } from "../shell/toast";
 import { useMyProjects, useMyProjectStates, usePrefetch, useWork } from "../prefetch";
+import { StateMark, mrLook } from "../components/states";
 
 const ACTION: Record<string, { icon: ReactElement; text: string }> = {
   assigned: { icon: <UserCheck size={14} />, text: "assigned you" },
@@ -254,14 +255,13 @@ function Todos({ pending, onDone, quiet, clear }: { pending: S["Todo"][]; onDone
 /** How far a merge request is from its merge: the checks of its page, as a small ring. */
 function MrReady({ s, draft }: { s: S["MergeStatus"]; draft: boolean }) {
   const { passed, total } = readinessScore(readinessChecks(s));
-  const ready = s.can_merge && !draft;
   const left = total - passed;
-  const text = draft ? "Draft" : ready ? "Ready to merge" : left > 0 ? `${left} check${left === 1 ? "" : "s"} left` : "Not ready";
+  if (draft) return <StateBadge tone="neutral" icon={GitPullRequestDraft}>Draft</StateBadge>;
+  if (s.can_merge) return <StateBadge tone="ok" icon={CircleCheck}>Ready to merge</StateBadge>;
   return (
-    <span className={`mr-ready${ready ? " ok" : ""}`}>
-      <Ring mini done={passed} total={total} title={`${passed} of ${total} checks pass`} />
-      {text}
-    </span>
+    <StateBadge tone="warn" icon={Clock} title={`${passed} of ${total} checks pass`}>
+      {left > 0 ? `${left} check${left === 1 ? "" : "s"} left` : "Not ready"}
+    </StateBadge>
   );
 }
 
@@ -272,9 +272,7 @@ function MrRows({ list, review, status, me }: { list: S["WorkMr"][]; review?: bo
         const s = status?.(m);
         return (
           <div className="item" key={`${m.project_id}-${m.iid}`}>
-            <span className={`row-icon ${m.draft ? "faint" : "ic-ok"}`}>
-              <GitMerge size={16} />
-            </span>
+            <StateMark look={mrLook("opened", m.draft)} className="row-icon" />
             <div className="grow" style={{ minWidth: 0 }}>
               <div className="row-title">
                 <Link to={mrUrl(m)} className="ellipsis">

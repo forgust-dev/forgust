@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { CircleDot, FolderGit2, GitMerge } from "lucide-react";
+import { FolderGit2 } from "lucide-react";
 import { api, qs, timeAgo, type S } from "../api/client";
 import { Empty, FilterTabs, ListHead, Q, SearchField, Pager, Spinner, useDebounced } from "../components/ui";
 import { Segmented } from "../components/controls";
 import { CodeSearch } from "./SearchCode";
+import { StateMark, issueLook, mrLook } from "../components/states";
 
 type Scope = "projects" | "issues" | "merge_requests" | "code";
 const SCOPES: readonly Scope[] = ["issues", "merge_requests", "projects", "code"];
@@ -168,9 +169,9 @@ export function SearchPage() {
                         {(scope === "issues" ? d.issues : d.merge_requests).map((i) => (
                           <div className="item" key={`${i.project_id}-${i.iid}`}>
                             {scope === "issues" ? (
-                              <CircleDot size={15} className={i.state === "opened" ? "ic-ok" : "faint"} />
+                              <StateMark look={issueLook(i.state)} size={15} />
                             ) : (
-                              <GitMerge size={15} className={i.state === "opened" ? "ic-ok" : i.state === "merged" ? "ic-accent" : "faint"} />
+                              <StateMark look={mrLook(i.state)} size={15} />
                             )}
                             <div className="grow" style={{ minWidth: 0 }}>
                               <div className="row-title">

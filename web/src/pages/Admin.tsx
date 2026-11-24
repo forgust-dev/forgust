@@ -6,10 +6,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, bytes, enc, qs, timeAgo, type S } from "../api/client";
 import { useProviders } from "../prefetch";
 import { useSession } from "../session";
-import { Avatar, Badge, Card, ErrorBox, Field, FilterTabs, NotFound, Q, SearchField, UserLink, useDebounced, useFormRun } from "../components/ui";
+import { Avatar, Badge, Card, ErrorBox, Field, FilterTabs, NotFound, Q, SearchField, UserLink, useDebounced, useFormRun, StateBadge } from "../components/ui";
 import { adminPage } from "./adminPages";
 import { Combobox, Menu, Select, type MenuItem } from "../components/controls";
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal, Ban, ShieldCheck } from "lucide-react";
 import { useAct, useToast } from "../shell/toast";
 import { useConfirm, usePrompt, type Ask } from "../shell/dialog";
 import { RunnersPanel } from "./project/ci/Runners";
@@ -288,9 +288,17 @@ function Users() {
                         <span className="muted small">@{u.username}</span>
                         {u.is_admin && <Badge tone="accent">admin</Badge>}
                         {u.is_external && <Badge>external</Badge>}
-                        {u.state === "blocked" && <Badge tone="warn">blocked</Badge>}
+                        {u.state === "blocked" && (
+                          <StateBadge tone="danger" icon={Ban}>
+                            Blocked
+                          </StateBadge>
+                        )}
                         {!human && <Badge>{u.user_type.replace("_", " ")}</Badge>}
-                        {human && u.two_factor_enabled && <Badge tone="ok">2FA</Badge>}
+                        {human && u.two_factor_enabled && (
+                          <StateBadge tone="ok" icon={ShieldCheck}>
+                            2FA
+                          </StateBadge>
+                        )}
                         {u.providers.map((name) => (
                           <Badge key={name}>{providers.data?.find((pr) => pr.name === name)?.display_name ?? name}</Badge>
                         ))}

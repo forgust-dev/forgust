@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, CalendarDays, ChevronDown, ChevronRight, Clock3, ExternalLink, Folder, GitBranch, Layers, Play, Rocket, RotateCcw, Server, ShieldCheck, Square, Tag, Timer, Trash2, XCircle } from "lucide-react";
+import { ArrowRight, CalendarDays, ChevronDown, ChevronRight, Clock3, ExternalLink, Folder, GitBranch, Layers, Play, Rocket, RotateCcw, Server, ShieldCheck, Square, Tag, Timer, Trash2, XCircle, CircleCheck, Radio, type LucideIcon } from "lucide-react";
 import { api, refLink, timeAgo, timeUntil, type S } from "../../../api/client";
-import { Badge, Empty, ListHead, Q, Tabs } from "../../../components/ui";
+import { Empty, ListHead, Q, Tabs, StateBadge, type Tone } from "../../../components/ui";
 import { DecideCard } from "../../../components/decide";
 import { useConfirm } from "../../../shell/dialog";
 import { useAct, useToast } from "../../../shell/toast";
@@ -19,10 +19,10 @@ type Deployment = S["Deployment"];
 const TIERS = ["production", "staging", "testing", "development", "other"];
 const tierRank = (t: string) => (TIERS.indexOf(t) + TIERS.length + 1) % (TIERS.length + 1);
 
-const STATE: Record<string, { label: string; tone: string }> = {
-  available: { label: "Available", tone: "opened" },
-  stopping: { label: "Stopping", tone: "draft" },
-  stopped: { label: "Stopped", tone: "closed" },
+const STATE: Record<string, { label: string; tone: Tone; icon: LucideIcon }> = {
+  available: { label: "Available", tone: "ok", icon: CircleCheck },
+  stopping: { label: "Stopping", tone: "neutral", icon: Clock3 },
+  stopped: { label: "Stopped", tone: "neutral", icon: Square },
 };
 
 /** A link to an environment's site, when it is a web address. */
@@ -195,7 +195,7 @@ function EnvironmentView({ ctx, e }: { ctx: Ctx; e: S["EnvironmentDetail"] }) {
   const live = e.state === "available" ? e.deployments.find((d) => d.status === "success") : undefined;
   const last = e.deployments[0];
   const site = siteOf(e);
-  const state = STATE[e.state] ?? { label: e.state, tone: "draft" };
+  const state = STATE[e.state] ?? { label: e.state, tone: "neutral", icon: Square };
   const remove = async () => {
     const ok = await confirm({
       title: `Delete ${e.name}?`,
@@ -217,7 +217,9 @@ function EnvironmentView({ ctx, e }: { ctx: Ctx; e: S["EnvironmentDetail"] }) {
     <div className="stack env-page">
       <header className="mr-head">
         <div className="mr-status">
-          <span className={`mr-state ${state.tone}`}>{state.label}</span>
+          <StateBadge tone={state.tone} icon={state.icon} className="mr-state">
+            {state.label}
+          </StateBadge>
           <span>{e.tier}</span>
           <span aria-hidden="true">·</span>
           <span>created {timeAgo(e.created_at)}</span>
@@ -421,7 +423,11 @@ function DeploymentRow({ ctx, d, live }: { ctx: Ctx; d: Deployment; live: boolea
             {d.tag ? <Tag size={13} /> : <GitBranch size={13} />}
             <Link to={refLink(ctx.web, "tree", d.ref)}>{d.ref}</Link>
           </span>
-          {live && <Badge tone="ok">Live</Badge>}
+          {live && (
+            <StateBadge tone="ok" icon={Radio}>
+              Live
+            </StateBadge>
+          )}
         </div>
         <div className="row-meta">
           <span>{statusLabel(d.status).toLowerCase()}</span>

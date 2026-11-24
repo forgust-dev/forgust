@@ -1,11 +1,12 @@
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { GitBranch, GitMerge, GitPullRequestClosed, Layers, X } from "lucide-react";
+import { GitBranch, Layers, X } from "lucide-react";
 import { api, qs, timeAgo, type S } from "../../api/client";
 import { usePref } from "../../shell/theme";
 import { useBranches } from "./Code";
 import { useAct } from "../../shell/toast";
 import type { Ctx } from "./Project";
+import { StateMark, mrLook } from "../../components/states";
 
 /** Open merge requests of the project (shared with the list's cache key). */
 export function useOpenMrs(ctx: Ctx, enabled = true) {
@@ -72,9 +73,7 @@ export function StackMap({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
         {layers.map((e) => (
           <li key={e.iid} className={e.iid === m.iid ? "current" : undefined} aria-current={e.iid === m.iid ? "true" : undefined}>
             <span className="stack-n faint">{e.n}</span>
-            <span className={`row-icon ${e.state === "merged" ? "ic-accent" : e.state === "closed" ? "ic-danger" : e.draft ? "faint" : "ic-ok"}`} aria-label={e.state} role="img">
-              {e.state === "closed" ? <GitPullRequestClosed size={14} /> : <GitMerge size={14} />}
-            </span>
+            <StateMark look={mrLook(e.state, e.draft)} size={14} className="row-icon" />
             <Link to={`${ctx.web}/-/merge_requests/${e.iid}`} className="grow ellipsis">
               <span className="faint">!{e.iid}</span> {e.title}
             </Link>
