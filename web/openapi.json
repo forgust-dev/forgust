@@ -33,6 +33,7 @@
         "tags": [
           "ai_review"
         ],
+        "summary": "Change AI review on this instance: provider, endpoint, model, key, image, limits, options (administrators only).",
         "operationId": "admin_set",
         "requestBody": {
           "content": {
@@ -567,6 +568,7 @@
         "tags": [
           "renovate"
         ],
+        "summary": "Change built-in Renovate here: image, limits, variables, github.com token, image pull credentials (administrators only).",
         "operationId": "admin_set",
         "requestBody": {
           "content": {
@@ -617,6 +619,7 @@
         "tags": [
           "renovate"
         ],
+        "summary": "Add a registry credential every project's Renovate runs use; returns the instance's rules (administrators only).",
         "operationId": "admin_add_host_rule",
         "requestBody": {
           "content": {
@@ -649,6 +652,7 @@
         "tags": [
           "renovate"
         ],
+        "summary": "Delete an instance-wide Renovate host rule (administrators only).",
         "operationId": "admin_delete_host_rule",
         "responses": {
           "204": {}
@@ -660,6 +664,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Instance runners, which every project may use (administrators only).",
         "operationId": "instance_runners",
         "responses": {
           "200": {
@@ -680,6 +685,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Create an instance runner; its token is shown only in the answer (administrators; browser session only).",
         "operationId": "create_instance_runner",
         "requestBody": {
           "content": {
@@ -709,6 +715,7 @@
         "tags": [
           "security"
         ],
+        "summary": "Instance scanning settings, scans running, the most exposed projects and Trivy DB mirrors (administrators only).",
         "operationId": "admin_scanning",
         "responses": {
           "200": {
@@ -726,6 +733,7 @@
         "tags": [
           "security"
         ],
+        "summary": "Change the instance's scanning settings; turning DB mirroring on copies them now (administrators only).",
         "operationId": "set_admin_scanning",
         "requestBody": {
           "content": {
@@ -821,6 +829,7 @@
         "tags": [
           "smart_view"
         ],
+        "summary": "Change the Smart View on this instance: whether projects may use it, image, runner tags, timeout (administrators only).",
         "operationId": "admin_set",
         "requestBody": {
           "content": {
@@ -1236,6 +1245,7 @@
         "tags": [
           "auth"
         ],
+        "summary": "Sign in with a username or email and a password: sets the session cookie, or answers a two-factor challenge.",
         "operationId": "login",
         "requestBody": {
           "content": {
@@ -1325,6 +1335,7 @@
         "tags": [
           "auth"
         ],
+        "summary": "Finish a two-factor sign-in with its challenge and an authenticator code: sets the session cookie.",
         "operationId": "login_totp",
         "requestBody": {
           "content": {
@@ -1706,6 +1717,7 @@
         "tags": [
           "groups"
         ],
+        "summary": "Top-level groups the viewer may see, by name; `member=true` keeps those they belong to.",
         "operationId": "list_top",
         "parameters": [
           {
@@ -1737,6 +1749,7 @@
         "tags": [
           "groups"
         ],
+        "summary": "Create a top-level group, or a subgroup of `parent_id` (who may create subgroups there); the creator owns it. Not bots.",
         "operationId": "create",
         "requestBody": {
           "content": {
@@ -1766,6 +1779,7 @@
         "tags": [
           "groups"
         ],
+        "summary": "A group, with the viewer's role and what they may create or manage, its breadcrumbs and, for an organization, its policy.",
         "operationId": "show",
         "responses": {
           "200": {
@@ -2037,6 +2051,7 @@
         "tags": [
           "groups"
         ],
+        "summary": "The group's direct members, highest role first (signed-in users who may see the group).",
         "operationId": "members",
         "responses": {
           "200": {
@@ -2166,6 +2181,7 @@
         "tags": [
           "groups"
         ],
+        "summary": "The projects directly in the group that the viewer may see, most recently active first.",
         "operationId": "projects",
         "responses": {
           "200": {
@@ -2188,6 +2204,7 @@
         "tags": [
           "renovate"
         ],
+        "summary": "Whether dependency updates are on by default for the group's projects (group Owners only).",
         "operationId": "group_get",
         "responses": {
           "200": {
@@ -2235,6 +2252,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "The group's own runners (group Owners).",
         "operationId": "group_runners",
         "responses": {
           "200": {
@@ -2255,6 +2273,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Create a group runner; its token is shown only in the answer (group Owners; browser session, confirmed email).",
         "operationId": "create_group_runner",
         "requestBody": {
           "content": {
@@ -2284,6 +2303,7 @@
         "tags": [
           "security"
         ],
+        "summary": "Whether a group turns scanning on for its projects that never chose (group Owners only).",
         "operationId": "group_scanning",
         "responses": {
           "200": {
@@ -2301,6 +2321,7 @@
         "tags": [
           "security"
         ],
+        "summary": "Set a group's scanning default; on turns it on for projects below that never chose (group Owners only).",
         "operationId": "set_group_scanning",
         "requestBody": {
           "content": {
@@ -2405,6 +2426,7 @@
         "tags": [
           "groups"
         ],
+        "summary": "The direct subgroups of the group that the viewer may see.",
         "operationId": "subgroups",
         "responses": {
           "200": {
@@ -2457,6 +2479,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "The group's CI/CD variables, without the values of masked ones (group Owners).",
         "operationId": "group_variables",
         "responses": {
           "200": {
@@ -2477,6 +2500,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Create or update a group CI/CD variable; an omitted value keeps the current one (group Owners).",
         "operationId": "set_group_variable",
         "requestBody": {
           "content": {
@@ -2509,6 +2533,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Delete a group CI/CD variable by key (group Owners).",
         "operationId": "delete_group_variable",
         "responses": {
           "200": {}
@@ -2536,6 +2561,7 @@
         "tags": [
           "imports"
         ],
+        "summary": "The caller's last 50 imports, newest first.",
         "operationId": "list",
         "responses": {
           "200": {
@@ -2702,6 +2728,7 @@
         "tags": [
           "imports"
         ],
+        "summary": "One import with its projects and the source users seen so far (its creator or an administrator).",
         "operationId": "show",
         "responses": {
           "200": {
@@ -2911,6 +2938,7 @@
         "tags": [
           "projects"
         ],
+        "summary": "Public projects, and internal ones for signed-in users, most recently active first; `search` filters by path.",
         "operationId": "explore",
         "responses": {
           "200": {
@@ -2931,6 +2959,7 @@
         "tags": [
           "projects"
         ],
+        "summary": "Create a project in a namespace (your own by default) with its default branch protected (who may create projects there).",
         "operationId": "create",
         "requestBody": {
           "content": {
@@ -2960,6 +2989,7 @@
         "tags": [
           "projects"
         ],
+        "summary": "A project, with the viewer's role and what they may do, its breadcrumbs and pull mirror source.",
         "operationId": "show",
         "responses": {
           "200": {
@@ -3332,6 +3362,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "The project's CI/CD settings (Maintainers).",
         "operationId": "ci_settings",
         "responses": {
           "200": {
@@ -3349,6 +3380,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Change the project's CI/CD settings: config path, timeout, git depth, merge checks, job token scope (Maintainers).",
         "operationId": "update_ci_settings",
         "requestBody": {
           "content": {
@@ -3530,6 +3562,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Environments of the project, their last deployment and whether you may stop each (`state`: available, stopped, all).",
         "operationId": "list",
         "responses": {
           "200": {
@@ -3552,6 +3585,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "One environment: its last 100 deployments, whether it is protected and whether you may stop it.",
         "operationId": "show",
         "responses": {
           "200": {
@@ -3601,6 +3635,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "List a project's issues by state, label, assignee, author, milestone or text; hidden confidential ones are left out.",
         "operationId": "list",
         "responses": {
           "200": {
@@ -3618,6 +3653,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "Create an issue (anyone signed in who sees the project); setting labels or a milestone needs Developer.",
         "operationId": "create",
         "requestBody": {
           "content": {
@@ -3647,6 +3683,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "One issue with its rendered description, related merge requests and what the caller may change.",
         "operationId": "show",
         "responses": {
           "200": {
@@ -3664,6 +3701,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "Update an issue (the author or a Developer; labels, milestone: Developers; only confidential: also assignees, Reporters).",
         "operationId": "update",
         "requestBody": {
           "content": {
@@ -3693,6 +3731,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "List an issue's comments and system notes, rendered; internal ones only for Reporters and above.",
         "operationId": "notes",
         "responses": {
           "200": {
@@ -3713,6 +3752,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "Comment on an issue (anyone signed in who sees it); an internal comment needs Reporter.",
         "operationId": "create_note",
         "requestBody": {
           "content": {
@@ -3734,6 +3774,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "Edit a comment of an issue (its author only).",
         "operationId": "edit_note",
         "requestBody": {
           "content": {
@@ -3753,6 +3794,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "Delete a comment of an issue (its author or a Maintainer).",
         "operationId": "delete_note",
         "responses": {
           "200": {}
@@ -3764,6 +3806,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "Emoji reactions on an issue and its comments, grouped by emoji (none on internal comments one may not see).",
         "operationId": "issue_reactions",
         "responses": {
           "200": {
@@ -3781,6 +3824,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "Add a reaction to an issue or one of its comments, or take it back when it is there.",
         "operationId": "issue_react",
         "requestBody": {
           "content": {
@@ -3810,6 +3854,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Projects whose CI job tokens may read this one (Maintainers).",
         "operationId": "job_token_allowlist",
         "responses": {
           "200": {
@@ -3830,6 +3875,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Let another project's CI job tokens read this one (Maintainers; the other project must be visible to them).",
         "operationId": "allow_job_token",
         "requestBody": {
           "content": {
@@ -3862,6 +3908,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Remove a project from the job token allowlist (Maintainers).",
         "operationId": "disallow_job_token",
         "responses": {
           "200": {}
@@ -3873,6 +3920,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "A job with its pipeline, runner, attempts and artifacts (the archive only when the viewer may download it).",
         "operationId": "show_job",
         "responses": {
           "200": {
@@ -3940,6 +3988,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Cancel a job; a running one stops at its runner's next update (Developers; on protected branches, who may push or merge).",
         "operationId": "cancel_job",
         "responses": {
           "200": {
@@ -3959,6 +4008,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Start a manual or delayed job now, as the caller (Developers; on protected branches, who may push or merge).",
         "operationId": "play_job",
         "responses": {
           "200": {
@@ -3978,6 +4028,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "A job's whole log as plain text (anyone who can read the project's code).",
         "operationId": "job_raw",
         "responses": {
           "200": {
@@ -3993,6 +4044,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Retry the latest attempt of a finished job (Developers; on protected branches, who may push or merge).",
         "operationId": "retry_job",
         "responses": {
           "200": {
@@ -4052,6 +4104,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "List a project's labels with their open issue and merge request counts.",
         "operationId": "labels",
         "responses": {
           "200": {
@@ -4072,6 +4125,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "Create a project label; a color is picked when none is given (Developers and above).",
         "operationId": "create_label",
         "requestBody": {
           "content": {
@@ -4101,6 +4155,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "Rename a label or change its color or description (Developers and above).",
         "operationId": "update_label",
         "requestBody": {
           "content": {
@@ -4128,6 +4183,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "Delete a project label (Developers and above).",
         "operationId": "delete_label",
         "responses": {
           "200": {}
@@ -4139,6 +4195,7 @@
         "tags": [
           "repository"
         ],
+        "summary": "Git LFS locks of the project: path, owner, when (the first 1000).",
         "operationId": "lfs_locks",
         "responses": {
           "200": {
@@ -4203,6 +4260,7 @@
         "tags": [
           "projects"
         ],
+        "summary": "The project's direct members, highest role first (signed-in users who may see the project).",
         "operationId": "members",
         "responses": {
           "200": {
@@ -4257,6 +4315,7 @@
         "tags": [
           "merge_requests"
         ],
+        "summary": "The project's merge requests, 20 a page, by state (`opened` by default), search, author, assignee, reviewer or milestone.",
         "operationId": "list",
         "responses": {
           "200": {
@@ -4277,6 +4336,7 @@
         "tags": [
           "merge_requests"
         ],
+        "summary": "Open a merge request from a source branch, into the default branch unless another target is given (who may push).",
         "operationId": "create",
         "requestBody": {
           "content": {
@@ -4306,6 +4366,7 @@
         "tags": [
           "merge_requests"
         ],
+        "summary": "A merge request with its diff versions, approvals, labels, assignees, reviewers, stack and what the viewer may do.",
         "operationId": "show",
         "responses": {
           "200": {
@@ -4491,6 +4552,7 @@
         "tags": [
           "merge_requests"
         ],
+        "summary": "Code owners of a merge request's changed files (CODEOWNERS of the target branch), their approvals, reviewers to add.",
         "operationId": "code_owners",
         "responses": {
           "200": {
@@ -4545,6 +4607,7 @@
         "tags": [
           "merge_requests"
         ],
+        "summary": "The diff of a merge request version (the latest by default), or between two versions, a page of files at a time.",
         "operationId": "diff",
         "responses": {
           "200": {
@@ -4564,6 +4627,7 @@
         "tags": [
           "merge_requests"
         ],
+        "summary": "Replace the merge request's labels; a system note records the change (who may push).",
         "operationId": "set_labels",
         "requestBody": {
           "content": {
@@ -4596,6 +4660,7 @@
         "tags": [
           "merge_requests"
         ],
+        "summary": "Merge the merge request now if every check passes; `sha` guards against unseen pushes (who may merge into the target).",
         "operationId": "merge",
         "requestBody": {
           "content": {
@@ -4625,6 +4690,7 @@
         "tags": [
           "merge_requests"
         ],
+        "summary": "Whether the merge request can be merged now: blockers, conflicts, approvals, pipeline, and the head SHA to merge.",
         "operationId": "merge_status",
         "responses": {
           "200": {
@@ -4674,6 +4740,7 @@
         "tags": [
           "merge_requests"
         ],
+        "summary": "The merge request's comments and threads, placed on a diff version (internal ones for Reporters and up).",
         "operationId": "notes",
         "responses": {
           "200": {
@@ -4790,6 +4857,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "The merge request's 20 latest pipelines: its own and its source branch's (anyone who can read the code).",
         "operationId": "mr_pipelines",
         "responses": {
           "200": {
@@ -4812,6 +4880,7 @@
         "tags": [
           "merge_requests"
         ],
+        "summary": "Emoji reactions on a merge request and its comments, grouped by emoji (readers of the code).",
         "operationId": "mr_reactions",
         "responses": {
           "200": {
@@ -4925,6 +4994,7 @@
         "tags": [
           "security"
         ],
+        "summary": "Security findings a merge request adds and fixes, against the default branch's last scan (Developers and above).",
         "operationId": "merge_request",
         "responses": {
           "200": {
@@ -4996,6 +5066,7 @@
         "tags": [
           "merge_requests"
         ],
+        "summary": "Test results of a merge request's head pipeline against its target branch: new, existing and fixed failures.",
         "operationId": "mr_tests",
         "responses": {
           "200": {
@@ -5070,6 +5141,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "List a project's milestones: active (default), closed or all, optionally searched by title.",
         "operationId": "list",
         "responses": {
           "200": {
@@ -5090,6 +5162,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "Create a milestone (Developers and above).",
         "operationId": "create",
         "requestBody": {
           "content": {
@@ -5119,6 +5192,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "One milestone of a project.",
         "operationId": "show",
         "responses": {
           "200": {
@@ -5136,6 +5210,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "Edit a milestone's title, description, dates or state (Developers and above).",
         "operationId": "update",
         "requestBody": {
           "content": {
@@ -5163,6 +5238,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "Delete a milestone; its issues and merge requests lose it (Developers and above).",
         "operationId": "delete",
         "responses": {
           "204": {}
@@ -5174,6 +5250,7 @@
         "tags": [
           "projects"
         ],
+        "summary": "Pull and push mirrors of the project with their last update and error (Maintainers only).",
         "operationId": "list",
         "responses": {
           "200": {
@@ -5227,6 +5304,7 @@
         "tags": [
           "projects"
         ],
+        "summary": "Change a mirror's state, interval, options or credentials; it updates at once if re-enabled or re-keyed (Maintainers only).",
         "operationId": "update",
         "requestBody": {
           "content": {
@@ -5303,6 +5381,7 @@
         "tags": [
           "projects"
         ],
+        "summary": "The caller's notification level for a project (`global`: their default) and the level that applies.",
         "operationId": "project",
         "responses": {
           "200": {
@@ -5320,6 +5399,7 @@
         "tags": [
           "projects"
         ],
+        "summary": "Set the caller's notification level for a project; `global` follows their default (not from a CI job).",
         "operationId": "set_project",
         "requestBody": {
           "content": {
@@ -5349,6 +5429,7 @@
         "tags": [
           "projects"
         ],
+        "summary": "The project's Pages site: whether the instance serves sites, its URL and current deployment (who may read the code).",
         "operationId": "pages",
         "responses": {
           "200": {
@@ -5408,6 +5489,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "The project's pipeline schedules; variable values only for their owner or a Maintainer (Developers).",
         "operationId": "list_schedules",
         "responses": {
           "200": {
@@ -5428,6 +5510,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Create a pipeline schedule owned by the caller (Developers who may run pipelines for its ref).",
         "operationId": "create_schedule",
         "requestBody": {
           "content": {
@@ -5457,6 +5540,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Change a pipeline schedule; the editor becomes its owner (its owner or a Maintainer, who may run its ref).",
         "operationId": "update_schedule",
         "requestBody": {
           "content": {
@@ -5484,6 +5568,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Delete a pipeline schedule (its owner or a Maintainer).",
         "operationId": "delete_schedule",
         "responses": {
           "200": {}
@@ -5507,6 +5592,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "The project's pipelines, newest first, by ref, status, sha or schedule (anyone who can read the code).",
         "operationId": "list_pipelines",
         "responses": {
           "200": {
@@ -5557,6 +5643,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "A pipeline with its stages, jobs, coverage and upstream pipeline (anyone who can read the code).",
         "operationId": "show_pipeline",
         "responses": {
           "200": {
@@ -5576,6 +5663,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Cancel a pipeline's unfinished jobs and downstream pipelines (Developers; on protected branches, who may push or merge).",
         "operationId": "cancel_pipeline",
         "responses": {
           "200": {
@@ -5638,6 +5726,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "A pipeline's JUnit test totals and each job's report with its failures.",
         "operationId": "pipeline_tests",
         "responses": {
           "200": {
@@ -5657,6 +5746,7 @@
         "tags": [
           "projects"
         ],
+        "summary": "The project's branch protection rules (who may read the code).",
         "operationId": "protected_branches",
         "responses": {
           "200": {
@@ -5722,6 +5812,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Protected environments of the project: names or globs and the access level deploying to them needs.",
         "operationId": "protected",
         "responses": {
           "200": {
@@ -5742,6 +5833,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Protect an environment name or glob, or change the level it asks for deploying (Maintainers only).",
         "operationId": "protect",
         "requestBody": {
           "content": {
@@ -5786,6 +5878,7 @@
         "tags": [
           "projects"
         ],
+        "summary": "The project's tag protection rules (who may read the code).",
         "operationId": "protected_tags",
         "responses": {
           "200": {
@@ -5839,6 +5932,7 @@
         "tags": [
           "projects"
         ],
+        "summary": "Remove a tag protection rule (Maintainers).",
         "operationId": "unprotect_tag",
         "responses": {
           "200": {}
@@ -5850,6 +5944,7 @@
         "tags": [
           "projects"
         ],
+        "summary": "Push rules of the project: commit message, author email and branch name patterns, file size, secrets, signatures.",
         "operationId": "push_rule",
         "responses": {
           "200": {
@@ -5867,6 +5962,7 @@
         "tags": [
           "projects"
         ],
+        "summary": "Replace the project's push rules (Maintainers only).",
         "operationId": "set_push_rule",
         "requestBody": {
           "content": {
@@ -5896,6 +5992,7 @@
         "tags": [
           "registry"
         ],
+        "summary": "Container registry of the project: whether it is on, the host and image to push to, its image repositories.",
         "operationId": "info",
         "responses": {
           "200": {
@@ -5927,6 +6024,7 @@
         "tags": [
           "registry"
         ],
+        "summary": "Cleanup policy of the project's container images: which tags it removes or keeps, and after how long.",
         "operationId": "cleanup_policy",
         "responses": {
           "200": {
@@ -5944,6 +6042,7 @@
         "tags": [
           "registry"
         ],
+        "summary": "Replace the cleanup policy of the project's container images (Maintainers only).",
         "operationId": "set_cleanup_policy",
         "requestBody": {
           "content": {
@@ -5985,6 +6084,7 @@
         "tags": [
           "registry"
         ],
+        "summary": "Tags of one of the project's image repositories, most recently updated first.",
         "operationId": "tags",
         "responses": {
           "200": {
@@ -6070,6 +6170,7 @@
         "tags": [
           "releases"
         ],
+        "summary": "One release by its tag: notes, links, and the tagged commit and source archives for those who read the code.",
         "operationId": "show",
         "responses": {
           "200": {
@@ -6087,6 +6188,7 @@
         "tags": [
           "releases"
         ],
+        "summary": "Change a release's name, notes or release date (Developer+, or a CI job of the project acting for one).",
         "operationId": "update",
         "requestBody": {
           "content": {
@@ -6126,6 +6228,7 @@
         "tags": [
           "releases"
         ],
+        "summary": "Add a link (an asset) to a release, at most 100 (Developer+, or a CI job of the project acting for one).",
         "operationId": "add_link",
         "requestBody": {
           "content": {
@@ -6155,6 +6258,7 @@
         "tags": [
           "releases"
         ],
+        "summary": "Delete a link of a release (Developer+, or a CI job of the project acting for one).",
         "operationId": "delete_link",
         "responses": {
           "204": {}
@@ -6235,6 +6339,7 @@
         "tags": [
           "renovate"
         ],
+        "summary": "Add a credential Renovate uses for one of the project's private registries; returns its rules (Maintainers only).",
         "operationId": "add_host_rule",
         "requestBody": {
           "content": {
@@ -6267,6 +6372,7 @@
         "tags": [
           "renovate"
         ],
+        "summary": "Delete one of the project's Renovate host rules (Maintainers only).",
         "operationId": "delete_host_rule",
         "responses": {
           "204": {}
@@ -6339,6 +6445,7 @@
         "tags": [
           "repository"
         ],
+        "summary": "Blame a text file at a ref (the default branch by default): the commit behind each line, and the highlighted lines.",
         "operationId": "blame",
         "responses": {
           "200": {
@@ -6358,6 +6465,7 @@
         "tags": [
           "repository"
         ],
+        "summary": "A file at a ref (the default branch by default), highlighted, Markdown rendered; binary or too large: its details only.",
         "operationId": "blob",
         "responses": {
           "200": {
@@ -6377,6 +6485,7 @@
         "tags": [
           "repository"
         ],
+        "summary": "The repository's branches (default and protected flagged), a page at a time, filtered by name; `x-total` counts matches.",
         "operationId": "branches",
         "responses": {
           "200": {
@@ -6431,6 +6540,7 @@
         "tags": [
           "repository"
         ],
+        "summary": "The history from a ref (the default branch by default), of one path if given, 40 commits a page (at most 100).",
         "operationId": "commits",
         "responses": {
           "200": {
@@ -6481,6 +6591,7 @@
         "tags": [
           "repository"
         ],
+        "summary": "One commit, by its SHA.",
         "operationId": "commit",
         "responses": {
           "200": {
@@ -6500,6 +6611,7 @@
         "tags": [
           "repository"
         ],
+        "summary": "What a commit changed, against its first parent, a page of files at a time.",
         "operationId": "commit_diff",
         "responses": {
           "200": {
@@ -6889,6 +7001,7 @@
         "tags": [
           "repository"
         ],
+        "summary": "Repository statistics at a ref (the default branch by default): disk size, LFS usage, languages, commit count.",
         "operationId": "stats",
         "responses": {
           "200": {
@@ -7011,6 +7124,7 @@
         "tags": [
           "repository"
         ],
+        "summary": "The entries of a folder at a ref (the default branch and top folder by default), and the last commit to touch it.",
         "operationId": "tree",
         "responses": {
           "200": {
@@ -7051,6 +7165,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Create a project runner; its token is shown only in the answer (Maintainers; browser session, confirmed email).",
         "operationId": "create_project_runner",
         "requestBody": {
           "content": {
@@ -7080,6 +7195,7 @@
         "tags": [
           "security"
         ],
+        "summary": "List a project's security findings with counts, by state, severity, report type or text (Developers and above).",
         "operationId": "findings",
         "responses": {
           "200": {
@@ -7099,6 +7215,7 @@
         "tags": [
           "security"
         ],
+        "summary": "One security finding with its history and the Renovate MRs updating its package (Developers and above).",
         "operationId": "finding",
         "responses": {
           "200": {
@@ -7118,6 +7235,7 @@
         "tags": [
           "security"
         ],
+        "summary": "Dismiss a security finding with a reason and an optional comment (Developers and above).",
         "operationId": "dismiss",
         "requestBody": {
           "content": {
@@ -7147,6 +7265,7 @@
         "tags": [
           "security"
         ],
+        "summary": "Reopen a dismissed security finding (Developers and above).",
         "operationId": "reopen",
         "responses": {
           "200": {
@@ -7166,6 +7285,7 @@
         "tags": [
           "security"
         ],
+        "summary": "A project's built-in security scanning: on or off, scanners, interval, next and last run (Developers and above).",
         "operationId": "scanning",
         "responses": {
           "200": {
@@ -7183,6 +7303,7 @@
         "tags": [
           "security"
         ],
+        "summary": "Turn a project's built-in scanning on or off, set its scanners, interval and SBOMs on tags (Maintainers only).",
         "operationId": "set_scanning",
         "requestBody": {
           "content": {
@@ -7212,6 +7333,7 @@
         "tags": [
           "security"
         ],
+        "summary": "Start a scan of the default branch now; scanning must be on for the project (Maintainers only).",
         "operationId": "run_scan",
         "responses": {
           "200": {
@@ -7462,6 +7584,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "The project's CI/CD variables, without the values of masked ones (Maintainers).",
         "operationId": "project_variables",
         "responses": {
           "200": {
@@ -7482,6 +7605,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Create or update a project CI/CD variable; an omitted value keeps the current one (Maintainers).",
         "operationId": "set_project_variable",
         "requestBody": {
           "content": {
@@ -7514,6 +7638,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Delete a project CI/CD variable by key (Maintainers).",
         "operationId": "delete_project_variable",
         "responses": {
           "200": {}
@@ -7556,6 +7681,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "A runner with its managers (its project's Maintainers, its group's Owners, or administrators).",
         "operationId": "show_runner",
         "responses": {
           "200": {
@@ -7573,6 +7699,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Change a runner's description, tags, flags and timeout (its project's Maintainers, its group's Owners, or admins).",
         "operationId": "update_runner",
         "requestBody": {
           "content": {
@@ -7600,6 +7727,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Delete a runner (its project's Maintainers, its group's Owners, or administrators).",
         "operationId": "delete_runner",
         "responses": {
           "200": {}
@@ -7611,6 +7739,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Replace a runner's token; the new one is shown only in the answer (who may manage it; browser session only).",
         "operationId": "reset_runner_token",
         "responses": {
           "200": {
@@ -7630,6 +7759,7 @@
         "tags": [
           "projects"
         ],
+        "summary": "Search projects, issues and merge requests by title, only what the caller may see (`scope`, `state`, paging).",
         "operationId": "search",
         "responses": {
           "200": {
@@ -7798,6 +7928,7 @@
         "tags": [
           "user"
         ],
+        "summary": "Your own account, the signed-in user, with its email and security settings.",
         "operationId": "me",
         "responses": {
           "200": {
@@ -7925,6 +8056,7 @@
         "tags": [
           "user"
         ],
+        "summary": "GPG keys of the caller, used to verify their commits' signatures.",
         "operationId": "list_gpg_keys",
         "responses": {
           "200": {
@@ -7945,6 +8077,7 @@
         "tags": [
           "user"
         ],
+        "summary": "Add an armored GPG public key to the caller (a browser session, not a token; a confirmed email when email is on).",
         "operationId": "add_gpg_key",
         "requestBody": {
           "content": {
@@ -7986,6 +8119,7 @@
         "tags": [
           "user"
         ],
+        "summary": "The instance's sign-in providers, and when your account was linked to each.",
         "operationId": "list_identities",
         "responses": {
           "200": {
@@ -8060,6 +8194,7 @@
         "tags": [
           "user"
         ],
+        "summary": "Your SSH keys.",
         "operationId": "list_keys",
         "responses": {
           "200": {
@@ -8176,6 +8311,7 @@
         "tags": [
           "user"
         ],
+        "summary": "The caller's default notification level: watch, participating, mention or disabled.",
         "operationId": "mine",
         "responses": {
           "200": {
@@ -8193,6 +8329,7 @@
         "tags": [
           "user"
         ],
+        "summary": "Set the caller's default notification level: watch, participating, mention or disabled (not from a CI job).",
         "operationId": "set_mine",
         "requestBody": {
           "content": {
@@ -8327,6 +8464,7 @@
         "tags": [
           "user"
         ],
+        "summary": "Projects you have a role in, with that role, most recently active first; `search` filters by path.",
         "operationId": "my_projects",
         "responses": {
           "200": {
@@ -8349,6 +8487,7 @@
         "tags": [
           "user"
         ],
+        "summary": "Your to-dos, `pending` (the default) or `done`, at most 100.",
         "operationId": "todos",
         "responses": {
           "200": {
@@ -8395,6 +8534,7 @@
         "tags": [
           "user"
         ],
+        "summary": "Your personal access tokens, newest first, revoked ones included (never the secrets).",
         "operationId": "list_tokens",
         "responses": {
           "200": {

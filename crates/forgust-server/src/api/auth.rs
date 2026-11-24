@@ -85,6 +85,7 @@ async fn start_session(
     ))
 }
 
+/// Sign in with a username or email and a password: sets the session cookie, or answers a two-factor challenge.
 #[utoipa::path(post, path = "/api/v1/auth/login", request_body = LoginRequest, responses((status = 200, body = LoginResponse)), tag = "auth")]
 pub async fn login(
     State(state): State<AppState>,
@@ -136,6 +137,7 @@ pub struct TotpLogin {
     pub code: String,
 }
 
+/// Finish a two-factor sign-in with its challenge and an authenticator code: sets the session cookie.
 #[utoipa::path(post, path = "/api/v1/auth/login/totp", request_body = TotpLogin, responses((status = 200, body = LoginResponse)), tag = "auth")]
 pub async fn login_totp(
     State(state): State<AppState>,

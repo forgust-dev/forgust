@@ -155,7 +155,8 @@ mod committed {
         );
     }
 
-    /// Every route of the router is in the document: the MCP server's code
+    /// Every route of the router is in the document, with a summary (the
+    /// handler's `///`, before its `#[utoipa::path]`): the MCP server's code
     /// mode finds endpoints there (`search_api`), so one left out is one an
     /// assistant cannot find. Read from the router's source, `.route(...)` by
     /// `.route(...)`.
@@ -164,7 +165,7 @@ mod committed {
         let src = include_str!("mod.rs");
         let doc = serde_json::to_value(super::document()).unwrap();
         let method = regex::Regex::new(r"\b(get|post|put|patch|delete)\(").unwrap();
-        let mut missing = Vec::new();
+        let (mut missing, mut unsummed) = (Vec::new(), Vec::new());
         for (start, _) in src.match_indices(".route(\"") {
             let rest = &src[start + 8..];
             let path = &rest[..rest.find('"').unwrap()];
@@ -181,11 +182,15 @@ mod committed {
             let args = &rest[path.len()..end.unwrap().0];
             let documented = format!("/api/v1{}", path.replace("{*", "{"));
             for m in method.captures_iter(args) {
-                if doc["paths"][&documented][&m[1]].is_null() {
+                let op = &doc["paths"][&documented][&m[1]];
+                if op.is_null() {
                     missing.push(format!("{} {documented}", m[1].to_uppercase()));
+                } else if op["summary"].as_str().is_none_or(str::is_empty) {
+                    unsummed.push(format!("{} {documented}", m[1].to_uppercase()));
                 }
             }
         }
         assert!(missing.is_empty(), "routes without #[utoipa::path] (or not in ApiDoc's paths): {missing:#?}");
+        assert!(unsummed.is_empty(), "routes without a summary (a `///` line before #[utoipa::path]): {unsummed:#?}");
     }
 }

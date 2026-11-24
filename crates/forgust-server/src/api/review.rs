@@ -23,12 +23,14 @@ use crate::state::AppState;
 
 // ------------------------------------------------------------------ push rules
 
+/// Push rules of the project: commit message, author email and branch name patterns, file size, secrets, signatures.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/push_rule", responses((status = 200, body = PushRules)), tag = "projects")]
 pub async fn push_rule(State(state): State<AppState>, Viewer(v): Viewer, Path(id): Path<String>) -> ApiResult<Json<PushRules>> {
     let p = project_for(&state, &v, &id, ProjectAction::ReadCode).await?;
     Ok(Json(forgust_db::push_rules::get(&state.db, p.id).await?))
 }
 
+/// Replace the project's push rules (Maintainers only).
 #[utoipa::path(put, path = "/api/v1/projects/{id}/push_rule", request_body = PushRules, responses((status = 200, body = PushRules)), tag = "projects")]
 pub async fn set_push_rule(
     State(state): State<AppState>,
@@ -53,6 +55,7 @@ pub async fn set_push_rule(
 
 // ------------------------------------------------------------------ GPG keys
 
+/// GPG keys of the caller, used to verify their commits' signatures.
 #[utoipa::path(get, path = "/api/v1/user/gpg_keys", responses((status = 200, body = [GpgKey])), tag = "user")]
 pub async fn list_gpg_keys(State(state): State<AppState>, SignedIn(u, _): SignedIn) -> ApiResult<Json<Vec<GpgKey>>> {
     Ok(Json(forgust_db::gpg_keys::list_for_user(&state.db, u.id).await?))
@@ -64,6 +67,7 @@ pub struct AddGpgKey {
     pub key: String,
 }
 
+/// Add an armored GPG public key to the caller (a browser session, not a token; a confirmed email when email is on).
 #[utoipa::path(post, path = "/api/v1/user/gpg_keys", request_body = AddGpgKey, responses((status = 200, body = GpgKey)), tag = "user")]
 pub async fn add_gpg_key(State(state): State<AppState>, SignedIn(u, p): SignedIn, Json(req): Json<AddGpgKey>) -> ApiResult<Json<GpgKey>> {
     // a key makes commits show as this user's: as for SSH keys, not with a token
@@ -138,6 +142,7 @@ pub async fn signatures(
 
 // ------------------------------------------------------------------ code owners
 
+/// Code owners of a merge request's changed files (CODEOWNERS of the target branch), their approvals, reviewers to add.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/merge_requests/{iid}/code_owners", responses((status = 200, body = CodeOwners)), tag = "merge_requests")]
 pub async fn code_owners(
     State(state): State<AppState>,
@@ -151,6 +156,7 @@ pub async fn code_owners(
 
 // ------------------------------------------------------------------ LFS locks
 
+/// Git LFS locks of the project: path, owner, when (the first 1000).
 #[utoipa::path(get, path = "/api/v1/projects/{id}/lfs_locks", responses((status = 200, body = [LfsLock])), tag = "repository")]
 pub async fn lfs_locks(State(state): State<AppState>, Viewer(v): Viewer, Path(id): Path<String>) -> ApiResult<Json<Vec<LfsLock>>> {
     let p = project_for(&state, &v, &id, ProjectAction::ReadCode).await?;

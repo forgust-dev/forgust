@@ -38,6 +38,7 @@ pub(crate) fn require_confirmed(state: &AppState, u: &forgust_db::users::User) -
     Ok(())
 }
 
+/// Your own account, the signed-in user, with its email and security settings.
 #[utoipa::path(get, path = "/api/v1/user", responses((status = 200, body = UserDto)), tag = "user")]
 pub async fn me(SignedIn(u, _): SignedIn) -> Json<UserDto> {
     Json(UserDto::from(&u, true))
@@ -209,6 +210,7 @@ pub struct LinkedProvider {
     pub linked_at: Option<DateTime<Utc>>,
 }
 
+/// The instance's sign-in providers, and when your account was linked to each.
 #[utoipa::path(get, path = "/api/v1/user/identities", responses((status = 200, body = [LinkedProvider])), tag = "user")]
 pub async fn list_identities(State(state): State<AppState>, SignedIn(u, _): SignedIn) -> ApiResult<Json<Vec<LinkedProvider>>> {
     let linked = forgust_db::users::identities(&state.db, u.id).await?;
@@ -322,6 +324,7 @@ fn key_comment(line: &str) -> Option<String> {
     (!comment.is_empty()).then_some(comment)
 }
 
+/// Your SSH keys.
 #[utoipa::path(get, path = "/api/v1/user/keys", responses((status = 200, body = [SshKey])), tag = "user")]
 pub async fn list_keys(State(state): State<AppState>, SignedIn(u, _): SignedIn) -> ApiResult<Json<Vec<SshKey>>> {
     Ok(Json(forgust_db::ssh_keys::list_for_user(&state.db, u.id).await?))
@@ -378,6 +381,7 @@ pub fn check_scopes(scopes: &[String]) -> ApiResult<()> {
     Ok(())
 }
 
+/// Your personal access tokens, newest first, revoked ones included (never the secrets).
 #[utoipa::path(get, path = "/api/v1/user/tokens", responses((status = 200, body = [AccessToken])), tag = "user")]
 pub async fn list_tokens(State(state): State<AppState>, SignedIn(u, _): SignedIn) -> ApiResult<Json<Vec<AccessToken>>> {
     Ok(Json(forgust_db::tokens::list_pats(&state.db, u.id).await?))
@@ -821,6 +825,7 @@ pub struct MyProject {
     pub access_level: String,
 }
 
+/// Projects you have a role in, with that role, most recently active first; `search` filters by path.
 #[utoipa::path(get, path = "/api/v1/user/projects", responses((status = 200, body = [MyProject])), tag = "user")]
 pub async fn my_projects(
     State(state): State<AppState>,
@@ -913,6 +918,7 @@ fn pending() -> String {
     "pending".into()
 }
 
+/// Your to-dos, `pending` (the default) or `done`, at most 100.
 #[utoipa::path(get, path = "/api/v1/user/todos", responses((status = 200, body = [forgust_db::todos::Todo])), tag = "user")]
 pub async fn todos(
     State(state): State<AppState>,

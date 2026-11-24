@@ -1100,6 +1100,7 @@ pub async fn admin_get(State(state): State<AppState>, Admin(..): Admin) -> ApiRe
     Ok(Json(admin_status(&state).await?))
 }
 
+/// Change the Smart View on this instance: whether projects may use it, image, runner tags, timeout (administrators only).
 #[utoipa::path(put, path = "/api/v1/admin/smart_view", request_body = AdminSmartView, responses((status = 200, body = AdminSmartViewStatus)), tag = "smart_view")]
 pub async fn admin_set(
     State(state): State<AppState>,

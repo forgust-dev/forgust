@@ -13,6 +13,7 @@ export interface paths {
         };
         /** AI review on this instance: the settings in effect (the config file, then changes made here). */
         get: operations["admin_get"];
+        /** Change AI review on this instance: provider, endpoint, model, key, image, limits, options (administrators only). */
         put: operations["admin_set"];
         post?: never;
         delete?: never;
@@ -324,6 +325,7 @@ export interface paths {
         };
         /** Built-in Renovate on this instance: the settings in effect (the config file, then changes made here). */
         get: operations["admin_get"];
+        /** Change built-in Renovate here: image, limits, variables, github.com token, image pull credentials (administrators only). */
         put: operations["admin_set"];
         post?: never;
         delete?: never;
@@ -342,6 +344,7 @@ export interface paths {
         /** Credentials every project's runs use (projects' own rules come after, so they win for the same host). */
         get: operations["admin_host_rules"];
         put?: never;
+        /** Add a registry credential every project's Renovate runs use; returns the instance's rules (administrators only). */
         post: operations["admin_add_host_rule"];
         delete?: never;
         options?: never;
@@ -359,6 +362,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /** Delete an instance-wide Renovate host rule (administrators only). */
         delete: operations["admin_delete_host_rule"];
         options?: never;
         head?: never;
@@ -372,8 +376,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Instance runners, which every project may use (administrators only). */
         get: operations["instance_runners"];
         put?: never;
+        /** Create an instance runner; its token is shown only in the answer (administrators; browser session only). */
         post: operations["create_instance_runner"];
         delete?: never;
         options?: never;
@@ -388,7 +394,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Instance scanning settings, scans running, the most exposed projects and Trivy DB mirrors (administrators only). */
         get: operations["admin_scanning"];
+        /** Change the instance's scanning settings; turning DB mirroring on copies them now (administrators only). */
         put: operations["set_admin_scanning"];
         post?: never;
         delete?: never;
@@ -424,6 +432,7 @@ export interface paths {
         };
         /** The Smart View on this instance: the settings in effect (the config file, then changes made here). */
         get: operations["admin_get"];
+        /** Change the Smart View on this instance: whether projects may use it, image, runner tags, timeout (administrators only). */
         put: operations["admin_set"];
         post?: never;
         delete?: never;
@@ -754,6 +763,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Sign in with a username or email and a password: sets the session cookie, or answers a two-factor challenge. */
         post: operations["login"];
         delete?: never;
         options?: never;
@@ -807,6 +817,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Finish a two-factor sign-in with its challenge and an authenticator code: sets the session cookie. */
         post: operations["login_totp"];
         delete?: never;
         options?: never;
@@ -1073,8 +1084,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Top-level groups the viewer may see, by name; `member=true` keeps those they belong to. */
         get: operations["list_top"];
         put?: never;
+        /** Create a top-level group, or a subgroup of `parent_id` (who may create subgroups there); the creator owns it. Not bots. */
         post: operations["create"];
         delete?: never;
         options?: never;
@@ -1089,6 +1102,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** A group, with the viewer's role and what they may create or manage, its breadcrumbs and, for an organization, its policy. */
         get: operations["show"];
         /** Change the group's name, description or visibility (Owners only). */
         put: operations["update"];
@@ -1196,6 +1210,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** The group's direct members, highest role first (signed-in users who may see the group). */
         get: operations["members"];
         put?: never;
         /** Add a member or change their role (Maintainers; not above their own role). */
@@ -1285,6 +1300,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** The projects directly in the group that the viewer may see, most recently active first. */
         get: operations["projects"];
         put?: never;
         post?: never;
@@ -1301,6 +1317,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Whether dependency updates are on by default for the group's projects (group Owners only). */
         get: operations["group_get"];
         /** Turn dependency updates on for every project of the group (those that never chose, and new ones). */
         put: operations["group_set"];
@@ -1318,8 +1335,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** The group's own runners (group Owners). */
         get: operations["group_runners"];
         put?: never;
+        /** Create a group runner; its token is shown only in the answer (group Owners; browser session, confirmed email). */
         post: operations["create_group_runner"];
         delete?: never;
         options?: never;
@@ -1334,7 +1353,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Whether a group turns scanning on for its projects that never chose (group Owners only). */
         get: operations["group_scanning"];
+        /** Set a group's scanning default; on turns it on for projects below that never chose (group Owners only). */
         put: operations["set_group_scanning"];
         post?: never;
         delete?: never;
@@ -1402,6 +1423,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** The direct subgroups of the group that the viewer may see. */
         get: operations["subgroups"];
         put?: never;
         post?: never;
@@ -1435,8 +1457,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** The group's CI/CD variables, without the values of masked ones (group Owners). */
         get: operations["group_variables"];
         put?: never;
+        /** Create or update a group CI/CD variable; an omitted value keeps the current one (group Owners). */
         post: operations["set_group_variable"];
         delete?: never;
         options?: never;
@@ -1454,6 +1478,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /** Delete a group CI/CD variable by key (group Owners). */
         delete: operations["delete_group_variable"];
         options?: never;
         head?: never;
@@ -1484,6 +1509,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** The caller's last 50 imports, newest first. */
         get: operations["list"];
         put?: never;
         /** Start an import: it plans every project first (a dry run), then waits for `start`. */
@@ -1572,6 +1598,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** One import with its projects and the source users seen so far (its creator or an administrator). */
         get: operations["show"];
         put?: never;
         post?: never;
@@ -1674,8 +1701,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Public projects, and internal ones for signed-in users, most recently active first; `search` filters by path. */
         get: operations["explore"];
         put?: never;
+        /** Create a project in a namespace (your own by default) with its default branch protected (who may create projects there). */
         post: operations["create"];
         delete?: never;
         options?: never;
@@ -1690,6 +1719,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** A project, with the viewer's role and what they may do, its breadcrumbs and pull mirror source. */
         get: operations["show"];
         /** Change the project's name, description, visibility or default branch (Maintainers; visibility is the Owners' call). */
         put: operations["update"];
@@ -1852,7 +1882,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** The project's CI/CD settings (Maintainers). */
         get: operations["ci_settings"];
+        /** Change the project's CI/CD settings: config path, timeout, git depth, merge checks, job token scope (Maintainers). */
         put: operations["update_ci_settings"];
         post?: never;
         delete?: never;
@@ -1955,6 +1987,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Environments of the project, their last deployment and whether you may stop each (`state`: available, stopped, all). */
         get: operations["list"];
         put?: never;
         post?: never;
@@ -1971,6 +2004,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** One environment: its last 100 deployments, whether it is protected and whether you may stop it. */
         get: operations["show"];
         put?: never;
         post?: never;
@@ -2005,8 +2039,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List a project's issues by state, label, assignee, author, milestone or text; hidden confidential ones are left out. */
         get: operations["list"];
         put?: never;
+        /** Create an issue (anyone signed in who sees the project); setting labels or a milestone needs Developer. */
         post: operations["create"];
         delete?: never;
         options?: never;
@@ -2021,7 +2057,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** One issue with its rendered description, related merge requests and what the caller may change. */
         get: operations["show"];
+        /** Update an issue (the author or a Developer; labels, milestone: Developers; only confidential: also assignees, Reporters). */
         put: operations["update"];
         post?: never;
         delete?: never;
@@ -2037,8 +2075,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List an issue's comments and system notes, rendered; internal ones only for Reporters and above. */
         get: operations["notes"];
         put?: never;
+        /** Comment on an issue (anyone signed in who sees it); an internal comment needs Reporter. */
         post: operations["create_note"];
         delete?: never;
         options?: never;
@@ -2054,8 +2094,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
+        /** Edit a comment of an issue (its author only). */
         put: operations["edit_note"];
         post?: never;
+        /** Delete a comment of an issue (its author or a Maintainer). */
         delete: operations["delete_note"];
         options?: never;
         head?: never;
@@ -2069,8 +2111,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Emoji reactions on an issue and its comments, grouped by emoji (none on internal comments one may not see). */
         get: operations["issue_reactions"];
         put?: never;
+        /** Add a reaction to an issue or one of its comments, or take it back when it is there. */
         post: operations["issue_react"];
         delete?: never;
         options?: never;
@@ -2085,8 +2129,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Projects whose CI job tokens may read this one (Maintainers). */
         get: operations["job_token_allowlist"];
         put?: never;
+        /** Let another project's CI job tokens read this one (Maintainers; the other project must be visible to them). */
         post: operations["allow_job_token"];
         delete?: never;
         options?: never;
@@ -2104,6 +2150,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /** Remove a project from the job token allowlist (Maintainers). */
         delete: operations["disallow_job_token"];
         options?: never;
         head?: never;
@@ -2117,6 +2164,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** A job with its pipeline, runner, attempts and artifacts (the archive only when the viewer may download it). */
         get: operations["show_job"];
         put?: never;
         post?: never;
@@ -2189,6 +2237,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Cancel a job; a running one stops at its runner's next update (Developers; on protected branches, who may push or merge). */
         post: operations["cancel_job"];
         delete?: never;
         options?: never;
@@ -2205,6 +2254,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Start a manual or delayed job now, as the caller (Developers; on protected branches, who may push or merge). */
         post: operations["play_job"];
         delete?: never;
         options?: never;
@@ -2219,6 +2269,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** A job's whole log as plain text (anyone who can read the project's code). */
         get: operations["job_raw"];
         put?: never;
         post?: never;
@@ -2237,6 +2288,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Retry the latest attempt of a finished job (Developers; on protected branches, who may push or merge). */
         post: operations["retry_job"];
         delete?: never;
         options?: never;
@@ -2285,8 +2337,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List a project's labels with their open issue and merge request counts. */
         get: operations["labels"];
         put?: never;
+        /** Create a project label; a color is picked when none is given (Developers and above). */
         post: operations["create_label"];
         delete?: never;
         options?: never;
@@ -2302,8 +2356,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
+        /** Rename a label or change its color or description (Developers and above). */
         put: operations["update_label"];
         post?: never;
+        /** Delete a project label (Developers and above). */
         delete: operations["delete_label"];
         options?: never;
         head?: never;
@@ -2317,6 +2373,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Git LFS locks of the project: path, owner, when (the first 1000). */
         get: operations["lfs_locks"];
         put?: never;
         post?: never;
@@ -2367,6 +2424,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** The project's direct members, highest role first (signed-in users who may see the project). */
         get: operations["members"];
         put?: never;
         /** Add a member or change their role (Maintainers; not above their own role). */
@@ -2401,8 +2459,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** The project's merge requests, 20 a page, by state (`opened` by default), search, author, assignee, reviewer or milestone. */
         get: operations["list"];
         put?: never;
+        /** Open a merge request from a source branch, into the default branch unless another target is given (who may push). */
         post: operations["create"];
         delete?: never;
         options?: never;
@@ -2417,6 +2477,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** A merge request with its diff versions, approvals, labels, assignees, reviewers, stack and what the viewer may do. */
         get: operations["show"];
         /** Edit a merge request: title, description, draft, target branch, assignees, reviewers, milestone, source branch removal. */
         put: operations["update"];
@@ -2524,6 +2585,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Code owners of a merge request's changed files (CODEOWNERS of the target branch), their approvals, reviewers to add. */
         get: operations["code_owners"];
         put?: never;
         post?: never;
@@ -2557,6 +2619,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** The diff of a merge request version (the latest by default), or between two versions, a page of files at a time. */
         get: operations["diff"];
         put?: never;
         post?: never;
@@ -2574,6 +2637,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
+        /** Replace the merge request's labels; a system note records the change (who may push). */
         put: operations["set_labels"];
         post?: never;
         delete?: never;
@@ -2591,6 +2655,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Merge the merge request now if every check passes; `sha` guards against unseen pushes (who may merge into the target). */
         post: operations["merge"];
         delete?: never;
         options?: never;
@@ -2605,6 +2670,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Whether the merge request can be merged now: blockers, conflicts, approvals, pipeline, and the head SHA to merge. */
         get: operations["merge_status"];
         put?: never;
         post?: never;
@@ -2639,6 +2705,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** The merge request's comments and threads, placed on a diff version (internal ones for Reporters and up). */
         get: operations["notes"];
         put?: never;
         /** Comment on a merge request, reply to a thread (`parent_id`) or comment on a diff line (`position`). */
@@ -2708,6 +2775,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** The merge request's 20 latest pipelines: its own and its source branch's (anyone who can read the code). */
         get: operations["mr_pipelines"];
         put?: never;
         post?: never;
@@ -2724,6 +2792,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Emoji reactions on a merge request and its comments, grouped by emoji (readers of the code). */
         get: operations["mr_reactions"];
         put?: never;
         /** Add a reaction, or take it back when it is there. */
@@ -2809,6 +2878,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Security findings a merge request adds and fixes, against the default branch's last scan (Developers and above). */
         get: operations["merge_request"];
         put?: never;
         post?: never;
@@ -2860,6 +2930,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Test results of a merge request's head pipeline against its target branch: new, existing and fixed failures. */
         get: operations["mr_tests"];
         put?: never;
         post?: never;
@@ -2930,8 +3001,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List a project's milestones: active (default), closed or all, optionally searched by title. */
         get: operations["list"];
         put?: never;
+        /** Create a milestone (Developers and above). */
         post: operations["create"];
         delete?: never;
         options?: never;
@@ -2946,9 +3019,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** One milestone of a project. */
         get: operations["show"];
+        /** Edit a milestone's title, description, dates or state (Developers and above). */
         put: operations["update"];
         post?: never;
+        /** Delete a milestone; its issues and merge requests lose it (Developers and above). */
         delete: operations["delete"];
         options?: never;
         head?: never;
@@ -2962,6 +3038,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Pull and push mirrors of the project with their last update and error (Maintainers only). */
         get: operations["list"];
         put?: never;
         /**
@@ -2983,6 +3060,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
+        /** Change a mirror's state, interval, options or credentials; it updates at once if re-enabled or re-keyed (Maintainers only). */
         put: operations["update"];
         post?: never;
         /** Remove a mirror; a pull mirror's repository becomes writable again. */
@@ -3016,7 +3094,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** The caller's notification level for a project (`global`: their default) and the level that applies. */
         get: operations["project"];
+        /** Set the caller's notification level for a project; `global` follows their default (not from a CI job). */
         put: operations["set_project"];
         post?: never;
         delete?: never;
@@ -3032,6 +3112,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** The project's Pages site: whether the instance serves sites, its URL and current deployment (who may read the code). */
         get: operations["pages"];
         put?: never;
         post?: never;
@@ -3066,8 +3147,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** The project's pipeline schedules; variable values only for their owner or a Maintainer (Developers). */
         get: operations["list_schedules"];
         put?: never;
+        /** Create a pipeline schedule owned by the caller (Developers who may run pipelines for its ref). */
         post: operations["create_schedule"];
         delete?: never;
         options?: never;
@@ -3083,8 +3166,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
+        /** Change a pipeline schedule; the editor becomes its owner (its owner or a Maintainer, who may run its ref). */
         put: operations["update_schedule"];
         post?: never;
+        /** Delete a pipeline schedule (its owner or a Maintainer). */
         delete: operations["delete_schedule"];
         options?: never;
         head?: never;
@@ -3115,6 +3200,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** The project's pipelines, newest first, by ref, status, sha or schedule (anyone who can read the code). */
         get: operations["list_pipelines"];
         put?: never;
         /** Run a pipeline for a branch or tag ("Run pipeline"). */
@@ -3132,6 +3218,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** A pipeline with its stages, jobs, coverage and upstream pipeline (anyone who can read the code). */
         get: operations["show_pipeline"];
         put?: never;
         post?: never;
@@ -3150,6 +3237,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Cancel a pipeline's unfinished jobs and downstream pipelines (Developers; on protected branches, who may push or merge). */
         post: operations["cancel_pipeline"];
         delete?: never;
         options?: never;
@@ -3198,6 +3286,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** A pipeline's JUnit test totals and each job's report with its failures. */
         get: operations["pipeline_tests"];
         put?: never;
         post?: never;
@@ -3214,6 +3303,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** The project's branch protection rules (who may read the code). */
         get: operations["protected_branches"];
         put?: never;
         /** Protect branches matching a name or glob, or change their rule (Maintainers). */
@@ -3248,8 +3338,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Protected environments of the project: names or globs and the access level deploying to them needs. */
         get: operations["protected"];
         put?: never;
+        /** Protect an environment name or glob, or change the level it asks for deploying (Maintainers only). */
         post: operations["protect"];
         delete?: never;
         options?: never;
@@ -3281,6 +3373,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** The project's tag protection rules (who may read the code). */
         get: operations["protected_tags"];
         put?: never;
         /** Protect tags matching a name or glob (Maintainers). */
@@ -3301,6 +3394,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /** Remove a tag protection rule (Maintainers). */
         delete: operations["unprotect_tag"];
         options?: never;
         head?: never;
@@ -3314,7 +3408,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Push rules of the project: commit message, author email and branch name patterns, file size, secrets, signatures. */
         get: operations["push_rule"];
+        /** Replace the project's push rules (Maintainers only). */
         put: operations["set_push_rule"];
         post?: never;
         delete?: never;
@@ -3330,6 +3426,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Container registry of the project: whether it is on, the host and image to push to, its image repositories. */
         get: operations["info"];
         put?: never;
         post?: never;
@@ -3363,7 +3460,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Cleanup policy of the project's container images: which tags it removes or keeps, and after how long. */
         get: operations["cleanup_policy"];
+        /** Replace the cleanup policy of the project's container images (Maintainers only). */
         put: operations["set_cleanup_policy"];
         post?: never;
         delete?: never;
@@ -3396,6 +3495,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Tags of one of the project's image repositories, most recently updated first. */
         get: operations["tags"];
         put?: never;
         post?: never;
@@ -3447,7 +3547,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** One release by its tag: notes, links, and the tagged commit and source archives for those who read the code. */
         get: operations["show"];
+        /** Change a release's name, notes or release date (Developer+, or a CI job of the project acting for one). */
         put: operations["update"];
         post?: never;
         /** Delete a release; its tag stays. */
@@ -3466,6 +3568,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Add a link (an asset) to a release, at most 100 (Developer+, or a CI job of the project acting for one). */
         post: operations["add_link"];
         delete?: never;
         options?: never;
@@ -3483,6 +3586,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /** Delete a link of a release (Developer+, or a CI job of the project acting for one). */
         delete: operations["delete_link"];
         options?: never;
         head?: never;
@@ -3517,6 +3621,7 @@ export interface paths {
         /** Credentials Renovate uses for the project's private registries (passwords not shown). */
         get: operations["host_rules"];
         put?: never;
+        /** Add a credential Renovate uses for one of the project's private registries; returns its rules (Maintainers only). */
         post: operations["add_host_rule"];
         delete?: never;
         options?: never;
@@ -3534,6 +3639,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /** Delete one of the project's Renovate host rules (Maintainers only). */
         delete: operations["delete_host_rule"];
         options?: never;
         head?: never;
@@ -3581,6 +3687,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Blame a text file at a ref (the default branch by default): the commit behind each line, and the highlighted lines. */
         get: operations["blame"];
         put?: never;
         post?: never;
@@ -3597,6 +3704,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** A file at a ref (the default branch by default), highlighted, Markdown rendered; binary or too large: its details only. */
         get: operations["blob"];
         put?: never;
         post?: never;
@@ -3613,6 +3721,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** The repository's branches (default and protected flagged), a page at a time, filtered by name; `x-total` counts matches. */
         get: operations["branches"];
         put?: never;
         /** Create a branch (Developer+; protected patterns apply as for a push). */
@@ -3647,6 +3756,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** The history from a ref (the default branch by default), of one path if given, 40 commits a page (at most 100). */
         get: operations["commits"];
         put?: never;
         /** Commit file changes made in the browser (GitLab's shape). */
@@ -3664,6 +3774,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** One commit, by its SHA. */
         get: operations["commit"];
         put?: never;
         post?: never;
@@ -3680,6 +3791,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** What a commit changed, against its first parent, a page of files at a time. */
         get: operations["commit_diff"];
         put?: never;
         post?: never;
@@ -3879,6 +3991,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Repository statistics at a ref (the default branch by default): disk size, LFS usage, languages, commit count. */
         get: operations["stats"];
         put?: never;
         post?: never;
@@ -3930,6 +4043,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** The entries of a folder at a ref (the default branch and top folder by default), and the last commit to touch it. */
         get: operations["tree"];
         put?: never;
         post?: never;
@@ -3949,6 +4063,7 @@ export interface paths {
         /** Runners the project can use (its own, its groups', the instance's). */
         get: operations["project_runners"];
         put?: never;
+        /** Create a project runner; its token is shown only in the answer (Maintainers; browser session, confirmed email). */
         post: operations["create_project_runner"];
         delete?: never;
         options?: never;
@@ -3963,6 +4078,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List a project's security findings with counts, by state, severity, report type or text (Developers and above). */
         get: operations["findings"];
         put?: never;
         post?: never;
@@ -3979,6 +4095,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** One security finding with its history and the Renovate MRs updating its package (Developers and above). */
         get: operations["finding"];
         put?: never;
         post?: never;
@@ -3997,6 +4114,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Dismiss a security finding with a reason and an optional comment (Developers and above). */
         post: operations["dismiss"];
         delete?: never;
         options?: never;
@@ -4013,6 +4131,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Reopen a dismissed security finding (Developers and above). */
         post: operations["reopen"];
         delete?: never;
         options?: never;
@@ -4027,7 +4146,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** A project's built-in security scanning: on or off, scanners, interval, next and last run (Developers and above). */
         get: operations["scanning"];
+        /** Turn a project's built-in scanning on or off, set its scanners, interval and SBOMs on tags (Maintainers only). */
         put: operations["set_scanning"];
         post?: never;
         delete?: never;
@@ -4045,6 +4166,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Start a scan of the default branch now; scanning must be on for the project (Maintainers only). */
         post: operations["run_scan"];
         delete?: never;
         options?: never;
@@ -4224,8 +4346,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** The project's CI/CD variables, without the values of masked ones (Maintainers). */
         get: operations["project_variables"];
         put?: never;
+        /** Create or update a project CI/CD variable; an omitted value keeps the current one (Maintainers). */
         post: operations["set_project_variable"];
         delete?: never;
         options?: never;
@@ -4243,6 +4367,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /** Delete a project CI/CD variable by key (Maintainers). */
         delete: operations["delete_project_variable"];
         options?: never;
         head?: never;
@@ -4276,9 +4401,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** A runner with its managers (its project's Maintainers, its group's Owners, or administrators). */
         get: operations["show_runner"];
+        /** Change a runner's description, tags, flags and timeout (its project's Maintainers, its group's Owners, or admins). */
         put: operations["update_runner"];
         post?: never;
+        /** Delete a runner (its project's Maintainers, its group's Owners, or administrators). */
         delete: operations["delete_runner"];
         options?: never;
         head?: never;
@@ -4294,6 +4422,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Replace a runner's token; the new one is shown only in the answer (who may manage it; browser session only). */
         post: operations["reset_runner_token"];
         delete?: never;
         options?: never;
@@ -4308,6 +4437,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Search projects, issues and merge requests by title, only what the caller may see (`scope`, `state`, paging). */
         get: operations["search"];
         put?: never;
         post?: never;
@@ -4421,6 +4551,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Your own account, the signed-in user, with its email and security settings. */
         get: operations["me"];
         /** Update your name and email (needs a signed-in browser session of the account); a new address needs the current password and takes over once confirmed from its inbox. */
         put: operations["update_me"];
@@ -4477,8 +4608,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** GPG keys of the caller, used to verify their commits' signatures. */
         get: operations["list_gpg_keys"];
         put?: never;
+        /** Add an armored GPG public key to the caller (a browser session, not a token; a confirmed email when email is on). */
         post: operations["add_gpg_key"];
         delete?: never;
         options?: never;
@@ -4510,6 +4643,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** The instance's sign-in providers, and when your account was linked to each. */
         get: operations["list_identities"];
         put?: never;
         post?: never;
@@ -4569,6 +4703,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Your SSH keys. */
         get: operations["list_keys"];
         put?: never;
         /** Add an SSH key to your account (needs a signed-in browser session of the account and, with email on, a confirmed address). */
@@ -4621,7 +4756,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** The caller's default notification level: watch, participating, mention or disabled. */
         get: operations["mine"];
+        /** Set the caller's default notification level: watch, participating, mention or disabled (not from a CI job). */
         put: operations["set_mine"];
         post?: never;
         delete?: never;
@@ -4726,6 +4863,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Projects you have a role in, with that role, most recently active first; `search` filters by path. */
         get: operations["my_projects"];
         put?: never;
         post?: never;
@@ -4742,6 +4880,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Your to-dos, `pending` (the default) or `done`, at most 100. */
         get: operations["todos"];
         put?: never;
         post?: never;
@@ -4792,6 +4931,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Your personal access tokens, newest first, revoked ones included (never the secrets). */
         get: operations["list_tokens"];
         put?: never;
         /** Create a personal access token, shown this once (needs a signed-in browser session of the account and, with email on, a confirmed address); `admin_mode` is for administrators. */

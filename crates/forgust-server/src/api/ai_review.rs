@@ -264,6 +264,7 @@ pub async fn admin_get(State(state): State<AppState>, Admin(..): Admin) -> ApiRe
     Ok(Json(admin_status(&state).await?))
 }
 
+/// Change AI review on this instance: provider, endpoint, model, key, image, limits, options (administrators only).
 #[utoipa::path(put, path = "/api/v1/admin/ai_review", request_body = AdminAiReview, responses((status = 200, body = AdminAiReviewStatus)), tag = "ai_review")]
 pub async fn admin_set(
     State(state): State<AppState>,

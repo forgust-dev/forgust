@@ -42,6 +42,7 @@ pub struct EnvironmentRow {
     pub can_stop: bool,
 }
 
+/// Environments of the project, their last deployment and whether you may stop each (`state`: available, stopped, all).
 #[utoipa::path(get, path = "/api/v1/projects/{id}/environments", responses((status = 200, body = [EnvironmentRow])), tag = "ci")]
 pub async fn list(
     State(state): State<AppState>,
@@ -72,6 +73,7 @@ pub struct EnvironmentDetail {
     pub can_stop: bool,
 }
 
+/// One environment: its last 100 deployments, whether it is protected and whether you may stop it.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/environments/{env_id}", responses((status = 200, body = EnvironmentDetail)), tag = "ci")]
 pub async fn show(
     State(state): State<AppState>,
@@ -117,6 +119,7 @@ pub async fn delete(
     Ok(Json(json!({ "ok": true })))
 }
 
+/// Protected environments of the project: names or globs and the access level deploying to them needs.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/protected_environments", responses((status = 200, body = [ProtectedEnvironment])), tag = "ci")]
 pub async fn protected(
     State(state): State<AppState>,
@@ -136,6 +139,7 @@ pub struct ProtectEnvironment {
     pub deploy_access_level: Option<String>,
 }
 
+/// Protect an environment name or glob, or change the level it asks for deploying (Maintainers only).
 #[utoipa::path(post, path = "/api/v1/projects/{id}/protected_environments", request_body = ProtectEnvironment, responses((status = 200, body = [ProtectedEnvironment])), tag = "ci")]
 pub async fn protect(
     State(state): State<AppState>,

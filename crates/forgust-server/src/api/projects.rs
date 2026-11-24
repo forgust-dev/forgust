@@ -20,6 +20,7 @@ use crate::error::{ApiError, ApiResult};
 use crate::services::{self, members, projects};
 use crate::state::AppState;
 
+/// Public projects, and internal ones for signed-in users, most recently active first; `search` filters by path.
 #[utoipa::path(get, path = "/api/v1/projects", responses((status = 200, body = [ProjectDto])), tag = "projects")]
 pub async fn explore(State(state): State<AppState>, Viewer(p): Viewer, Query(pg): Query<Paging>) -> ApiResult<Json<Vec<ProjectDto>>> {
     let signed_in = p.sees_internal();
@@ -45,6 +46,7 @@ fn private() -> String {
     "private".into()
 }
 
+/// Create a project in a namespace (your own by default) with its default branch protected (who may create projects there).
 #[utoipa::path(post, path = "/api/v1/projects", request_body = CreateProject, responses((status = 200, body = ProjectDto)), tag = "projects")]
 pub async fn create(
     State(state): State<AppState>,
@@ -103,6 +105,7 @@ async fn set_archived(state: &AppState, p: &crate::auth::Principal, id: &str, ar
     Ok(Json(json!({ "archived_at": at })))
 }
 
+/// A project, with the viewer's role and what they may do, its breadcrumbs and pull mirror source.
 #[utoipa::path(get, path = "/api/v1/projects/{id}", responses((status = 200, body = ProjectDetail)), tag = "projects")]
 pub async fn show(State(state): State<AppState>, Viewer(p): Viewer, Path(id): Path<String>) -> ApiResult<Json<ProjectDetail>> {
     let proj = project_for(&state, &p, &id, ProjectAction::Read).await?;
@@ -200,6 +203,7 @@ pub async fn delete(State(state): State<AppState>, SignedIn(_, p): SignedIn, Pat
     Ok(Json(json!({ "ok": true })))
 }
 
+/// The project's direct members, highest role first (signed-in users who may see the project).
 #[utoipa::path(get, path = "/api/v1/projects/{id}/members", responses((status = 200, body = [MemberDto])), tag = "projects")]
 pub async fn members(State(state): State<AppState>, SignedIn(_, p): SignedIn, Path(id): Path<String>) -> ApiResult<Json<Vec<MemberDto>>> {
     let proj = project_for(&state, &p, &id, ProjectAction::Read).await?;
@@ -268,6 +272,7 @@ pub async fn unshare(
 
 // ------------------------------------------------------------------ protected branches
 
+/// The project's branch protection rules (who may read the code).
 #[utoipa::path(get, path = "/api/v1/projects/{id}/protected_branches", responses((status = 200, body = [ProtectedBranchDto])), tag = "projects")]
 pub async fn protected_branches(
     State(state): State<AppState>,
@@ -592,6 +597,7 @@ pub struct ProtectTag {
     pub create_access_level: String,
 }
 
+/// The project's tag protection rules (who may read the code).
 #[utoipa::path(get, path = "/api/v1/projects/{id}/protected_tags", responses((status = 200, body = [ProtectedTagDto])), tag = "projects")]
 pub async fn protected_tags(
     State(state): State<AppState>,
@@ -615,6 +621,7 @@ pub async fn protect_tag(
     Ok(Json(forgust_db::protected_branches::tags(&state.db, proj.id).await?.into_iter().map(Into::into).collect()))
 }
 
+/// Remove a tag protection rule (Maintainers).
 #[utoipa::path(delete, path = "/api/v1/projects/{id}/protected_tags/{pt_id}", responses((status = 200)), tag = "projects")]
 pub async fn unprotect_tag(
     State(state): State<AppState>,
@@ -666,6 +673,7 @@ pub struct PagesInfo {
     pub deployment: Option<forgust_db::pages::PagesDeployment>,
 }
 
+/// The project's Pages site: whether the instance serves sites, its URL and current deployment (who may read the code).
 #[utoipa::path(get, path = "/api/v1/projects/{id}/pages", responses((status = 200, body = PagesInfo)), tag = "projects")]
 pub async fn pages(State(state): State<AppState>, Viewer(v): Viewer, Path(id): Path<String>) -> ApiResult<Json<PagesInfo>> {
     let p = project_for(&state, &v, &id, ProjectAction::ReadCode).await?;

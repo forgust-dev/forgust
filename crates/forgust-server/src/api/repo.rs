@@ -134,6 +134,7 @@ pub struct TreeResponse {
     pub last_commit: Option<forgust_storage::CommitInfo>,
 }
 
+/// The entries of a folder at a ref (the default branch and top folder by default), and the last commit to touch it.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/repository/tree", responses((status = 200, body = TreeResponse)), tag = "repository")]
 pub async fn tree(
     State(state): State<AppState>,
@@ -246,6 +247,7 @@ pub struct RepoStats {
     pub commit_count: u64,
 }
 
+/// Repository statistics at a ref (the default branch by default): disk size, LFS usage, languages, commit count.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/repository/stats", responses((status = 200, body = RepoStats)), tag = "repository")]
 pub async fn stats(
     State(state): State<AppState>,
@@ -362,6 +364,7 @@ async fn render_blob(state: &AppState, p: &Project, git_ref: &str, commit: &str,
     })
 }
 
+/// A file at a ref (the default branch by default), highlighted, Markdown rendered; binary or too large: its details only.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/repository/blob", responses((status = 200, body = BlobResponse)), tag = "repository")]
 pub async fn blob(
     State(state): State<AppState>,
@@ -542,6 +545,7 @@ fn per() -> usize {
     40
 }
 
+/// The history from a ref (the default branch by default), of one path if given, 40 commits a page (at most 100).
 #[utoipa::path(get, path = "/api/v1/projects/{id}/repository/commits", responses((status = 200, body = [forgust_storage::CommitInfo])), tag = "repository")]
 pub async fn commits(
     State(state): State<AppState>,
@@ -565,6 +569,7 @@ pub async fn commits(
     .await
 }
 
+/// One commit, by its SHA.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/repository/commits/{sha}", responses((status = 200, body = forgust_storage::CommitInfo)), tag = "repository")]
 pub async fn commit(State(state): State<AppState>, Viewer(v): Viewer, Path((id, sha)): Path<(String, String)>) -> ApiResult<Response> {
     let p = readable(&state, &v, &id).await?;
@@ -597,6 +602,7 @@ impl DiffQuery {
     }
 }
 
+/// What a commit changed, against its first parent, a page of files at a time.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/repository/commits/{sha}/diff", responses((status = 200, body = forgust_storage::Diff)), tag = "repository")]
 pub async fn commit_diff(
     State(state): State<AppState>,
@@ -730,6 +736,7 @@ fn page_refs(refs: Vec<RefInfo>, prefix: &str, q: &RefsQuery) -> (Vec<RefInfo>, 
     (filtered.into_iter().skip((q.page.max(1) - 1) * per).take(per).collect(), total)
 }
 
+/// The repository's branches (default and protected flagged), a page at a time, filtered by name; `x-total` counts matches.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/repository/branches", responses((status = 200, body = [BranchDto])), tag = "repository")]
 pub async fn branches(
     State(state): State<AppState>,
@@ -846,6 +853,7 @@ pub struct BlameResponse {
     pub lines: Vec<String>,
 }
 
+/// Blame a text file at a ref (the default branch by default): the commit behind each line, and the highlighted lines.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/repository/blame", responses((status = 200, body = BlameResponse)), tag = "repository")]
 pub async fn blame(
     State(state): State<AppState>,

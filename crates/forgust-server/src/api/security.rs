@@ -47,6 +47,7 @@ pub struct SecurityOverview {
     pub last_scan_pipeline_iid: Option<i64>,
 }
 
+/// List a project's security findings with counts, by state, severity, report type or text (Developers and above).
 #[utoipa::path(get, path = "/api/v1/projects/{id}/security/findings", responses((status = 200, body = SecurityOverview)), tag = "security")]
 pub async fn findings(
     State(state): State<AppState>,
@@ -92,6 +93,7 @@ pub struct FindingDetail {
     pub fix_merge_requests: Vec<sdb::FixMergeRequest>,
 }
 
+/// One security finding with its history and the Renovate MRs updating its package (Developers and above).
 #[utoipa::path(get, path = "/api/v1/projects/{id}/security/findings/{finding_id}", responses((status = 200, body = FindingDetail)), tag = "security")]
 pub async fn finding(
     State(state): State<AppState>,
@@ -115,6 +117,7 @@ pub struct DismissBody {
     pub comment: String,
 }
 
+/// Dismiss a security finding with a reason and an optional comment (Developers and above).
 #[utoipa::path(post, path = "/api/v1/projects/{id}/security/findings/{finding_id}/dismiss", request_body = DismissBody, responses((status = 200, body = FindingDetail)), tag = "security")]
 pub async fn dismiss(
     State(state): State<AppState>,
@@ -151,6 +154,7 @@ pub async fn dismiss(
     finding(State(state), Viewer(v), Path((id, fid))).await
 }
 
+/// Reopen a dismissed security finding (Developers and above).
 #[utoipa::path(post, path = "/api/v1/projects/{id}/security/findings/{finding_id}/reopen", responses((status = 200, body = FindingDetail)), tag = "security")]
 pub async fn reopen(
     State(state): State<AppState>,
@@ -170,6 +174,7 @@ pub async fn reopen(
     finding(State(state), Viewer(v), Path((id, fid))).await
 }
 
+/// Security findings a merge request adds and fixes, against the default branch's last scan (Developers and above).
 #[utoipa::path(get, path = "/api/v1/projects/{id}/merge_requests/{iid}/security", responses((status = 200, body = services::security::MrSecurity)), tag = "security")]
 pub async fn merge_request(
     State(state): State<AppState>,
@@ -229,6 +234,7 @@ async fn scanning_status(state: &AppState, p: &Project) -> ApiResult<ScanningSta
     })
 }
 
+/// A project's built-in security scanning: on or off, scanners, interval, next and last run (Developers and above).
 #[utoipa::path(get, path = "/api/v1/projects/{id}/security/scanning", responses((status = 200, body = ScanningStatus)), tag = "security")]
 pub async fn scanning(State(state): State<AppState>, Viewer(v): Viewer, Path(id): Path<String>) -> ApiResult<Json<ScanningStatus>> {
     let p = developer_of(&state, &v, &id).await?;
@@ -250,6 +256,7 @@ fn day() -> i32 {
     24
 }
 
+/// Turn a project's built-in scanning on or off, set its scanners, interval and SBOMs on tags (Maintainers only).
 #[utoipa::path(put, path = "/api/v1/projects/{id}/security/scanning", request_body = ScanningBody, responses((status = 200, body = ScanningStatus)), tag = "security")]
 pub async fn set_scanning(
     State(state): State<AppState>,
@@ -273,6 +280,7 @@ pub async fn set_scanning(
     Ok(Json(scanning_status(&state, &p).await?))
 }
 
+/// Start a scan of the default branch now; scanning must be on for the project (Maintainers only).
 #[utoipa::path(post, path = "/api/v1/projects/{id}/security/scanning/run", responses((status = 200, body = ScanningStatus)), tag = "security")]
 pub async fn run_scan(State(state): State<AppState>, Viewer(v): Viewer, Path(id): Path<String>) -> ApiResult<Json<ScanningStatus>> {
     let p = project_for(&state, &v, &id, ProjectAction::Admin).await?;
@@ -286,12 +294,14 @@ pub struct GroupScanning {
     pub enabled: bool,
 }
 
+/// Whether a group turns scanning on for its projects that never chose (group Owners only).
 #[utoipa::path(get, path = "/api/v1/groups/{id}/security/scanning", responses((status = 200, body = GroupScanning)), tag = "security")]
 pub async fn group_scanning(State(state): State<AppState>, Viewer(v): Viewer, Path(id): Path<String>) -> ApiResult<Json<GroupScanning>> {
     let ns = super::group_for(&state, &v, &id, crate::auth::authz::GroupAction::Admin).await?;
     Ok(Json(GroupScanning { enabled: sdb::scanning_group_default(&state.db, ns.id).await? }))
 }
 
+/// Set a group's scanning default; on turns it on for projects below that never chose (group Owners only).
 #[utoipa::path(put, path = "/api/v1/groups/{id}/security/scanning", request_body = GroupScanning, responses((status = 200, body = Object)), tag = "security")]
 pub async fn set_group_scanning(
     State(state): State<AppState>,
@@ -317,6 +327,7 @@ pub struct AdminScanning {
     pub mirrors: Vec<forgust_db::mirrors::MirrorStatus>,
 }
 
+/// Instance scanning settings, scans running, the most exposed projects and Trivy DB mirrors (administrators only).
 #[utoipa::path(get, path = "/api/v1/admin/security/scanning", responses((status = 200, body = AdminScanning)), tag = "security")]
 pub async fn admin_scanning(State(state): State<AppState>, crate::auth::Admin(..): crate::auth::Admin) -> ApiResult<Json<AdminScanning>> {
     Ok(Json(AdminScanning {
@@ -328,6 +339,7 @@ pub async fn admin_scanning(State(state): State<AppState>, crate::auth::Admin(..
     }))
 }
 
+/// Change the instance's scanning settings; turning DB mirroring on copies them now (administrators only).
 #[utoipa::path(put, path = "/api/v1/admin/security/scanning", request_body = crate::config::SecurityScanningConfig, responses((status = 200, body = AdminScanning)), tag = "security")]
 pub async fn set_admin_scanning(
     State(state): State<AppState>,

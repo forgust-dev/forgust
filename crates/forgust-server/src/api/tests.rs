@@ -47,6 +47,7 @@ pub struct PipelineTests {
     pub jobs: Vec<TestReport>,
 }
 
+/// A pipeline's JUnit test totals and each job's report with its failures.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/pipelines/{iid}/test_report", responses((status = 200, body = PipelineTests)), tag = "ci")]
 pub async fn pipeline_tests(
     State(state): State<AppState>,
@@ -146,6 +147,7 @@ fn failing(s: &str) -> bool {
     s == "failed" || s == "error"
 }
 
+/// Test results of a merge request's head pipeline against its target branch: new, existing and fixed failures.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/merge_requests/{iid}/test_summary", responses((status = 200, body = MrTests)), tag = "merge_requests")]
 pub async fn mr_tests(State(state): State<AppState>, Viewer(v): Viewer, Path((id, iid)): Path<(String, i64)>) -> ApiResult<Json<MrTests>> {
     let p = project_for(&state, &v, &id, ProjectAction::ReadCode).await?;

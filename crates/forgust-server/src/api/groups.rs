@@ -31,6 +31,7 @@ pub struct ListTop {
     pub member: bool,
 }
 
+/// Top-level groups the viewer may see, by name; `member=true` keeps those they belong to.
 #[utoipa::path(get, path = "/api/v1/groups", params(ListTop), responses((status = 200, body = [GroupDto])), tag = "groups")]
 pub async fn list_top(State(state): State<AppState>, Viewer(p): Viewer, Query(q): Query<ListTop>) -> ApiResult<Json<Vec<GroupDto>>> {
     let uid = p.direct_user().map(|u| u.id);
@@ -54,6 +55,7 @@ fn private() -> String {
     "private".into()
 }
 
+/// Create a top-level group, or a subgroup of `parent_id` (who may create subgroups there); the creator owns it. Not bots.
 #[utoipa::path(post, path = "/api/v1/groups", request_body = CreateGroup, responses((status = 200, body = GroupDto)), tag = "groups")]
 pub async fn create(State(state): State<AppState>, SignedIn(_, p): SignedIn, Json(req): Json<CreateGroup>) -> ApiResult<Json<GroupDto>> {
     let path = req.path.clone().filter(|s| !s.is_empty()).unwrap_or_else(|| services::paths::slug(&req.name));
@@ -72,6 +74,7 @@ pub async fn create(State(state): State<AppState>, SignedIn(_, p): SignedIn, Jso
     Ok(Json(GroupDto::from(&ns, &state.cfg)))
 }
 
+/// A group, with the viewer's role and what they may create or manage, its breadcrumbs and, for an organization, its policy.
 #[utoipa::path(get, path = "/api/v1/groups/{id}", responses((status = 200, body = GroupDetail)), tag = "groups")]
 pub async fn show(State(state): State<AppState>, Viewer(p): Viewer, Path(id): Path<String>) -> ApiResult<Json<GroupDetail>> {
     let ns = group_for(&state, &p, &id, GroupAction::Read).await?;
@@ -197,6 +200,7 @@ pub async fn delete(State(state): State<AppState>, SignedIn(_, p): SignedIn, Pat
     Ok(Json(json!({ "ok": true })))
 }
 
+/// The direct subgroups of the group that the viewer may see.
 #[utoipa::path(get, path = "/api/v1/groups/{id}/subgroups", responses((status = 200, body = [GroupDto])), tag = "groups")]
 pub async fn subgroups(State(state): State<AppState>, Viewer(p): Viewer, Path(id): Path<String>) -> ApiResult<Json<Vec<GroupDto>>> {
     let ns = group_for(&state, &p, &id, GroupAction::Read).await?;
@@ -205,6 +209,7 @@ pub async fn subgroups(State(state): State<AppState>, Viewer(p): Viewer, Path(id
     Ok(Json(list.iter().map(|n| GroupDto::from(n, &state.cfg)).collect()))
 }
 
+/// The projects directly in the group that the viewer may see, most recently active first.
 #[utoipa::path(get, path = "/api/v1/groups/{id}/projects", responses((status = 200, body = [ProjectDto])), tag = "groups")]
 pub async fn projects(State(state): State<AppState>, Viewer(p): Viewer, Path(id): Path<String>) -> ApiResult<Json<Vec<ProjectDto>>> {
     let ns = group_for(&state, &p, &id, GroupAction::Read).await?;
@@ -238,6 +243,7 @@ pub async fn project_states(
     Ok(Json(forgust_db::projects::states(&state.db, &ids).await?))
 }
 
+/// The group's direct members, highest role first (signed-in users who may see the group).
 #[utoipa::path(get, path = "/api/v1/groups/{id}/members", responses((status = 200, body = [MemberDto])), tag = "groups")]
 pub async fn members(State(state): State<AppState>, Viewer(p): Viewer, Path(id): Path<String>) -> ApiResult<Json<Vec<MemberDto>>> {
     let ns = group_for(&state, &p, &id, GroupAction::Read).await?;

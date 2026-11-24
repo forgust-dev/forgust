@@ -116,6 +116,7 @@ pub async fn count(
     Ok(Json(MrCount { opened, merged, closed }))
 }
 
+/// The project's merge requests, 20 a page, by state (`opened` by default), search, author, assignee, reviewer or milestone.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/merge_requests", responses((status = 200, body = [MrListItem])), tag = "merge_requests")]
 pub async fn list(
     State(state): State<AppState>,
@@ -158,6 +159,7 @@ pub struct LabelsBody {
     pub labels: Vec<String>,
 }
 
+/// Replace the merge request's labels; a system note records the change (who may push).
 #[utoipa::path(put, path = "/api/v1/projects/{id}/merge_requests/{iid}/labels", request_body = LabelsBody, responses((status = 200, body = [Label])), tag = "merge_requests")]
 pub async fn set_labels(
     State(state): State<AppState>,
@@ -192,6 +194,7 @@ pub struct CreateMr {
     pub milestone_id: Option<i64>,
 }
 
+/// Open a merge request from a source branch, into the default branch unless another target is given (who may push).
 #[utoipa::path(post, path = "/api/v1/projects/{id}/merge_requests", request_body = CreateMr, responses((status = 200, body = MergeRequest)), tag = "merge_requests")]
 pub async fn create(
     State(state): State<AppState>,
@@ -260,6 +263,7 @@ pub struct MrDetail {
     pub auto_merge_user: Option<UserBrief>,
 }
 
+/// A merge request with its diff versions, approvals, labels, assignees, reviewers, stack and what the viewer may do.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/merge_requests/{iid}", responses((status = 200, body = MrDetail)), tag = "merge_requests")]
 pub async fn show(State(state): State<AppState>, Viewer(v): Viewer, Path((id, iid)): Path<(String, i64)>) -> ApiResult<Json<MrDetail>> {
     let (p, m) = load(&state, &v, &id, iid, ProjectAction::ReadCode).await?;
@@ -357,6 +361,7 @@ pub async fn reopen(
     Ok(Json(mr::set_open(&state, &p0, &p, &m, true).await?))
 }
 
+/// Whether the merge request can be merged now: blockers, conflicts, approvals, pipeline, and the head SHA to merge.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/merge_requests/{iid}/merge_status", responses((status = 200, body = MergeStatus)), tag = "merge_requests")]
 pub async fn merge_status(
     State(state): State<AppState>,
@@ -419,6 +424,7 @@ pub struct MergeRequestBody {
     pub message: Option<String>,
 }
 
+/// Merge the merge request now if every check passes; `sha` guards against unseen pushes (who may merge into the target).
 #[utoipa::path(post, path = "/api/v1/projects/{id}/merge_requests/{iid}/merge", request_body = MergeRequestBody, responses((status = 200, body = MergeRequest)), tag = "merge_requests")]
 pub async fn merge(
     State(state): State<AppState>,
@@ -511,6 +517,7 @@ pub async fn commits(
     .await
 }
 
+/// The diff of a merge request version (the latest by default), or between two versions, a page of files at a time.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/merge_requests/{iid}/diff", responses((status = 200, body = forgust_storage::Diff)), tag = "merge_requests")]
 pub async fn diff(
     State(state): State<AppState>,
@@ -556,6 +563,7 @@ pub struct NoteDto {
     pub body_html: String,
 }
 
+/// The merge request's comments and threads, placed on a diff version (internal ones for Reporters and up).
 #[utoipa::path(get, path = "/api/v1/projects/{id}/merge_requests/{iid}/notes", responses((status = 200, body = [NoteDto])), tag = "merge_requests")]
 pub async fn notes(
     State(state): State<AppState>,

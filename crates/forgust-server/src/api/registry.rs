@@ -33,6 +33,7 @@ pub struct RegistryInfo {
     pub repositories: Vec<ImageRepository>,
 }
 
+/// Container registry of the project: whether it is on, the host and image to push to, its image repositories.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/registry", responses((status = 200, body = RegistryInfo)), tag = "registry")]
 pub async fn info(State(state): State<AppState>, Viewer(v): Viewer, Path(id): Path<String>) -> ApiResult<Json<RegistryInfo>> {
     let p = project_for(&state, &v, &id, ProjectAction::ReadCode).await?;
@@ -49,6 +50,7 @@ pub(crate) async fn repo_of(state: &AppState, project_id: i64, repo_id: i64) -> 
     rdb::repository_by_id(&state.db, repo_id).await?.filter(|r| r.project_id == project_id).ok_or(ApiError::NotFound)
 }
 
+/// Tags of one of the project's image repositories, most recently updated first.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/registry/repositories/{repository_id}/tags", responses((status = 200, body = [Tag])), tag = "registry")]
 pub async fn tags(State(state): State<AppState>, Viewer(v): Viewer, Path((id, repo_id)): Path<(String, i64)>) -> ApiResult<Json<Vec<Tag>>> {
     let p = project_for(&state, &v, &id, ProjectAction::ReadCode).await?;
@@ -97,12 +99,14 @@ pub async fn delete_repository(
     Ok(Json(json!({ "ok": true })))
 }
 
+/// Cleanup policy of the project's container images: which tags it removes or keeps, and after how long.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/registry/cleanup_policy", responses((status = 200, body = CleanupPolicy)), tag = "registry")]
 pub async fn cleanup_policy(State(state): State<AppState>, Viewer(v): Viewer, Path(id): Path<String>) -> ApiResult<Json<CleanupPolicy>> {
     let p = project_for(&state, &v, &id, ProjectAction::ReadCode).await?;
     Ok(Json(rdb::cleanup_policy(&state.db, p.id).await?))
 }
 
+/// Replace the cleanup policy of the project's container images (Maintainers only).
 #[utoipa::path(put, path = "/api/v1/projects/{id}/registry/cleanup_policy", request_body = CleanupPolicy, responses((status = 200, body = CleanupPolicy)), tag = "registry")]
 pub async fn set_cleanup_policy(
     State(state): State<AppState>,

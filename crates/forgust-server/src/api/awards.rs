@@ -26,6 +26,7 @@ pub struct Reacted {
     pub awarded: bool,
 }
 
+/// Emoji reactions on a merge request and its comments, grouped by emoji (readers of the code).
 #[utoipa::path(get, path = "/api/v1/projects/{id}/merge_requests/{iid}/reactions", responses((status = 200, body = Reactions)), tag = "merge_requests")]
 pub async fn mr_reactions(
     State(state): State<AppState>,
@@ -50,6 +51,7 @@ pub async fn mr_react(
     Ok(Json(Reacted { awarded }))
 }
 
+/// Emoji reactions on an issue and its comments, grouped by emoji (none on internal comments one may not see).
 #[utoipa::path(get, path = "/api/v1/projects/{id}/issues/{iid}/reactions", responses((status = 200, body = Reactions)), tag = "issues")]
 pub async fn issue_reactions(
     State(state): State<AppState>,
@@ -61,6 +63,7 @@ pub async fn issue_reactions(
     Ok(Json(svc::summarize(&all, v.direct_user().map(|u| u.id))))
 }
 
+/// Add a reaction to an issue or one of its comments, or take it back when it is there.
 #[utoipa::path(post, path = "/api/v1/projects/{id}/issues/{iid}/reactions", request_body = ReactBody, responses((status = 200, body = Reacted)), tag = "issues")]
 pub async fn issue_react(
     State(state): State<AppState>,

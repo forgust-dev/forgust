@@ -21,6 +21,7 @@ pub struct MilestonesQuery {
     search: String,
 }
 
+/// List a project's milestones: active (default), closed or all, optionally searched by title.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/milestones", responses((status = 200, body = Vec<Milestone>)), tag = "issues")]
 pub async fn list(
     State(state): State<AppState>,
@@ -36,12 +37,14 @@ pub async fn list(
     Ok(Json(forgust_db::milestones::list(&state.db, p.id, st, &forgust_db::like_escape(q.search.trim()), v.search_viewer()).await?))
 }
 
+/// One milestone of a project.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/milestones/{milestone_id}", responses((status = 200, body = Milestone)), tag = "issues")]
 pub async fn show(State(state): State<AppState>, Viewer(v): Viewer, Path((id, mid)): Path<(String, i64)>) -> ApiResult<Json<Milestone>> {
     let p = project_for(&state, &v, &id, ProjectAction::Read).await?;
     Ok(Json(svc::find(&state, &v, &p, mid).await?))
 }
 
+/// Create a milestone (Developers and above).
 #[utoipa::path(post, path = "/api/v1/projects/{id}/milestones", request_body = MilestoneBody, responses((status = 201, body = Milestone)), tag = "issues")]
 pub async fn create(
     State(state): State<AppState>,
@@ -53,6 +56,7 @@ pub async fn create(
     Ok((StatusCode::CREATED, Json(svc::create(&state, &v, &p, &b).await?)))
 }
 
+/// Edit a milestone's title, description, dates or state (Developers and above).
 #[utoipa::path(put, path = "/api/v1/projects/{id}/milestones/{milestone_id}", request_body = MilestoneBody, responses((status = 200, body = Milestone)), tag = "issues")]
 pub async fn update(
     State(state): State<AppState>,
@@ -64,6 +68,7 @@ pub async fn update(
     Ok(Json(svc::update(&state, &v, &p, mid, &b).await?))
 }
 
+/// Delete a milestone; its issues and merge requests lose it (Developers and above).
 #[utoipa::path(delete, path = "/api/v1/projects/{id}/milestones/{milestone_id}", responses((status = 204)), tag = "issues")]
 pub async fn delete(
     State(state): State<AppState>,
