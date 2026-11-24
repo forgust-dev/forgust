@@ -100,6 +100,18 @@ test("the Smart View maps the code into blocks and tells what each needs", async
     await expect(card("db").locator(".smart-mark title")).toHaveText("PostgreSQL");
     if (!isMobile(page)) await expect(page.getByRole("link", { name: "Smart View" }).first()).toBeVisible();
 
+    // the first visit tells the map's story, and plays it: the next commit comes by itself
+    const visit = page.locator(".smart-visit");
+    await expect(visit).toContainText("The story of this map. From 3 blocks in");
+    await expect(visit).toContainText("to 5 blocks now: 2 changes by 1 person.");
+    await visit.getByRole("button", { name: "Watch it grow" }).click();
+    await expect(page).toHaveURL(new RegExp(`[?&]history=${first}`));
+    await expect(page.locator(".smart-history-chapter")).toContainText("Start the map");
+    await expect(page).toHaveURL(new RegExp(`[?&]history=${sha}`), { timeout: 5000 });
+    await expect(page.getByRole("button", { name: "Play the history" })).toBeVisible();
+    await page.getByRole("button", { name: "Back to the map of now" }).click();
+    await expect(page).not.toHaveURL(/history=/);
+
     // a block chosen: what it needs and what needs it, each with the link and the file that says so
     await card("api").click();
     await expect(page).toHaveURL(/[?&]block=api\b/);
@@ -117,6 +129,11 @@ test("the Smart View maps the code into blocks and tells what each needs", async
     const told = panel.locator("section").filter({ has: page.getByRole("heading", { name: /^History/ }) });
     await expect(told).toContainText("Added · Now uses core");
     await expect(told.getByRole("link", { name: "Add the crates" })).toHaveAttribute("href", `${web}/-/commit/${sha}`);
+    // and opens the map as it was then
+    await told.getByRole("button", { name: /^The map then:/ }).click();
+    await expect(page).toHaveURL(new RegExp(`[?&]history=${sha}`));
+    await page.getByRole("button", { name: "Back to the map of now" }).click();
+    await expect(page.getByRole("complementary", { name: "api, details" })).toBeVisible();
 
     // from one block to the next: the image, and who made it
     await panel.getByRole("button", { name: "image", exact: true }).click();
@@ -147,6 +164,15 @@ test("the Smart View maps the code into blocks and tells what each needs", async
     await expect(chapterNow).toContainText("The first map: 3 blocks and 2 links.");
     await page.getByRole("button", { name: "Back to the map of now" }).click();
     await expect(page).not.toHaveURL(/history=/);
+
+    // a visit after a commit not seen yet: said, and what it brought marked on the map
+    await page.evaluate(([key, commit]) => localStorage.setItem(key, commit), [`forgust.smart-view.seen.${project.id}`, first]);
+    await page.reload();
+    await expect(page.locator(".smart-visit")).toContainText("1 change since your last visit: Adds 2 blocks: api and core");
+    await expect(card("api")).toHaveClass(/\bmark-added\b/);
+    await expect(card("app")).not.toHaveClass(/\bmark-added\b/);
+    await page.locator(".smart-visit").getByRole("button", { name: "Show them" }).click();
+    await expect(page).toHaveURL(new RegExp(`[?&]history=${sha}`));
 
     // what a change reaches, through others too; lit up when asked
     await page.goto(`${web}/-/smart_view?block=api`);

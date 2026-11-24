@@ -220,7 +220,10 @@ La page **Smart View** d'un projet, sous Code (`/-/smart_view`), montre la derni
 - à l'ouverture, aucun bloc n'est caché sous les boutons de zoom ni sous la mini-carte : le graphe se décale, ou le cadre grandit ;
 - le job de la branche par défaut lit aussi l'histoire (`assay report --history`) : ce que chaque commit a changé à la carte, après le dernier commit lu. Le serveur la garde à part des cartes. Un job qui relit tout (la branche a été réécrite, ou c'en est une autre) remplace ce qui était gardé, et la Smart View désactivée l'oublie ;
 - chaque lien dit depuis quand il est là (« since !12 », ou le commit), et le panneau d'un bloc a une partie « History » : les commits qui l'ont changé, lui ou ses liens, en mots, avec leur MR, leur auteur et leur date ;
-- « 24 changes since Jun 2026 », dans la barre, ouvre l'histoire de la carte : un curseur passe d'un commit à l'autre, avec la carte telle qu'elle était, ce que le commit a changé allumé et dit en mots. Un revert et ce qu'il défait ne comptent pas.
+- « 24 changes since Jun 2026 », dans la barre, ouvre l'histoire de la carte. Une frise en montre les commits : un point chacun, plus gros s'il a plus changé, les cinq plus gros nommés, les releases (tags) en repères. Elle se parcourt à la souris, au clavier ou en lecture (▶), un commit toutes les 1,4 s. Chaque bloc qui a existé garde sa place : ce que le commit apporte apparaît en fondu (vert), ce qu'il retire reste là, estompé et barré (rouge), ce qu'il change (renommé, autre type) est en orange, et la vue va d'elle-même à un changement hors champ. Le commit est dit en mots, avec sa MR, la première phrase de sa description (le « pourquoi ») et son nombre de commentaires. Un revert et ce qu'il défait ne comptent pas ;
+- la première fois qu'un navigateur ouvre la Smart View d'un projet, elle en raconte l'histoire (« From 1 block in Jun 2026 to 37 blocks now: 24 changes by 5 people », « Watch it grow » la joue) ; ensuite, « 2 changes since your last visit » dit ce qui a changé depuis, et le marque sur la carte (« New ») ;
+- une MR fusionnée garde ses « Map changes » : elles viennent de l'histoire, une fois sa carte supprimée ;
+- un import peut activer la Smart View (« Map it in the Smart View », cochée par défaut dans la page d'import) : la première carte lit l'histoire, et chaque changement y est relié à la MR importée qui l'a fait.
 
 ### L'essayer
 
@@ -304,15 +307,13 @@ Elle a d'abord été essayée hors du produit, sur l'historique de Forgust (trop
 - un revert et ce qu'il défait ne comptent pas ;
 - les dossiers `examples/` sont exclus de toute carte : un exemple n'est pas une partie du code.
 
-**Fait** : `assay history`, et `assay report --history --since <commit>`. Le job de la branche par défaut lit l'histoire après le dernier commit lu ; la première fois, toute, sur au plus 2 000 commits qui peuvent changer la carte. `GET /repository/map/history` la donne chapitre par chapitre, avec l'auteur et sa MR. La Smart View dit depuis quand chaque lien est là, raconte l'histoire de chaque bloc, et montre la carte telle qu'elle était, commit après commit.
+**Fait** : `assay history`, et `assay report --history --since <commit>`. Le job de la branche par défaut lit l'histoire après le dernier commit lu ; la première fois, toute, sur au plus 2 000 commits qui peuvent changer la carte. `GET /repository/map/history` la donne chapitre par chapitre, avec l'auteur, sa MR et le début de sa description. La Smart View dit depuis quand chaque lien est là et raconte l'histoire de chaque bloc. Elle montre la carte telle qu'elle était, sur une frise, commit après commit ou en lecture, chaque bloc à la même place. Elle raconte l'histoire à la première visite (et donc après un import qui l'active), puis dit ce qui a changé depuis la dernière. Le détail est sous « Dans Forgust ».
 
-Pas encore fait :
-- le récit à la fin d'un import (« de 3 à 37 blocs, et les 5 MR qui l'ont le plus changée ») ;
-- les commits d'une MR fusionnée en fast-forward : seul le dernier, celui de la fusion, est relié à elle.
+Pas encore fait : les commits d'une MR fusionnée en fast-forward. Seul le dernier, celui de la fusion, est relié à elle.
 
 ### L'essayer sur la démo
 
-Le seed ouvre sur le monorepo une MR où le storefront lit le stock avec un nouveau paquet `@acme/db-client` (« Show the stock on the product page ») : elle montre le bloc ajouté et le nouveau lien, celui qu'un relecteur refuserait. La vue « To share » montre le worker, que Frank est seul à connaître. La barre dit « N changes since … » : l'histoire de la carte, depuis le premier paquet. Le lien du worker au serveur de mail dit « since !N », la MR de Frank fusionnée par Alice (« Mail the customer once an order ships »).
+Le seed ouvre sur le monorepo une MR où le storefront lit le stock avec un nouveau paquet `@acme/db-client` (« Show the stock on the product page ») : elle montre le bloc ajouté et le nouveau lien, celui qu'un relecteur refuserait. La vue « To share » montre le worker, que Frank est seul à connaître. La barre dit « N changes since … » : l'histoire de la carte, depuis le premier paquet, qu'on peut jouer (« Watch it grow » à la première visite). Le lien du worker au serveur de mail dit « since !N », la MR de Frank fusionnée par Alice (« Mail the customer once an order ships ») : son chapitre en donne le pourquoi, et la MR garde ses « Map changes ».
 
 ## Priorité 3 — Les gros paris
 
