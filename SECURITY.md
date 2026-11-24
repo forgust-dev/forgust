@@ -68,7 +68,24 @@ to verify.
   passkey, ask for the password again. They are audited; a new or removed security key
   or passkey is emailed to the account.
 
-## Scope
+## MCP code mode
+
+Off until an administrator turns it on (Admin, Settings). Its `search_api` and
+`execute_api` tools run JavaScript that an assistant writes, in QuickJS on the server:
+
+- **The sandbox** has no files, network, processes, timers or modules. A run gets at
+  most 64 MB of memory, 1 MB of stack and 30 seconds.
+- **The one way out** is `forgust.request`. It calls the `/api/v1` router in-process
+  as the token's user, through the same handlers and permission checks as over HTTP.
+  It cannot reach another host or another part of the server.
+- **Scopes:** every MCP token may read (GET). Only a token with the `api` scope may
+  change things. An OAuth client's `mcp_write` keeps to the write tools the person
+  allowed. The admin API still needs `admin_mode`, and credentials are never made
+  with a token.
+- **Limits:** a run makes at most 50 calls, and each call counts against the token's
+  MCP rate limit (120 a minute). Each change is audited (`mcp_tool_call`, with the
+  method and the route).
+
 
 Anything in this repository: the server and its APIs (`/api/v1`, `/api/v4`, the
 runner API, the registry at `/v2/`, the MCP server), git over HTTP and SSH, the

@@ -205,7 +205,9 @@ volumes: { forgust-data: {}, db-data: {} }
   confidential issues and internal comments only go to hooks that ask for their own
   events
 - A GitLab-compatible `/api/v4` subset, so Renovate and `glab` work
-- An MCP server for AI assistants, with OAuth sign-in
+- An MCP server for AI assistants, with OAuth sign-in and typed answers; its optional
+  code mode (`search_api`, `execute_api`) gives assistants the whole `/api/v1` through
+  scripts that run in a sandbox on the server
 
 ### Importing projects
 

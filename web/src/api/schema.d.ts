@@ -4495,6 +4495,8 @@ export interface components {
              */
             auto_confirm_emails: boolean;
             default_branch_name: string;
+            /** @description The MCP server's code mode: scripts an assistant writes, run in a sandbox. */
+            mcp_code_mode: boolean;
             /** @description The MCP server answers. */
             mcp_enabled: boolean;
             signup_enabled: boolean;
@@ -6974,6 +6976,7 @@ export interface components {
             allow_personal_projects: boolean;
             auto_confirm_emails?: boolean | null;
             default_branch_name: string;
+            mcp_code_mode?: boolean | null;
             mcp_enabled?: boolean | null;
             signup_enabled: boolean;
             update_check_enabled?: boolean | null;

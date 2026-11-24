@@ -206,10 +206,20 @@ pub async fn principal_from_token(state: &AppState, token: &str) -> Result<Optio
 /// `read_api` for reads).
 pub struct Viewer(pub Principal);
 
+/// A principal the server hands to `/api/v1` itself: the MCP server's code
+/// mode calls the API in-process as its caller, already authenticated (and
+/// its scopes checked there). Only server code sets request extensions: a
+/// client cannot send one.
+#[derive(Clone)]
+pub struct InProcess(pub Principal);
+
 impl FromRequestParts<AppState> for Viewer {
     type Rejection = ApiError;
 
     async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
+        if let Some(InProcess(p)) = parts.extensions.get::<InProcess>() {
+            return Ok(Viewer(p.clone()));
+        }
         let read_only = matches!(parts.method, Method::GET | Method::HEAD | Method::OPTIONS);
         let header_token = parts.headers.get("private-token").and_then(|v| v.to_str().ok()).map(str::to_string).or_else(|| {
             parts

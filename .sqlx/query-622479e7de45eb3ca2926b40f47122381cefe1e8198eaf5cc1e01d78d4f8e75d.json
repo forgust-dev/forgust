@@ -1,6 +1,10 @@
 {
   "db_name": "PostgreSQL",
+<<<<<<<< HEAD:.sqlx/query-1a643e1326a90a2deaa8650a968b32bdfb09660b09031878cb68f45e5bdcb878.json
   "query": "SELECT signup_enabled, allow_personal_projects, default_branch_name, mcp_enabled, update_check_enabled, auto_confirm_emails FROM instance_settings FOR UPDATE",
+========
+  "query": "SELECT signup_enabled, allow_personal_projects, default_branch_name, mcp_enabled, mcp_code_mode, update_check_enabled FROM instance_settings FOR UPDATE",
+>>>>>>>> e92b958 (feat(mcp): typed tool answers and an optional code mode):.sqlx/query-622479e7de45eb3ca2926b40f47122381cefe1e8198eaf5cc1e01d78d4f8e75d.json
   "describe": {
     "columns": [
       {
@@ -49,6 +53,17 @@
       },
       {
         "ordinal": 4,
+        "name": "mcp_code_mode",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "instance_settings",
+            "name": "mcp_code_mode"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
         "name": "update_check_enabled",
         "type_info": "Bool",
         "origin": {
@@ -82,5 +97,9 @@
       false
     ]
   },
+<<<<<<<< HEAD:.sqlx/query-1a643e1326a90a2deaa8650a968b32bdfb09660b09031878cb68f45e5bdcb878.json
   "hash": "1a643e1326a90a2deaa8650a968b32bdfb09660b09031878cb68f45e5bdcb878"
+========
+  "hash": "622479e7de45eb3ca2926b40f47122381cefe1e8198eaf5cc1e01d78d4f8e75d"
+>>>>>>>> e92b958 (feat(mcp): typed tool answers and an optional code mode):.sqlx/query-622479e7de45eb3ca2926b40f47122381cefe1e8198eaf5cc1e01d78d4f8e75d.json
 }

@@ -433,6 +433,21 @@ function SettingsForm({ initial }: { initial: S["InstanceSettings"] }) {
         </span>
       </label>
       <label className="check">
+        <input
+          type="checkbox"
+          checked={s.mcp_code_mode}
+          disabled={!s.mcp_enabled}
+          onChange={(e) => setS({ ...s, mcp_code_mode: e.target.checked })}
+        />
+        <span>
+          MCP code mode{" "}
+          <span className="muted small">
+            — assistants find endpoints with <code>search_api</code> and run scripts that call the API with <code>execute_api</code>, in a
+            sandbox on this server (<code>/api/v4/mcp?tools=code</code> lists only those two)
+          </span>
+        </span>
+      </label>
+      <label className="check">
         <input type="checkbox" checked={s.update_check_enabled} onChange={(e) => setS({ ...s, update_check_enabled: e.target.checked })} />
         <span>
           Check for new releases <span className="muted small">— the server asks GitHub for the latest one every 6 hours, and tells administrators</span>

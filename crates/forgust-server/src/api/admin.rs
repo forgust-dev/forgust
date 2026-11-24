@@ -1010,6 +1010,7 @@ pub struct UpdateInstanceSettings {
     pub allow_personal_projects: bool,
     pub default_branch_name: String,
     pub mcp_enabled: Option<bool>,
+    pub mcp_code_mode: Option<bool>,
     pub update_check_enabled: Option<bool>,
     pub auto_confirm_emails: Option<bool>,
 }
@@ -1031,6 +1032,7 @@ pub async fn update_settings(
         allow_personal_projects: req.allow_personal_projects,
         default_branch_name: req.default_branch_name,
         mcp_enabled: req.mcp_enabled.unwrap_or(before.mcp_enabled),
+        mcp_code_mode: req.mcp_code_mode.unwrap_or(before.mcp_code_mode),
         update_check_enabled: req.update_check_enabled.unwrap_or(before.update_check_enabled),
         auto_confirm_emails: req.auto_confirm_emails.unwrap_or(before.auto_confirm_emails),
     };

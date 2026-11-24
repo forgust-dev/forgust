@@ -4042,26 +4042,6 @@
         }
       }
     },
-    "/api/v1/projects/{id}/repository/map/history": {
-      "get": {
-        "tags": [
-          "repository"
-        ],
-        "summary": "The history of the Smart View's map: what each commit of the default branch changed to it,\nwith the merge request that brought it, and who made it.",
-        "operationId": "history",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MapHistory"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/projects/{id}/repository/signatures": {
       "post": {
         "tags": [
@@ -4789,29 +4769,6 @@
         }
       }
     },
-    "/api/v1/user/emails": {
-      "get": {
-        "tags": [
-          "user"
-        ],
-        "summary": "Your other email addresses: commits made with a confirmed one show as yours.",
-        "operationId": "list_emails",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/UserEmail"
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/user/gpg_keys": {
       "get": {
         "tags": [
@@ -5351,21 +5308,6 @@
           }
         }
       },
-      "AddEmail": {
-        "type": "object",
-        "required": [
-          "email"
-        ],
-        "properties": {
-          "current_password": {
-            "type": "string",
-            "description": "Needed when the address is confirmed as it is added (an instance that\nsends no email): a borrowed session must not be able to claim one."
-          },
-          "email": {
-            "type": "string"
-          }
-        }
-      },
       "AddGpgKey": {
         "type": "object",
         "required": [
@@ -5890,9 +5832,7 @@
           "created_at",
           "sessions",
           "tokens",
-          "providers",
-          "other_emails",
-          "other_emails_unconfirmed"
+          "providers"
         ],
         "properties": {
           "created_at": {
@@ -5924,15 +5864,6 @@
           },
           "name": {
             "type": "string"
-          },
-          "other_emails": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Its other email addresses, and how many of them wait for confirmation."
-          },
-          "other_emails_unconfirmed": {
-            "type": "integer",
-            "format": "int64"
           },
           "providers": {
             "type": "array",
@@ -6739,31 +6670,6 @@
           }
         }
       },
-      "BlockChange": {
-        "type": "object",
-        "required": [
-          "block",
-          "kind_before"
-        ],
-        "properties": {
-          "block": {
-            "$ref": "#/components/schemas/MapBlock"
-          },
-          "kind_before": {
-            "$ref": "#/components/schemas/MapKind"
-          },
-          "role_before": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/MapRole"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        }
-      },
       "BranchDto": {
         "type": "object",
         "required": [
@@ -6772,24 +6678,6 @@
           "protected"
         ],
         "properties": {
-          "ahead": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64",
-            "description": "With `details`: commits on this branch that the default branch has not.",
-            "minimum": 0
-          },
-          "behind": {
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64",
-            "description": "With `details`: commits on the default branch that this branch has not.",
-            "minimum": 0
-          },
           "commit": {
             "oneOf": [
               {
@@ -6803,65 +6691,11 @@
           "default": {
             "type": "boolean"
           },
-          "merge_request": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/BranchMergeRequest",
-                "description": "With `details`: the open merge request from this branch (the newest)."
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "name": {
             "type": "string"
           },
-          "pipeline": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/BranchPipeline",
-                "description": "With `details`: the latest pipeline on this branch."
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "protected": {
             "type": "boolean"
-          }
-        }
-      },
-      "BranchMergeRequest": {
-        "type": "object",
-        "required": [
-          "iid",
-          "title"
-        ],
-        "properties": {
-          "iid": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "title": {
-            "type": "string"
-          }
-        }
-      },
-      "BranchPipeline": {
-        "type": "object",
-        "required": [
-          "iid",
-          "status"
-        ],
-        "properties": {
-          "iid": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "status": {
-            "type": "string"
           }
         }
       },
@@ -7069,167 +6903,6 @@
           "web": {
             "type": "boolean",
             "description": "The bell in the app."
-          }
-        }
-      },
-      "ChapterAuthor": {
-        "type": "object",
-        "required": [
-          "name"
-        ],
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "username": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "Their account, by their verified email."
-          }
-        }
-      },
-      "ChapterBlock": {
-        "type": "object",
-        "description": "A block as it was then: enough to draw it.",
-        "required": [
-          "id",
-          "name",
-          "kind"
-        ],
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "kind": {
-            "$ref": "#/components/schemas/MapKind"
-          },
-          "name": {
-            "type": "string"
-          },
-          "role": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/MapRole"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        }
-      },
-      "ChapterChanges": {
-        "type": "object",
-        "description": "What a commit changed to the map. A block found again under another id is renamed rather\nthan removed and added; a role is a guess whose changes are not told, a kind's are.",
-        "required": [
-          "blocks_added",
-          "blocks_removed",
-          "blocks_renamed",
-          "kinds_changed",
-          "links_added",
-          "links_removed"
-        ],
-        "properties": {
-          "blocks_added": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ChapterBlock"
-            }
-          },
-          "blocks_removed": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ChapterBlock"
-            }
-          },
-          "blocks_renamed": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ChapterRename"
-            }
-          },
-          "kinds_changed": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ChapterKind"
-            }
-          },
-          "links_added": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MapLink"
-            }
-          },
-          "links_removed": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MapLink"
-            }
-          }
-        }
-      },
-      "ChapterKind": {
-        "type": "object",
-        "required": [
-          "id",
-          "from",
-          "to"
-        ],
-        "properties": {
-          "from": {
-            "$ref": "#/components/schemas/MapKind"
-          },
-          "id": {
-            "type": "string"
-          },
-          "to": {
-            "$ref": "#/components/schemas/MapKind"
-          }
-        }
-      },
-      "ChapterMergeRequest": {
-        "type": "object",
-        "required": [
-          "iid",
-          "title",
-          "comments"
-        ],
-        "properties": {
-          "comments": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Its comments, not the system's."
-          },
-          "description": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "The start of its description: why it was made. None without one."
-          },
-          "iid": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "title": {
-            "type": "string"
-          }
-        }
-      },
-      "ChapterRename": {
-        "type": "object",
-        "required": [
-          "from",
-          "to"
-        ],
-        "properties": {
-          "from": {
-            "$ref": "#/components/schemas/ChapterBlock"
-          },
-          "to": {
-            "$ref": "#/components/schemas/ChapterBlock"
           }
         }
       },
@@ -9763,22 +9436,6 @@
           }
         }
       },
-      "HistoryStart": {
-        "type": "object",
-        "required": [
-          "commit",
-          "at"
-        ],
-        "properties": {
-          "at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "commit": {
-            "type": "string"
-          }
-        }
-      },
       "HookBody": {
         "type": "object",
         "required": [
@@ -10184,19 +9841,19 @@
           "allow_personal_projects",
           "default_branch_name",
           "mcp_enabled",
-          "update_check_enabled",
-          "auto_confirm_emails"
+          "mcp_code_mode",
+          "update_check_enabled"
         ],
         "properties": {
           "allow_personal_projects": {
             "type": "boolean"
           },
-          "auto_confirm_emails": {
-            "type": "boolean",
-            "description": "While the instance sends no email and sign-up is closed, the addresses\npeople add to their account are confirmed at once."
-          },
           "default_branch_name": {
             "type": "string"
+          },
+          "mcp_code_mode": {
+            "type": "boolean",
+            "description": "The MCP server's code mode: scripts an assistant writes, run in a sandbox."
           },
           "mcp_enabled": {
             "type": "boolean",
@@ -11444,142 +11101,6 @@
           }
         }
       },
-      "MapChanges": {
-        "type": "object",
-        "description": "What a merge request changes to the map: its head's against the default branch's, only what\nthe files it changes tell (a manifest, the file a link is read in, assay.toml). What the\ndefault branch changed since the merge request left it is not the merge request's.",
-        "required": [
-          "blocks_added",
-          "blocks_removed",
-          "blocks_changed",
-          "blocks_renamed",
-          "links_added",
-          "links_removed"
-        ],
-        "properties": {
-          "blocks_added": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MapBlock"
-            }
-          },
-          "blocks_changed": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/BlockChange"
-            },
-            "description": "A block whose kind or role changes: as it is at the head."
-          },
-          "blocks_removed": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MapBlock"
-            }
-          },
-          "blocks_renamed": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ChapterRename"
-            },
-            "description": "A block found again under another id: once merged, as the history tells it."
-          },
-          "links_added": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MapLink"
-            }
-          },
-          "links_removed": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MapLink"
-            }
-          }
-        }
-      },
-      "MapChapter": {
-        "type": "object",
-        "description": "A commit that changed the map, and what it changed.",
-        "required": [
-          "commit",
-          "at",
-          "title",
-          "author",
-          "changes"
-        ],
-        "properties": {
-          "at": {
-            "type": "string",
-            "format": "date-time",
-            "description": "When they reached the default branch."
-          },
-          "author": {
-            "$ref": "#/components/schemas/ChapterAuthor"
-          },
-          "changes": {
-            "$ref": "#/components/schemas/ChapterChanges"
-          },
-          "commit": {
-            "type": "string",
-            "description": "The commit that made the changes."
-          },
-          "merge_commit": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "The default branch's merge commit that brought them, when it was made on the branch merged."
-          },
-          "merge_request": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/ChapterMergeRequest",
-                "description": "The merge request merged as the commit (squashed) or as its merge."
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "title": {
-            "type": "string",
-            "description": "The first line of the commit's message."
-          }
-        }
-      },
-      "MapHistory": {
-        "type": "object",
-        "description": "What the commits of the default branch changed to the map, as the map jobs read it. Empty\nuntil one has (the Smart View off, or no job of the default branch since it came).",
-        "required": [
-          "chapters"
-        ],
-        "properties": {
-          "chapters": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MapChapter"
-            },
-            "description": "The commits that changed the map, oldest first. A revert and what it undid are left out."
-          },
-          "head": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "The last commit read."
-          },
-          "start": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/HistoryStart",
-                "description": "Where it starts when it does not go back to the first commit: what came before is not told."
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        }
-      },
       "MapKind": {
         "type": "string",
         "enum": [
@@ -12506,17 +12027,6 @@
             },
             "description": "The most changed first."
           },
-          "changes": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/MapChanges",
-                "description": "What it changes to the map: none until a job mapped its head (or when it is the default\nbranch's commit)."
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "commit": {
             "type": "string",
             "description": "The commit of the map they are read from: its head once a job mapped it, else the\ndefault branch's (empty without a map: the Smart View is off, or no job has run yet)."
@@ -13439,7 +12949,7 @@
       },
       "Options": {
         "type": "object",
-        "description": "What an import brings besides the repository (all on by default, but the mirror and the\nSmart View: the import page turns the Smart View on).",
+        "description": "What an import brings besides the repository (all on by default).",
         "properties": {
           "issues": {
             "type": "boolean",
@@ -13471,11 +12981,6 @@
           "protected_branches": {
             "type": "boolean",
             "default": true
-          },
-          "smart_view": {
-            "type": "boolean",
-            "description": "Turn the Smart View on: the code is mapped, and the map's history read, which the merge\nrequests imported tell (off by default, for who calls the API; on in the import page).",
-            "default": false
           },
           "variables": {
             "type": "boolean",
@@ -17688,14 +17193,14 @@
           "allow_personal_projects": {
             "type": "boolean"
           },
-          "auto_confirm_emails": {
+          "default_branch_name": {
+            "type": "string"
+          },
+          "mcp_code_mode": {
             "type": [
               "boolean",
               "null"
             ]
-          },
-          "default_branch_name": {
-            "type": "string"
           },
           "mcp_enabled": {
             "type": [
@@ -18121,42 +17626,6 @@
           },
           "username": {
             "type": "string"
-          }
-        }
-      },
-      "UserEmail": {
-        "type": "object",
-        "required": [
-          "id",
-          "email",
-          "created_at"
-        ],
-        "properties": {
-          "confirmed_at": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "format": "date-time",
-            "description": "When it was confirmed (None: not yet)."
-          },
-          "confirmed_by": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "How: `link` (from its inbox), `admin` (an administrator vouched for\nit) or `auto` (the instance trusted it, sending no email)."
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "email": {
-            "type": "string"
-          },
-          "id": {
-            "type": "integer",
-            "format": "int64"
           }
         }
       },

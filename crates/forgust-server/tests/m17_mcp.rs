@@ -329,3 +329,107 @@ async fn unused_oauth_clients_are_forgotten(pool: sqlx::PgPool) {
     assert!(kept("mcp-granted").await, "someone let it in: it may come back for consent with the same id");
     assert!(kept("mcp-new").await, "just registered");
 }
+
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn typed_answers_and_code_mode(pool: sqlx::PgPool) {
+    let srv = TestServer::start(pool).await;
+    let admin = srv.user("root", true).await;
+    let owner = srv.user("olivia", false).await;
+    let guest = srv.user("gus", false).await;
+    let (_org, _sub, p) = org_project(&owner).await;
+    owner.ok_post(&format!("/api/v1/projects/{p}/members"), json!({ "username": "gus", "access_level": "guest" })).await;
+    owner.ok_post(&format!("/api/v1/projects/{p}/issues"), json!({ "title": "First" })).await;
+    let read = Mcp::new(&srv, Some(&token(&owner, "read", &["mcp"]).await));
+    let write = Mcp::new(&srv, Some(&token(&owner, "write", &["api"]).await));
+    let call = |m: &Mcp, name: &str, args: Value| {
+        let (m, name) = (Mcp { base: m.base.clone(), token: m.token.clone(), http: m.http.clone() }, name.to_string());
+        async move { m.rpc("tools/call", json!({ "name": name, "arguments": args })).await }
+    };
+
+    // typed answers: an output schema per tool, structuredContent next to the text
+    let list = read.rpc("tools/list", json!({})).await;
+    let schema = |name: &str| list["tools"].as_array().unwrap().iter().find(|t| t["name"] == name).unwrap()["outputSchema"].clone();
+    assert_eq!(schema("list_issues")["properties"]["items"]["type"], "array");
+    assert_eq!(schema("get_issue")["type"], "object");
+    let r = call(&read, "list_issues", json!({ "project_id": p })).await;
+    assert_eq!(r["structuredContent"]["items"][0]["title"], "First", "{r}");
+    let r = call(&read, "get_mcp_server_version", json!({})).await;
+    assert_eq!(r["structuredContent"]["user"], "olivia", "{r}");
+    let r = call(&write, "create_issue", json!({ "project_id": p, "title": "Second" })).await;
+    assert_eq!(r["structuredContent"]["iid"], 2, "{r}");
+
+    // code mode: off until an administrator turns it on
+    assert!(!read.tools().await.contains(&"execute_api".to_string()));
+    let (err, text) = read.call("execute_api", json!({ "code": "1" })).await;
+    assert!(err && text.contains("code mode is off"), "{text}");
+    let mut settings = admin.ok_get("/api/v1/admin/settings").await;
+    assert_eq!(settings["mcp_code_mode"], false);
+    settings["mcp_code_mode"] = json!(true);
+    admin.ok_put("/api/v1/admin/settings", settings).await;
+    let names = read.tools().await;
+    assert!(names.contains(&"search_api".to_string()) && names.contains(&"get_issue".to_string()), "{names:?}");
+    // `?tools=code`: those two only
+    let only: Value = reqwest::Client::new()
+        .post(format!("{}/api/v4/mcp?tools=code", srv.base))
+        .bearer_auth(read.token.as_deref().unwrap())
+        .json(&json!({ "jsonrpc": "2.0", "id": 1, "method": "tools/list" }))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    let only: Vec<&str> = only["result"]["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
+    assert_eq!(only, ["search_api", "execute_api"]);
+
+    // search_api: scripts over the OpenAPI document
+    let r = call(&read, "search_api", json!({ "code": "Object.keys(spec.paths).filter((p) => p.endsWith('/issues'))" })).await;
+    assert!(r["structuredContent"]["result"].as_array().unwrap().iter().any(|x| x == "/api/v1/projects/{id}/issues"), "{r}");
+
+    // execute_api: many calls, one answer, as the token's user (an `mcp` token reads)
+    let code = format!(
+        "const r = await forgust.get('/api/v1/projects/{p}/issues?state=all');\nconst list = r.issues ?? r.items ?? r;\nconsole.log(list.length);\n\
+         const me = await forgust.get('/user');\nreturn {{ me: me.username, titles: list.map((i) => i.title).sort() }};"
+    );
+    let r = call(&read, "execute_api", json!({ "code": code })).await;
+    assert_eq!(r["structuredContent"]["result"], json!({ "me": "olivia", "titles": ["First", "Second"] }), "{r}");
+    assert_eq!(r["structuredContent"]["logs"], json!(["2"]));
+    assert!(r["content"][0]["text"].as_str().unwrap().contains("untrusted"), "{r}");
+
+    // ...but does not write; a failed call throws with its status
+    let code =
+        format!("try {{ await forgust.post('/projects/{p}/issues', {{ title: 'x' }}); }} catch (e) {{ return [e.status, e.message]; }}");
+    let r = call(&read, "execute_api", json!({ "code": code })).await;
+    assert_eq!(r["structuredContent"]["result"][0], 403, "{r}");
+    let (err, text) = read.call("execute_api", json!({ "code": "forgust.get('/projects/999999')" })).await;
+    assert!(err && text.contains("Error"), "{text}");
+    let (err, text) = read.call("execute_api", json!({ "code": "forgust.get('https://example.com/')" })).await;
+    assert!(err && text.contains("a path of the API"), "{text}");
+
+    // the same checks as the API: a Guest reads no code
+    let g = Mcp::new(&srv, Some(&token(&guest, "g", &["read_api"]).await));
+    let (err, text) = g.call("execute_api", json!({ "code": format!("forgust.get('/projects/{p}/repository/commits')") })).await;
+    assert!(err, "{text}");
+    // nor the admin API without admin_mode
+    let a = Mcp::new(&srv, Some(&token(&admin, "a", &["api"]).await));
+    let (err, text) = a.call("execute_api", json!({ "code": "forgust.get('/admin/settings')" })).await;
+    assert!(err && text.contains("admin_mode"), "{text}");
+
+    // `api` tokens change things, each change audited by route
+    let code = format!("const i = await forgust.post('/api/v1/projects/{p}/issues', {{ title: 'From a script' }});\nreturn i.iid;");
+    let r = call(&write, "execute_api", json!({ "code": code })).await;
+    assert_eq!(r["structuredContent"]["result"], 3, "{r}");
+    let details: Value =
+        sqlx::query_scalar("SELECT details FROM audit_events WHERE action = 'mcp_tool_call' AND details->>'tool' = 'execute_api'")
+            .fetch_one(&srv.state.db)
+            .await
+            .unwrap();
+    assert_eq!(details["method"], "POST");
+    assert_eq!(details["route"], "/projects/{id}/issues", "{details}");
+    assert!(details["token_id"].is_number(), "{details}");
+
+    // at most 50 calls a run
+    let code = "for (let i = 0; i < 60; i++) { try { await forgust.get('/user'); } catch (e) { return [i, e.status]; } }";
+    let r = call(&write, "execute_api", json!({ "code": code })).await;
+    assert_eq!(r["structuredContent"]["result"], json!([50, 429]), "{r}");
+}
