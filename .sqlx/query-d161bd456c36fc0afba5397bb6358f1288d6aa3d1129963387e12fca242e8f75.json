@@ -1,0 +1,124 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.sha, c.merge_sha, c.author_name, c.author_email, c.at, c.title, c.changes,\n                  mr.iid AS \"mr_iid?\", mr.title AS \"mr_title?\"\n             FROM smart_view_chapters c\n             LEFT JOIN LATERAL (\n                  SELECT m.iid, m.title FROM merge_requests m\n                   WHERE m.project_id = c.project_id AND m.state = 'merged' AND m.merge_commit_sha IN (c.sha, c.merge_sha)\n                   -- the merge request of the commit itself first: a squash merged into a release branch\n                   ORDER BY m.merge_commit_sha = c.sha DESC, m.id DESC\n                   LIMIT 1\n             ) mr ON true\n            WHERE c.project_id = $1\n            ORDER BY c.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sha",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "smart_view_chapters",
+            "name": "sha"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "merge_sha",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "smart_view_chapters",
+            "name": "merge_sha"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "author_name",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "smart_view_chapters",
+            "name": "author_name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "author_email",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "smart_view_chapters",
+            "name": "author_email"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "smart_view_chapters",
+            "name": "at"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "title",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "smart_view_chapters",
+            "name": "title"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "changes",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "smart_view_chapters",
+            "name": "changes"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "mr_iid?",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "iid"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "mr_title?",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "merge_requests",
+            "name": "title"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d161bd456c36fc0afba5397bb6358f1288d6aa3d1129963387e12fca242e8f75"
+}

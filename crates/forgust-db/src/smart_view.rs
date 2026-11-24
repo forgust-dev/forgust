@@ -290,3 +290,151 @@ pub async fn ended_pending(e: impl PgExecutor<'_>) -> Result<Vec<(i64, String)>>
     .map(|r| (r.id, r.status))
     .collect())
 }
+
+/// The history kept of a project's default branch: which branch, and the last commit read.
+pub async fn history_head(e: impl PgExecutor<'_>, project_id: i64) -> Result<Option<(String, String)>> {
+    Ok(sqlx::query!("SELECT git_ref, head FROM smart_view_history WHERE project_id = $1", project_id)
+        .fetch_optional(e)
+        .await?
+        .map(|r| (r.git_ref, r.head)))
+}
+
+/// A commit that changed the map, to keep.
+#[derive(Debug, Clone)]
+pub struct NewChapter {
+    pub sha: String,
+    /// The default branch's merge that brought its changes, when it was made on the branch merged.
+    pub merge_sha: Option<String>,
+    pub author_name: String,
+    pub author_email: String,
+    /// When its changes reached the default branch, in seconds since 1970.
+    pub at: i64,
+    pub title: String,
+    /// assay's `Changes`, as JSON.
+    pub changes: String,
+}
+
+/// Keep what a job read of the default branch's history, up to `head`. Read on from `since`, the
+/// last commit kept, its chapters follow those kept; when another job's were kept meanwhile,
+/// nothing is (false). Read whole, from `start` or the first commit, they take the place of all
+/// those kept.
+pub async fn keep_history(
+    tx: &mut sqlx::PgConnection,
+    project_id: i64,
+    git_ref: &str,
+    head: &str,
+    since: Option<&str>,
+    start: Option<(&str, i64)>,
+    chapters: &[NewChapter],
+) -> Result<bool> {
+    match since {
+        Some(since) => {
+            let moved = sqlx::query!(
+                "UPDATE smart_view_history SET head = $4, updated_at = now() WHERE project_id = $1 AND git_ref = $2 AND head = $3",
+                project_id,
+                git_ref,
+                since,
+                head
+            )
+            .execute(&mut *tx)
+            .await?;
+            if moved.rows_affected() == 0 {
+                return Ok(false);
+            }
+        }
+        None => {
+            sqlx::query!(
+                "INSERT INTO smart_view_history (project_id, git_ref, head, start_sha, start_at) VALUES ($1, $2, $3, $4, to_timestamp($5))
+                 ON CONFLICT (project_id) DO UPDATE
+                   SET git_ref = EXCLUDED.git_ref, head = EXCLUDED.head, start_sha = EXCLUDED.start_sha,
+                       start_at = EXCLUDED.start_at, updated_at = now()",
+                project_id,
+                git_ref,
+                head,
+                start.map(|(sha, _)| sha),
+                start.map(|(_, at)| at as f64)
+            )
+            .execute(&mut *tx)
+            .await?;
+            sqlx::query!("DELETE FROM smart_view_chapters WHERE project_id = $1", project_id).execute(&mut *tx).await?;
+        }
+    }
+    let column = |f: fn(&NewChapter) -> String| chapters.iter().map(f).collect::<Vec<String>>();
+    // in their order, which the ids keep
+    sqlx::query!(
+        "INSERT INTO smart_view_chapters (project_id, sha, merge_sha, author_name, author_email, at, title, changes)
+         SELECT $1, u.sha, NULLIF(u.merge_sha, ''), u.author_name, u.author_email, to_timestamp(u.at), u.title, u.changes::jsonb
+           FROM UNNEST($2::text[], $3::text[], $4::text[], $5::text[], $6::bigint[], $7::text[], $8::text[])
+                WITH ORDINALITY AS u(sha, merge_sha, author_name, author_email, at, title, changes, n)
+          ORDER BY u.n",
+        project_id,
+        &column(|c| c.sha.clone()),
+        &column(|c| c.merge_sha.clone().unwrap_or_default()),
+        &column(|c| c.author_name.clone()),
+        &column(|c| c.author_email.clone()),
+        &chapters.iter().map(|c| c.at).collect::<Vec<i64>>(),
+        &column(|c| c.title.clone()),
+        &column(|c| c.changes.clone())
+    )
+    .execute(&mut *tx)
+    .await?;
+    Ok(true)
+}
+
+/// The history kept of a project's default branch.
+#[derive(Debug, Clone)]
+pub struct History {
+    pub git_ref: String,
+    pub head: String,
+    /// Where it starts when it does not reach the first commit.
+    pub start_sha: Option<String>,
+    pub start_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+pub async fn history(e: impl PgExecutor<'_>, project_id: i64) -> Result<Option<History>> {
+    sqlx::query_as!(History, "SELECT git_ref, head, start_sha, start_at FROM smart_view_history WHERE project_id = $1", project_id)
+        .fetch_optional(e)
+        .await
+}
+
+/// A commit that changed the map, with the merge request merged as it (a squash) or as its merge.
+#[derive(Debug, Clone)]
+pub struct Chapter {
+    pub sha: String,
+    pub merge_sha: Option<String>,
+    pub author_name: String,
+    pub author_email: String,
+    pub at: chrono::DateTime<chrono::Utc>,
+    pub title: String,
+    pub changes: serde_json::Value,
+    pub mr_iid: Option<i64>,
+    pub mr_title: Option<String>,
+}
+
+/// The chapters kept of a project's history, oldest first.
+pub async fn chapters(e: impl PgExecutor<'_>, project_id: i64) -> Result<Vec<Chapter>> {
+    sqlx::query_as!(
+        Chapter,
+        r#"SELECT c.sha, c.merge_sha, c.author_name, c.author_email, c.at, c.title, c.changes,
+                  mr.iid AS "mr_iid?", mr.title AS "mr_title?"
+             FROM smart_view_chapters c
+             LEFT JOIN LATERAL (
+                  SELECT m.iid, m.title FROM merge_requests m
+                   WHERE m.project_id = c.project_id AND m.state = 'merged' AND m.merge_commit_sha IN (c.sha, c.merge_sha)
+                   -- the merge request of the commit itself first: a squash merged into a release branch
+                   ORDER BY m.merge_commit_sha = c.sha DESC, m.id DESC
+                   LIMIT 1
+             ) mr ON true
+            WHERE c.project_id = $1
+            ORDER BY c.id"#,
+        project_id
+    )
+    .fetch_all(e)
+    .await
+}
+
+/// Forget a project's history (the Smart View turned off).
+pub async fn drop_history(e: impl PgExecutor<'_>, project_id: i64) -> Result<()> {
+    sqlx::query!("DELETE FROM smart_view_history WHERE project_id = $1", project_id).execute(e).await?;
+    Ok(())
+}

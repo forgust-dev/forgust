@@ -49,7 +49,8 @@ async fn report_and_finish(srv: &TestServer, job: &Value, report: Option<Value>,
     wait_jobs(&srv.state).await;
 }
 
-/// What the assay image writes for `work`, a clone at the job's commit.
+/// What the assay image writes for `work`, a clone at the job's commit: with the history when the
+/// job asks for it (`--history`), after the commit it names.
 async fn assay_report(job: &Value, work: &Path) -> Value {
     assert_eq!(
         must(git(work, &["rev-parse", "HEAD"]).await).trim(),
@@ -57,7 +58,12 @@ async fn assay_report(job: &Value, work: &Path) -> Value {
         "the clone is at the job's commit"
     );
     let opts = forgust_assay::Options { name: var(job, "FORGUST_SMART_VIEW_NAME"), ..Default::default() };
-    serde_json::to_value(forgust_assay::report::report(work, &opts).unwrap()).unwrap()
+    let mut report = forgust_assay::report::report(work, &opts).unwrap();
+    if job.to_string().contains("--history") {
+        let asked = forgust_assay::HistoryOptions { since: var(job, "FORGUST_SMART_VIEW_SINCE"), ..Default::default() };
+        report.history = Some(forgust_assay::history(work, &opts, &asked).unwrap());
+    }
+    serde_json::to_value(report).unwrap()
 }
 
 /// The runner takes the map job waiting, runs assay on `work`, and uploads its report.
@@ -409,4 +415,126 @@ async fn merge_requests_get_their_own_map(pool: sqlx::PgPool) {
     wait_jobs(&srv.state).await;
     run_map_job(&srv, &runner, &work).await;
     assert_eq!(owner.ok_get(&map).await["map"]["days"], 4_000_000_000u64);
+}
+
+fn titles(history: &Value) -> Vec<&str> {
+    history["chapters"].as_array().unwrap().iter().map(|c| c["title"].as_str().unwrap()).collect()
+}
+
+/// The default branch's history: the first job reads all of it, the next ones what came after the
+/// last commit read. Each commit that changed the map is told with its author's account and the
+/// merge request merged as it; a merge request's own map job reads none; a revert and what it
+/// undid are left out; turned off, the history goes.
+#[sqlx::test(migrator = "forgust_db::MIGRATOR")]
+async fn the_default_branch_keeps_its_history(pool: sqlx::PgPool) {
+    let srv = TestServer::start_with(pool, |c| c.ci.long_poll_secs = 1).await;
+    let owner = srv.user("olivia", false).await;
+    let dev = srv.user("dave", false).await;
+    let (org, _sub, p) = org_project(&owner).await;
+    owner.ok_post(&format!("/api/v1/groups/{org}/members"), json!({ "username": "dave", "access_level": "developer" })).await;
+    let admin = srv.user("root", true).await;
+    let runner = admin.ok_post("/api/v1/admin/runners", json!({ "description": "shared" })).await["token"].as_str().unwrap().to_string();
+    let work = srv.work_dir("map-history");
+    must(git(&work, &["init", "-q", "-b", "main"]).await);
+    for (path, text) in [
+        ("Cargo.toml", "[workspace]\nmembers = [\"crates/*\"]\n"),
+        ("crates/api/Cargo.toml", "[package]\nname = \"api\"\n\n[dependencies]\ncore = { path = \"../core\" }\n"),
+        ("crates/api/src/main.rs", "fn main() {}\n"),
+        ("crates/core/Cargo.toml", "[package]\nname = \"core\"\n"),
+        ("crates/core/src/lib.rs", "\n"),
+    ] {
+        std::fs::create_dir_all(work.join(path).parent().unwrap()).unwrap();
+        std::fs::write(work.join(path), text).unwrap();
+    }
+    must(git(&work, &["add", "."]).await);
+    let olivia = [("GIT_AUTHOR_NAME", "Olivia"), ("GIT_AUTHOR_EMAIL", "olivia@example.com")];
+    must(git_env(&work, &["commit", "-q", "-m", "an api on a core"], &olivia).await);
+    let url = srv.http_url("olivia", "acme/platform/api");
+    must(git(&work, &["push", "-q", &url, "main"]).await);
+    wait_jobs(&srv.state).await;
+    let first = must(git(&work, &["rev-parse", "HEAD"]).await).trim().to_string();
+    let history = format!("/api/v1/projects/{p}/repository/map/history");
+    assert_eq!(owner.ok_get(&history).await, json!({ "head": null, "start": null, "chapters": [] }), "off: none");
+
+    // the first job reads the whole history
+    let settings = format!("/api/v1/projects/{p}/smart_view");
+    owner.ok_put(&settings, json!({ "enabled": true })).await;
+    let job = request(&srv, &runner).await.expect("a map job waits");
+    assert!(job.to_string().contains("--history"), "{job}");
+    assert_eq!(var(&job, "FORGUST_SMART_VIEW_SINCE"), None, "nothing read yet");
+    let report = assay_report(&job, &work).await;
+    report_and_finish(&srv, &job, Some(report), "success").await;
+    let h = owner.ok_get(&history).await;
+    assert_eq!((&h["head"], &h["start"]), (&json!(first), &Value::Null), "from the first commit: {h}");
+    assert_eq!(titles(&h), ["an api on a core"]);
+    let c = &h["chapters"][0];
+    assert_eq!((&c["commit"], &c["merge_commit"], &c["merge_request"]), (&json!(first), &Value::Null, &Value::Null));
+    assert_eq!(c["author"], json!({ "name": "Olivia", "username": "olivia" }));
+    let added: Vec<&str> = c["changes"]["blocks_added"].as_array().unwrap().iter().map(|b| b["id"].as_str().unwrap()).collect();
+    assert_eq!(added, ["api", "core"]);
+    assert_eq!(
+        c["changes"]["links_added"][0],
+        json!({ "from": "api", "to": "core", "kind": "uses", "inferred": false, "via": "crates/api/Cargo.toml" })
+    );
+    assert_eq!(srv.user("mallory", false).await.get(&history).await.0, 404, "who cannot read the code sees none of it");
+
+    // Dave adds a worker in a merge request: its own map reads no history
+    must(git(&work, &["checkout", "-q", "-b", "feature/worker"]).await);
+    std::fs::create_dir_all(work.join("crates/worker/src")).unwrap();
+    std::fs::write(
+        work.join("crates/worker/Cargo.toml"),
+        "[package]\nname = \"worker\"\n\n[dependencies]\ncore = { path = \"../core\" }\n",
+    )
+    .unwrap();
+    std::fs::write(work.join("crates/worker/src/main.rs"), "fn main() {}\n").unwrap();
+    must(git(&work, &["add", "."]).await);
+    must(
+        git_env(&work, &["commit", "-q", "-m", "a worker"], &[("GIT_AUTHOR_NAME", "Dave"), ("GIT_AUTHOR_EMAIL", "dave@example.com")]).await,
+    );
+    let worker = must(git(&work, &["rev-parse", "HEAD"]).await).trim().to_string();
+    must(git(&work, &["push", "-q", &srv.http_url("dave", "acme/platform/api"), "feature/worker"]).await);
+    dev.ok_post(&format!("/api/v1/projects/{p}/merge_requests"), json!({ "source_branch": "feature/worker", "title": "Add a worker" }))
+        .await;
+    wait_jobs(&srv.state).await;
+    let job = request(&srv, &runner).await.expect("the merge request's map job waits");
+    assert!(!job.to_string().contains("--history"), "{job}");
+    let report = assay_report(&job, &work).await;
+    report_and_finish(&srv, &job, Some(report), "success").await;
+    assert_eq!(titles(&owner.ok_get(&history).await), ["an api on a core"]);
+
+    // Olivia merges it: the next job reads on from the last commit read, and the worker's commit
+    // is told with the merge request merged as its merge
+    let mr = format!("/api/v1/projects/{p}/merge_requests/1");
+    let st = owner.ok_get(&format!("{mr}/merge_status")).await;
+    owner.ok_post(&format!("{mr}/merge"), json!({ "method": "merge", "sha": st["head_sha"] })).await;
+    wait_jobs(&srv.state).await;
+    must(git(&work, &["checkout", "-q", "main"]).await);
+    must(git(&work, &["pull", "-q", "--ff-only", &url, "main"]).await);
+    let merge = must(git(&work, &["rev-parse", "HEAD"]).await).trim().to_string();
+    let job = request(&srv, &runner).await.expect("the default branch's new head waits");
+    assert_eq!(var(&job, "FORGUST_SMART_VIEW_SINCE").as_deref(), Some(first.as_str()));
+    let report = assay_report(&job, &work).await;
+    report_and_finish(&srv, &job, Some(report), "success").await;
+    let h = owner.ok_get(&history).await;
+    assert_eq!(h["head"], merge.as_str());
+    assert_eq!(titles(&h), ["an api on a core", "a worker"]);
+    let c = &h["chapters"][1];
+    assert_eq!((&c["commit"], &c["merge_commit"]), (&json!(worker), &json!(merge)));
+    assert_eq!(c["merge_request"], json!({ "iid": 1, "title": "Add a worker" }));
+    assert_eq!(c["author"], json!({ "name": "Dave", "username": "dave" }));
+    assert_eq!(c["changes"]["links_added"][0]["from"], "worker");
+
+    // reverted: the revert and what it undid tell nothing
+    must(git(&work, &["revert", "--no-edit", "-m", "1", &merge]).await);
+    must(git(&work, &["push", "-q", &url, "main"]).await);
+    wait_jobs(&srv.state).await;
+    run_map_job(&srv, &runner, &work).await;
+    let h = owner.ok_get(&history).await;
+    assert_eq!(titles(&h), ["an api on a core"], "{h}");
+
+    // turned off: it goes
+    owner.ok_put(&settings, json!({ "enabled": false })).await;
+    assert_eq!(owner.ok_get(&history).await["chapters"], json!([]));
+    let left: (i64,) = sqlx::query_as("SELECT count(*) FROM smart_view_chapters").fetch_one(&srv.state.db).await.unwrap();
+    assert_eq!(left.0, 0);
 }

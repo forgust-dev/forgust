@@ -255,6 +255,7 @@ pub fn router() -> Router<AppState> {
         .route("/projects/{id}/repository/files", get(repo::files))
         .route("/projects/{id}/repository/map", get(smart_view::map))
         .route("/projects/{id}/repository/map/block", get(smart_view::path_block))
+        .route("/projects/{id}/repository/map/history", get(smart_view::history))
         .route("/projects/{id}/markdown", post(repo::markdown))
         .route("/projects/{id}/templates/{kind}", get(repo::templates))
         // merge requests (M3)
