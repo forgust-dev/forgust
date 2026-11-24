@@ -66,7 +66,7 @@
   --emph-bad: #ff9b8f;
   --emph-warn: #f2c25c;
   --emph-info: #8db8ff;
-  --emph-btn-bg: #ff6500;
+  --emph-btn-bg: #f5f1ec;
   --emph-btn-text: #1c1915;
   --chart-ok: #2f9e5a;
   --chart-bad: #a8261d;
@@ -126,8 +126,8 @@
     --chip-bg: #22252d;
     --side-active-bg: #22252d;
     --side-active-ring: #30343d;
-    --primary-bg: #ff6500;
-    --primary-hover: #e65b00;
+    --primary-bg: #f5f5f6;
+    --primary-hover: #d9dbe0;
     --primary-text: #0d0e12;
     --on-ink: #f5f5f6;
     --tile-bg: #22252d;
@@ -146,7 +146,7 @@
     --emph-bad: #f0738a;
     --emph-warn: #f2b04f;
     --emph-info: #6aa7ff;
-    --emph-btn-bg: #ff6500;
+    --emph-btn-bg: #f5f5f6;
     --emph-btn-text: #0d0e12;
     --chart-ok: #5fcf98;
     --chart-bad: #f0738a;
@@ -197,8 +197,8 @@
   --chip-bg: #22252d;
   --side-active-bg: #22252d;
   --side-active-ring: #30343d;
-  --primary-bg: #ff6500;
-  --primary-hover: #e65b00;
+  --primary-bg: #f5f5f6;
+  --primary-hover: #d9dbe0;
   --primary-text: #0d0e12;
   --on-ink: #f5f5f6;
   --tile-bg: #22252d;
@@ -217,7 +217,7 @@
   --emph-bad: #f0738a;
   --emph-warn: #f2b04f;
   --emph-info: #6aa7ff;
-  --emph-btn-bg: #ff6500;
+  --emph-btn-bg: #f5f5f6;
   --emph-btn-text: #0d0e12;
   --chart-ok: #5fcf98;
   --chart-bad: #f0738a;
@@ -363,16 +363,6 @@ h3 {
 .btn.primary:hover {
   background: var(--primary-hover);
   border-color: var(--primary-hover);
-}
-/* the positive action of a review (approve, run): the brand's orange */
-.btn.accent {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-text);
-}
-.btn.accent:hover {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
 }
 .btn.danger {
   color: var(--danger);
@@ -2539,8 +2529,13 @@ kbd {
   color: var(--text-muted);
   height: 34px;
   padding: 0 11px;
-  border-radius: var(--radius-sm);
-  background: var(--chip-bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+.ref-counts a:hover {
+  background: var(--bg-hover);
+  text-decoration: none;
 }
 .ref-counts strong {
   color: var(--text);
@@ -3444,15 +3439,6 @@ kbd {
   border-radius: var(--radius);
   font-size: 14.5px;
   font-weight: 600;
-}
-.btn.dark {
-  background: var(--text);
-  border-color: var(--text);
-  color: var(--bg);
-  font-weight: 600;
-}
-.btn.dark:hover {
-  background: var(--text-muted);
 }
 .link-btn {
   padding: 0;

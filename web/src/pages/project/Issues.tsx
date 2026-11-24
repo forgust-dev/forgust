@@ -492,7 +492,7 @@ function IssueActivity({ ctx, i, notes, labels, refresh }: { ctx: Ctx; i: S["Iss
                 {i.state === "opened" ? (body.trim() ? "Close with comment" : "Close issue") : body.trim() ? "Reopen with comment" : "Reopen issue"}
               </button>
             )}
-            <button className="btn dark" disabled={!body.trim()}>
+            <button className="btn primary" disabled={!body.trim()}>
               Comment
             </button>
           </div>

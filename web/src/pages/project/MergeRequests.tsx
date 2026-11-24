@@ -489,7 +489,7 @@ function MrAside({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
                   Revoke
                 </button>
               ) : (
-                <button className="btn small accent" onClick={() => act(() => api.post(`${path}/approve`), "Approved")}>
+                <button className="btn small primary" onClick={() => act(() => api.post(`${path}/approve`), "Approved")}>
                   Approve
                 </button>
               ))}
@@ -1304,7 +1304,7 @@ function Activity({ ctx, m, notes }: { ctx: Ctx; m: S["MrDetail"]; notes: S["Not
         <MarkdownEditor projectId={ctx.p.id} rows={3} placeholder={internal ? "Leave an internal comment" : "Leave a comment"} value={body} onChange={setBody} label="Comment" />
         <div className="row wrap" style={{ justifyContent: "flex-end" }}>
           {m.can_comment_internal && <InternalToggle grow checked={internal} onChange={setInternal} />}
-          <button className="btn dark" disabled={!body.trim()}>
+          <button className="btn primary" disabled={!body.trim()}>
             Comment
           </button>
         </div>
