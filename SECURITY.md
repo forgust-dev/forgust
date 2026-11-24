@@ -88,6 +88,7 @@ Off until an administrator turns it on (Admin, Settings). Its `search_api` and
   most 2 for one user. Each change is audited (`mcp_tool_call`, with the
   method and the route).
 
+## Scope
 
 Anything in this repository: the server and its APIs (`/api/v1`, `/api/v4`, the
 runner API, the registry at `/v2/`, the MCP server), git over HTTP and SSH, the
