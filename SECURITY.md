@@ -83,7 +83,8 @@ Off until an administrator turns it on (Admin, Settings). Its `search_api` and
   `execute_api`, and `mcp_write` keeps to the write tools the person allowed. The admin API still needs `admin_mode`, and credentials are never made
   with a token.
 - **Limits:** a run makes at most 50 calls, and each call counts against the token's
-  MCP rate limit (120 a minute). Each change is audited (`mcp_tool_call`, with the
+  MCP rate limit (120 a minute). The server runs at most 8 scripts at once, and at
+  most 2 for one user. Each change is audited (`mcp_tool_call`, with the
   method and the route).
 
 

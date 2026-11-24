@@ -1199,7 +1199,7 @@ async fn run(c: &Caller, name: &str, a: &Value) -> R {
                                "commit_message": s(a, "commit_message").ok_or("commit_message is required")?, "actions": a["actions"].clone() });
             call_api(api::repo::create_commit(st(c), signed(c), Path(project_arg(a)?), j(body)?).await).await
         }
-        "search_api" => super::code::search(s(a, "code").ok_or("code is required")?).await,
+        "search_api" => super::code::search(c, s(a, "code").ok_or("code is required")?).await,
         "execute_api" => super::code::execute(c, s(a, "code").ok_or("code is required")?).await,
         _ => Err(format!("unknown tool {name}")),
     }

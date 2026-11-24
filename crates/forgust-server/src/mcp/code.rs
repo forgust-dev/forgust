@@ -8,9 +8,10 @@
 //! against the token's rate limit.
 
 use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::rc::Rc;
-use std::sync::LazyLock;
+use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, Instant};
 
 use axum::body::Body;
@@ -38,8 +39,44 @@ const LOGS: usize = 16 << 10;
 /// Scripts running at once, on the whole server: each holds a thread and up
 /// to `MEMORY` for up to `TIME`.
 const RUNS: usize = 8;
+/// Scripts one user runs at once (all their tokens): one cannot hold all `RUNS`.
+const RUNS_PER_USER: usize = 2;
 
 static RUNNING: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(RUNS);
+/// Scripts running, per user id (no entry: none).
+static BY_USER: LazyLock<Mutex<HashMap<i64, usize>>> = LazyLock::new(Mutex::default);
+
+/// A running script's place: one of `RUNS`, one of its user's `RUNS_PER_USER`.
+struct Slot {
+    user: i64,
+    _permit: tokio::sync::SemaphorePermit<'static>,
+}
+
+impl Slot {
+    fn take(user: i64) -> Result<Slot, String> {
+        let mut by_user = BY_USER.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if by_user.get(&user).copied().unwrap_or(0) >= RUNS_PER_USER {
+            return Err(format!("you already run {RUNS_PER_USER} scripts: wait for one to end"));
+        }
+        let Ok(permit) = RUNNING.try_acquire() else {
+            return Err(format!("the server already runs {RUNS} scripts: try again in a moment"));
+        };
+        *by_user.entry(user).or_default() += 1;
+        Ok(Slot { user, _permit: permit })
+    }
+}
+
+impl Drop for Slot {
+    fn drop(&mut self) {
+        let mut by_user = BY_USER.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(n) = by_user.get_mut(&self.user) {
+            *n -= 1;
+            if *n == 0 {
+                by_user.remove(&self.user);
+            }
+        }
+    }
+}
 
 /// The API's OpenAPI document, as `search_api` gives it to scripts.
 static SPEC: LazyLock<String> = LazyLock::new(|| serde_json::to_string(&crate::api::openapi::document()).unwrap_or_default());
@@ -87,8 +124,8 @@ const PRELUDE: &str = r#"
 }
 "#;
 
-pub async fn search(code: String) -> Result<Value, String> {
-    sandbox(code, None).await
+pub async fn search(c: &Caller, code: String) -> Result<Value, String> {
+    sandbox(c.user.id, code, None).await
 }
 
 pub async fn execute(c: &Caller, code: String) -> Result<Value, String> {
@@ -105,7 +142,7 @@ pub async fn execute(c: &Caller, code: String) -> Result<Value, String> {
         deadline: Instant::now() + TIME,
         calls: Cell::new(0),
     };
-    sandbox(code, Some(host)).await
+    sandbox(c.user.id, code, Some(host)).await
 }
 
 /// The route a request matched, on its response: for the audit log, which
@@ -119,14 +156,12 @@ async fn keep_route(req: Request, next: Next) -> Response {
     resp
 }
 
-/// Runs `code` on a blocking thread (QuickJS is not async and its runtime
+/// Runs `code` for `user` on a blocking thread (QuickJS is not async and its runtime
 /// stays on one thread); its result as JSON, with what it logged.
-async fn sandbox(code: String, host: Option<Host>) -> Result<Value, String> {
-    let Ok(permit) = RUNNING.try_acquire() else {
-        return Err(format!("the server already runs {RUNS} scripts: try again in a moment"));
-    };
+async fn sandbox(user: i64, code: String, host: Option<Host>) -> Result<Value, String> {
+    let slot = Slot::take(user)?;
     let task = tokio::task::spawn_blocking(move || {
-        let _permit = permit;
+        let _slot = slot;
         let logs = Rc::new(RefCell::new(Vec::<String>::new()));
         let deadline = host.as_ref().map_or_else(|| Instant::now() + TIME, |h| h.deadline);
         let answer = run_js(&code, host, deadline, &logs);
@@ -367,6 +402,17 @@ mod tests {
         assert!(e.starts_with("SyntaxError"), "{e}");
         assert_eq!(logs.take(), ["ran"]);
         assert_eq!(ok("await Promise.resolve(5)"), json!(5), "an expression may await");
+    }
+
+    #[test]
+    fn one_user_cannot_hold_every_run() {
+        let user = -1;
+        let held: Vec<Slot> = (0..RUNS_PER_USER).map(|_| Slot::take(user).unwrap()).collect();
+        assert!(Slot::take(user).is_err_and(|e| e.contains("you already run")));
+        drop(Slot::take(-2).expect("another user still runs one"));
+        drop(held);
+        drop(Slot::take(user).expect("free again"));
+        assert!(!BY_USER.lock().unwrap().contains_key(&user), "no entry left behind");
     }
 
     #[test]
