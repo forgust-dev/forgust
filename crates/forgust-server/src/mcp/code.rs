@@ -329,38 +329,40 @@ impl Host {
         if let Some(ip) = self.ip {
             req.extensions_mut().insert(ConnectInfo(SocketAddr::new(ip, 0)));
         }
+        let late = || (504, format!("the script ran longer than {} s", TIME.as_secs()));
         let left = self.deadline.saturating_duration_since(Instant::now());
-        let call = async {
-            let resp = self.router.clone().oneshot(req).await.map_err(|e| (500, e.to_string()))?;
-            let status = resp.status();
-            // a stream (server-sent events) never ends: refused, not waited for
-            if resp.headers().get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).is_some_and(|t| t.starts_with("text/event-stream")) {
-                return Err((400, "a stream of events: execute_api reads whole answers only".to_string()));
-            }
-            let route = resp.extensions().get::<MatchedPath>().map_or("(no route)", MatchedPath::as_str).to_string();
-            let bytes = axum::body::to_bytes(resp.into_body(), BODY)
-                .await
-                .map_err(|_| (413, format!("the answer is larger than {} MB: ask for less (a page, a path)", BODY >> 20)))?;
-            if status.is_success() && method != Method::GET {
-                crate::services::audit(
-                    &self.state,
-                    &self.principal,
-                    "mcp_tool_call",
-                    None,
-                    json!({ "tool": "execute_api", "via": "mcp", "token_id": self.token_id, "method": method.as_str(), "route": route }),
-                    self.ip.map(|ip| ip.to_string()).as_deref(),
-                )
-                .await;
-            }
-            let body = serde_json::from_slice(&bytes).unwrap_or_else(|_| match std::str::from_utf8(&bytes) {
-                Ok(s) => Value::String(s.to_string()),
-                Err(_) => Value::String(format!("({} bytes of binary data)", bytes.len())),
-            });
-            Ok((status.as_u16(), body))
+        let resp = match self.handle.block_on(tokio::time::timeout(left, self.router.clone().oneshot(req))) {
+            Ok(Ok(resp)) => resp,
+            Ok(Err(e)) => match e {},
+            Err(_) => return Err(late()),
         };
-        self.handle
-            .block_on(tokio::time::timeout(left, call))
-            .unwrap_or_else(|_| Err((504, format!("the script ran longer than {} s", TIME.as_secs()))))
+        let status = resp.status();
+        // a change is audited once it is made, whatever becomes of its answer
+        if status.is_success() && method != Method::GET {
+            let route = resp.extensions().get::<MatchedPath>().map_or("(no route)", MatchedPath::as_str);
+            let details = json!({
+                "tool": "execute_api", "via": "mcp", "token_id": self.token_id, "method": method.as_str(),
+                "route": route,
+            });
+            let ip = self.ip.map(|ip| ip.to_string());
+            let audit = crate::services::audit(&self.state, &self.principal, "mcp_tool_call", None, details, ip.as_deref());
+            self.handle.block_on(audit);
+        }
+        // a stream (server-sent events) never ends: refused, not waited for
+        if resp.headers().get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).is_some_and(|t| t.starts_with("text/event-stream")) {
+            return Err((400, "a stream of events: execute_api reads whole answers only".to_string()));
+        }
+        let left = self.deadline.saturating_duration_since(Instant::now());
+        let bytes = match self.handle.block_on(tokio::time::timeout(left, axum::body::to_bytes(resp.into_body(), BODY))) {
+            Ok(Ok(bytes)) => bytes,
+            Ok(Err(_)) => return Err((413, format!("the answer is larger than {} MB: ask for less (a page, a path)", BODY >> 20))),
+            Err(_) => return Err(late()),
+        };
+        let body = serde_json::from_slice(&bytes).unwrap_or_else(|_| match std::str::from_utf8(&bytes) {
+            Ok(s) => Value::String(s.to_string()),
+            Err(_) => Value::String(format!("({} bytes of binary data)", bytes.len())),
+        });
+        Ok((status.as_u16(), body))
     }
 }
 
