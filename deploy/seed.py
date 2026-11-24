@@ -1386,6 +1386,35 @@ def market_stock_mr(r, api, pid):
                                                 "description": "Reads the stock from the catalog's table: quicker than a call to the API."})
 
 
+def market_mail_mr(r, apis, pid):
+    """A merge request merged: the worker mails the customer once an order ships, through the mail
+    server. The Smart View's history tells its new link with it."""
+    r.git("checkout", "-q", "-b", "worker-mail", "main")
+    compose = (r.dir / "compose.yml").read_text()
+    worker = "      DATABASE_URL: postgres://market:market@db:5432/market\n  indexer:"
+    assert worker in compose
+    r.commit("frank", "worker: an email when an order ships", {
+        "compose.yml": compose.replace(worker, worker.replace("\n  indexer:", "\n      SMTP_URL: smtp://mail:1025\n  indexer:"), 1),
+        "services/worker/internal/orders/mail.go": "package orders\n\n// Shipped mails the customer.\nfunc Shipped() {}\n"}, days_ago=3)
+    r.push("worker-mail")
+    r.git("checkout", "-q", "main")
+    time.sleep(4)  # let the server process the push first
+    iid = apis["frank"].post(f"/projects/{pid}/merge_requests", {"source_branch": "worker-mail", "target_branch": "main", "remove_source_branch": True,
+                                                                "title": "Mail the customer once an order ships",
+                                                                "description": "The worker sends it through the mail server, as the API does."})["iid"]
+    alice = apis["alice"]
+    alice.post(f"/projects/{pid}/merge_requests/{iid}/approve")
+
+    def mergeable():
+        st = alice.get(f"/projects/{pid}/merge_requests/{iid}/merge_status")
+        return st["can_merge"] and st
+
+    st = wait_until("the mail merge request to be mergeable", mergeable, timeout=120)
+    alice.post(f"/projects/{pid}/merge_requests/{iid}/merge", {"method": "merge", "sha": st["head_sha"]})
+    # the working copy follows the merge
+    r.git("pull", "-q", "--ff-only", r.url, "main")
+
+
 def market_deploy(r):
     """What deploys the marketplace, each in a few hands: for the Smart View's infrastructure."""
     r.commit("bob", "deploy: a Helm chart for the API and the storefront", MARKET_HELM)
@@ -1481,7 +1510,6 @@ def market_history(r):
     r.commit("carol", "ui: dark mode colours", {"packages/ui/src/theme.css": ":root { --price: #1c1915; }\n@media (prefers-color-scheme: dark) { :root { --price: #f5f5f6; } }\n"})
     r.commit("dave", "storefront: the cart total is right after a removal", {"apps/storefront/src/Cart.tsx": "import { Button, Price } from \"@acme/ui\";\n\nexport function Cart({ total }: { total: number }) {\n  return <aside>Total <Price cents={Math.max(0, total)} /> <Button>Order</Button></aside>;\n}\n"})
     r.commit("bob", "store: order events", {"crates/store/migrations/0003_order_events.sql": "create table order_events (\n  order_id bigint not null references orders,\n  kind text not null,\n  at timestamptz not null default now()\n);\n"})
-    r.commit("frank", "worker: an email when an order ships", {"services/worker/internal/orders/mail.go": "package orders\n\n// Shipped mails the customer.\nfunc Shipped() {}\n"})
     r.commit("carol", "backoffice: edit products", {"apps/backoffice/src/Products.tsx": "export function Products() {\n  return <form />;\n}\n"})
     r.commit("alice", "api: a rate limit", {"services/api/src/limit.rs": "//! Requests per minute, per address.\npub const PER_MINUTE: u32 = 600;\n"})
     r.commit("bob", "domain: discounts", {"crates/domain/src/discount.rs": "use crate::money::Cents;\n\npub fn percent_off(c: Cents, pct: i64) -> Cents {\n    c - c * pct / 100\n}\n",
@@ -1505,7 +1533,9 @@ def seed_marketplace(apis, platform):
     r = Repo("marketplace", "bob", bob.token, "acme/platform/marketplace")
     market_history(r)
     r.push("main")
-    # a job on the compose runner maps it with the assay image (built with the stack)
+    market_mail_mr(r, apis, p["id"])
+    # a job on the compose runner maps it with the assay image (built with the stack), and reads
+    # its history
     bob.put(f"/projects/{p['id']}/smart_view", {"enabled": True})
     market_stock_mr(r, apis["carol"], p["id"])
     return p["id"]

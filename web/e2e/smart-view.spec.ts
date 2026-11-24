@@ -56,8 +56,30 @@ test("the Smart View maps the code into blocks and tells what each needs", async
     }
     expect(job, "the map job").toBeTruthy();
     expect(JSON.stringify(job.steps)).toContain("assay report");
+    // the default branch's: with what each commit changed to the map, the first time all of them
+    expect(JSON.stringify(job.steps)).toContain("--history");
     const sha = job.git_info.sha;
-    const report = { ...REPORT, commit: sha, map: { ...REPORT.map, commit: sha } };
+    const commits = await api("get", `/projects/${project.id}/repository/commits?ref_name=main`);
+    const first = commits[commits.length - 1].id;
+    // two commits: the workspace, its image and services, then the crates
+    const crates = ["api", "core"];
+    const ofCrates = (l: any) => crates.includes(l.from) || crates.includes(l.to);
+    const now = Math.floor(Date.now() / 1000);
+    const chapter = (commit: string, title: string, at: number, blocks: any[], links: any[]) => ({
+      commit,
+      author: "E2E",
+      email: "e2e@example.com",
+      at,
+      title,
+      changes: { blocks_added: blocks.map((b) => ({ id: b.id, name: b.name, kind: b.kind, ...(b.role ? { role: b.role } : {}) })), links_added: links },
+    });
+    const history = {
+      chapters: [
+        chapter(first, "Start the map", now - 3600, REPORT.map.blocks.filter((b: any) => !crates.includes(b.id)), REPORT.map.links.filter((l: any) => !ofCrates(l))),
+        chapter(sha, "Add the crates", now, REPORT.map.blocks.filter((b: any) => crates.includes(b.id)), REPORT.map.links.filter(ofCrates)),
+      ],
+    };
+    const report = { ...REPORT, commit: sha, map: { ...REPORT.map, commit: sha }, history };
     const up = await page.request.post(`/api/v4/jobs/${job.id}/artifacts?artifact_type=smart_view&artifact_format=raw`, {
       headers: { "JOB-TOKEN": job.token },
       multipart: { file: { name: "assay-report.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(report)) } },
@@ -90,6 +112,11 @@ test("the Smart View maps the code into blocks and tells what each needs", async
     await expect(row(panel, "image").getByRole("link", { name: "From Dockerfile" })).toBeVisible();
     // where it is, and the manifest it was found in
     await expect(panel.getByRole("link", { name: "Cargo.toml", exact: true })).toHaveAttribute("href", `${web}/-/blob/main/api/Cargo.toml`);
+    // since when each link is there, and what the history tells of the block
+    await expect(row(panel, "core")).toContainText(`since ${sha.slice(0, 7)}`);
+    const told = panel.locator("section").filter({ has: page.getByRole("heading", { name: /^History/ }) });
+    await expect(told).toContainText("Added · Now uses core");
+    await expect(told.getByRole("link", { name: "Add the crates" })).toHaveAttribute("href", `${web}/-/commit/${sha}`);
 
     // from one block to the next: the image, and who made it
     await panel.getByRole("button", { name: "image", exact: true }).click();
@@ -107,6 +134,19 @@ test("the Smart View maps the code into blocks and tells what each needs", async
     await expect(page.locator(".smart-find-count")).toHaveText("1 block");
     await find.press("Enter");
     await expect(page).toHaveURL(/[?&]block=core\b/);
+
+    // the map through its history, a commit at a time, then back to now
+    await page.goto(`${web}/-/smart_view`);
+    await page.getByRole("button", { name: /^2 changes since / }).click();
+    await expect(page).toHaveURL(new RegExp(`[?&]history=${sha}`));
+    const chapterNow = page.locator(".smart-history-chapter");
+    await expect(chapterNow).toContainText("Add the crates");
+    await expect(chapterNow).toContainText("Adds 2 blocks: api and core");
+    await page.getByRole("button", { name: "The change before" }).click();
+    await expect(page).toHaveURL(new RegExp(`[?&]history=${first}`));
+    await expect(chapterNow).toContainText("The first map: 3 blocks and 2 links.");
+    await page.getByRole("button", { name: "Back to the map of now" }).click();
+    await expect(page).not.toHaveURL(/history=/);
 
     // what a change reaches, through others too; lit up when asked
     await page.goto(`${web}/-/smart_view?block=api`);

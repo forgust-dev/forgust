@@ -217,7 +217,10 @@ La page **Smart View** d'un projet, sous Code (`/-/smart_view`), montre la derni
 - les pages d'un fichier ou d'un dossier disent le bloc où il est et à qui demander, un lien vers son panneau (pour un commit de l'historique, la carte de la branche par défaut sert : une carte par commit parcouru coûterait trop) ;
 - ceux qui ont relu les MR fusionnées dans les jours d'historique (approbation, revue ou commentaire, pas leur auteur ni un bot, ni une note interne) comptent parmi les personnes à contacter : « 3 commits · 2 reviews ». `[people] exclude` les retire aussi, par une adresse à eux ou par un nom ou une adresse de leurs commits ;
 - qui peut committer corrige la carte depuis le panneau : « Rename or describe », « Merge into… », « Not a block », « I know it », et « Leave me out » sur sa propre ligne. Chacun ouvre l'éditeur sur `assay.toml` (ou un nouveau) avec la correction écrite, à relire avant de la committer ici ou dans une MR ; seules les lignes concernées changent ;
-- à l'ouverture, aucun bloc n'est caché sous les boutons de zoom ni sous la mini-carte : le graphe se décale, ou le cadre grandit.
+- à l'ouverture, aucun bloc n'est caché sous les boutons de zoom ni sous la mini-carte : le graphe se décale, ou le cadre grandit ;
+- le job de la branche par défaut lit aussi l'histoire (`assay report --history`) : ce que chaque commit a changé à la carte, après le dernier commit lu. Le serveur la garde à part des cartes. Un job qui relit tout (la branche a été réécrite, ou c'en est une autre) remplace ce qui était gardé, et la Smart View désactivée l'oublie ;
+- chaque lien dit depuis quand il est là (« since !12 », ou le commit), et le panneau d'un bloc a une partie « History » : les commits qui l'ont changé, lui ou ses liens, en mots, avec leur MR, leur auteur et leur date ;
+- « 24 changes since Jun 2026 », dans la barre, ouvre l'histoire de la carte : un curseur passe d'un commit à l'autre, avec la carte telle qu'elle était, ce que le commit a changé allumé et dit en mots. Un revert et ce qu'il défait ne comptent pas.
 
 ### L'essayer
 
@@ -261,15 +264,15 @@ Peu chers une fois le socle en place, parce qu'ils réutilisent la carte fichier
 - **Santé par bloc** : statut CI, couverture de tests, dépendances obsolètes, issues ouvertes. Deux onglets en plus :
   - **Coût** : temps de CI consommé, taille de l'image Docker, temps de build.
   - **Sécurité** : CVE des dépendances, secrets utilisés, surface exposée (ports, routes publiques).
-- **Diff de la vue entre deux versions** : comparer l'architecture entre deux releases (bloc ajouté, dépendance apparue, bloc qui a beaucoup grossi). Un changelog d'architecture automatique. **Première version faite**, par merge request (voir « Idées détaillées »).
+- **Diff de la vue entre deux versions** : comparer l'architecture entre deux releases (bloc ajouté, dépendance apparue, bloc qui a beaucoup grossi). Un changelog d'architecture automatique. **Première version faite**, par merge request et commit par commit (voir « Idées détaillées »).
 - **CI générée** : la vue propose la CI de chaque bloc (`cargo build` et `cargo test` pour un bloc Rust, build d'image pour un bloc Docker, install, lint et build pour un bloc Web). Elle arrive en PR pour être relue, et seuls les jobs des blocs touchés par un push sont relancés.
 - **Revue adaptée au risque** : chaque PR reçoit un niveau de risque calculé d'après les blocs touchés, la familiarité de l'auteur avec ces blocs, la couverture de tests et les incidents récents. PR risquée : deux relecteurs dont un référent. PR triviale : fusion automatique possible.
 - **Page d'accueil du bloc** : les 3 ou 4 fichiers à lire en premier, ce qu'il faut pour le lancer (variables d'environnement, ports, secrets requis, commande de démarrage), et un parcours d'onboarding avec une première « good first issue » et le référent à contacter.
-- **Mémoire du bloc** : les décisions et grosses PR qui l'ont façonné, résumées par IA, plus un README et des notes de décision. La forge signale une doc obsolète quand le code a beaucoup changé depuis sa dernière mise à jour.
+- **Mémoire du bloc** : les décisions et grosses PR qui l'ont façonné, résumées par IA, plus un README et des notes de décision. La forge signale une doc obsolète quand le code a beaucoup changé depuis sa dernière mise à jour. **Première version faite**, sans IA : la partie « History » d'un bloc (voir « La carte qui se souvient »).
 
 ## Idées détaillées
 
-Deux idées qui ne coûtent presque rien une fois la carte là, sans rien à configurer. **Faites toutes les deux.** Une troisième, les règles entre blocs, a été faite puis retirée : voir « À repousser loin ».
+Deux idées qui ne coûtent presque rien une fois la carte là, sans rien à configurer. **Faites toutes les deux.** Une troisième, les règles entre blocs, a été faite puis retirée : voir « À repousser loin ». Puis une plus ambitieuse, pour donner envie de migrer : la carte qui se souvient. **Faite** aussi.
 
 ### Ce que la merge request change à la carte
 
@@ -288,9 +291,28 @@ Une vue « à partager » liste les blocs connus d'une seule personne (bus facto
 
 **Fait** : le compte « N blocks known by one person » en haut de la Smart View ouvre cette liste (`?share=1`). Le formulaire de nouvelle issue accepte désormais `?title=` et `?description=`, que la ligne remplit.
 
+### La carte qui se souvient
+
+Chaque bloc et chaque lien sait quel commit l'a fait, quand, qui, et par quelle merge request. Un projet importé de GitHub ou GitLab voit son historique relu : ses propres PR racontent comment son architecture s'est construite. Aucune forge ne le montre, faute de carte : c'est un argument pour migrer, l'historique vaut plus ici que là-bas.
+
+Elle a d'abord été essayée hors du produit, sur l'historique de Forgust (trop court : 12 jours) puis sur celui d'un monorepo public de sept ans (3 592 commits). Seuls 54 commits y changent la carte, et ses plus gros chapitres sont ses vrais tournants. L'essai a donné les règles suivies :
+- assay rejoue la branche par les premiers parents, sans copie de travail, et ne cartographie que les commits qui ajoutent ou retirent des fichiers, ou changent un fichier qu'il lit : 41 % des commits, sans rien manquer ;
+- un bloc retrouvé sous un autre identifiant dans le même manifeste (un service : la même image) est renommé, pas retiré puis ajouté, et ses liens le suivent ;
+- le rôle est une supposition qui change avec l'outillage : ses changements ne sont pas racontés, ceux du type si (une crate Rust réécrite en Go) ;
+- ce qu'apporte un merge est raconté par le commit de sa branche qui l'a fait, pour qu'un merge de release ne porte pas tout le travail qu'il apporte ;
+- un commit est relié à sa MR par le SHA de sa fusion, jamais par le « (#N) » de son message, qui peut venir d'un autre dépôt ;
+- un revert et ce qu'il défait ne comptent pas ;
+- les dossiers `examples/` sont exclus de toute carte : un exemple n'est pas une partie du code.
+
+**Fait** : `assay history`, et `assay report --history --since <commit>`. Le job de la branche par défaut lit l'histoire après le dernier commit lu ; la première fois, toute, sur au plus 2 000 commits qui peuvent changer la carte. `GET /repository/map/history` la donne chapitre par chapitre, avec l'auteur et sa MR. La Smart View dit depuis quand chaque lien est là, raconte l'histoire de chaque bloc, et montre la carte telle qu'elle était, commit après commit.
+
+Pas encore fait :
+- le récit à la fin d'un import (« de 3 à 37 blocs, et les 5 MR qui l'ont le plus changée ») ;
+- les commits d'une MR fusionnée en fast-forward : seul le dernier, celui de la fusion, est relié à elle.
+
 ### L'essayer sur la démo
 
-Le seed ouvre sur le monorepo une MR où le storefront lit le stock avec un nouveau paquet `@acme/db-client` (« Show the stock on the product page ») : elle montre le bloc ajouté et le nouveau lien, celui qu'un relecteur refuserait. La vue « To share » montre le worker, que Frank est seul à connaître.
+Le seed ouvre sur le monorepo une MR où le storefront lit le stock avec un nouveau paquet `@acme/db-client` (« Show the stock on the product page ») : elle montre le bloc ajouté et le nouveau lien, celui qu'un relecteur refuserait. La vue « To share » montre le worker, que Frank est seul à connaître. La barre dit « N changes since … » : l'histoire de la carte, depuis le premier paquet. Le lien du worker au serveur de mail dit « since !N », la MR de Frank fusionnée par Alice (« Mail the customer once an order ships »).
 
 ## Priorité 3 — Les gros paris
 
