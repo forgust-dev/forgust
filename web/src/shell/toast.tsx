@@ -137,20 +137,23 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               ) : (
                 <span className="grow">{t.text}</span>
               )}
-              {t.undo && (
-                <button
-                  className="btn small"
-                  onClick={() => {
-                    dismiss(t.id);
-                    t.undo?.();
-                  }}
-                >
-                  Undo
+              {/* Undo and the cross on one line, that of the title */}
+              <div className="toast-actions">
+                {t.undo && (
+                  <button
+                    className="btn small"
+                    onClick={() => {
+                      dismiss(t.id);
+                      t.undo?.();
+                    }}
+                  >
+                    Undo
+                  </button>
+                )}
+                <button className="icon-btn" aria-label="Dismiss" onClick={() => dismiss(t.id)}>
+                  <X size={14} />
                 </button>
-              )}
-              <button className="icon-btn" aria-label="Dismiss" onClick={() => dismiss(t.id)}>
-                <X size={14} />
-              </button>
+              </div>
             </div>
           ))}
         </div>,

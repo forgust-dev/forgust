@@ -2728,8 +2728,15 @@ kbd {
 .toast.detailed > svg:first-child {
   margin-top: 2px;
 }
-.toast > .btn.small {
+/* Undo and the cross, centred on the title's line */
+.toast.detailed > .toast-actions {
+  margin-top: -6px;
+}
+.toast-actions {
+  display: flex;
   flex: none;
+  align-items: center;
+  gap: 4px;
 }
 @starting-style {
   .toast {
