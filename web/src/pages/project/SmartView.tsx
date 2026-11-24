@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode, Ref } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   AlertTriangle,
@@ -62,6 +62,7 @@ import type { ElkExtendedEdge, ElkNode } from "elkjs/lib/elk-api";
 import { api, listAnd, qs, refLink, timeAgo, type S } from "../../api/client";
 import { Avatar, Empty, ListHead, Q, UserLink } from "../../components/ui";
 import { Select } from "../../components/controls";
+import { useProjectEvents } from "../../shell/live";
 import { useSession } from "../../session";
 import type { AssayEdit } from "./assayToml";
 import { LINK_VERB, blockTitle } from "./blocks";
@@ -307,6 +308,14 @@ export function SmartView({ ctx }: { ctx: Ctx }) {
     staleTime: 30_000,
     // a commit is being mapped: its map comes in when the job is done
     refetchInterval: (query) => (query.state.data?.view.run?.state === "pending" ? 4000 : false),
+  });
+  // the server says the map changed (a commit started being mapped, its map was kept, or it
+  // could not be): read it again, though the page was shown before the job started
+  const qc = useQueryClient();
+  useProjectEvents(ctx.p.id, (ev) => {
+    if (ev.type !== "smart_view") return;
+    void qc.invalidateQueries({ queryKey: ["map", ctx.p.id] });
+    void qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === "mr" && q.queryKey[1] === ctx.p.id && q.queryKey[3] === "blocks" });
   });
   const [words, setWords] = useState("");
   // the blocks the words find, in the order the graph shows them
