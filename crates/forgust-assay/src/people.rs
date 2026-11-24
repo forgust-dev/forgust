@@ -169,7 +169,7 @@ pub fn attach(blocks: &mut [Block], commits: &[Commit], block_of: impl Fn(&str) 
 }
 
 /// A Unix time's day, `YYYY-MM-DD` in UTC (Howard Hinnant's `civil_from_days`).
-fn date(t: i64) -> String {
+pub(crate) fn date(t: i64) -> String {
     let z = t.div_euclid(86_400) + 719_468;
     let era = z.div_euclid(146_097);
     let doe = z.rem_euclid(146_097);
