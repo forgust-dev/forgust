@@ -5,7 +5,7 @@
 
 Creates the first administrator, registers the compose runner, then users in every
 role, groups, projects with history (LFS, tags, releases; a monorepo for the Smart
-View), issues, merge requests in
+View; a README that uses all of Markdown), issues, merge requests in
 every state (review threads, suggestions, approvals, stacks, a conflict, a train),
 CI (artifacts, test reports, environments, services, child pipelines, registry
 images, schedules), webhooks, tokens and keys. Every user's password is PASSWORD.
@@ -1541,6 +1541,585 @@ def seed_marketplace(apis, platform):
     return p["id"]
 
 
+# --------------------------------------------------------------------------- steady
+
+# A small command-line tool whose README shows what a README can be here: a logo and a screenshot
+# for each theme, badges, links to its sections, the five alerts, folds, keys, coloured code,
+# tables, a diagram, math, a task list, footnotes and emoji, as on GitHub.
+STEADY_DESCRIPTION = "A calm focus timer for your terminal. Its README is Markdown at its best: open it, in both themes."
+
+STEADY_CARGO = """[package]
+name = "steady"
+version = "1.4.0"
+edition = "2021"
+rust-version = "1.80"
+description = "A calm focus timer for your terminal"
+license = "MIT"
+
+[dependencies]
+"""
+
+STEADY_MAIN_V1 = """//! Steady: a calm focus timer for your terminal.
+
+mod duration;
+mod session;
+
+use std::io::{self, Write};
+use std::process::ExitCode;
+use std::time::Duration;
+
+use session::{Plan, Session};
+
+fn main() -> ExitCode {
+    let plan = match Plan::from_args(std::env::args().skip(1)) {
+        Ok(plan) => plan,
+        Err(e) => {
+            eprintln!("steady: {e}");
+            return ExitCode::from(2);
+        }
+    };
+    for (n, session) in plan.sessions().enumerate() {
+        if let Err(e) = run(n / 2 + 1, &session) {
+            eprintln!("steady: {e}");
+            return ExitCode::FAILURE;
+        }
+    }
+    ExitCode::SUCCESS
+}
+
+/// One session, redrawn once a second on a single line.
+fn run(n: usize, session: &Session) -> io::Result<()> {
+    let total = session.length.as_secs();
+    let mut out = io::stdout().lock();
+    for k in 1..=total {
+        std::thread::sleep(Duration::from_secs(1));
+        let left = total - k;
+        write!(out, "\\r {} {}  {}  {:02}:{:02} left ", session.kind.dot(), session.kind, bar(k, total, 30), left / 60, left % 60)?;
+        out.flush()?;
+    }
+    writeln!(out, "\\n {} {} {n} done\\x07", session.kind.dot(), session.kind)
+}
+
+fn bar(done: u64, total: u64, width: usize) -> String {
+    let full = (done * width as u64 / total.max(1)) as usize;
+    format!("{}{}", "━".repeat(full), "─".repeat(width - full))
+}
+"""
+
+# ticks are due from the start of the session: a slow terminal delays one, never the end
+STEADY_MAIN = STEADY_MAIN_V1.replace("""use std::time::Duration;
+""", """use std::time::{Duration, Instant};
+""").replace("""/// One session, redrawn once a second on a single line.
+fn run(n: usize, session: &Session) -> io::Result<()> {
+    let total = session.length.as_secs();
+    let mut out = io::stdout().lock();
+    for k in 1..=total {
+        std::thread::sleep(Duration::from_secs(1));
+""", """/// One session, redrawn once a second on a single line. Tick k is due at start + k seconds,
+/// measured from the start and not from the tick before: a slow terminal delays a tick, never
+/// the end of the session.
+fn run(n: usize, session: &Session) -> io::Result<()> {
+    let start = Instant::now();
+    let total = session.length.as_secs();
+    let mut out = io::stdout().lock();
+    for k in 1..=total {
+        let due = start + Duration::from_secs(k);
+        if let Some(wait) = due.checked_duration_since(Instant::now()) {
+            std::thread::sleep(wait);
+        }
+""")
+
+STEADY_SESSION = """//! The cycle of focus sessions and breaks.
+
+use std::fmt;
+use std::time::Duration;
+
+use crate::duration::parse;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Kind {
+    Focus,
+    ShortBreak,
+    LongBreak,
+}
+
+impl Kind {
+    pub fn dot(self) -> &'static str {
+        match self {
+            Kind::Focus => "●",
+            Kind::ShortBreak | Kind::LongBreak => "○",
+        }
+    }
+}
+
+impl fmt::Display for Kind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            Kind::Focus => "Focus",
+            Kind::ShortBreak => "Break",
+            Kind::LongBreak => "Long break",
+        })
+    }
+}
+
+pub struct Session {
+    pub kind: Kind,
+    pub length: Duration,
+}
+
+/// What a day looks like: how long each part lasts, and how often a long break comes.
+pub struct Plan {
+    pub focus: Duration,
+    pub short_break: Duration,
+    pub long_break: Duration,
+    pub long_break_every: usize,
+    pub rounds: usize,
+}
+
+impl Default for Plan {
+    fn default() -> Self {
+        let min = |m: u64| Duration::from_secs(m * 60);
+        Plan { focus: min(25), short_break: min(5), long_break: min(15), long_break_every: 4, rounds: 4 }
+    }
+}
+
+impl Plan {
+    pub fn from_args(mut args: impl Iterator<Item = String>) -> Result<Plan, String> {
+        let mut plan = Plan::default();
+        while let Some(arg) = args.next() {
+            let mut value = || args.next().ok_or_else(|| format!("{arg} needs a value"));
+            match arg.as_str() {
+                "--focus" => plan.focus = parse(&value()?)?,
+                "--break" => plan.short_break = parse(&value()?)?,
+                "--long-break" => plan.long_break = parse(&value()?)?,
+                "--every" => plan.long_break_every = value()?.parse().map_err(|_| "--every takes a number")?,
+                "--rounds" => plan.rounds = value()?.parse().map_err(|_| "--rounds takes a number")?,
+                other => return Err(format!("unknown option {other} (try --focus 25m)")),
+            }
+        }
+        Ok(plan)
+    }
+
+    /// Focus, break, focus, break: a long break after every `long_break_every` sessions.
+    pub fn sessions(&self) -> impl Iterator<Item = Session> + '_ {
+        (1..=self.rounds).flat_map(move |n| {
+            let (kind, length) = if n % self.long_break_every.max(1) == 0 {
+                (Kind::LongBreak, self.long_break)
+            } else {
+                (Kind::ShortBreak, self.short_break)
+            };
+            [Session { kind: Kind::Focus, length: self.focus }, Session { kind, length }]
+        })
+    }
+}
+"""
+
+STEADY_DURATION_V1 = """//! Lengths as people write them: `25m`, or `25` for minutes.
+
+use std::time::Duration;
+
+pub fn parse(text: &str) -> Result<Duration, String> {
+    let minutes: u64 = text.trim().trim_end_matches('m').parse().map_err(|_| format!("{text}: not a length (try 25m)"))?;
+    Ok(Duration::from_secs(minutes * 60))
+}
+"""
+
+STEADY_DURATION = """//! Lengths as people write them: `25m`, `90s`, `1h30m`, or `25` for minutes.
+
+use std::time::Duration;
+
+pub fn parse(text: &str) -> Result<Duration, String> {
+    let mut total = 0u64;
+    let mut number = String::new();
+    for c in text.trim().chars() {
+        match c {
+            '0'..='9' => number.push(c),
+            'h' | 'm' | 's' => {
+                let n: u64 = number.parse().map_err(|_| format!("{text}: a number goes before {c}"))?;
+                total += n * match c {
+                    'h' => 3600,
+                    'm' => 60,
+                    _ => 1,
+                };
+                number.clear();
+            }
+            _ => return Err(format!("{text}: not a length (try 25m or 1h30m)")),
+        }
+    }
+    if !number.is_empty() {
+        // a bare number is minutes
+        total += number.parse::<u64>().map_err(|e| e.to_string())? * 60;
+    }
+    if total == 0 {
+        return Err(format!("{text}: a session needs some time"));
+    }
+    Ok(Duration::from_secs(total))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reads_lengths_as_people_write_them() {
+        assert_eq!(parse("25m"), Ok(Duration::from_secs(25 * 60)));
+        assert_eq!(parse("1h30m"), Ok(Duration::from_secs(90 * 60)));
+        assert_eq!(parse("90s"), Ok(Duration::from_secs(90)));
+        assert_eq!(parse("10"), Ok(Duration::from_secs(10 * 60)));
+        assert!(parse("soon").is_err());
+        assert!(parse("0m").is_err());
+    }
+}
+"""
+
+STEADY_TOML = """# Copy to ~/.config/steady/steady.toml: every option can also be given on the command line.
+focus = "25m"
+short_break = "5m"
+long_break = "15m"
+long_break_every = 4
+
+[notify]
+sound = "bell"   # or "none"
+desktop = true
+"""
+
+STEADY_CONTRIBUTING = """# Contributing to Steady
+
+Thanks for helping! A few things keep Steady calm:
+
+1. Open an issue before anything bigger than a typo, so we can agree on it first.
+2. `cargo test` and `cargo clippy -- -D warnings` must pass.
+3. Steady draws one line and never scrolls your terminal: keep it that way.
+"""
+
+STEADY_LICENSE = """MIT License
+
+Copyright (c) 2026 Acme Corp
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+"""
+
+STEADY_README = r"""<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.svg">
+    <img src="docs/assets/logo-light.svg" alt="" width="112">
+  </picture>
+</p>
+
+<h1 align="center">Steady</h1>
+
+<p align="center">
+  <strong>A calm focus timer for your terminal.</strong><br>
+  Work in steady sessions, take real breaks, and keep your evenings.
+</p>
+
+<p align="center">
+  <img src="docs/badges/version.svg" alt="version 1.4.0">
+  <img src="docs/badges/rust.svg" alt="rust 1.80+">
+  <img src="docs/badges/platforms.svg" alt="Linux, macOS and Windows">
+  <img src="docs/badges/license.svg" alt="license MIT">
+</p>
+
+<p align="center">
+  <a href="#install">Install</a> ·
+  <a href="#usage">Usage</a> ·
+  <a href="#configuration">Configuration</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#faq">FAQ</a>
+</p>
+
+<p align="center">
+  <img src="docs/assets/demo-light.svg#gh-light-mode-only" alt="Steady in a terminal: the third focus session, 17 minutes left">
+  <img src="docs/assets/demo-dark.svg#gh-dark-mode-only" alt="Steady in a terminal: the third focus session, 17 minutes left">
+</p>
+
+## Why Steady
+
+Most timers ring, then leave you to it. Steady keeps the rhythm for you :seedling:
+
+- **One command.** `steady` starts the classic cycle: 25 minutes of focus, then 5 of rest.
+- **Real breaks.** Every fourth session earns a long one, and Steady tells you to stand up.
+- **Never in the way.** It draws a single line, so it fits in the smallest pane.
+- **Quiet.** No account, no cloud, no tracking: your history is a file you own.
+
+> [!TIP]
+> Run Steady in a small pane of your terminal multiplexer: it redraws one line and never scrolls.
+
+## Install
+
+```sh
+cargo install steady
+```
+
+<details>
+<summary>Other ways to install</summary>
+
+With Homebrew:
+
+```sh
+brew install acme/tap/steady
+```
+
+From the source:
+
+```sh
+git clone https://forge.example.com/acme/steady.git
+cd steady && cargo install --path .
+```
+
+</details>
+
+> [!NOTE]
+> Building Steady needs Rust 1.80 or later. The binaries of the releases need nothing.
+
+## Usage
+
+```console
+$ steady                          # 25 minutes of focus, 5 of rest, four times
+$ steady --focus 50m --break 10m  # longer sessions, longer breaks
+$ steady --rounds 2 --every 2     # two sessions, then a long break
+```
+
+While a session runs:
+
+| Key | What it does |
+| :-: | --- |
+| <kbd>Space</kbd> | Pause, or go on |
+| <kbd>S</kbd> | Skip to what comes next |
+| <kbd>+</kbd> <kbd>-</kbd> | A minute more, or less |
+| <kbd>Q</kbd> | Stop (the session so far counts) |
+
+`steady log --week` shows when you focused:
+
+```text
+Mon  ████████░░  3h 20m
+Tue  ██████░░░░  2h 30m
+Wed  █████████░  3h 45m
+```
+
+## Configuration
+
+Steady reads `~/.config/steady/steady.toml` when it starts. Every option can also be given on the command line.
+
+```toml
+focus = "25m"
+short_break = "5m"
+long_break = "15m"
+long_break_every = 4
+
+[notify]
+sound = "bell"   # or "none"
+desktop = true
+```
+
+| Option | Default | What it does |
+| --- | :-: | --- |
+| `focus` | `25m` | How long a focus session lasts |
+| `short_break` | `5m` | The break after most sessions |
+| `long_break` | `15m` | The break after every `long_break_every` sessions |
+| `long_break_every` | `4` | How many sessions earn a long break |
+| `notify.sound` | `bell` | The sound when a session ends, or `none` |
+
+> [!WARNING]
+> Desktop notifications need `notify-send` on Linux. Without it, Steady rings the terminal's bell.
+
+## How it works
+
+A day is a cycle of sessions and breaks:
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    state "Long break" as LongBreak
+    [*] --> Focus
+    Focus --> Break: 25 min
+    Break --> Focus: 5 min
+    Focus --> LongBreak: every 4th
+    LongBreak --> Focus: 15 min
+```
+
+Steady never drifts. Tick $k$ of a session is due at a time measured from its start, not from the tick before:
+
+```math
+t_k = t_0 + k\,\Delta, \qquad k = 1, 2, \dots, \left\lceil \frac{T}{\Delta} \right\rceil
+```
+
+So a busy machine can delay a tick, but never the end of a session.[^clock] In `src/main.rs`:
+
+```rust
+let start = Instant::now();
+for k in 1..=total {
+    let due = start + Duration::from_secs(k);
+    if let Some(wait) = due.checked_duration_since(Instant::now()) {
+        std::thread::sleep(wait);
+    }
+    // redraw the line: the bar, and what is left
+}
+```
+
+> [!IMPORTANT]
+> Steady counts on a monotonic clock: changing your computer's time during a session does not change its length.
+
+## Roadmap
+
+- [x] Focus sessions and breaks
+- [x] Desktop notifications
+- [x] A weekly report (`steady log --week`)
+- [ ] Daily goals ("four sessions a day")
+- [ ] Sync between your machines, if you ask for it
+
+## FAQ
+
+<details>
+<summary>Does it work over SSH?</summary>
+
+Yes. Steady only needs a terminal; without a desktop, notifications fall back to the bell.
+
+</details>
+
+<details>
+<summary>Where is my history?</summary>
+
+In `~/.local/share/steady/history.csv`, one line per session. Delete the file to start over.
+
+</details>
+
+<details>
+<summary>Why 25 minutes?</summary>
+
+Long enough to get into a task, short enough to stop before you tire. Change it with `--focus`: Steady is yours.
+
+</details>
+
+> [!CAUTION]
+> `steady log --clear` deletes your whole history, without asking twice.
+
+## Contributing
+
+Issues and merge requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). Run `cargo test` before you push :sparkles:
+
+## License
+
+[MIT](LICENSE) © 2026 Acme Corp
+
+[^clock]: Steady measures time with `std::time::Instant`, which no change of the clock moves.
+"""
+
+
+def steady_logo(track, arc_from, arc_to):
+    """Steady's mark: a session's ring, three quarters done, around a steady point."""
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="112" height="112" viewBox="0 0 112 112" role="img" aria-label="Steady">
+  <defs>
+    <linearGradient id="arc" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="{arc_from}"/>
+      <stop offset="1" stop-color="{arc_to}"/>
+    </linearGradient>
+  </defs>
+  <circle cx="56" cy="56" r="40" fill="none" stroke="{track}" stroke-width="12"/>
+  <path d="M56 16a40 40 0 1 1-40 40" fill="none" stroke="url(#arc)" stroke-width="12" stroke-linecap="round"/>
+  <circle cx="56" cy="56" r="10" fill="url(#arc)"/>
+</svg>
+"""
+
+
+def steady_demo(bg, border, bar, fg, dim, accent, track):
+    """A terminal running Steady: the third focus session, 17:42 left (7:18 of 25:00 done)."""
+    mono = "ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace"
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="720" height="240" viewBox="0 0 720 240" role="img" aria-label="Steady in a terminal: the third focus session, 17 minutes left">
+  <style>
+    text {{ font-family: {mono}; font-size: 15px; fill: {fg}; white-space: pre; }}
+    .dim {{ fill: {dim}; }}
+    .accent {{ fill: {accent}; font-weight: 700; }}
+    .key {{ fill: {fg}; font-weight: 700; }}
+  </style>
+  <rect x="0.5" y="0.5" width="719" height="239" rx="12" fill="{bg}" stroke="{border}"/>
+  <path d="M1 40V13A12 12 0 0 1 13 1h694a12 12 0 0 1 12 12v27z" fill="{bar}"/>
+  <path d="M1 40.5h718" stroke="{border}"/>
+  <circle cx="24" cy="20.5" r="6" fill="#FF5F57"/>
+  <circle cx="44" cy="20.5" r="6" fill="#FEBC2E"/>
+  <circle cx="64" cy="20.5" r="6" fill="#28C840"/>
+  <text x="360" y="25" text-anchor="middle" class="dim" style="font-size: 13px">steady — 80×24</text>
+  <text x="28" y="80"><tspan class="accent">~/notes</tspan><tspan class="dim"> $ </tspan>steady --focus 25m</text>
+  <text x="28" y="124"><tspan class="accent">● Focus</tspan><tspan class="dim">  session 3 of 4</tspan></text>
+  <text x="692" y="124" text-anchor="end" class="dim">next: a long break</text>
+  <rect x="28" y="142" width="520" height="10" rx="5" fill="{track}"/>
+  <rect x="28" y="142" width="152" height="10" rx="5" fill="{accent}"/>
+  <text x="692" y="152" text-anchor="end">17:42 left</text>
+  <text x="28" y="204" class="dim"><tspan class="key">space</tspan> pause   <tspan class="key">s</tspan> skip   <tspan class="key">+ -</tspan> a minute   <tspan class="key">q</tspan> stop</text>
+</svg>
+"""
+
+
+def badge(label, value, color):
+    """A flat badge, as shields.io draws them, made here: the demo needs no network."""
+    widths = {"i": 3.0, "l": 3.0, "j": 3.8, "f": 3.9, "t": 4.3, "r": 4.7, ".": 3.9, " ": 3.9, "·": 3.9,
+              "c": 5.9, "s": 5.8, "z": 5.8, "m": 10.7, "w": 9.0, "M": 9.6, "I": 4.3, "+": 9.2}
+    width = lambda t: round(sum(widths.get(c, 6.9) for c in t)) + 12
+    lw, vw = width(label), width(value)
+    w = lw + vw
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="20" role="img" aria-label="{label}: {value}">
+  <linearGradient id="s" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient>
+  <clipPath id="r"><rect width="{w}" height="20" rx="3" fill="#fff"/></clipPath>
+  <g clip-path="url(#r)"><rect width="{lw}" height="20" fill="#555"/><rect x="{lw}" width="{vw}" height="20" fill="{color}"/><rect width="{w}" height="20" fill="url(#s)"/></g>
+  <g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="11">
+    <text x="{lw / 2}" y="15" fill="#010101" fill-opacity=".3">{label}</text><text x="{lw / 2}" y="14">{label}</text>
+    <text x="{lw + vw / 2}" y="15" fill="#010101" fill-opacity=".3">{value}</text><text x="{lw + vw / 2}" y="14">{value}</text>
+  </g>
+</svg>
+"""
+
+
+STEADY_ASSETS = {
+    "docs/assets/logo-light.svg": steady_logo("#D5EFE4", "#34C38F", "#16775A"),
+    "docs/assets/logo-dark.svg": steady_logo("#1B3A30", "#5BE0AC", "#2BA57A"),
+    "docs/assets/demo-light.svg": steady_demo("#FFFFFF", "#D0D7DE", "#F6F8FA", "#1F2328", "#656D76", "#1A8A63", "#E3EBE7"),
+    "docs/assets/demo-dark.svg": steady_demo("#0D1117", "#30363D", "#161B22", "#E6EDF3", "#8B949E", "#3FCB94", "#21302A"),
+    "docs/badges/version.svg": badge("version", "1.4.0", "#1F6FEB"),
+    "docs/badges/rust.svg": badge("rust", "1.80+", "#CE422B"),
+    "docs/badges/platforms.svg": badge("platforms", "linux · macos · windows", "#6E7781"),
+    "docs/badges/license.svg": badge("license", "MIT", "#2DA44E"),
+}
+
+
+def seed_steady(apis, acme):
+    """acme/steady: a small command-line tool, for its README."""
+    alice = apis["alice"]
+    log("acme/steady: a small tool with a README that uses all of Markdown")
+    p = alice.post("/projects", {"namespace_id": acme, "name": "Steady", "path": "steady", "visibility": "public",
+                                 "description": STEADY_DESCRIPTION})
+    r = Repo("steady", "alice", alice.token, "acme/steady")
+    r.commit("carol", "Steady: focus sessions and breaks, on one line of the terminal",
+             {"Cargo.toml": STEADY_CARGO, "src/main.rs": STEADY_MAIN_V1, "src/session.rs": STEADY_SESSION,
+              "src/duration.rs": STEADY_DURATION_V1, "LICENSE": STEADY_LICENSE,
+              "README.md": "# Steady\n\nA calm focus timer for your terminal: `cargo run`.\n"})
+    r.commit("bob", "Ticks are due from the start of a session: a slow terminal no longer stretches it",
+             {"src/main.rs": STEADY_MAIN})
+    r.commit("carol", "Lengths as people write them: 1h30m, 90s", {"src/duration.rs": STEADY_DURATION})
+    r.commit("alice", "An example configuration and a contributing guide",
+             {"steady.example.toml": STEADY_TOML, "CONTRIBUTING.md": STEADY_CONTRIBUTING})
+    r.commit("carol", "README: a logo and a screenshot for each theme, badges, a tour and an FAQ",
+             {"README.md": STEADY_README, **STEADY_ASSETS})
+    r.git("tag", "v1.4.0")
+    r.push("main", "v1.4.0")
+    return p["id"]
+
+
 SECURITY_JOB = """
 # Demo security reports: canned GitLab-format reports, so the Security
 # tab has findings without running scanners. Turn on Settings > Security
@@ -1682,6 +2261,7 @@ def main():
     shop, mrs, m_fix = seed_shop(apis, ids, acme)
     seed_others(apis, ids, acme, platform, partners, shop)
     seed_marketplace(apis, platform)
+    seed_steady(apis, acme)
     seed_admin_extras(apis, acme)
     seed_security(apis, shop)
     imp = seed_import(apis, imported)
@@ -1712,7 +2292,7 @@ def main():
 
 Try: review !{mrs['feature/discounts']} on acme/shop as alice, add !{mrs['chore/gitignore']} and !{mrs['docs/cart-merging']} to the merge train,
 play the production job, turn on Dependency updates in acme/platform/api,
-open the Smart View of acme/platform/marketplace.
+open the Smart View of acme/platform/marketplace, read acme/steady's README (in both themes).
 """)
 
 
