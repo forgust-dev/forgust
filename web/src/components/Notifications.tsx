@@ -16,6 +16,20 @@ export const LEVELS: { value: string; label: string; hint: string }[] = [
 
 const label = (v: string) => LEVELS.find((l) => l.value === v)?.label ?? v;
 
+/** What a level means, in a sentence: what you hear about `where` (`here`, `in your projects`). */
+function hear(level: string, where: string): string {
+  switch (level) {
+    case "watch":
+      return `You hear about everything ${where}: new issues and merge requests, every comment and change.`;
+    case "participating":
+      return `You hear about what you take part in, are assigned to or asked to review, and your mentions, ${where}.`;
+    case "mention":
+      return `You hear only when someone @mentions you ${where}.`;
+    default:
+      return `You hear about nothing ${where}.`;
+  }
+}
+
 /** Your default level, for every project you have not chosen one for. */
 export function NotificationDefaults() {
   const qc = useQueryClient();
@@ -23,12 +37,17 @@ export function NotificationDefaults() {
   const q = useQuery({ queryKey: ["notifications", "me"], queryFn: () => api.get<S["LevelDto"]>("/user/notification_settings") });
   // shown at once; put back if the server refuses
   const [picked, setPicked] = useState<string | null>(null);
-  const set = async (level: string) => {
+  // `back`: an undo, which is not undone in turn
+  const set = async (level: string, back = false) => {
+    const before = picked ?? q.data?.level;
     setPicked(level);
     try {
       await api.put("/user/notification_settings", { level });
       qc.invalidateQueries({ queryKey: ["notifications"] });
-      toast.ok(`Notifications: ${label(level)}`);
+      toast.ok(`${label(level)} by default`, {
+        detail: `${hear(level, "in your projects")} A project's bell can say otherwise.`,
+        undo: before && before !== level && !back ? () => void set(before, true) : undefined,
+      });
     } catch (e) {
       setPicked(null);
       toast.error(e);
@@ -141,17 +160,22 @@ function NotificationChannels() {
   );
 }
 
-/** The bell on a project: your level here (or your default). */
-export function NotificationBell({ projectId }: { projectId: number }) {
+/** The bell on a project (`name`): your level here (or your default). */
+export function NotificationBell({ projectId, name }: { projectId: number; name: string }) {
   const qc = useQueryClient();
   const toast = useToast();
   const key = ["notifications", "project", projectId];
   const q = useQuery({ queryKey: key, queryFn: () => api.get<S["LevelDto"]>(`/projects/${projectId}/notification_settings`) });
-  const set = async (level: string) => {
+  // `back`: an undo, which is not undone in turn
+  const set = async (level: string, back = false) => {
+    const before = q.data?.level;
     try {
       const r = await api.put<S["LevelDto"]>(`/projects/${projectId}/notification_settings`, { level });
       qc.setQueryData(key, r);
-      toast.ok(`Notifications for this project: ${level === "global" ? `your default (${label(r.effective)})` : label(level)}`);
+      toast.ok(`${name}: ${level === "global" ? `your default (${label(r.effective)})` : label(level)}`, {
+        detail: hear(r.effective, "here"),
+        undo: before && before !== level && !back ? () => void set(before, true) : undefined,
+      });
     } catch (e) {
       toast.error(e);
     }
