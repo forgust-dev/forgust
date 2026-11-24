@@ -76,6 +76,8 @@ const INSET = 12;
 /** Under this zoom the cards' text is too small to read: the graph overflows the frame instead,
  *  from its start (what needs the rest, on the left), and pans. */
 const READABLE = 0.8;
+/** How far the canvas zooms out and in, its buttons and its fit too. */
+const ZOOM = { min: 0.2, max: 1.5 };
 /** The frame is as tall as the graph at the zoom it opens at, within these (the most: a share of
  *  the window's height). */
 const FRAME_MIN = 440;
@@ -737,6 +739,7 @@ function Flow({ lay, byId, jobs, waitsOn, chosen, joined, lit, fit: shown, selec
     return { start: { ...at, x: at.x + shift }, below: 0 };
   });
   const height = fit + open.below;
+  const fitAll = useMemo(() => ({ padding: fitPadding(lay, width, height, corner) }), [lay, width, height, corner]);
 
   const nodes = useMemo<Node<CardData>[]>(
     () =>
@@ -833,8 +836,8 @@ function Flow({ lay, byId, jobs, waitsOn, chosen, joined, lit, fit: shown, selec
         nodeTypes={NODE_TYPES}
         edgeTypes={EDGE_TYPES}
         defaultViewport={open.start}
-        minZoom={0.2}
-        maxZoom={1.5}
+        minZoom={ZOOM.min}
+        maxZoom={ZOOM.max}
         zIndexMode="auto"
         nodesDraggable={false}
         nodesConnectable={false}
@@ -854,12 +857,8 @@ function Flow({ lay, byId, jobs, waitsOn, chosen, joined, lit, fit: shown, selec
         onNodeClick={(_, n) => select(n.id)}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
-        {/* the whole graph, above the corner's buttons */}
-        <Controls
-          showInteractive={false}
-          position="bottom-left"
-          fitViewOptions={{ padding: { top: `${MARGIN}px`, right: `${MARGIN}px`, bottom: `${corner.h}px`, left: `${MARGIN}px` } }}
-        />
+        {/* the whole graph, clear of the corner's buttons */}
+        <Controls showInteractive={false} position="bottom-left" fitViewOptions={fitAll} />
         {/* beside the buttons: a graph from left to right is crowded on the right, not there */}
         {!(fitsAcross && fitsDown) && (
           <MiniMap pannable zoomable position="bottom-left" style={{ width: 120, height: 76, marginLeft: 58 }} ariaLabel="Where the view is in the whole graph" />
@@ -1660,6 +1659,21 @@ function cornerShift(lay: Plan, at: { x: number; y: number; zoom: number }, heig
     if (left < corner.w && top < height && top + H * at.zoom > height - corner.h) shift = Math.max(shift, corner.w - left);
   }
   return shift;
+}
+
+/** The fit button's padding, in a frame `width` by `height`: MARGIN around the whole graph, as
+ *  React Flow centres it. Only when a card would then be under the corner's buttons is their room
+ *  kept: their side or their top, whichever leaves the graph the larger. Their top across the
+ *  whole frame left an empty band under a graph that never reached them. */
+function fitPadding(lay: Plan, width: number, height: number, corner: { w: number; h: number }) {
+  const zoomFor = (left: number, bottom: number) =>
+    Math.min(ZOOM.max, Math.max(ZOOM.min, Math.min((width - left - MARGIN) / lay.width, (height - MARGIN - bottom) / lay.height)));
+  const px = (n: number): `${number}px` => `${n}px`;
+  const padding = (left: number, bottom: number) => ({ top: px(MARGIN), right: px(MARGIN), bottom: px(bottom), left: px(left) });
+  const zoom = zoomFor(MARGIN, MARGIN);
+  const centred = { zoom, x: (width - lay.width * zoom) / 2, y: (height - lay.height * zoom) / 2 };
+  if (!cornerShift(lay, centred, height, corner)) return padding(MARGIN, MARGIN);
+  return zoomFor(corner.w, MARGIN) >= zoomFor(MARGIN, corner.h) ? padding(corner.w, MARGIN) : padding(MARGIN, corner.h);
 }
 
 /** Where a block of the graph goes, inside the block holding it if any (`inside`), and its size. */
