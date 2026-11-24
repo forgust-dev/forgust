@@ -343,7 +343,8 @@ impl Host {
             let project = self.handle.block_on(self.project_of(route, path));
             let details = json!({
                 "tool": "execute_api", "via": "mcp", "token_id": self.token_id, "method": method.as_str(),
-                "route": route,
+                // as the audit log names routes elsewhere
+                "route": format!("/api/v1{route}"),
             });
             let ip = self.ip.map(|ip| ip.to_string());
             let audit = crate::services::audit(

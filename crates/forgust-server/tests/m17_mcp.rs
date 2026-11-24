@@ -440,7 +440,7 @@ async fn typed_answers_and_code_mode(pool: sqlx::PgPool) {
     .unwrap();
     assert_eq!((target_type.as_deref(), target_id), (Some("project"), Some(p)));
     assert_eq!(details["method"], "POST");
-    assert_eq!(details["route"], "/projects/{id}/issues", "{details}");
+    assert_eq!(details["route"], "/api/v1/projects/{id}/issues", "{details}");
     assert!(details["token_id"].is_number(), "{details}");
 
     // at most 50 calls a run
