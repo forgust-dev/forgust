@@ -8,8 +8,10 @@ mod common;
 use std::path::Path;
 
 use common::*;
+use forgust_server::events::Event;
 use reqwest::StatusCode;
 use serde_json::{Value, json};
+use tokio::sync::broadcast::{Receiver, error::TryRecvError};
 
 async fn request(srv: &TestServer, token: &str) -> Option<Value> {
     let r = reqwest::Client::new()
@@ -68,6 +70,18 @@ async fn run_map_job(srv: &TestServer, runner: &str, work: &Path) -> Value {
     job
 }
 
+/// How many times the project's open pages were told its map changed, since last asked.
+fn told(events: &mut Receiver<Event>, project_id: i64) -> usize {
+    let mut n = 0;
+    loop {
+        match events.try_recv() {
+            Ok(Event::SmartView { project_id: id }) if id == project_id => n += 1,
+            Ok(_) | Err(TryRecvError::Lagged(_)) => {}
+            Err(_) => return n,
+        }
+    }
+}
+
 async fn maps_kept(srv: &TestServer) -> Vec<(Option<i64>, String, String)> {
     sqlx::query_as("SELECT merge_request_id, sha, state FROM smart_view_maps ORDER BY id").fetch_all(&srv.state.db).await.unwrap()
 }
@@ -82,6 +96,8 @@ async fn a_job_maps_the_default_branch(pool: sqlx::PgPool) {
     let dev = srv.user("dave", false).await;
     let (_org, _sub, p) = org_project(&owner).await;
     owner.ok_post(&format!("/api/v1/projects/{p}/members"), json!({ "username": "dave", "access_level": "developer" })).await;
+    // what the project's open pages hear: each change of its map, so they need no reload
+    let mut events = srv.state.events.subscribe();
     let work = srv.work_dir("map");
     must(git(&work, &["init", "-q", "-b", "main"]).await);
     for (path, text) in [
@@ -139,6 +155,7 @@ async fn a_job_maps_the_default_branch(pool: sqlx::PgPool) {
     assert_eq!(dev.put(&settings, json!({ "enabled": true })).await.0, 403);
     assert_eq!(owner.ok_get(&settings).await, json!({ "available": true, "enabled": false }));
     assert_eq!(owner.ok_put(&settings, json!({ "enabled": true })).await, json!({ "available": true, "enabled": true }));
+    assert!(told(&mut events, p) >= 1, "turned on: its pages hear the head is being mapped");
     let head = must(git(&work, &["rev-parse", "HEAD"]).await).trim().to_string();
     let waiting = owner.ok_get(&base).await;
     assert_eq!((&waiting["enabled"], &waiting["map"]), (&json!(true), &Value::Null));
@@ -158,6 +175,7 @@ async fn a_job_maps_the_default_branch(pool: sqlx::PgPool) {
     assert!(job.to_string().contains("assay report --name"), "{job}");
     let report = assay_report(&job, &work).await;
     report_and_finish(&srv, &job, Some(report), "success").await;
+    assert_eq!(told(&mut events, p), 1, "the map kept: its pages hear it once");
 
     let view = owner.ok_get(&base).await;
     assert!(view["run"].is_null(), "{view}");
@@ -203,6 +221,7 @@ async fn a_job_maps_the_default_branch(pool: sqlx::PgPool) {
     must(git(&work, &["push", "-q", &url, "main"]).await);
     wait_jobs(&srv.state).await;
     let second = must(git(&work, &["rev-parse", "HEAD"]).await).trim().to_string();
+    assert_eq!(told(&mut events, p), 1, "a new head: its pages hear it is being mapped");
     let during = owner.ok_get(&base).await;
     assert_eq!(
         (&during["map"]["commit"], &during["run"]["commit"], &during["run"]["state"]),
@@ -235,6 +254,7 @@ async fn a_job_maps_the_default_branch(pool: sqlx::PgPool) {
     report_and_finish(&srv, &job, Some(wrong), "success").await;
     let failed = owner.ok_get(&base).await;
     assert_eq!((&failed["map"]["commit"], &failed["run"]["state"]), (&json!(second), &json!("failed")));
+    assert!(told(&mut events, p) >= 1, "it could not be mapped: its pages hear it");
     assert!(failed["run"]["error"].as_str().unwrap().contains("not of this commit"), "{failed}");
     assert!(request(&srv, &runner).await.is_none(), "the run given up was canceled");
 
@@ -243,7 +263,9 @@ async fn a_job_maps_the_default_branch(pool: sqlx::PgPool) {
     assert_eq!(other.get(&base).await.0, 404);
 
     // turned off: the maps go
+    told(&mut events, p);
     owner.ok_put(&settings, json!({ "enabled": false })).await;
+    assert_eq!(told(&mut events, p), 1, "turned off: its pages hear it");
     assert_eq!(owner.ok_get(&base).await, json!({ "enabled": false, "map": null, "run": null }));
     assert!(maps_kept(&srv).await.is_empty());
     assert_eq!(srv.audit_events("smart_view_enabled").await.len(), 1);

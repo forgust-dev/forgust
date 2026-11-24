@@ -44,6 +44,8 @@ export function useLiveUpdates(projectId: number) {
     // a push to a source branch arrives as a merge_request event; one to a target
     // branch only changes whether MRs can merge: refresh just their status
     if (ev.type === "push") qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === "mr" && q.queryKey[1] === projectId && q.queryKey[3] === "status" });
+    // a Smart View map came in: the blocks a merge request changes are read from it
+    if (ev.type === "smart_view") qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === "mr" && q.queryKey[1] === projectId && q.queryKey[3] === "blocks" });
   });
 }
 

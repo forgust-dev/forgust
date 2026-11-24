@@ -118,8 +118,16 @@ pub async fn configure(state: &AppState, principal: &Principal, project: &Projec
     if enabled != was_on {
         let action = if enabled { "smart_view_enabled" } else { "smart_view_disabled" };
         super::audit(state, principal, action, Some(("project", project.id)), json!({}), None).await;
+        told(state, project.id);
     }
     Ok(())
+}
+
+/// The project's open pages hear that its map changed, and read it again: one shown before a
+/// commit started being mapped would otherwise wait for a reload. While one is being mapped
+/// they also ask every few seconds, so a run settled by the sweep reaches them too.
+fn told(state: &AppState, project_id: i64) {
+    state.events.publish(crate::events::Event::SmartView { project_id });
 }
 
 /// The job: the assay image running `assay report` on a full clone (the
@@ -190,6 +198,7 @@ async fn start(state: &AppState, project: &Project, mr: Option<&MergeRequest>, g
             db::unclaim(&state.db, id).await?;
             return Err(ApiError::Internal(e));
         }
+        told(state, project.id);
     }
     // the head is mapped or being mapped (now, or already: a branch pushed back to a commit it
     // was at): the runs of the commits it left would only put an older map over its own
@@ -234,7 +243,9 @@ pub async fn on_pipeline_finished(state: &AppState, pipeline: &forgust_db::ci::P
     }
     let settled: anyhow::Result<()> = async {
         let Some(row) = db::of_pipeline(&state.db, pipeline.id).await? else { return Ok(()) };
-        settle_failed(state, row.id, &format!("the job ended ({status}) without a report")).await
+        settle_failed(state, row.id, &format!("the job ended ({status}) without a report")).await?;
+        told(state, pipeline.project_id);
+        Ok(())
     }
     .await;
     if let Err(e) = settled {
@@ -281,7 +292,12 @@ pub async fn ingest(state: &AppState, build_id: i64) -> anyhow::Result<()> {
     }
     // given up since (a newer commit, the Smart View turned off): nothing to keep
     let Some(row) = db::of_pipeline(&state.db, pl.id).await? else { return Ok(()) };
-    let fail = |why: String| async move { settle_failed(state, row.id, &why).await };
+    let project_id = pl.project_id;
+    let fail = |why: String| async move {
+        settle_failed(state, row.id, &why).await?;
+        told(state, project_id);
+        Ok(())
+    };
     let user = match pl.user_id {
         Some(id) => forgust_db::users::find(&state.db, id).await?,
         None => None,
@@ -307,6 +323,7 @@ pub async fn ingest(state: &AppState, build_id: i64) -> anyhow::Result<()> {
     let mut tx = state.db.begin().await?;
     db::ready(&mut tx, row.id, &serde_json::to_value(&rep)?).await?;
     tx.commit().await?;
+    told(state, project_id);
     Ok(())
 }
 

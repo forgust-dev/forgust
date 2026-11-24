@@ -48,6 +48,11 @@ pub enum Event {
     JobsQueued {
         project_id: i64,
     },
+    /// The Smart View's map of a project changed: a commit is being mapped, its map was kept, it
+    /// could not be made, or the Smart View was turned on or off. Its open pages read it again.
+    SmartView {
+        project_id: i64,
+    },
     /// A notification reached this person's inbox (only their own streams hear
     /// it); `screen`: they want it shown as it arrives.
     Notification {
@@ -78,7 +83,8 @@ impl Event {
             | Event::Pipeline { project_id, .. }
             | Event::Job { project_id, .. }
             | Event::JobTrace { project_id, .. }
-            | Event::JobsQueued { project_id } => Audience::Project(*project_id),
+            | Event::JobsQueued { project_id }
+            | Event::SmartView { project_id } => Audience::Project(*project_id),
         }
     }
 }

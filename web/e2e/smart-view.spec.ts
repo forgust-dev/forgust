@@ -47,22 +47,26 @@ test("the Smart View maps the code into blocks and tells what each needs", async
     await api("put", `/projects/${project.id}/smart_view`, { enabled: true });
     await page.reload();
     await expect(page.getByText("The code is being mapped by")).toBeVisible();
-    let job: any = null;
-    for (let i = 0; i < 40 && !job; i++) {
-      const r = await page.request.post("/api/v4/jobs/request", { data: { token: runner.token, system_id: tag, info: { version: "19.5.3", executor: "docker" } } });
-      if (r.status() === 201) job = await r.json();
-      else await page.waitForTimeout(250);
-    }
-    expect(job, "the map job").toBeTruthy();
-    expect(JSON.stringify(job.steps)).toContain("assay report");
-    const sha = job.git_info.sha;
-    const report = { ...REPORT, commit: sha, map: { ...REPORT.map, commit: sha } };
-    const up = await page.request.post(`/api/v4/jobs/${job.id}/artifacts?artifact_type=smart_view&artifact_format=raw`, {
-      headers: { "JOB-TOKEN": job.token },
-      multipart: { file: { name: "assay-report.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(report)) } },
-    });
-    expect(up.status()).toBe(201);
-    expect((await page.request.put(`/api/v4/jobs/${job.id}`, { data: { token: job.token, state: "success", exit_code: 0 } })).status()).toBe(200);
+    // the runner takes the map job waiting, and uploads what assay writes for its commit
+    const mapJob = async () => {
+      let job: any = null;
+      for (let i = 0; i < 40 && !job; i++) {
+        const r = await page.request.post("/api/v4/jobs/request", { data: { token: runner.token, system_id: tag, info: { version: "19.5.3", executor: "docker" } } });
+        if (r.status() === 201) job = await r.json();
+        else await page.waitForTimeout(250);
+      }
+      expect(job, "the map job").toBeTruthy();
+      expect(JSON.stringify(job.steps)).toContain("assay report");
+      const sha = job.git_info.sha;
+      const report = { ...REPORT, commit: sha, map: { ...REPORT.map, commit: sha } };
+      const up = await page.request.post(`/api/v4/jobs/${job.id}/artifacts?artifact_type=smart_view&artifact_format=raw`, {
+        headers: { "JOB-TOKEN": job.token },
+        multipart: { file: { name: "assay-report.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(report)) } },
+      });
+      expect(up.status()).toBe(201);
+      expect((await page.request.put(`/api/v4/jobs/${job.id}`, { data: { token: job.token, state: "success", exit_code: 0 } })).status()).toBe(200);
+    };
+    await mapJob();
 
     // the page takes the map in when the job is done
     // compose.yml declares the services but holds no block's files
@@ -76,6 +80,20 @@ test("the Smart View maps the code into blocks and tells what each needs", async
     await expect(card("api").locator(".smart-mark title")).toHaveText("Rust");
     await expect(card("db").locator(".smart-mark title")).toHaveText("PostgreSQL");
     if (!isMobile(page)) await expect(page.getByRole("link", { name: "Smart View" }).first()).toBeVisible();
+
+    // a commit pushed while the page is open: it says the commit is being mapped, then takes its
+    // map in, all without a reload
+    await page.evaluate(() => ((window as any).notReloaded = true));
+    await api("post", `/projects/${project.id}/repository/commits`, {
+      branch: "main",
+      commit_message: "A line in the README",
+      actions: [{ action: "update", file_path: "README.md", content: "# Map\n\nMapped again.\n" }],
+    });
+    await expect(page.getByText(/A newer commit \(\w{8}\) is being mapped by pipeline #\d+/)).toBeVisible();
+    await mapJob();
+    await expect(page.getByText(/is being mapped by/)).toBeHidden();
+    await expect(page.getByText("5 blocks · 4 links · 3 files in no block")).toBeVisible();
+    expect(await page.evaluate(() => (window as any).notReloaded)).toBe(true);
 
     // a block chosen: what it needs and what needs it, each with the link and the file that says so
     await card("api").click();
