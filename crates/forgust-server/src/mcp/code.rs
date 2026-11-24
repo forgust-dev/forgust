@@ -122,7 +122,10 @@ const PRELUDE: &str = r#"
     }
     let v = await f();
     if (expression && typeof v === "function") v = await v();
-    return v === undefined ? "null" : JSON.stringify(v);
+    if (v === undefined) return "null";
+    const json = JSON.stringify(v);
+    if (typeof json !== "string") throw new TypeError("the result has no JSON form (a " + typeof v + "): return data");
+    return json;
   };
 }
 "#;
@@ -255,7 +258,7 @@ fn run_js(code: &str, host: Option<Host>, deadline: Instant, logs: &Rc<RefCell<V
     if out.len() > RESULT {
         return Err(format!("the result is larger than {} MB of JSON: return less (a count, the fields you need)", RESULT >> 20));
     }
-    serde_json::from_str(&out).map_err(|e| format!("the result is not JSON: {e}"))
+    serde_json::from_str(&out).map_err(|e| format!("the result cannot be read ({e}): JSON at most 128 levels deep"))
 }
 
 /// What `forgust.request` reaches: the API as the caller.
@@ -462,6 +465,10 @@ mod tests {
         assert!(e.contains(r#"{"code":7}"#), "{e}");
         let e = js("return new Promise(() => {})", TIME).unwrap_err();
         assert!(e.contains("never comes"), "{e}");
+        let e = js("return Symbol()", TIME).unwrap_err();
+        assert!(e.contains("no JSON form (a symbol)"), "{e}");
+        let e = js("let v = 1; for (let i = 0; i < 200; i++) v = [v]; return v;", TIME).unwrap_err();
+        assert!(e.contains("128 levels"), "{e}");
         let e = js("return (", TIME).unwrap_err();
         assert!(e.contains("SyntaxError"), "{e}");
     }
