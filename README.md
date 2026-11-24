@@ -141,7 +141,7 @@ volumes: { forgust-data: {}, db-data: {} }
   branch and of open merge requests with the assay image, which maps any repository in CI
 - Code search across projects: exact text or regular expressions, filters by path,
   file name and language, only in code you can read
-- Markdown with diagrams (Mermaid), math, alerts and emoji shortcodes
+- Markdown as GitHub renders it: the HTML a README holds (sanitized), highlighted code, links to its sections, diagrams (Mermaid), math, alerts and emoji shortcodes
 - Edit files, create branches and tags from the browser
 - Protected branches and tags, push rules, signed-commit verification (GPG and SSH)
 - Releases with notes and attached files

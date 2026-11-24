@@ -1140,6 +1140,10 @@ a.milestone-chip:hover {
   background: var(--warn-soft);
 }
 .markdown {
+  /* lucide's copy, check and link, for the buttons and links added to a text */
+  --icon-copy: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='14' height='14' x='8' y='8' rx='2' ry='2'/%3E%3Cpath d='M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2'/%3E%3C/svg%3E");
+  --icon-check: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E");
+  --icon-link: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'/%3E%3Cpath d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'/%3E%3C/svg%3E");
   line-height: 1.6;
   overflow-wrap: break-word;
 }
@@ -1158,13 +1162,35 @@ a.milestone-chip:hover {
   padding: 0;
   background: none;
 }
+/* a table as wide as its text, no wider than the text column: one too wide for it scrolls
+   sideways, on its own */
 .markdown table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  margin: 0 0 1em;
+  overflow: auto;
   border-collapse: collapse;
+}
+/* a fold (<details>) keeps a paragraph's space below it, as a table does: a heading has none
+   above */
+.markdown details {
+  margin: 0 0 1em;
+}
+.markdown summary {
+  cursor: pointer;
 }
 .markdown td,
 .markdown th {
   border: 1px solid var(--border);
   padding: 4px 10px;
+}
+.markdown th {
+  background: var(--bg-subtle);
+  font-weight: 600;
+}
+.markdown tr:nth-child(2n) > td {
+  background: color-mix(in srgb, var(--bg-subtle) 55%, transparent);
 }
 .markdown img {
   max-width: 100%;
@@ -1260,6 +1286,95 @@ a.milestone-chip:hover {
 }
 .markdown pre.mermaid-error {
   border-left: 3px solid var(--danger);
+}
+/* a section a link goes to (`#install`) shows below the top bar */
+.markdown [id],
+.markdown a[name] {
+  scroll-margin-top: calc(var(--topbar-h) + 16px);
+}
+/* a heading's link to itself, after its text while the heading is hovered */
+.markdown a.anchor {
+  display: inline-flex;
+  margin-left: 6px;
+  vertical-align: middle;
+  color: var(--text-muted);
+  opacity: 0;
+}
+.markdown a.anchor::before {
+  content: "";
+  width: 16px;
+  height: 16px;
+  background: currentColor;
+  mask: var(--icon-link) center / contain no-repeat;
+}
+.markdown a.anchor:hover {
+  color: var(--accent);
+}
+.markdown :is(h1, h2, h3, h4, h5, h6):hover > a.anchor,
+.markdown a.anchor:focus-visible {
+  opacity: 1;
+}
+/* a code block's copy button: in its corner on hover, and always where nothing hovers */
+.markdown .code-block {
+  position: relative;
+}
+.markdown .code-copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  opacity: 0;
+}
+.markdown .code-copy::before {
+  content: "";
+  width: 14px;
+  height: 14px;
+  background: currentColor;
+  mask: var(--icon-copy) center / contain no-repeat;
+}
+.markdown .code-copy.copied {
+  color: var(--ok);
+}
+.markdown .code-copy.copied::before {
+  mask-image: var(--icon-check);
+}
+.markdown .code-block:hover > .code-copy,
+.markdown .code-copy:focus-visible,
+.markdown .code-copy.copied {
+  opacity: 1;
+}
+@media (hover: none) {
+  .markdown a.anchor {
+    display: none;
+  }
+  .markdown .code-copy {
+    opacity: 1;
+  }
+}
+/* an image made for one theme (GitHub's `#gh-dark-mode-only`): only in that theme, the one
+   picked here or else the system's */
+:root[data-theme="light"] .markdown img[src$="#gh-dark-mode-only"],
+:root[data-theme="dark"] .markdown img[src$="#gh-light-mode-only"] {
+  display: none;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .markdown img[src$="#gh-dark-mode-only"] {
+    display: none;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .markdown img[src$="#gh-light-mode-only"] {
+    display: none;
+  }
+}
+/* a heading in a text's outline (Markdown.tsx), indented by its level */
+.outline-item {
+  min-width: 0;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ---------------------------------------------------------------- diffs */
@@ -3047,6 +3162,10 @@ kbd {
 }
 .readme .card-head {
   gap: 8px;
+}
+/* its buttons keep the head as low as its title */
+.readme .card-head .icon-btn {
+  margin: -4px 0;
 }
 .popover {
   padding: 12px;
