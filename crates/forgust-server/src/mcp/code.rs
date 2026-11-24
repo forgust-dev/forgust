@@ -34,6 +34,9 @@ const TIME: Duration = Duration::from_secs(30);
 const CALLS: usize = 50;
 /// One API answer, at most.
 const BODY: usize = 4 << 20;
+/// A run's result, as JSON, at most: the answer is cut at 64 KB anyway, and a
+/// larger one would be copied and parsed for nothing.
+const RESULT: usize = 1 << 20;
 /// `console.log` output kept.
 const LOGS: usize = 16 << 10;
 /// Scripts running at once, on the whole server: each holds a thread and up
@@ -249,6 +252,9 @@ fn run_js(code: &str, host: Option<Host>, deadline: Instant, logs: &Rc<RefCell<V
         let promise: Promise = run.call((code,)).map_err(fail)?;
         promise.finish::<String>().map_err(fail)
     })?;
+    if out.len() > RESULT {
+        return Err(format!("the result is larger than {} MB of JSON: return less (a count, the fields you need)", RESULT >> 20));
+    }
     serde_json::from_str(&out).map_err(|e| format!("the result is not JSON: {e}"))
 }
 
@@ -455,6 +461,8 @@ mod tests {
         assert!(start.elapsed() < Duration::from_secs(5));
         let e = js("const a = []; while (true) a.push('x'.repeat(1 << 20) + a.length);", TIME).unwrap_err();
         assert!(e.contains("MB"), "{e}");
+        let e = js("return 'x'.repeat(2 << 20)", TIME).unwrap_err();
+        assert!(e.contains("larger than 1 MB"), "{e}");
         let e = js("const f = (n) => f(n + 1); f(0)", TIME).unwrap_err();
         assert!(e.contains("stack") || e.contains("RangeError") || e.contains("InternalError"), "{e}");
     }

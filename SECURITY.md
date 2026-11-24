@@ -74,7 +74,8 @@ Off until an administrator turns it on (Admin, Settings). Its `search_api` and
 `execute_api` tools run JavaScript that an assistant writes, in QuickJS on the server:
 
 - **The sandbox** has no files, network, processes, timers or modules. A run gets at
-  most 64 MB of memory, 1 MB of stack and 30 seconds.
+  most 64 MB of memory, 1 MB of stack and 30 seconds, and returns at most 1 MB of
+  JSON.
 - **The one way out** is `forgust.request`. It calls the `/api/v1` router in-process
   as the token's user, through the same handlers and permission checks as over HTTP.
   It cannot reach another host or another part of the server.
