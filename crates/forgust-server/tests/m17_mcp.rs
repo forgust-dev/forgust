@@ -405,6 +405,12 @@ async fn typed_answers_and_code_mode(pool: sqlx::PgPool) {
     assert!(err && text.contains("Error"), "{text}");
     let (err, text) = read.call("execute_api", json!({ "code": "forgust.get('https://example.com/')" })).await;
     assert!(err && text.contains("a path of the API"), "{text}");
+    // a stream of events fails at once, not at the end of the run
+    let start = std::time::Instant::now();
+    let code = format!("try {{ await forgust.get('/events?projects={p}'); }} catch (e) {{ return [e.status, e.message]; }}");
+    let r = call(&read, "execute_api", json!({ "code": code })).await;
+    assert_eq!(r["structuredContent"]["result"][0], 400, "{r}");
+    assert!(start.elapsed() < std::time::Duration::from_secs(10), "waited for the stream");
 
     // the same checks as the API: a Guest reads no code
     let g = Mcp::new(&srv, Some(&token(&guest, "g", &["read_api"]).await));

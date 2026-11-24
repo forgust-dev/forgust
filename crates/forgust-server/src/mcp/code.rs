@@ -287,6 +287,10 @@ impl Host {
         let call = async {
             let resp = self.router.clone().oneshot(req).await.map_err(|e| (500, e.to_string()))?;
             let status = resp.status();
+            // a stream (server-sent events) never ends: refused, not waited for
+            if resp.headers().get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).is_some_and(|t| t.starts_with("text/event-stream")) {
+                return Err((400, "a stream of events: execute_api reads whole answers only".to_string()));
+            }
             let route = resp.extensions().get::<MatchedPath>().map_or("(no route)", MatchedPath::as_str).to_string();
             let bytes = axum::body::to_bytes(resp.into_body(), BODY)
                 .await
