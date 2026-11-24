@@ -70,14 +70,18 @@ const PRELUDE: &str = r#"
     });
   }
   globalThis.__run = async (src) => {
-    let f;
+    // only compiled here, never run: a SyntaxError is the code's form, not
+    // one it threw (which must not run it a second time)
+    let f, expression = true;
     try {
-      f = (0, eval)("(" + src + "\n)");
+      f = (0, eval)("(async () => (" + src + "\n))");
     } catch (e) {
       if (!(e instanceof SyntaxError)) throw e;
       f = (0, eval)("(async () => {\n" + src + "\n})");
+      expression = false;
     }
-    const v = await (typeof f === "function" ? f() : f);
+    let v = await f();
+    if (expression && typeof v === "function") v = await v();
     return v === undefined ? "null" : JSON.stringify(v);
   };
 }
@@ -353,6 +357,16 @@ mod tests {
         assert_eq!(ok("let y = 1"), Value::Null, "a body that returns nothing");
         assert_eq!(ok("spec.openapi"), json!("3.1.0"));
         assert!(ok("Object.keys(spec.paths).filter((p) => p.endsWith('/issues'))").as_array().is_some_and(|l| !l.is_empty()));
+    }
+
+    #[test]
+    fn runs_the_code_once() {
+        // a SyntaxError thrown while running is not a parse error
+        let logs = Rc::new(RefCell::new(Vec::new()));
+        let e = run_js("[console.log('ran'), JSON.parse('{')]", None, Instant::now() + TIME, &logs).unwrap_err();
+        assert!(e.starts_with("SyntaxError"), "{e}");
+        assert_eq!(logs.take(), ["ran"]);
+        assert_eq!(ok("await Promise.resolve(5)"), json!(5), "an expression may await");
     }
 
     #[test]
