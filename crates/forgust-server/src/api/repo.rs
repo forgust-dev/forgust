@@ -325,18 +325,22 @@ async fn render_blob(state: &AppState, p: &Project, git_ref: &str, commit: &str,
     let (mut lines, mut markdown_html, mut language) = (Vec::new(), None, String::new());
     if !binary && !too_large {
         let text = String::from_utf8_lossy(&blob.data).into_owned();
-        let hl = state.highlighter.clone();
-        let (pth, txt) = (path.to_string(), text.clone());
-        let (l, lang) =
-            tokio::task::spawn_blocking(move || (hl.highlight_lines(&pth, &txt), hl.language(&pth, txt.lines().next().unwrap_or(""))))
-                .await
-                .map_err(|e| ApiError::Internal(e.into()))?;
+        let (hl, images) = (state.highlighter.clone(), state.images.clone());
+        let (pth, project_url, git_ref) = (path.to_string(), format!("/{}", p.full_path), git_ref.to_string());
+        let (l, lang, md) = tokio::task::spawn_blocking(move || {
+            // a Markdown file is also shown rendered, its code highlighted as the file is
+            let md = render::is_markdown(&pth).then(|| {
+                let dir = pth.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
+                let extras = render::MarkdownExtras { images: images.as_ref(), code: Some(&hl) };
+                render::markdown_with(&text, &project_url, &git_ref, dir, extras)
+            });
+            (hl.highlight_lines(&pth, &text), hl.language(&pth, text.lines().next().unwrap_or("")), md)
+        })
+        .await
+        .map_err(|e| ApiError::Internal(e.into()))?;
         lines = l;
         language = lang;
-        if render::is_markdown(path) {
-            let dir = path.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
-            markdown_html = Some(render::markdown_with(&text, &format!("/{}", p.full_path), git_ref, dir, state.images.as_ref()));
-        }
+        markdown_html = md;
     }
     Ok(BlobResponse {
         commit: commit.to_string(),
@@ -451,9 +455,16 @@ pub async fn readme(
         candidates.sort_by_key(|e| (!render::is_markdown(&e.name), e.name.len()));
         let Some(e) = candidates.first() else { return Ok(None) };
         let blob = state.storage.blob(p.id, &commit, &e.path, state.cfg.limits.max_render_bytes).await?;
-        let text = String::from_utf8_lossy(&blob.data);
+        let text = String::from_utf8_lossy(&blob.data).into_owned();
         let html = if render::is_markdown(&e.name) {
-            render::markdown_with(&text, &format!("/{}", p.full_path), &git_ref, &dir, state.images.as_ref())
+            let (hl, images) = (state.highlighter.clone(), state.images.clone());
+            let (project_url, git_ref, dir) = (format!("/{}", p.full_path), git_ref.clone(), dir.clone());
+            tokio::task::spawn_blocking(move || {
+                let extras = render::MarkdownExtras { images: images.as_ref(), code: Some(&hl) };
+                render::markdown_with(&text, &project_url, &git_ref, &dir, extras)
+            })
+            .await
+            .map_err(|e| ApiError::Internal(e.into()))?
         } else {
             format!("<pre>{}</pre>", render::escape_html(&text))
         };

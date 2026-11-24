@@ -48,19 +48,21 @@ pub async fn targets(state: &AppState, p: &Project, texts: &[&str], code: bool, 
     t
 }
 
+/// What a text's Markdown may use: the image proxy, and the highlighter for its code.
+fn extras(state: &AppState) -> render::MarkdownExtras<'_> {
+    render::MarkdownExtras { images: state.images.as_ref(), code: Some(&state.highlighter) }
+}
+
 /// Markdown of an issue or MR (description, comment) → sanitized HTML with links.
 pub async fn render(state: &AppState, p: &Project, text: &str, git_ref: &str, code: bool, v: Viewer) -> String {
     let t = targets(state, p, &[text], code, v).await;
-    render::link_refs(&render::markdown_with(text, &t.project_url, git_ref, "", state.images.as_ref()), &t)
+    render::link_refs(&render::markdown_with(text, &t.project_url, git_ref, "", extras(state)), &t)
 }
 
 /// Several texts of one page with a single lookup.
 pub async fn render_many(state: &AppState, p: &Project, texts: &[&str], git_ref: &str, code: bool, v: Viewer) -> Vec<String> {
     let t = targets(state, p, texts, code, v).await;
-    texts
-        .iter()
-        .map(|text| render::link_refs(&render::markdown_with(text, &t.project_url, git_ref, "", state.images.as_ref()), &t))
-        .collect()
+    texts.iter().map(|text| render::link_refs(&render::markdown_with(text, &t.project_url, git_ref, "", extras(state)), &t)).collect()
 }
 
 /// Texts each rendered at its own ref (a release's tag), with one lookup.
@@ -69,7 +71,7 @@ pub async fn render_at(state: &AppState, p: &Project, items: &[(&str, &str)], co
     let t = targets(state, p, &texts, code, v).await;
     items
         .iter()
-        .map(|(text, git_ref)| render::link_refs(&render::markdown_with(text, &t.project_url, git_ref, "", state.images.as_ref()), &t))
+        .map(|(text, git_ref)| render::link_refs(&render::markdown_with(text, &t.project_url, git_ref, "", extras(state)), &t))
         .collect()
 }
 

@@ -102,6 +102,40 @@ impl Highlighter {
         self.syntax_for(path, first_line).name.clone()
     }
 
+    /// The grammar a fenced block names (```rust, ```sh, ```ts): by its name or an extension,
+    /// as people write them; none for one it does not know, or that says it is plain.
+    fn syntax_for_lang(&self, lang: &str) -> Option<&SyntaxReference> {
+        let lang = lang.trim().to_ascii_lowercase();
+        let token = match lang.as_str() {
+            "" | "text" | "txt" | "plain" | "plaintext" | "mermaid" | "math" => return None,
+            l if l.starts_with("suggestion") => return None,
+            "sh" | "shell" | "console" | "zsh" | "bash" | "shellscript" => "bash",
+            "ts" | "tsx" | "typescript" | "mjs" | "cjs" | "jsx" => "js",
+            "toml" => "ini",
+            "yml" => "yaml",
+            "dockerfile" | "containerfile" => "Dockerfile",
+            "golang" => "go",
+            "py" | "python3" => "python",
+            "rs" => "rust",
+            l => l,
+        };
+        self.syntaxes.find_syntax_by_token(token).or_else(|| self.syntaxes.find_syntax_by_name(token)).filter(|s| s.name != "Plain Text")
+    }
+
+    /// A fenced block's code (```rust), highlighted as the file views are; none when its
+    /// language is not known (or none given), and it stays plain.
+    pub fn highlight_block(&self, lang: &str, code: &str) -> Option<String> {
+        let syntax = self.syntax_for_lang(lang)?;
+        if code.lines().count() > MAX_HIGHLIGHT_LINES {
+            return None;
+        }
+        let mut generator = ClassedHTMLGenerator::new_with_class_style(syntax, &self.syntaxes, CLASS_STYLE);
+        for line in syntect::util::LinesWithEndings::from(code) {
+            generator.parse_html_for_line_which_includes_newline(line).ok()?;
+        }
+        Some(generator.finalize())
+    }
+
     /// One HTML string per line; spans never cross line boundaries.
     pub fn highlight_lines(&self, path: &str, text: &str) -> Vec<String> {
         let first = text.lines().next().unwrap_or("");
@@ -248,21 +282,86 @@ const ALERT_CLASSES: &[&str] = &[
     "markdown-alert-title",
 ];
 
+/// What a Markdown render may use besides its text.
+#[derive(Clone, Copy, Default)]
+pub struct MarkdownExtras<'a> {
+    /// Images from other sites go through it.
+    pub images: Option<&'a ImageProxy>,
+    /// Fenced code is highlighted with it, as the file views are.
+    pub code: Option<&'a Highlighter>,
+}
+
+/// A fenced block's code (```rust) highlighted by [`Highlighter`]; one in a language it does
+/// not know stays plain.
+struct FencedCode<'a>(&'a Highlighter);
+
+impl comrak::adapters::SyntaxHighlighterAdapter for FencedCode<'_> {
+    fn write_highlighted(&self, out: &mut dyn std::fmt::Write, lang: Option<&str>, code: &str) -> std::fmt::Result {
+        match lang.and_then(|l| self.0.highlight_block(l, code)) {
+            Some(html) => out.write_str(&html),
+            None => out.write_str(&escape_html(code)),
+        }
+    }
+
+    fn write_pre_tag(
+        &self,
+        out: &mut dyn std::fmt::Write,
+        attributes: std::collections::HashMap<&'static str, std::borrow::Cow<'_, str>>,
+    ) -> std::fmt::Result {
+        write_tag(out, "pre", attributes)
+    }
+
+    fn write_code_tag(
+        &self,
+        out: &mut dyn std::fmt::Write,
+        attributes: std::collections::HashMap<&'static str, std::borrow::Cow<'_, str>>,
+    ) -> std::fmt::Result {
+        write_tag(out, "code", attributes)
+    }
+}
+
+/// An opening tag with its attributes, in a steady order.
+fn write_tag(
+    out: &mut dyn std::fmt::Write,
+    tag: &str,
+    attributes: std::collections::HashMap<&'static str, std::borrow::Cow<'_, str>>,
+) -> std::fmt::Result {
+    let mut attributes: Vec<_> = attributes.into_iter().collect();
+    attributes.sort();
+    write!(out, "<{tag}")?;
+    for (name, value) in attributes {
+        write!(out, " {name}=\"{}\"", escape_html(&value))?;
+    }
+    out.write_str(">")
+}
+
+/// The theme a GitHub README's image is for (`logo.png#gh-dark-mode-only`): kept at the end of
+/// its address wherever it goes, for the page to show the one of its theme.
+const THEME_ONLY: &[&str] = &["#gh-dark-mode-only", "#gh-light-mode-only"];
+
+/// What every id of a rendered text starts with, as on GitHub.
+const USER_CONTENT: &str = "user-content-";
+
 /// GitHub-flavored Markdown → sanitized HTML. Relative links resolve against the
 /// file's directory: images to raw files, other links to the blob view.
 pub fn markdown(source: &str, project_url: &str, git_ref: &str, dir: &str) -> String {
-    markdown_with(source, project_url, git_ref, dir, None)
+    markdown_with(source, project_url, git_ref, dir, MarkdownExtras::default())
 }
 
-/// [`markdown`], with images from other sites sent through `images`.
-pub fn markdown_with(source: &str, project_url: &str, git_ref: &str, dir: &str, images: Option<&ImageProxy>) -> String {
+/// [`markdown`], with images from other sites sent through `extras.images`, and fenced code
+/// highlighted with `extras.code`.
+///
+/// The HTML a README holds is kept as GitHub keeps it, sanitized: a centred logo
+/// (`<p align="center">`), an image for each theme (`<picture>`), `<details>`, `<kbd>`, `<sub>`,
+/// tables; never a script, a style, an event handler or another site's frame.
+pub fn markdown_with(source: &str, project_url: &str, git_ref: &str, dir: &str, extras: MarkdownExtras) -> String {
     let mut opts = comrak::Options::default();
     opts.extension.table = true;
     opts.extension.strikethrough = true;
     opts.extension.autolink = true;
     opts.extension.tasklist = true;
     opts.extension.footnotes = true;
-    opts.extension.header_id_prefix = Some("user-content-".into());
+    opts.extension.header_id_prefix = Some(USER_CONTENT.into());
     // `> [!NOTE]` and friends (GitHub's and GitLab's alerts)
     opts.extension.alerts = true;
     // `$x^2$`, `$$...$$`, `` $`x`$ `` and ```math: marked here, typeset in the browser
@@ -270,38 +369,86 @@ pub fn markdown_with(source: &str, project_url: &str, git_ref: &str, dir: &str, 
     opts.extension.math_code = true;
     // `:tada:` and the other emoji shortcodes, as on GitLab and GitHub
     opts.extension.shortcodes = true;
-    opts.render.r#unsafe = false;
-    let html = markdown_html(source, &opts);
+    // the HTML written in a README (a centred logo, a picture, a fold): ammonia keeps what is safe
+    opts.render.r#unsafe = true;
+    let html = markdown_html(source, &opts, extras.code);
 
     let rewrite = LinkRewriter {
         base_dir: if dir.is_empty() { String::new() } else { format!("{dir}/") },
         project_url: project_url.trim_end_matches('/').to_string(),
         git_ref: git_ref.to_string(),
     };
-    let proxy = images.cloned();
-    ammonia::Builder::default()
+    // a `<source>`'s `srcset` is no address ammonia knows: its images are rewritten here alike
+    let sources = rewrite.clone();
+    let proxy = extras.images.cloned();
+    let headings = ["h1", "h2", "h3", "h4", "h5", "h6"];
+    let mut builder = ammonia::Builder::default();
+    builder
         .url_relative(UrlRelative::Custom(Box::new(rewrite)))
         .add_generic_attributes(&["id"])
+        // a README's own ids (`<a id="install">`) never clash with the page's: they read
+        // `user-content-install`, as a heading's do, and its links find them in the browser
+        .id_prefix(Some(USER_CONTENT))
+        // a task list's box, and nothing else: never a field to type in
         .add_tag_attributes("input", &["type", "checked", "disabled"])
-        .add_tags(&["input"])
+        .set_tag_attribute_value("input", "type", "checkbox")
+        .set_tag_attribute_value("input", "disabled", "")
+        .add_tags(&["input", "picture", "source"])
+        // a heading's link to itself (`class="anchor"`, named for screen readers), and an
+        // anchor by name, prefixed as ids are
+        .add_tag_attributes("a", &["class", "aria-label", "name"])
         // a fenced block's language (`language-rust`, `language-suggestion:-1+2`):
         // nothing else, and only plain characters
         .add_tag_attributes("code", &["class", "data-math-style"])
-        .add_tag_attributes("span", &["data-math-style"])
-        .add_tag_attributes("div", &["class"])
-        .add_tag_attributes("p", &["class"])
+        // the highlighter's classes (`hl-keyword`), and math
+        .add_tag_attributes("span", &["class", "data-math-style"])
+        .add_tag_attributes("div", &["class", "align"])
+        .add_tag_attributes("p", &["class", "align"])
+        .add_tag_attributes("source", &["srcset", "media", "type", "width", "height"])
+        .add_tag_attributes("details", &["open"]);
+    for h in headings {
+        builder.add_tag_attributes(h, &["align"]);
+    }
+    builder
         .attribute_filter(move |el, attr, value| {
             if el == "img"
                 && attr == "src"
                 && let Some(px) = &proxy
                 && px.wants(value)
             {
-                let abs = if value.starts_with("//") { format!("https:{value}") } else { value.to_string() };
-                return Some(px.path(&abs).into());
+                // the theme it is for stays at the end of its address
+                let (url, only) = THEME_ONLY.iter().find_map(|t| value.strip_suffix(t).map(|u| (u, *t))).unwrap_or((value, ""));
+                let abs = if url.starts_with("//") { format!("https:{url}") } else { url.to_string() };
+                return Some(format!("{}{only}", px.path(&abs)).into());
+            }
+            if el == "source" && attr == "srcset" {
+                return srcset(value, &sources, proxy.as_ref()).map(Into::into);
+            }
+            // only the media of a theme (`(prefers-color-scheme: dark)`), and image types
+            if el == "source" && attr == "media" {
+                return color_scheme(value).map(|s| format!("(prefers-color-scheme: {s})").into());
+            }
+            if el == "source" && attr == "type" {
+                return value.starts_with("image/").then(|| value.into());
+            }
+            if attr == "align" {
+                let a = value.trim().to_ascii_lowercase();
+                return matches!(a.as_str(), "left" | "center" | "right" | "justify").then(|| a.into());
+            }
+            if el == "a" && attr == "class" {
+                return (value == "anchor").then(|| value.into());
+            }
+            if el == "a" && attr == "name" {
+                return Some(if value.starts_with(USER_CONTENT) { value.into() } else { format!("{USER_CONTENT}{value}").into() });
             }
             // alerts: their own classes only
             if (el == "div" || el == "p") && attr == "class" {
                 return ALERT_CLASSES.contains(&value).then(|| value.into());
+            }
+            // highlighted code: the highlighter's classes only
+            if el == "span" && attr == "class" {
+                let ok = value.split_whitespace().all(|c| c.strip_prefix("hl-").is_some_and(|n| !n.is_empty()));
+                return ok.then(|| value.into());
             }
             if attr == "data-math-style" {
                 return matches!(value, "inline" | "display").then(|| value.into());
@@ -318,11 +465,48 @@ pub fn markdown_with(source: &str, project_url: &str, git_ref: &str, dir: &str, 
         .to_string()
 }
 
+/// A `<source>`'s `srcset` (`dark.png 1x, dark@2x.png 2x`): each image's address resolved as an
+/// `<img>`'s is (in the repository, or through `images`), its size kept; none when one is not an
+/// image's address (a script's, data).
+fn srcset(value: &str, rewrite: &LinkRewriter, images: Option<&ImageProxy>) -> Option<String> {
+    use ammonia::UrlRelativeEvaluate;
+    let mut out = Vec::new();
+    for candidate in value.split(',').map(str::trim).filter(|c| !c.is_empty()) {
+        let (url, size) = candidate.split_once(char::is_whitespace).map_or((candidate, ""), |(u, s)| (u, s.trim()));
+        let lower = url.to_ascii_lowercase();
+        let resolved = if lower.starts_with("http://") || lower.starts_with("https://") || lower.starts_with("//") {
+            match images.filter(|px| px.wants(url)) {
+                Some(px) => px.path(&if url.starts_with("//") { format!("https:{url}") } else { url.to_string() }),
+                None => url.to_string(),
+            }
+        } else if url.contains(':') || url.is_empty() {
+            // `javascript:`, `data:`: no image of the repository's
+            return None;
+        } else {
+            rewrite.evaluate(url)?.into_owned()
+        };
+        out.push(if size.is_empty() { resolved } else { format!("{resolved} {size}") });
+    }
+    (!out.is_empty()).then(|| out.join(", "))
+}
+
+/// The colour scheme a `<source>`'s media asks for (`(prefers-color-scheme: dark)`); none for
+/// any other media.
+fn color_scheme(media: &str) -> Option<&'static str> {
+    let compact: String = media.chars().filter(|c| !c.is_whitespace()).collect::<String>().to_ascii_lowercase();
+    match compact.as_str() {
+        "(prefers-color-scheme:dark)" => Some("dark"),
+        "(prefers-color-scheme:light)" => Some("light"),
+        _ => None,
+    }
+}
+
 /// comrak's HTML, with one rule more for `$x$` math than Pandoc's: a closing `$`
 /// glued to a word (`http://$HOST`, a shell's `$VAR`) does not close it. Such a span's
 /// opening `$` is escaped and the source parsed again, so the text keeps its own
-/// Markdown (`**http://$A** and **http://$B**` stays bold, not one math span).
-fn markdown_html(source: &str, opts: &comrak::Options) -> String {
+/// Markdown (`**http://$A** and **http://$B**` stays bold, not one math span). Fenced code is
+/// highlighted with `code`.
+fn markdown_html(source: &str, opts: &comrak::Options, code: Option<&Highlighter>) -> String {
     use comrak::nodes::NodeValue;
     let mut src = std::borrow::Cow::Borrowed(source);
     // each pass escapes every bad span; a few passes undo the chains a new one makes
@@ -348,8 +532,11 @@ fn markdown_html(source: &str, opts: &comrak::Options) -> String {
             })
             .collect();
         if escapes.is_empty() || pass == 4 {
+            let fenced = code.map(FencedCode);
+            let mut plugins = comrak::options::Plugins::default();
+            plugins.render.codefence_syntax_highlighter = fenced.as_ref().map(|f| f as &dyn comrak::adapters::SyntaxHighlighterAdapter);
             let mut out = String::new();
-            comrak::format_html(root, opts, &mut out).expect("writing to a String cannot fail");
+            comrak::format_html_with_plugins(root, opts, &mut out, &plugins).expect("writing to a String cannot fail");
             return out;
         }
         escapes.sort_unstable();
@@ -526,6 +713,7 @@ fn link_text(text: &str, t: &RefTargets) -> String {
     out
 }
 
+#[derive(Clone)]
 struct LinkRewriter {
     base_dir: String,
     project_url: String,
@@ -691,6 +879,110 @@ mod tests {
         // inside a quote and a list too, and with a multibyte text before
         let html = markdown("> - é **http://$A** and **http://$B**", "/acme/api", "main", "");
         assert!(html.contains("é <strong>http://$A</strong> and <strong>http://$B</strong>"), "{html}");
+    }
+
+    #[test]
+    fn a_readme_keeps_the_html_github_keeps() {
+        let html = markdown(
+            "<p align=\"center\">\n  <picture>\n    <source media=\"(prefers-color-scheme: dark)\" srcset=\"img/dark.png, img/dark@2x.png 2x\" />\n    <img src=\"img/light.png\" alt=\"Logo\" width=\"300\" />\n  </picture>\n</p>\n\n<details><summary>More</summary>\n\nHidden **text**\n\n</details>\n\nPress <kbd>Ctrl</kbd>+<kbd>C</kbd>. H<sub>2</sub>O, x<sup>2</sup><br>\n<img src=\"img/a.png#gh-dark-mode-only\"><img src=\"img/b.png#gh-light-mode-only\">\n\n<table><tr><td align=\"center\">Cell</td></tr></table>\n\n<a name=\"install\"></a>\n\n## Install",
+            "/acme/api",
+            "main",
+            "docs",
+        );
+        assert!(html.contains(r#"<p align="center">"#), "{html}");
+        assert!(
+            html.contains(r#"<source media="(prefers-color-scheme: dark)" srcset="/acme/api/-/raw/main/docs/img/dark.png, /acme/api/-/raw/main/docs/img/dark@2x.png 2x">"#),
+            "{html}"
+        );
+        assert!(html.contains(r#"<img src="/acme/api/-/raw/main/docs/img/light.png" alt="Logo" width="300">"#), "{html}");
+        assert!(html.contains("<details><summary>More</summary>") && html.contains("Hidden <strong>text</strong>"), "{html}");
+        assert!(html.contains("<kbd>Ctrl</kbd>+<kbd>C</kbd>. H<sub>2</sub>O, x<sup>2</sup><br>"), "{html}");
+        // the theme an image is for stays at the end of its address
+        assert!(html.contains(r#"src="/acme/api/-/raw/main/docs/img/a.png#gh-dark-mode-only""#), "{html}");
+        assert!(html.contains(r#"<td align="center">Cell</td>"#), "{html}");
+        // an anchor and a heading's id are the text's own, as on GitHub
+        assert!(html.contains(r#"<a name="user-content-install" rel="noopener noreferrer"></a>"#), "{html}");
+        assert!(
+            html.contains(r##"<h2 id="user-content-install">Install<a href="#install" aria-label="Link to heading 'Install'" class="anchor" rel="noopener noreferrer"></a></h2>"##),
+            "{html}"
+        );
+    }
+
+    #[test]
+    fn a_readme_html_cannot_reach_the_page() {
+        let html = markdown(
+            "<script>alert(1)</script><style>body{display:none}</style>\n\n<img src=\"x.png\" onerror=\"alert(2)\"><iframe src=\"https://evil.example\"></iframe>\n<picture><source srcset=\"javascript:alert(3)\" media=\"print\" type=\"text/html\"><source srcset=\"data:image/png;base64,AAAA 2x\"></picture>\n<div id=\"root\" class=\"modal\" align=\"evil\" style=\"position:fixed\">a</div>\n<span class=\"btn hl-keyword\">b</span> <a class=\"btn\" href=\"javascript:alert(4)\">c</a>\n<input type=\"text\" value=\"password\"> <form action=\"/x\"><button>Send</button></form>",
+            "/acme/api",
+            "main",
+            "",
+        );
+        for bad in [
+            "<script",
+            "alert(1)",
+            "<style",
+            "display:none",
+            "onerror",
+            "<iframe",
+            "javascript:",
+            "data:",
+            "print",
+            "text/html",
+            "modal",
+            "evil",
+            "style=",
+            "btn",
+            "<form",
+            "action=",
+        ] {
+            assert!(!html.contains(bad), "{bad} in {html}");
+        }
+        // an id never clashes with the page's
+        assert!(html.contains(r#"<div id="user-content-root">a</div>"#), "{html}");
+        // a box to tick, never a field to type in
+        assert!(html.contains(r#"<input type="checkbox" disabled="">"#), "{html}");
+    }
+
+    #[test]
+    fn fenced_code_is_highlighted_as_files_are() {
+        let h = Highlighter::new();
+        let extras = MarkdownExtras { images: None, code: Some(&h) };
+        let html = markdown_with(
+            "```rust\nfn main() { let s = \"<b>\"; }\n```\n\n```sh\npip install shop\n```\n\n```\nplain <i>\n```\n\n```nonsense\nx < y\n```\n\n```mermaid\ngraph TD; A-->B\n```\n\n```math\na+b\n```\n\n```suggestion:-0+1\nx\n```",
+            "/acme/api",
+            "main",
+            "",
+            extras,
+        );
+        let rust = html.split("<code class=\"language-rust\">").nth(1).expect(&html);
+        assert!(rust.starts_with("<span class=\"hl-source hl-rust\">"), "{html}");
+        assert!(rust.contains("hl-keyword") && rust.contains("&lt;b&gt;") && !rust.contains("<b>"), "{html}");
+        assert!(html.contains("<code class=\"language-sh\"><span class=\"hl-source hl-shell"), "{html}");
+        // what it cannot colour stays as written
+        assert!(html.contains("<pre><code>plain &lt;i&gt;\n</code></pre>"), "{html}");
+        assert!(html.contains("<code class=\"language-nonsense\">x &lt; y\n</code>"), "{html}");
+        assert!(html.contains("<code class=\"language-mermaid\">graph TD; A--&gt;B\n</code>"), "{html}");
+        assert!(html.contains(r#"<code class="language-math" data-math-style="display">a+b"#), "{html}");
+        assert!(html.contains("<code class=\"language-suggestion:-0+1\">x\n</code>"), "{html}");
+    }
+
+    #[test]
+    fn images_of_other_sites_keep_their_theme_through_the_proxy() {
+        let secrets = crate::crypto::SecretBox::from_base64(&crate::crypto::SecretBox::generate_key()).unwrap();
+        let px = ImageProxy::new(secrets, "https://forge.example");
+        let extras = MarkdownExtras { images: Some(&px), code: None };
+        let html = markdown_with(
+            "![a](https://img.example/a.png#gh-dark-mode-only)\n<picture><source media=\"(prefers-color-scheme:dark)\" srcset=\"https://img.example/d.png 2x\"><img src=\"https://forge.example/x.png\"></picture>",
+            "/acme/api",
+            "main",
+            "",
+            extras,
+        );
+        let a = px.path("https://img.example/a.png");
+        assert!(html.contains(&format!(r#"src="{a}#gh-dark-mode-only""#)), "{html}");
+        let d = px.path("https://img.example/d.png");
+        assert!(html.contains(&format!(r#"<source media="(prefers-color-scheme: dark)" srcset="{d} 2x">"#)), "{html}");
+        // this instance's own images are not proxied
+        assert!(html.contains(r#"<img src="https://forge.example/x.png">"#), "{html}");
     }
 
     #[test]
