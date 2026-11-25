@@ -624,6 +624,7 @@ a.dropdown-item:focus-visible {
 
 /* segmented control */
 .segmented {
+  position: relative;
   display: inline-grid;
   grid-auto-columns: minmax(0, 1fr);
   grid-auto-flow: column;
@@ -631,7 +632,26 @@ a.dropdown-item:focus-visible {
   border-radius: var(--radius);
   background: var(--chip-bg);
 }
+/* the chosen segment's pill, one per control: it slides to the segment chosen. Segmented sets
+   --n (segments) and --at (the chosen one); all are one width, so a step is the pill's width */
+.segmented::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc((100% - 4px) / var(--n, 1));
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  box-shadow: 0 1px 2px rgba(60, 40, 20, 0.1);
+  transform: translateX(calc(var(--at, 0) * 100%));
+  transition: transform 180ms var(--ease-out);
+}
+.segmented[data-none]::before {
+  display: none;
+}
 .segment {
+  position: relative; /* above the pill */
   display: grid;
   padding: 4px 12px;
   border: 0;
@@ -647,10 +667,8 @@ a.dropdown-item:focus-visible {
   cursor: pointer;
 }
 .segment[data-checked] {
-  background: var(--bg);
   color: var(--text);
   font-weight: 600;
-  box-shadow: 0 1px 2px rgba(60, 40, 20, 0.1);
 }
 /* the label and its hidden bold copy share one cell, so the cell is as wide as the bold */
 .segment > span {
@@ -7828,7 +7846,8 @@ button.test-case-row:hover {
   .side-sub,
   .side-sub.folded,
   .scrim,
-  .ready-ring .done {
+  .ready-ring .done,
+  .segmented::before {
     transition: none;
   }
   .select-menu,

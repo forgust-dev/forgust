@@ -160,8 +160,17 @@ export function Switch({ checked, onChange, children, disabled }: { checked: boo
 
 /** One choice among a few, shown side by side: radios (one is always chosen). */
 export function Segmented<T extends string>({ value, onChange, options, label }: { value: T; onChange: (v: T) => void; options: (Option & { value: T })[]; label: string }) {
+  const at = options.findIndex((o) => o.value === value);
   return (
-    <RadioGroup className="segmented" aria-label={label} value={value} onValueChange={(v) => onChange(v as T)}>
+    <RadioGroup
+      className="segmented"
+      aria-label={label}
+      value={value}
+      onValueChange={(v) => onChange(v as T)}
+      // where the pill of the chosen segment stands; it slides to the next one (styles.css)
+      style={{ "--n": options.length, "--at": Math.max(at, 0) } as CSSProperties}
+      data-none={at < 0 ? "" : undefined}
+    >
       {options.map((o) => (
         <Radio.Root key={o.value} value={o.value} className="segment" disabled={o.disabled} title={typeof o.hint === "string" ? o.hint : undefined}>
           {/* the label in bold, hidden, holds the width: choosing a segment does not resize the control */}
