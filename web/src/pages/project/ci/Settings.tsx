@@ -54,6 +54,7 @@ export function VariablesPanel({ base }: { base: string }) {
   };
   return (
     <Section
+      id="variables"
       title="Variables"
       description="Values given to jobs as environment variables."
       actions={

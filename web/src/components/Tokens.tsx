@@ -48,6 +48,7 @@ export function AccessTokens({ base, title, description }: { base: string; title
   };
   return (
     <ListSection
+      id="access-tokens"
       title={title}
       description={description}
       add="Create a token"

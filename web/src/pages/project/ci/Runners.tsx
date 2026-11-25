@@ -75,6 +75,7 @@ export function RunnersPanel({ list, create, title = "Runners", note, children }
   };
   return (
     <Section
+      id="runners"
       title={title}
       description={note ?? "Machines that pick up and run the jobs."}
       actions={

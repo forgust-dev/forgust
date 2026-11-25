@@ -40,6 +40,7 @@ const PAGES: Record<SettingsSlug, ComponentType<{ ctx: Ctx }>> = {
 /** A settings page of a project: `settings` (general) or `settings/<page>`. */
 export function ProjectSettings({ ctx, page }: { ctx: Ctx; page: string }) {
   useTopOnSwitch(page);
+  useHashSection();
   const found = settingsPage(page);
   if (!found) return <NotFound />;
   const Page = PAGES[found.slug];
@@ -49,18 +50,36 @@ export function ProjectSettings({ ctx, page }: { ctx: Ctx; page: string }) {
 /** Sections that had an anchor here before they moved to a page of their own. */
 const MOVED: Record<string, SettingsSlug> = { "#pages": "ci_cd", "#security-scanning": "automation", "#smart-view": "automation" };
 
-/** Brings the section of the address's anchor (`#id`) to the top once it is `ready`, and keeps it
- *  there while the sections above it load and grow, until the page settles or someone scrolls. */
-function useAnchor(id: string, ready: boolean) {
+/**
+ * Brings the section the address names (`#id`) into view once it is there: the page may show it
+ * later (a page loaded on demand, its data). It keeps it in place while the sections above it
+ * load and grow, until the page settles or someone scrolls. Also when the anchor changes on the
+ * page: the Ctrl+K palette leads to any section.
+ */
+function useHashSection() {
+  const { hash } = useLocation();
   useEffect(() => {
-    const el = document.getElementById(id);
-    if (!ready || window.location.hash !== `#${id}` || !el) return;
-    const place = () => el.scrollIntoView({ block: "start" });
-    place();
+    const id = decodeURIComponent(hash.slice(1));
+    if (!id) return;
+    const main = document.querySelector("main") ?? document.body;
+    let el = document.getElementById(id);
+    const place = () => el?.scrollIntoView({ block: "start" });
     const grows = new ResizeObserver(place);
-    grows.observe(el.parentElement ?? document.body);
-    const stop = () => grows.disconnect();
-    const settled = window.setTimeout(stop, 1500);
+    const appears = new MutationObserver(() => {
+      if (el || !(el = document.getElementById(id))) return;
+      appears.disconnect();
+      place();
+      grows.observe(main);
+    });
+    if (el) {
+      place();
+      grows.observe(main);
+    } else appears.observe(main, { childList: true, subtree: true });
+    const stop = () => {
+      grows.disconnect();
+      appears.disconnect();
+    };
+    const settled = window.setTimeout(stop, 3000);
     const away = ["wheel", "touchstart", "keydown"] as const;
     for (const ev of away) window.addEventListener(ev, stop, { once: true, passive: true });
     return () => {
@@ -68,7 +87,7 @@ function useAnchor(id: string, ready: boolean) {
       window.clearTimeout(settled);
       for (const ev of away) window.removeEventListener(ev, stop);
     };
-  }, [id, ready]);
+  }, [hash]);
 }
 
 function RepositorySettings({ ctx }: { ctx: Ctx }) {
@@ -78,10 +97,10 @@ function RepositorySettings({ ctx }: { ctx: Ctx }) {
       <ListHead title="Repository settings" sub="Protected branches and tags, push rules, locked files, and keys and tokens to clone the repository." />
       <ProtectedBranches ctx={ctx} />
       <ProtectedTags ctx={ctx} />
-      <Section title="Push rules" description="Checks every push (and every commit made in the browser) must pass.">
+      <Section id="push-rules" title="Push rules" description="Checks every push (and every commit made in the browser) must pass.">
         <PushRules ctx={ctx} />
       </Section>
-      <Section title="Locked files" description="Files locked with git lfs lock: on the default branch, only their owner can change them.">
+      <Section id="locked-files" title="Locked files" description="Files locked with git lfs lock: on the default branch, only their owner can change them.">
         <LockedFiles ctx={ctx} />
       </Section>
       <DeployKeys ctx={ctx} />
@@ -170,6 +189,7 @@ function AutomationSettings({ ctx }: { ctx: Ctx }) {
         <SecurityScanning ctx={ctx} />
       </Section>
       <Section
+        id="dependency-updates"
         title="Dependency updates"
         description="Renovate opens merge requests that update this project's dependencies, as a bot member of the project. No token or pipeline to set up."
       >
@@ -198,7 +218,6 @@ function SmartViewSetting({ ctx }: { ctx: Ctx }) {
   const key = ["smart-view-settings", ctx.p.id];
   const q = useQuery({ queryKey: key, queryFn: () => api.get<S["SmartViewSettings"]>(`/projects/${ctx.p.id}/smart_view`) });
   // the Smart View's page links here when it is off
-  useAnchor("smart-view", !!q.data);
   const done = () => {
     qc.invalidateQueries({ queryKey: key });
     qc.invalidateQueries({ queryKey: ["map", ctx.p.id] });
@@ -340,7 +359,7 @@ function GeneralSettings({ ctx }: { ctx: Ctx }) {
       {msg && <div className="alert ok">{msg}</div>}
       {!archived && (
         <>
-          <Section title="Picture" description="The project's picture in lists, its page and the sidebar.">
+          <Section id="picture" title="Picture" description="The project's picture in lists, its page and the sidebar.">
             <AvatarUpload
               preview={<Tile name={p.name} src={p.avatar_url} big />}
               path={`/projects/${p.id}/avatar`}
@@ -349,7 +368,7 @@ function GeneralSettings({ ctx }: { ctx: Ctx }) {
               what="in lists and on the project's page"
             />
           </Section>
-          <Section title="General" description="Name, description, who can see the project, and the branch it opens on.">
+          <Section id="general" title="General" description="Name, description, who can see the project, and the branch it opens on.">
             <form className="stack" onSubmit={saveGeneral}>
               <ErrorBox error={generalError} />
               <Field label="Name">
@@ -927,7 +946,6 @@ function LockedFiles({ ctx }: { ctx: Ctx }) {
 function StorageUse({ ctx }: { ctx: Ctx }) {
   const q = useQuery({ queryKey: ["storage", ctx.p.id], queryFn: () => api.get<S["ProjectStorageUse"]>(`/projects/${ctx.p.id}/storage`) });
   // the storage banner links here: once the numbers are in, show them
-  useAnchor("storage", !!q.data);
   return (
     <Q q={q}>
       {(u) => (
