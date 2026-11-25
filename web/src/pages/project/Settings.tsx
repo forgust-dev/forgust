@@ -1120,7 +1120,9 @@ function DeployKeys({ ctx }: { ctx: Ctx }) {
                   <div className="grow" style={{ minWidth: 0 }}>
                     <strong>{k.title}</strong>
                     <div className="small muted">
-                      {k.can_push ? "Can read and push" : "Can read"} · added {timeAgo(k.created_at)} · <span className="mono">{k.fingerprint}</span>
+                      {k.can_push ? "Can read and push" : "Can read"} · added {timeAgo(k.created_at)} · <span className="mono" style={{ overflowWrap: "anywhere" }}>
+                        {k.fingerprint}
+                      </span>
                     </div>
                   </div>
                   <button className="btn small danger" onClick={() => del.mutate(k.id)}>

@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, timeAgo, type S } from "../api/client";
-import { Badge, ErrorBox, Field, levelName, Q, StateBadge } from "./ui";
+import { ErrorBox, Field, levelName, Q, StateBadge } from "./ui";
 import { Select } from "./controls";
 import { AddActions, EmptyRow, ListSection } from "./settings";
 import { CircleCheck, CircleX, Clock } from "lucide-react";
@@ -103,17 +103,23 @@ export function Webhooks({ base, title, description }: { base: string; title: st
               {hooks.map((h) => (
                 <div key={h.id} className="list-group">
                   <div className="item">
-                    <code className="grow ellipsis">{h.url}</code>
-                    {h.format !== "generic" && <Badge>{formatName(h.format)}</Badge>}
-                    {h.events.map((e) => (
-                      <Badge key={e}>{e}</Badge>
-                    ))}
-                    <button className="btn small" onClick={() => setOpen(open === h.id ? null : h.id)}>
-                      Deliveries
-                    </button>
-                    <button className="btn small danger" onClick={() => del.mutate(h.id)}>
-                      Remove
-                    </button>
+                    <div className="grow" style={{ minWidth: 0 }}>
+                      <code className="ellipsis" style={{ display: "block" }} title={h.url}>
+                        {h.url}
+                      </code>
+                      <div className="small muted">
+                        {h.format !== "generic" && `${formatName(h.format)} · `}
+                        called on {h.events.join(", ")}
+                      </div>
+                    </div>
+                    <div className="row" style={{ flex: "none", gap: 6 }}>
+                      <button className="btn small" onClick={() => setOpen(open === h.id ? null : h.id)}>
+                        Deliveries
+                      </button>
+                      <button className="btn small danger" onClick={() => del.mutate(h.id)}>
+                        Remove
+                      </button>
+                    </div>
                   </div>
                   {open === h.id && <Deliveries base={base} id={h.id} />}
                 </div>
