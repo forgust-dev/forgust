@@ -1817,12 +1817,12 @@ kbd {
 .side-link.sub::before {
   content: "";
   position: absolute;
-  left: -11px;
+  left: -12px;
   top: 50%;
-  width: 6px;
-  height: 6px;
-  margin-top: -3px;
-  border-radius: 2px;
+  width: 8px;
+  height: 8px;
+  margin-top: -4px;
+  border-radius: 50%;
 }
 .side-link.sub.active::before {
   background: var(--brand);
@@ -2525,10 +2525,6 @@ kbd {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-}
-.side-version .dot {
-  width: 6px;
-  height: 6px;
 }
 
 /* ---- repository overview (Repo v1) */
@@ -4693,10 +4689,12 @@ a.status-badge:hover {
   height: 1px;
   background: var(--border-strong);
 }
+/* a dot is 8 px: a whole number of screen pixels at 125, 150 and 200 %, where 9 or 10 px fall
+   on half pixels and come out uneven */
 .dot {
   flex: none;
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: currentColor;
 }
@@ -7537,8 +7535,8 @@ button.test-case-row:hover {
 .pipe-legend i {
   display: inline-block;
   flex: none; /* a flex item: without it, a narrow legend squeezes the dot into an oval */
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   margin-left: 6px;
   border-radius: 50%;
 }

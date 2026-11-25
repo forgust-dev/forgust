@@ -46,7 +46,8 @@ on light, one of each on dark. On the dark panel, in light, `--emph-*` takes the
 color, as its text does. Text on a filled tone uses `--on-tone` (or `--accent-text` on orange),
 never `#fff`. README alerts keep GitHub's colors, and a job log keeps its terminal palette, whose
 base green and red are the site's. A dot that stands for a state or a series (a stage, a
-legend) is round.
+legend) is round and 8 px (`.dot`): at 125 or 150 %, 9 or 10 px fall on half pixels and come
+out uneven.
 
 The sidebar, the top bar and the job list are painted `--bg-side`, which in light is the color
 of `--bg-hover`: a hover there takes `--side-hover`, or it does not show.
