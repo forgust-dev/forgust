@@ -10,7 +10,7 @@ import { ApprovalRules, Webhooks } from "../../components/Webhooks";
 import type { Ctx } from "./Project";
 import { HostRules } from "../../components/HostRules";
 import { useBranches } from "./Code";
-import { useGroups } from "../../prefetch";
+import { fetchers, useGroups } from "../../prefetch";
 import { useSession } from "../../session";
 import { StatusBadge } from "./ci/Status";
 import { useConfirm, usePrompt } from "../../shell/dialog";
@@ -317,12 +317,16 @@ function GeneralSettings({ ctx }: { ctx: Ctx }) {
   };
   const [path, setPath] = useState(p.path);
   const [target, setTarget] = useState("");
+  // a subgroup, or a place the list does not hold: by its path, as before the list
+  const [typed, setTyped] = useState("");
   const { user } = useSession();
   const groups = useGroups(p.can_own);
   const places = [
     ...(user?.namespace_id ? [{ value: String(user.namespace_id), label: `${user.username} (personal)` }] : []),
     ...(groups.data ?? []).map((g) => ({ value: String(g.id), label: g.full_path })),
-  ].filter((o) => o.value !== String(p.namespace_id));
+  ]
+    .filter((o) => o.value !== String(p.namespace_id))
+    .concat([{ value: "path", label: "Another group, by its path…" }]);
   const prompt = usePrompt();
   const remove = async () => {
     const typed = await prompt({
@@ -427,15 +431,21 @@ function GeneralSettings({ ctx }: { ctx: Ctx }) {
             <form
               className="stack"
               onSubmit={run(async () => {
-                const np = await api.post<S["ProjectDto"]>(`/projects/${p.id}/transfer`, { namespace_id: Number(target) });
+                const id = target === "path" ? (await fetchers.pathResolve(typed.trim())).id : Number(target);
+                const np = await api.post<S["ProjectDto"]>(`/projects/${p.id}/transfer`, { namespace_id: id });
                 nav(`/${np.full_path}/-/settings`, { replace: true });
               }, "Project moved.")}
             >
               <Field label="Move to another group" hint="An organization, a subgroup, or your personal namespace">
                 <Select value={target} onChange={setTarget} placeholder="Choose where" options={places} />
               </Field>
+              {target === "path" && (
+                <Field label="Group path" hint="Its path, as in its address: acme/platform">
+                  <input className="mono" placeholder="acme/platform" value={typed} onChange={(e) => setTyped(e.target.value)} />
+                </Field>
+              )}
               <div>
-                <button className="btn" disabled={!target}>
+                <button className="btn" disabled={!target || (target === "path" && !typed.trim())}>
                   Move
                 </button>
               </div>
