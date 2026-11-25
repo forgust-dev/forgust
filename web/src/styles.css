@@ -1547,6 +1547,10 @@ kbd {
   background: var(--bg-hover);
   color: var(--text);
 }
+/* the top bar has the sidebar's color, which --bg-hover matches in light */
+.topbar .icon-btn:hover {
+  background: var(--side-hover);
+}
 /* a theme change: the page crossfades to the new colours (theme.tsx), and the
    button's new icon turns in (Shell.tsx), the button itself stays put */
 ::view-transition-old(root),
@@ -3460,13 +3464,13 @@ kbd {
   border-radius: 3px;
 }
 .quota-bar .ok {
-  background: var(--chart-ok);
+  background: var(--ok);
 }
 .quota-bar .warn {
-  background: var(--chart-warn);
+  background: var(--warn);
 }
 .quota-bar .bad {
-  background: var(--chart-bad);
+  background: var(--danger);
 }
 .checks,
 .blockers {
@@ -4909,7 +4913,7 @@ a.status-badge:hover {
   color: var(--text);
 }
 .job-list-item:hover {
-  background: var(--bg-hover);
+  background: var(--side-hover);
   text-decoration: none;
 }
 .job-list-item.active {
