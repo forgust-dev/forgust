@@ -44,6 +44,7 @@
   --bg-side: #f3eee7;
   --chip-bg: #efe9e1;
   --side-active-bg: #ffffff;
+  --side-hover: #e8e2d9;
   --side-active-ring: #e6dfd5;
   --primary-bg: #1c1915;
   --primary-hover: #36302a;
@@ -125,6 +126,7 @@
     --tab-mark: #ff6500;
     --chip-bg: #22252d;
     --side-active-bg: #22252d;
+    --side-hover: var(--bg-hover);
     --side-active-ring: #30343d;
     --primary-bg: #f5f5f6;
     --primary-hover: #d9dbe0;
@@ -196,6 +198,7 @@
   --tab-mark: #ff6500;
   --chip-bg: #22252d;
   --side-active-bg: #22252d;
+  --side-hover: var(--bg-hover);
   --side-active-ring: #30343d;
   --primary-bg: #f5f5f6;
   --primary-hover: #d9dbe0;
@@ -1766,7 +1769,7 @@ kbd {
   flex: none;
 }
 .side-link:hover {
-  background: var(--bg-hover);
+  background: var(--side-hover);
   color: var(--text);
   text-decoration: none;
 }
@@ -3249,10 +3252,10 @@ kbd {
   background: var(--border);
 }
 .diff-bar .add {
-  background: #2f9e62;
+  background: var(--ok);
 }
 .diff-bar .del {
-  background: #d6455d;
+  background: var(--danger);
 }
 .tabs .icon-btn {
   align-self: center;
@@ -3680,7 +3683,7 @@ kbd {
 }
 .tl-icon.ok-solid {
   background: var(--ok);
-  color: #fff;
+  color: var(--on-tone);
 }
 .tl-icon.merged {
   background: var(--merged);
@@ -4494,8 +4497,8 @@ a.status-badge:hover {
   width: 36px;
   height: 36px;
   border-radius: var(--radius);
-  background: var(--accent-soft);
-  color: var(--accent-ink);
+  background: var(--bg-hover);
+  color: var(--text-muted);
 }
 .sched-card.paused .sched-icon {
   background: var(--bg-hover);
@@ -6519,9 +6522,6 @@ a.item.import-row:hover {
   content: " (merged)";
   font-weight: 400;
 }
-.accent-text {
-  color: var(--accent);
-}
 .todo-row .row-desc {
   max-width: 70ch;
 }
@@ -7010,7 +7010,7 @@ a.item.import-row:hover {
 .ms-bar > span {
   display: block;
   height: 100%;
-  background: var(--ok, #16a34a);
+  background: var(--ok);
 }
 .ms-row .ms-progress {
   width: 220px;
@@ -7136,7 +7136,7 @@ a.item.import-row:hover {
   padding: 0 4px;
   border-radius: 8px;
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-text);
   font-size: 10.5px;
   font-weight: 600;
   line-height: 16px;
@@ -8557,7 +8557,7 @@ button.test-case-row:hover {
 }
 .smart-mr > svg {
   flex: none;
-  color: var(--accent);
+  color: var(--text-muted);
 }
 .smart-mr .btn.on {
   border-color: var(--accent);

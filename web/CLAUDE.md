@@ -41,6 +41,11 @@ folder icons (they open) and the page-loading bar (it answers a click). Progress
 of what it counts: green for what is done and fine (the readiness ring), blue for what runs (an
 import).
 
+A tone has one color per surface: the page tokens (`--ok`, `--danger`…) on the page, `--emph-*`
+on a dark panel (lighter on purpose, like its text), `--chart-*` only inside charts. Text on a
+filled tone uses `--on-tone` (or `--accent-text` on orange), never `#fff`. README alerts keep
+GitHub's colors, and a job log keeps its terminal palette.
+
 Never put a hex color in a component. Data that carries its own color is the exception: a label
 and its swatches, code highlighting, the Smart View's block kinds and logos.
 

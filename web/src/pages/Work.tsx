@@ -288,7 +288,7 @@ function MrRows({ list, review, status, me }: { list: S["WorkMr"][]; review?: bo
                 </span>
                 {me && m.author_username === me ? <span>opened by you</span> : <span>by {m.author_username ? <UserLink username={m.author_username} /> : "ghost"}</span>}
                 {me && m.author_username !== me && <span>assigned to you</span>}
-                {review && m.review_state && <span className={isWaiting(m) ? "accent-text" : ""}>{REVIEW_TEXT[m.review_state] ?? m.review_state}</span>}
+                {review && m.review_state && <span className={isWaiting(m) ? "warn-text" : ""}>{REVIEW_TEXT[m.review_state] ?? m.review_state}</span>}
                 {status && <span title={new Date(m.updated_at).toLocaleString()}>updated {timeAgo(m.updated_at)}</span>}
               </div>
             </div>
