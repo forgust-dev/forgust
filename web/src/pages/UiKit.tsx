@@ -1,5 +1,7 @@
 import { AlertTriangle, Archive, Ban, Bell, CircleCheck, CircleX, Clock, Copy, GitBranch, GitMerge, Globe, HardDrive, Loader2, Lock, Milestone, Pencil, Plus, Shield, Star, Tag, Trash2, UserRound, type LucideIcon } from "lucide-react";
-import { Badge, Card, ListHead, Section, StateBadge, type Tone } from "../components/ui";
+import { useState } from "react";
+import { Badge, Card, Field, ListHead, Section, StateBadge, type Tone } from "../components/ui";
+import { AddActions, EmptyRow, ListSection, SaveRow, SettingSwitch, useSaved } from "../components/settings";
 import { StateMark, StateOf, issueLook, mrLook } from "../components/states";
 import { LabelChip } from "../components/labels";
 import { DecideCard } from "../components/decide";
@@ -232,6 +234,91 @@ export function UiKit() {
           </div>
         </div>
       </Section>
+
+      <SettingsDemo />
     </div>
+  );
+}
+
+/** The settings' own rules (components/settings.tsx), with nothing sent anywhere. */
+function SettingsDemo() {
+  const form = useSaved({ name: "Marketplace" });
+  const [adding, setAdding] = useState(false);
+  const [rules, setRules] = useState<string[]>([]);
+  const [pattern, setPattern] = useState("");
+  return (
+    <>
+      <Section
+        title="Settings: saving"
+        description="A form of several fields has one Save, grey until something changes, then Saved beside it; the page asks before it is left with changes. A setting that is one switch saves as it is flipped."
+      >
+        <form
+          className="stack"
+          onSubmit={(e) => {
+            e.preventDefault();
+            form.done();
+          }}
+        >
+          <Field label="Name">
+            <input value={form.value.name} onChange={(e) => form.set({ name: e.target.value })} />
+          </Field>
+          <SaveRow dirty={form.dirty} saved={form.saved} />
+          <SettingSwitch checked onSave={() => new Promise((done) => setTimeout(done, 300))}>
+            Use the instance&apos;s shared runners
+          </SettingSwitch>
+        </form>
+      </Section>
+      <ListSection
+        title="Settings: a list"
+        description="What is there first, or one line when nothing is; the form opens from this button and closes once done. Each rule says what it lets happen."
+        add="Protect a branch"
+        adding={adding}
+        onAdd={() => setAdding(true)}
+        form={
+          <form
+            className="stack"
+            onSubmit={(e) => {
+              e.preventDefault();
+              setRules([...rules, pattern]);
+              setPattern("");
+              setAdding(false);
+            }}
+          >
+            <Field label="Branch or pattern">
+              <input value={pattern} onChange={(e) => setPattern(e.target.value)} />
+            </Field>
+            <AddActions label="Protect" disabled={!pattern.trim()} onCancel={() => setAdding(false)} />
+          </form>
+        }
+      >
+        {rules.length === 0 ? (
+          <EmptyRow>No protected branches.</EmptyRow>
+        ) : (
+          <div className="list">
+            {rules.map((r) => (
+              <div className="item" key={r}>
+                <div className="grow">
+                  <code>{r}</code>
+                  <div className="small muted">Maintainers can push and merge · no force push</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </ListSection>
+      <Section title="Settings: danger zone" description="What cannot be undone lightly, at the bottom of its page: one row per action, what it does beside it. Deleting asks to type the name." danger>
+        <div className="danger-rows">
+          <div className="danger-row">
+            <div className="grow">
+              <strong>Delete this project</strong>
+              <p className="small muted">Its repository, issues, merge requests, pipelines and everything else go with it, for good.</p>
+            </div>
+            <button type="button" className="btn danger">
+              Delete project
+            </button>
+          </div>
+        </div>
+      </Section>
+    </>
   );
 }

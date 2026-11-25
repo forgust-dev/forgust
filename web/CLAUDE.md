@@ -83,4 +83,24 @@ picker; a password a `PasswordInput`, with its Show button.
   `info`, `neutral` or `danger`.
 - `.alert ok|error|warn` is a form's result, under the form. Errors use `ErrorBox`.
 
+## Settings
+
+`components/settings.tsx` holds their rules; `/-/ui` shows them.
+
+- A settings page is sections: a title and one sentence on the left (`Section`), the settings on
+  the right. Each section has an id listed in `pages/project/settingsPages.ts`
+  (`SETTINGS_SECTIONS`): the Ctrl+K palette finds it, and `#id` scrolls to it.
+- A form of several fields has one Save (`SaveRow`, values in `useSaved`): grey until something
+  changes, then "Saved" beside it. Leaving the page with changes not saved asks first.
+- A setting that is one switch saves as it is flipped (`SettingSwitch`); if turning it off undoes
+  something, it asks first.
+- A feature is turned on by a switch; its options show once it is on, and are still sent as they
+  are while it is off.
+- A list shows what is there first, or one line when nothing is (`EmptyRow`). Its add form opens
+  from the button under the section's description (`ListSection`) and closes once done; a secret
+  shown once stays on screen after its form closes.
+- A rule says in words what it lets happen ("Maintainers can push and merge · no force push").
+- What cannot be undone lightly is in the page's Danger zone, at the bottom: one row per action,
+  with what it does. Deleting asks to type the name.
+
 Check new UI in light and dark, at desktop width and at 390 px.
