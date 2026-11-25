@@ -2,7 +2,8 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Lock, Plus, Server, Trash2 } from "lucide-react";
 import { api, timeAgo, type S } from "../../../api/client";
-import { Section, Empty, ErrorBox, Field, NewSecret, Q, StateBadge } from "../../../components/ui";
+import { Section, ErrorBox, Field, NewSecret, Q, StateBadge } from "../../../components/ui";
+import { EmptyRow } from "../../../components/settings";
 import { useToast } from "../../../shell/toast";
 import { useConfirm } from "../../../shell/dialog";
 
@@ -117,7 +118,7 @@ export function RunnersPanel({ list, create, title = "Runners", note, children }
         <Q q={q}>
           {(rs) =>
             rs.length === 0 ? (
-              <Empty>No runners yet.</Empty>
+              <EmptyRow>No runners yet.</EmptyRow>
             ) : (
               <div className="list">
                 {rs.map((r) => (
