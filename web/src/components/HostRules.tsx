@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type S } from "../api/client";
 import { Plus } from "lucide-react";
 import { ErrorBox, Field, Q } from "./ui";
+import { useFocusSwap } from "./settings";
 
 /** Credentials Renovate uses for private registries; passwords are write-only. */
 export function HostRules({ base, empty: emptyText, title = "Private registries" }: { base: string; empty: string; title?: string }) {
@@ -12,6 +13,9 @@ export function HostRules({ base, empty: emptyText, title = "Private registries"
   const empty = { match_host: "", host_type: "", username: "", password: "" };
   const [r, setR] = useState(empty);
   const [adding, setAdding] = useState(false);
+  const button = useRef<HTMLButtonElement>(null);
+  const card = useRef<HTMLDivElement>(null);
+  useFocusSwap(adding, card, button);
   const [error, setError] = useState<unknown>(null);
   const refresh = () => qc.invalidateQueries({ queryKey: key });
   const close = () => {
@@ -54,12 +58,12 @@ export function HostRules({ base, empty: emptyText, title = "Private registries"
       {/* the list first; the form once asked for */}
       {!adding ? (
         <div>
-          <button type="button" className="btn small" onClick={() => setAdding(true)}>
+          <button ref={button} type="button" className="btn small" onClick={() => setAdding(true)}>
             <Plus size={14} /> Add a registry
           </button>
         </div>
       ) : (
-      <div className="card card-body add-form stack" role="group" aria-label="New registry">
+      <div ref={card} className="card card-body add-form stack" role="group" aria-label="New registry">
       <div className="grid2">
         <Field label="Host">
           <input value={r.match_host} placeholder="npm.example.com" onChange={(e) => setR({ ...r, match_host: e.target.value })} />

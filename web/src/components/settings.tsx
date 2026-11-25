@@ -189,6 +189,9 @@ export function ListSection({
   form: ReactNode;
   children: ReactNode;
 }) {
+  const button = useRef<HTMLButtonElement>(null);
+  const card = useRef<HTMLDivElement>(null);
+  useFocusSwap(adding, card, button);
   return (
     <Section
       id={id}
@@ -196,18 +199,35 @@ export function ListSection({
       description={description}
       actions={
         add && !adding ? (
-          <button type="button" className="btn small" onClick={onAdd}>
+          <button ref={button} type="button" className="btn small" onClick={onAdd}>
             <Plus size={14} /> {add}
           </button>
         ) : undefined
       }
     >
       <div className="stack">
-        {adding && <div className="card card-body add-form">{form}</div>}
+        {adding && (
+          <div ref={card} className="card card-body add-form">
+            {form}
+          </div>
+        )}
         {children}
       </div>
     </Section>
   );
+}
+
+/**
+ * Keyboard focus across an add form that replaces its button: its first field once it opens,
+ * the button again once it closes (done or canceled), instead of falling to the page.
+ */
+export function useFocusSwap(open: boolean, form: React.RefObject<HTMLElement | null>, button: React.RefObject<HTMLElement | null>) {
+  const was = useRef(open);
+  useEffect(() => {
+    if (open && !was.current) form.current?.querySelector<HTMLElement>("input, textarea, [role=combobox], [role=radio], button")?.focus();
+    if (!open && was.current) button.current?.focus();
+    was.current = open;
+  }, [open, form, button]);
 }
 
 /** An add form's buttons: what it does, and Cancel. */
