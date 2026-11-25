@@ -960,40 +960,72 @@ function LockedFiles({ ctx }: { ctx: Ctx }) {
   );
 }
 
+/** What a project keeps, the largest first: a bar per kind, of the whole, in one grey (no kind
+ *  is a state); the kinds that hold nothing in one line. Its quotas above, if any. */
 function StorageUse({ ctx }: { ctx: Ctx }) {
   const q = useQuery({ queryKey: ["storage", ctx.p.id], queryFn: () => api.get<S["ProjectStorageUse"]>(`/projects/${ctx.p.id}/storage`) });
   // the storage banner links here: once the numbers are in, show them
   return (
     <Q q={q}>
-      {(u) => (
-        <div className="stack">
-          {u.quota && <QuotaBar label="This project's quota" used={u.quota.used} quota={u.quota.quota} />}
-          {u.namespace && <QuotaBar label={`Quota of ${u.namespace.name}, shared by all its projects`} used={u.namespace.used} quota={u.namespace.quota} />}
-          <dl className="storage-use">
-            <dt>Repository</dt>
-            <dd>{bytes(u.repository_bytes)}</dd>
-            <dt>Uploads</dt>
-            <dd>
-              {bytes(u.uploads_bytes)} <span className="muted">({u.uploads_count} files)</span>
-            </dd>
-            <dt>CI artifacts and logs</dt>
-            <dd>{bytes(u.artifacts_bytes)}</dd>
-            <dt>Git LFS</dt>
-            <dd>{bytes(u.lfs_bytes)}</dd>
-            <dt>Container images</dt>
-            <dd>{bytes(u.registry_bytes)}</dd>
-            <dt>Total</dt>
-            <dd>
-              <strong>{bytes(u.total_bytes)}</strong>
-            </dd>
-          </dl>
-          {(u.quota || u.namespace) && (
-            <p className="small muted" style={{ margin: 0 }}>
-              Once a quota is full, new pushes, commits, merges, LFS files, CI artifacts, images and uploads are refused; reading, deleting and CI jobs carry on. Administrators set quotas.
-            </p>
-          )}
-        </div>
-      )}
+      {(u) => {
+        const total = u.total_bytes;
+        const kinds = [
+          { name: "Repository", few: "the repository", bytes: Math.max(0, u.repository_bytes) },
+          { name: "Uploads", few: "uploads", bytes: u.uploads_bytes, note: u.uploads_count > 0 ? `${u.uploads_count} file${u.uploads_count === 1 ? "" : "s"}` : undefined },
+          { name: "CI artifacts and logs", few: "CI artifacts and logs", bytes: u.artifacts_bytes },
+          { name: "Git LFS", few: "Git LFS", bytes: u.lfs_bytes },
+          { name: "Container images", few: "container images", bytes: u.registry_bytes },
+        ];
+        const held = kinds.filter((k) => k.bytes > 0).sort((a, b) => b.bytes - a.bytes);
+        const empty = kinds.filter((k) => k.bytes <= 0).map((k) => k.few);
+        return (
+          <div className="stack">
+            {u.quota && <QuotaBar label="This project's quota" used={u.quota.used} quota={u.quota.quota} />}
+            {u.namespace && <QuotaBar label={`Quota of ${u.namespace.name}, shared by all its projects`} used={u.namespace.used} quota={u.namespace.quota} />}
+            {total <= 0 || held.length === 0 ? (
+              <p className="muted" style={{ margin: 0 }}>
+                Nothing stored yet.
+              </p>
+            ) : (
+              <>
+                <p style={{ margin: 0 }}>
+                  <strong>{bytes(total)}</strong> <span className="muted">stored</span>
+                </p>
+                <div className="storage-kinds" role="list">
+                  {held.map((k) => {
+                    const share = k.bytes / total;
+                    const pct = share < 0.01 ? "<1 %" : `${Math.round(share * 100)} %`;
+                    return (
+                      <div className="storage-kind" role="listitem" key={k.name}>
+                        <span className="storage-name">{k.name}</span>
+                        <span className="storage-bar" role="meter" aria-label={k.name} aria-valuemin={0} aria-valuemax={total} aria-valuenow={k.bytes} aria-valuetext={`${bytes(k.bytes)}, ${pct} of ${bytes(total)}`}>
+                          {/* a kind that holds something stays visible, however small */}
+                          <span style={{ width: `max(2px, ${(share * 100).toFixed(2)}%)` }} />
+                        </span>
+                        <span className="storage-size">
+                          {bytes(k.bytes)}
+                          {k.note && <span className="muted"> · {k.note}</span>}
+                        </span>
+                        <span className="storage-pct muted">{pct}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                {empty.length > 0 && (
+                  <p className="small muted" style={{ margin: 0 }}>
+                    Nothing in {empty.length === 1 ? empty[0] : `${empty.slice(0, -1).join(", ")} or ${empty[empty.length - 1]}`}.
+                  </p>
+                )}
+              </>
+            )}
+            {(u.quota || u.namespace) && (
+              <p className="small muted" style={{ margin: 0 }}>
+                Once a quota is full, new pushes, commits, merges, LFS files, CI artifacts, images and uploads are refused; reading, deleting and CI jobs carry on. Administrators set quotas.
+              </p>
+            )}
+          </div>
+        );
+      }}
     </Q>
   );
 }

@@ -7502,17 +7502,48 @@ a.item.import-row:hover {
   font-size: 0.8rem;
   white-space: pre-wrap;
 }
-.storage-use {
+/* a project's storage, the largest kind first: its name, a bar of the whole, its size and share */
+.storage-kinds {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 640px;
+}
+.storage-kind {
   display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 6px 16px;
-  margin: 0;
+  grid-template-columns: 11em minmax(60px, 1fr) 8.5em 3.5em;
+  gap: 14px;
+  align-items: center;
 }
-.storage-use dt {
-  color: var(--text-muted);
+.storage-bar {
+  display: block;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--border);
+  overflow: hidden;
 }
-.storage-use dd {
-  margin: 0;
+/* the data's end rounded, its start on the bar's own */
+.storage-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+  background: var(--text-faint);
+}
+.storage-size,
+.storage-pct {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+@media (max-width: 600px) {
+  /* the name on its own line; the bars still line up */
+  .storage-kind {
+    grid-template-columns: minmax(0, 1fr) 8.5em 3.5em;
+    gap: 4px 10px;
+  }
+  .storage-name {
+    grid-column: 1 / -1;
+  }
 }
 
 /* container registry */
