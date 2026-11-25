@@ -632,6 +632,7 @@ a.dropdown-item:focus-visible {
   background: var(--chip-bg);
 }
 .segment {
+  display: grid;
   padding: 4px 12px;
   border: 0;
   border-radius: var(--radius-sm);
@@ -650,6 +651,14 @@ a.dropdown-item:focus-visible {
   color: var(--text);
   font-weight: 600;
   box-shadow: 0 1px 2px rgba(60, 40, 20, 0.1);
+}
+/* the label and its hidden bold copy share one cell, so the cell is as wide as the bold */
+.segment > span {
+  grid-area: 1 / 1;
+}
+.segment-width {
+  font-weight: 600;
+  visibility: hidden;
 }
 .segment[data-disabled] {
   color: var(--text-faint);

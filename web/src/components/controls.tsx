@@ -164,7 +164,11 @@ export function Segmented<T extends string>({ value, onChange, options, label }:
     <RadioGroup className="segmented" aria-label={label} value={value} onValueChange={(v) => onChange(v as T)}>
       {options.map((o) => (
         <Radio.Root key={o.value} value={o.value} className="segment" disabled={o.disabled} title={typeof o.hint === "string" ? o.hint : undefined}>
-          {o.label}
+          {/* the label in bold, hidden, holds the width: choosing a segment does not resize the control */}
+          <span className="segment-width" aria-hidden="true">
+            {o.label}
+          </span>
+          <span className="segment-label">{o.label}</span>
         </Radio.Root>
       ))}
     </RadioGroup>

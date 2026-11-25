@@ -1233,6 +1233,8 @@ function Activity({ ctx, m, notes }: { ctx: Ctx; m: S["MrDetail"]; notes: S["Not
       await api.post(`/projects/${ctx.p.id}/merge_requests/${m.iid}/notes`, { body, internal });
       setBody("");
       setInternal(false);
+      // History hides comments: back to everything, so the new one shows
+      if (filter === "history") setFilter("all");
       qc.invalidateQueries({ queryKey: ["mr", ctx.p.id, m.iid] });
     } catch (err) {
       setError(err);
