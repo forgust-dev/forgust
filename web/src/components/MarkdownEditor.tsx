@@ -150,6 +150,8 @@ export function MarkdownEditor({
   label?: string;
 }) {
   const [tab, setTab] = useState<"write" | "preview">("write");
+  // the box's height while writing (resized or not): the preview keeps it, writing again gets it back
+  const [height, setHeight] = useState<number | null>(null);
   const ta = useRef<HTMLTextAreaElement>(null);
   const [trigger, setTrigger] = useState<Trigger | null>(null);
   const [active, setActive] = useState(0);
@@ -262,7 +264,10 @@ export function MarkdownEditor({
           role="tab"
           aria-selected={tab === "preview"}
           className={tab === "preview" ? "active" : ""}
-          onClick={() => setTab("preview")}
+          onClick={() => {
+            if (ta.current) setHeight(ta.current.offsetHeight);
+            setTab("preview");
+          }}
         >
           Preview
         </button>
@@ -297,6 +302,7 @@ export function MarkdownEditor({
             aria-label={label ?? "Markdown"}
             autoFocus={autoFocus}
             rows={rows}
+            style={height ? { height } : undefined}
             value={value}
             placeholder={placeholder}
             aria-autocomplete="list"
@@ -404,7 +410,7 @@ export function MarkdownEditor({
             )}
         </div>
       ) : (
-        <div className="md-preview markdown" style={{ minHeight: rows * 22 }}>
+        <div className="md-preview markdown" style={{ minHeight: height ?? rows * 22 }}>
           {!value.trim() ? (
             <span className="faint">Nothing to preview.</span>
           ) : preview.isLoading ? (

@@ -2915,8 +2915,16 @@ kbd {
   box-shadow: none;
   outline: none;
 }
+/* the textarea's padding (input, select, textarea) and no margin above the first block: the
+   text stays where it was written */
 .md-preview {
-  padding: 10px 12px;
+  padding: 6px 10px;
+}
+.md-preview > * > :first-child {
+  margin-top: 0;
+}
+.md-preview > * > :last-child {
+  margin-bottom: 0;
 }
 
 /* ---- diffs: toolbar, file tree, split view, sticky header */
