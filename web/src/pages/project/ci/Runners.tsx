@@ -4,6 +4,7 @@ import { Lock, Plus, Server, Trash2 } from "lucide-react";
 import { api, timeAgo, type S } from "../../../api/client";
 import { Section, ErrorBox, Field, NewSecret, Q, StateBadge } from "../../../components/ui";
 import { EmptyRow } from "../../../components/settings";
+import { FormActions, FormDialog, useJustAdded } from "../../../components/FormDialog";
 import { useToast } from "../../../shell/toast";
 import { useConfirm } from "../../../shell/dialog";
 
@@ -33,6 +34,12 @@ export function RunnersPanel({ list, create, title = "Runners", note, children }
   const [form, setForm] = useState<{ description: string; tags: string; run_untagged: boolean; protected_only: boolean } | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
+  const fresh = useJustAdded();
+  const close = () => {
+    setForm(null);
+    setToken(null);
+    setError(null);
+  };
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (!form || !create) return;
@@ -40,8 +47,10 @@ export function RunnersPanel({ list, create, title = "Runners", note, children }
     try {
       const tags = form.tags.split(",").map((t) => t.trim()).filter(Boolean);
       const r = await api.post<S["NewRunnerToken"]>(create, { description: form.description, tags, run_untagged: form.run_untagged || tags.length === 0, protected_only: form.protected_only });
+      // its token is shown once: in the window, in place of the form, until Done
       setToken(r.token);
       setForm(null);
+      fresh.mark(r.id);
       qc.invalidateQueries({ queryKey: ["runners", list] });
     } catch (err) {
       setError(err);
@@ -82,16 +91,16 @@ export function RunnersPanel({ list, create, title = "Runners", note, children }
       actions={
         create && (
           <button className="btn small" onClick={() => setForm({ description: "", tags: "", run_untagged: true, protected_only: false })}>
-            <Plus size={14} /> New runner
+            <Plus size={14} /> Add a runner
           </button>
         )
       }
     >
       <div className="stack">
         {children}
-        {token && <RegisterHelp token={token} />}
+        <FormDialog open={form != null || token != null} onClose={close} title={token ? "Runner created" : "Add a runner"} result={token && <RegisterHelp token={token} />}>
         {form && (
-          <form className="card card-body stack" onSubmit={submit}>
+          <form className="stack" onSubmit={submit}>
             <ErrorBox error={error} />
             <Field label="Description">
               <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="e.g. docker on build-01" />
@@ -107,14 +116,10 @@ export function RunnersPanel({ list, create, title = "Runners", note, children }
                 <input type="checkbox" checked={form.protected_only} onChange={(e) => setForm({ ...form, protected_only: e.target.checked })} /> Protected branches only
               </label>
             </div>
-            <div className="row">
-              <button className="btn primary">Create runner</button>
-              <button type="button" className="btn" onClick={() => setForm(null)}>
-                Cancel
-              </button>
-            </div>
+            <FormActions label="Create runner" onCancel={close} />
           </form>
         )}
+        </FormDialog>
         <Q q={q}>
           {(rs) =>
             rs.length === 0 ? (
@@ -122,7 +127,7 @@ export function RunnersPanel({ list, create, title = "Runners", note, children }
             ) : (
               <div className="list">
                 {rs.map((r) => (
-                  <div className="item" key={r.id} style={{ alignItems: "flex-start" }}>
+                  <div className={"item" + fresh.fresh(r.id)} key={r.id} style={{ alignItems: "flex-start" }}>
                     <Server size={16} className={`st-${RUNNER_STATUS[r.status] === "ok" ? "success" : r.status === "paused" ? "manual" : "skipped"}`} style={{ marginTop: 3 }} />
                     <div className="grow stack" style={{ gap: 3, minWidth: 0 }}>
                       <span>

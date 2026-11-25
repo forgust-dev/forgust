@@ -26,10 +26,11 @@ test("dependency updates: turn on, run now, turn off", async ({ page }) => {
     // a private registry: the password is never shown again
     await page.goto(`${web}/-/settings/automation`);
     await section.getByRole("button", { name: "Add a registry" }).click();
-    await section.getByLabel("Host").fill("npm.example.com");
-    await section.getByLabel("Type").fill("npm");
-    await section.getByLabel("Password or token").fill("e2e-npm-token");
-    await section.getByRole("button", { name: "Add registry" }).click();
+    const registry = page.getByRole("dialog", { name: "Add a registry" });
+    await registry.getByLabel("Host").fill("npm.example.com");
+    await registry.getByLabel("Type").fill("npm");
+    await registry.getByLabel("Password or token").fill("e2e-npm-token");
+    await registry.getByRole("button", { name: "Add registry" }).click();
     await expect(section.locator(".item", { hasText: "npm.example.com" })).toBeVisible();
     await expect(page.getByText("e2e-npm-token")).toHaveCount(0);
     await section.getByRole("button", { name: "Delete npm.example.com" }).click();

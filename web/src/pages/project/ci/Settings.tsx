@@ -6,7 +6,7 @@ import { api, timeAgo, type S } from "../../../api/client";
 import { Section, ErrorBox, Field, Q, ListHead } from "../../../components/ui";
 import { RunnersPanel } from "./Runners";
 import { EmptyRow, ListSection, SaveRow, SettingSwitch, useSaved } from "../../../components/settings";
-import { FormActions, useJustAdded } from "../../../components/FormDialog";
+import { FormActions, FormDialog, useJustAdded } from "../../../components/FormDialog";
 import { saveCiSettings, useCiSettings } from "../ciSettings";
 import { Select } from "../../../components/controls";
 import { useToast } from "../../../shell/toast";
@@ -28,6 +28,11 @@ export function VariablesPanel({ base }: { base: string }) {
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [shown, setShown] = useState<Record<string, boolean>>({});
+  const fresh = useJustAdded();
+  const close = () => {
+    setForm(null);
+    setError(null);
+  };
   const save = async (e: FormEvent) => {
     e.preventDefault();
     if (!form) return;
@@ -37,7 +42,8 @@ export function VariablesPanel({ base }: { base: string }) {
       const body = { ...form, value: editing && form.masked && !form.value ? undefined : form.value };
       await api.post(`${base}/variables`, body);
       toast.ok(`Saved ${form.key}`);
-      setForm(null);
+      fresh.mark(form.key);
+      close();
       qc.invalidateQueries({ queryKey: ["variables", base] });
     } catch (err) {
       setError(err);
@@ -66,7 +72,7 @@ export function VariablesPanel({ base }: { base: string }) {
             setForm({ ...EMPTY });
           }}
         >
-          <Plus size={14} /> Add variable
+          <Plus size={14} /> Add a variable
         </button>
       }
     >
@@ -75,8 +81,9 @@ export function VariablesPanel({ base }: { base: string }) {
           Values are encrypted at rest. <strong>Protected</strong> variables only reach pipelines of protected branches;{" "}
           <strong>masked</strong> ones are hidden in job logs and cannot be read back here.
         </p>
+        <FormDialog open={form != null} onClose={close} title={editing ? "Edit the variable" : "Add a variable"}>
         {form && (
-          <form className="card card-body stack" onSubmit={save}>
+          <form className="stack" onSubmit={save}>
             <ErrorBox error={error} />
             <div className="grid2">
               <Field label="Key">
@@ -113,14 +120,10 @@ export function VariablesPanel({ base }: { base: string }) {
                 </span>
               </label>
             </div>
-            <div className="row">
-              <button className="btn primary">Save</button>
-              <button type="button" className="btn" onClick={() => setForm(null)}>
-                Cancel
-              </button>
-            </div>
+            <FormActions label={editing ? "Save" : "Add variable"} onCancel={close} />
           </form>
         )}
+        </FormDialog>
         <Q q={q}>
           {(list) =>
             list.length === 0 ? (
@@ -128,7 +131,7 @@ export function VariablesPanel({ base }: { base: string }) {
             ) : (
               <div className="list">
                 {list.map((v) => (
-                  <div className="item" key={v.key}>
+                  <div className={"item" + fresh.fresh(v.key)} key={v.key}>
                     <KeyRound size={15} className="faint" />
                     <div className="grow" style={{ minWidth: 0 }}>
                       <code>{v.key}</code>{" "}

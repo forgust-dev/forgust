@@ -221,19 +221,6 @@ export function ListSection({
   );
 }
 
-/**
- * Keyboard focus across an add form that replaces its button: its first field once it opens,
- * the button again once it closes (done or canceled), instead of falling to the page.
- */
-export function useFocusSwap(open: boolean, form: React.RefObject<HTMLElement | null>, button: React.RefObject<HTMLElement | null>) {
-  const was = useRef(open);
-  useEffect(() => {
-    if (open && !was.current) form.current?.querySelector<HTMLElement>("input, textarea, [role=combobox], [role=radio], button")?.focus();
-    if (!open && was.current) button.current?.focus();
-    was.current = open;
-  }, [open, form, button]);
-}
-
 /** Who a protection lets do something, in words. */
 export function whoCan(level: string) {
   return ({ no_one: "Nobody", developer: "Developers and Maintainers", maintainer: "Maintainers", owner: "Owners" } as Record<string, string>)[level] ?? level;
