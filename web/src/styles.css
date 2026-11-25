@@ -45,7 +45,8 @@
   --chip-bg: #efe9e1;
   --side-active-bg: #ffffff;
   --side-hover: #e8e2d9;
-  --row-hover: var(--bg-hover);
+  /* as strong as dark's row hover on its card (contrast 1.10): visible, and not the page's color */
+  --row-hover: #f7f3ee;
   --side-active-ring: #e6dfd5;
   --primary-bg: #1c1915;
   --primary-hover: #36302a;
