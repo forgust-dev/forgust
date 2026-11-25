@@ -166,7 +166,10 @@ function MergeChecksForm({ ctx, initial }: { ctx: Ctx; initial: S["ProjectCiSett
       </label>
       <label className="check">
         <input type="checkbox" checked={s.merge_trains_enabled} disabled={!s.only_merge_if_pipeline_succeeds} onChange={(e) => form.set({ ...s, merge_trains_enabled: e.target.checked })} />{" "}
-        Merge through merge trains: each merge request is tested on top of the ones queued ahead of it, then they merge in order
+        <span>
+          Merge through merge trains: each merge request is tested on top of the ones queued ahead of it, then they merge in order
+          {!s.only_merge_if_pipeline_succeeds && <span className="muted"> (needs the rule above)</span>}
+        </span>
       </label>
       <label className="check">
         <input type="checkbox" checked={s.block_new_security_findings} onChange={(e) => form.set({ ...s, block_new_security_findings: e.target.checked })} />
