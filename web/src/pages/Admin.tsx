@@ -8,6 +8,7 @@ import { useProviders } from "../prefetch";
 import { useSession } from "../session";
 import { Avatar, Badge, Card, ErrorBox, Field, FilterTabs, NotFound, Q, SearchField, UserLink, useDebounced, useFormRun, StateBadge } from "../components/ui";
 import { adminPage } from "./adminPages";
+import { useTopOnSwitch } from "../shell/scroll";
 import { Combobox, Menu, Select, type MenuItem } from "../components/controls";
 import { MoreHorizontal, Ban, ShieldCheck } from "lucide-react";
 import { useAct, useToast } from "../shell/toast";
@@ -19,6 +20,7 @@ import { AdminBackups, AdminHealth, AdminJobs, AdminOverview, AdminProjects, Adm
 export function Admin() {
   const { user } = useSession();
   const loc = useLocation();
+  useTopOnSwitch(loc.pathname);
   if (!user?.is_admin) return <NotFound />;
   // the area's pages are in the sidebar (shell/Shell.tsx): here, which one this is
   return (

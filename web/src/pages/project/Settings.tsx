@@ -14,6 +14,7 @@ import { fetchers } from "../../prefetch";
 import { StatusBadge } from "./ci/Status";
 import { useConfirm } from "../../shell/dialog";
 import { settingsPage, type SettingsSlug } from "./settingsPages";
+import { useTopOnSwitch } from "../../shell/scroll";
 const CiSettings = lazy(() => import("./ci/Settings").then((m) => ({ default: m.CiSettings })));
 
 /** Who may push or merge to a protected branch, or create a protected tag. */
@@ -35,6 +36,7 @@ const PAGES: Record<SettingsSlug, ComponentType<{ ctx: Ctx }>> = {
 
 /** A settings page of a project: `settings` (general) or `settings/<page>`. */
 export function ProjectSettings({ ctx, page }: { ctx: Ctx; page: string }) {
+  useTopOnSwitch(page);
   const found = settingsPage(page);
   if (!found) return <NotFound />;
   const Page = PAGES[found.slug];
