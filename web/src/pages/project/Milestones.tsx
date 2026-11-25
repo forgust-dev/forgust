@@ -7,6 +7,7 @@ import { ConfidentialMark, Empty, ErrorBox, Field, FilterTabs, ListHead, Q, Stat
 import { DecideCard, Ring, type DecideRow } from "../../components/decide";
 import { Select } from "../../components/controls";
 import { MarkdownEditor } from "../../components/MarkdownEditor";
+import { DateField } from "../../components/DateField";
 import { useToast } from "../../shell/toast";
 import { useConfirm } from "../../shell/dialog";
 import type { Ctx } from "./Project";
@@ -448,10 +449,10 @@ function Form({ ctx, m }: { ctx: Ctx; m?: M }) {
         </Field>
         <div className="row wrap" style={{ gap: 12 }}>
           <Field label="Start date" hint="Optional">
-            <input type="date" value={start} onChange={(e) => setStart(e.target.value)} />
+            <DateField value={start} onChange={setStart} />
           </Field>
           <Field label="Due date" hint="Optional">
-            <input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
+            <DateField value={due} onChange={setDue} />
           </Field>
         </div>
         <Field label="Description">
@@ -500,7 +501,7 @@ export function DueDateFact({ value, open, canEdit, onChange }: { value?: string
       <span className="fact-label">Due date</span>
       <div className="fact-value column">
         {canEdit ? (
-          <input type="date" aria-label="Due date" value={value ?? ""} onChange={(e) => onChange(e.target.value)} />
+          <DateField label="Due date" value={value ?? ""} onChange={onChange} />
         ) : value ? (
           <span className={open && overdue(value) ? "error-text" : undefined}>
             <CalendarDays size={13} /> {day(value)}

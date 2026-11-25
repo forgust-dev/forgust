@@ -8,6 +8,7 @@ import { ScopePicker, useCrudList } from "../components/Tokens";
 import { ResendLink } from "../components/ResendLink";
 import { OtherEmails } from "../components/UserEmails";
 import { AvatarUpload } from "../components/AvatarUpload";
+import { DateField } from "../components/DateField";
 import { NotificationDefaults } from "../components/Notifications";
 import { cancelled, createCredential, webauthnSupported } from "../api/webauthn";
 import { profilePage } from "./profilePages";
@@ -331,7 +332,7 @@ function Tokens() {
                   <input value={name} onChange={(e) => setName(e.target.value)} />
                 </Field>
                 <Field label="Expires">
-                  <input type="date" value={expires} onChange={(e) => setExpires(e.target.value)} />
+                  <DateField value={expires} onChange={setExpires} />
                 </Field>
               </div>
               <ScopePicker
