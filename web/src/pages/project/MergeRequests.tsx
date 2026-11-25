@@ -239,7 +239,7 @@ export function NewMergeRequest({ ctx }: { ctx: Ctx }) {
           </label>
         </div>
         <div>
-          <button className="btn primary" disabled={!source || !target || source === target || !title}>
+          <button className="btn primary large" disabled={!source || !target || source === target || !title}>
             Create merge request
           </button>
         </div>
@@ -916,7 +916,7 @@ function Readiness({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
                     return (
                       <>
                         <button
-                          className="btn primary block"
+                          className="btn primary block large"
                           aria-busy={busy}
                           disabled={busy || why != null}
                           onClick={() => run(
@@ -963,14 +963,14 @@ function Readiness({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
                       }, "Set to auto-merge");
                     if (s.can_merge && !waiting) {
                       return (
-                        <button className="btn primary block" aria-busy={busy} disabled={busy || ffBlocked} onClick={merge}>
+                        <button className="btn primary block large" aria-busy={busy} disabled={busy || ffBlocked} onClick={merge}>
                           {busy ? "Working…" : `Merge into ${m.target_branch}`}
                         </button>
                       );
                     }
                     return (
                       <>
-                        <button className="btn primary block" aria-busy={busy} disabled={busy || ffBlocked || s.conflicts.length > 0 || m.draft} onClick={auto} title="Merges as you once every check passes; new commits or a failed pipeline cancel it">
+                        <button className="btn primary block large" aria-busy={busy} disabled={busy || ffBlocked || s.conflicts.length > 0 || m.draft} onClick={auto} title="Merges as you once every check passes; new commits or a failed pipeline cancel it">
                           <Clock3 size={15} /> {busy ? "Working…" : "Set to auto-merge"}
                         </button>
                         {s.can_merge && (

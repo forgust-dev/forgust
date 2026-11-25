@@ -1,4 +1,9 @@
 :root {
+  /* controls of one size line up: buttons, fields and menus (taller on touch screens, below) */
+  --control-h: 30px;
+  --control-h-sm: 26px;
+  /* the one main action of a page */
+  --control-h-lg: 34px;
   /* surfaces (cards, fields, menus) are white; the page under them is warm paper */
   --bg: #ffffff;
   --bg-page: #f9f7f4;
@@ -334,13 +339,14 @@ h3 {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  height: 34px;
+  height: var(--control-h);
   padding: 0 12px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   background: var(--bg);
   color: var(--text);
   font: inherit;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
@@ -372,9 +378,30 @@ h3 {
   background: var(--danger-soft);
 }
 .btn.small {
-  height: 28px;
+  height: var(--control-h-sm);
   padding: 0 8px;
   font-size: 12px;
+}
+/* the one main action of a page, a step taller: the buttons of its head, a creation page's
+   submit and its Cancel, Merge. Every other button, Save and a window's included, is the
+   usual size. */
+.btn.large,
+.list-head .btn:not(.small),
+.form-actions .btn:not(.small) {
+  height: var(--control-h-lg);
+  padding: 0 14px;
+  font-size: 14px;
+}
+/* on a touch screen, controls fit a finger */
+@media (pointer: coarse) {
+  :root {
+    --control-h: 36px;
+    --control-h-sm: 30px;
+    --control-h-lg: 36px;
+  }
+  .btn {
+    font-size: 14px;
+  }
 }
 .btn.ghost {
   border-color: transparent;
@@ -383,8 +410,8 @@ input,
 select,
 textarea {
   width: 100%;
-  height: 34px;
-  padding: 6px 10px;
+  height: var(--control-h);
+  padding: 4px 10px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   background: var(--bg);
@@ -394,6 +421,7 @@ textarea {
 textarea {
   height: auto;
   min-height: 80px;
+  padding: 6px 10px;
   font-family: var(--mono);
   font-size: 12px;
 }
@@ -434,7 +462,7 @@ input[type="radio"] {
   gap: 8px;
   width: 100%;
   min-width: 0;
-  height: 34px;
+  height: var(--control-h);
   padding: 0 10px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
@@ -466,9 +494,13 @@ input[type="radio"] {
   display: inline-flex;
   color: var(--text-muted);
 }
-/* the positioner places a popup and is its layer: above the top bar, under dialogs */
+/* the positioner places a popup and is its layer: above the top bar, under dialogs; but above
+   the window it was opened from (a form's select, date or search, controls.tsx) */
 .positioner {
   z-index: 60;
+}
+.positioner.over-window {
+  z-index: 152;
 }
 .select-menu,
 .dropdown {
@@ -721,7 +753,12 @@ div.field {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  font-size: 13px;
   font-weight: 500;
+}
+/* labels at 13 px; what is typed or chosen at the page's 14 */
+:is(label, div).field :is(input:not([type="checkbox"]):not([type="radio"]), select, .select) {
+  font-size: 14px;
 }
 label.field .hint,
 div.field .hint {
@@ -733,6 +770,7 @@ label.check {
   display: flex;
   align-items: center;
   gap: 8px;
+  font-size: 13px;
 }
 /* a choice whose text may wrap: the box stays on the first line */
 label.check.top {
@@ -1550,8 +1588,8 @@ kbd {
   align-items: center;
   justify-content: center;
   flex: none;
-  width: 34px;
-  height: 34px;
+  width: var(--control-h);
+  height: var(--control-h);
   padding: 0;
   border: 0;
   border-radius: var(--radius);
@@ -1576,8 +1614,8 @@ kbd {
   position: absolute;
   top: 3px;
   right: 3px;
-  width: 28px;
-  height: 28px;
+  width: calc(var(--control-h) - 6px);
+  height: calc(var(--control-h) - 6px);
 }
 /* a settings form's foot: Save, and "Saved" beside it after a save (components/settings.tsx) */
 .save-row {
@@ -1643,8 +1681,8 @@ kbd {
   position: absolute;
   top: 3px;
   right: 3px;
-  width: 28px;
-  height: 28px;
+  width: calc(var(--control-h) - 6px);
+  height: calc(var(--control-h) - 6px);
 }
 .calendar {
   display: flex;
@@ -5417,7 +5455,7 @@ a.status-badge:hover {
   pointer-events: none;
 }
 .search-field input {
-  height: 32px;
+  height: var(--control-h);
   padding-left: 30px;
 }
 
@@ -5708,10 +5746,20 @@ a.row-title:hover,
 .settings-section {
   scroll-margin-top: 64px;
   display: grid;
-  grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
-  gap: 16px 40px;
-  padding: 28px 0;
+  grid-template-columns: minmax(0, 260px) minmax(0, 1fr);
+  gap: 12px 32px;
+  padding: 20px 0;
   border-top: 1px solid var(--border);
+}
+.settings-page > .list-head h1 {
+  font-size: 24px;
+}
+/* a field is as wide as what it holds (a name, a path, a choice), not the whole column */
+.settings-body :is(label, div).field > :is(input:not([type="checkbox"]):not([type="radio"]), .select, .password-input) {
+  max-width: 440px;
+}
+.settings-body :is(label, div).field > input[type="number"] {
+  max-width: 160px;
 }
 .settings-page > .list-head + .settings-section,
 .settings-page > .error + .settings-section,
@@ -5744,7 +5792,7 @@ a.row-title:hover,
 @media (max-width: 900px) {
   .settings-section {
     grid-template-columns: minmax(0, 1fr);
-    padding: 22px 0;
+    padding: 18px 0;
   }
 }
 
@@ -5808,7 +5856,7 @@ a.row-title:hover,
 }
 .dash-controls .select {
   width: auto;
-  height: 32px;
+  height: var(--control-h);
   font-size: 13px;
 }
 .list-toolbar .dash-controls .search-field {
@@ -6142,6 +6190,11 @@ a.item.group-row:hover .row-title {
 .auth-card .btn.auth-submit {
   width: 100%;
   height: 42px;
+}
+/* the Show button, inside a 42 px field */
+.auth-card .password-input .icon-btn {
+  width: 36px;
+  height: 36px;
 }
 .auth-pw {
   position: relative;

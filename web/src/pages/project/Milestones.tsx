@@ -459,10 +459,10 @@ function Form({ ctx, m }: { ctx: Ctx; m?: M }) {
           <MarkdownEditor projectId={ctx.p.id} rows={5} value={description} onChange={setDescription} label="Description" />
         </Field>
         <div className="row">
-          <button className="btn primary" disabled={!title.trim()}>
+          <button className="btn primary large" disabled={!title.trim()}>
             {m ? "Save changes" : "Create milestone"}
           </button>
-          <button type="button" className="btn" onClick={() => nav(-1)}>
+          <button type="button" className="btn large" onClick={() => nav(-1)}>
             Cancel
           </button>
         </div>

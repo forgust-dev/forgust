@@ -198,10 +198,10 @@ function Editor({ ctx, res, mode }: { ctx: Ctx; res: S["RefResolved"]; mode: Mod
           {target === "new" && <input aria-label="New branch name" value={newBranch} onChange={(e) => setNewBranch(e.target.value)} spellCheck={false} />}
         </fieldset>
         <div className="row">
-          <button className={`btn ${mode === "delete" ? "danger" : "primary"}`} aria-busy={busy} disabled={busy || !message.trim() || (mode === "new" && !path.trim()) || (target === "new" && !newBranch.trim()) || !loaded}>
+          <button className={`btn large ${mode === "delete" ? "danger" : "primary"}`} aria-busy={busy} disabled={busy || !message.trim() || (mode === "new" && !path.trim()) || (target === "new" && !newBranch.trim()) || !loaded}>
             {busy ? "Committing…" : mode === "delete" ? "Delete the file" : "Commit changes"}
           </button>
-          <button type="button" className="btn" onClick={() => nav(-1)}>
+          <button type="button" className="btn large" onClick={() => nav(-1)}>
             Cancel
           </button>
         </div>
