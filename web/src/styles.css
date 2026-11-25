@@ -366,16 +366,10 @@ h3 {
   border-color: var(--primary-bg);
   color: var(--primary-text);
 }
-.btn.primary:hover {
+/* disabled, a main button stays itself, faded (.btn:disabled), and does not answer the mouse */
+.btn.primary:not(:disabled):hover {
   background: var(--primary-hover);
   border-color: var(--primary-hover);
-}
-/* a main button that cannot act yet steps back to the grey of a disabled secondary, so the eye
-   goes to what can be done now; one that is working (aria-busy) keeps its color, dimmed */
-.btn.primary:disabled:not([aria-busy="true"]) {
-  background: var(--bg);
-  border-color: var(--border-strong);
-  color: var(--text);
 }
 .btn.danger {
   color: var(--danger);

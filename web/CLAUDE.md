@@ -59,8 +59,8 @@ A spinner (`Loader2`) always turns, with `className="spin"`. `StateBadge` adds i
 ## Buttons
 
 - `btn primary`: the one main action of a page or a section. It is black on light and white
-  on dark. Disabled, it turns to a disabled secondary's grey on its own. When it is disabled
-  because it is working, give it `aria-busy={busy}`, so it keeps its color, dimmed.
+  on dark. Disabled, it keeps its color, faded, like every disabled button. When it is
+  disabled because it is working, also give it `aria-busy={busy}`, so assistive tech says so.
 - `btn`: every other action. `btn ghost`: an action inside a list or a card.
 - `btn danger`: outlined in a list. `btn danger solid` only in the confirmation.
   `link-btn danger` is a word that destroys something, such as deleting a comment.
