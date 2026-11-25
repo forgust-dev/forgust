@@ -133,11 +133,19 @@ export function UiKit() {
         </div>
       </Section>
 
-      <Section title="Buttons" description="Primary: the one main action of a page or a section; faded while it cannot act yet or while it works (aria-busy). Secondary: every other one. Ghost: an action in a list or a card. Danger: outlined in a list, solid only in the confirmation, a red word in a line of text. An icon alone has its tooltip.">
+      <Section title="Buttons" description="Primary: the one main action of a page or a section; faded while it cannot act yet or while it works (aria-busy). Secondary: every other one. Ghost: an action in a list or a card. Danger: outlined in a list, solid only in the confirmation, a red word in a line of text. An icon alone has its tooltip. Three heights: large for the one main action of a page (its head, a creation page's submit and its Cancel, Merge), the usual one, small in rows.">
         <div className="ui-kit-rows">
           <div className="ui-kit-row">
-            <button type="button" className="btn primary">
+            <button type="button" className="btn primary large">
               <Plus size={15} /> New merge request
+            </button>
+            <button type="button" className="btn large">
+              Cancel
+            </button>
+          </div>
+          <div className="ui-kit-row">
+            <button type="button" className="btn primary">
+              Save
             </button>
             <button type="button" className="btn">
               Schedules

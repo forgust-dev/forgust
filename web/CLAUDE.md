@@ -62,6 +62,18 @@ A spinner (`Loader2`) always turns, with `className="spin"`. `StateBadge` adds i
 A date is a `DateField` (typed, or picked on a calendar), never `type="date"` and its browser
 picker; a password a `PasswordInput`, with its Show button.
 
+## Sizes
+
+Buttons, fields and menus share one height, from tokens in `src/styles.css`: `--control-h`
+(30 px), `--control-h-sm` (26 px, `btn small`) and `--control-h-lg` (34 px). On a touch screen
+they are 36 px. Button text is 13 px, a field's label 13 px, what is typed 14 px. A control
+next to another takes its height from the same token, so they line up; never write a height.
+
+The one main action of a page is a step taller (`btn large`): the buttons of its head
+(`.list-head`, on its own), a creation page's submit and its Cancel (`.form-actions`, on its
+own, or `large`), Merge. Everything else is the usual size: Save in a section, a window's
+buttons.
+
 ## Buttons
 
 - `btn primary`: the one main action of a page or a section. It is black on light and white
@@ -96,11 +108,40 @@ picker; a password a `PasswordInput`, with its Show button.
   something, it asks first.
 - A feature is turned on by a switch; its options show once it is on, and are still sent as they
   are while it is off.
-- A list shows what is there first, or one line when nothing is (`EmptyRow`). Its add form opens
-  from the button under the section's description (`ListSection`) and closes once done; a secret
-  shown once stays on screen after its form closes.
+- A list shows what is there first, or one line when nothing is (`EmptyRow`). Its button, under
+  the section's description, opens its form in a window (`ListSection`, see Adding).
+- A field is as wide as what it holds (440 px, 160 for a number), not the whole column.
 - A rule says in words what it lets happen ("Maintainers can push and merge · no force push").
 - What cannot be undone lightly is in the page's Danger zone, at the bottom: one row per action,
   with what it does. Deleting asks to type the name.
+
+## Adding
+
+What is created gets its own page afterwards? It is created on a page (`…/new`): an issue, a
+merge request, a milestone, a release, a file, a project, a group. Its button says "New …".
+
+A row of a list (a protected branch, a key, a token, a webhook, a variable, a schedule, a
+label, a branch, a member…) is added, and changed, in a window (`FormDialog`,
+`components/FormDialog.tsx`). Its button says what it does with a verb, not "New": "Add a
+label", "Protect a branch", "Create a token". The window:
+
+- has the button's words as its title, then the fields, then `FormActions`: Cancel and what it
+  does. It starts on its first field; Enter sends it.
+- closes with Cancel, Esc or a click outside, except that a click outside does nothing once
+  something was typed.
+- shows a secret shown once (a token, a runner's) in place of its form, as `result`, until
+  Done; it is never left on the page.
+- shows the popups of its fields above it (`InWindow`, read by `controls.tsx`).
+
+The row added comes in highlighted, then fades back (`useJustAdded`: `mark` its key, give each
+row `fresh(key)`).
+
+What is added inside a form being filled stays in it: a variable of a pipeline to run, a link
+of a release, a project to import. So do comments and reactions.
+
+## Numbers
+
+A breakdown (what takes a project's storage) is a bar per part, the largest first, in one
+grey: a part is not a state. The parts that hold nothing are one line.
 
 Check new UI in light and dark, at desktop width and at 390 px.
