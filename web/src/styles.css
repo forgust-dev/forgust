@@ -4991,12 +4991,6 @@ a.status-badge:hover {
   font-size: 17px;
   font-weight: 600;
 }
-.job-pane-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 12px;
-}
 .artifacts summary {
   cursor: pointer;
   color: var(--text-muted);

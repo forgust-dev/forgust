@@ -311,24 +311,73 @@ export function JobPage({ ctx, jobId }: { ctx: Ctx; jobId: number }) {
                     <FileText size={13} /> Raw
                   </a>
                 </div>
-                <div className="job-pane-meta small muted">
-                  <StatusBadge status={j.status} />
-                  <span>stage {j.stage}</span>
-                  {j.runner_description && <span>runner {j.runner_description}</span>}
-                  {j.image && <span className="mono">{j.image}</span>}
-                  {j.duration != null && <span>ran {duration(j.duration)}</span>}
-                  {j.queued_duration != null && <span>queued {duration(j.queued_duration)}</span>}
-                  {j.finished_at && <span>finished {timeAgo(j.finished_at)}</span>}
-                  {j.attempt > 1 && <span>attempt {j.attempt}</span>}
-                  {j.coverage != null && <span>coverage {j.coverage.toFixed(2)}%</span>}
-                  {j.environment && (
-                    <span>
-                      {j.environment.action === "stop" ? "stops" : "deploys to"}{" "}
-                      <Link to={`${ctx.web}/-/environments`}>{j.environment.name}</Link>
-                    </span>
+                <dl className="facts-bar job-facts">
+                  <div>
+                    <dt>Status</dt>
+                    <dd>
+                      <StatusBadge status={j.status} />
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Stage</dt>
+                    <dd>{j.stage}</dd>
+                  </div>
+                  {j.runner_description && (
+                    <div>
+                      <dt>Runner</dt>
+                      <dd>{j.runner_description}</dd>
+                    </div>
                   )}
-                  {j.retried && j.attempts[0] !== j.id && <Link to={`${ctx.web}/-/jobs/${j.attempts[0]}`}>a newer attempt exists</Link>}
-                </div>
+                  {j.image && (
+                    <div>
+                      <dt>Image</dt>
+                      <dd className="mono">{j.image}</dd>
+                    </div>
+                  )}
+                  {j.duration != null && (
+                    <div>
+                      <dt>Duration</dt>
+                      <dd>{duration(j.duration)}</dd>
+                    </div>
+                  )}
+                  {j.queued_duration != null && (
+                    <div>
+                      <dt>Queued</dt>
+                      <dd>{duration(j.queued_duration)}</dd>
+                    </div>
+                  )}
+                  {j.finished_at && (
+                    <div>
+                      <dt>Finished</dt>
+                      <dd title={new Date(j.finished_at).toLocaleString()}>{timeAgo(j.finished_at)}</dd>
+                    </div>
+                  )}
+                  {j.attempt > 1 && (
+                    <div>
+                      <dt>Attempt</dt>
+                      <dd>{j.attempt}</dd>
+                    </div>
+                  )}
+                  {j.coverage != null && (
+                    <div>
+                      <dt>Coverage</dt>
+                      <dd>{j.coverage.toFixed(2)}%</dd>
+                    </div>
+                  )}
+                  {j.environment && (
+                    <div>
+                      <dt>{j.environment.action === "stop" ? "Stops" : "Deploys to"}</dt>
+                      <dd>
+                        <Link to={`${ctx.web}/-/environments`}>{j.environment.name}</Link>
+                      </dd>
+                    </div>
+                  )}
+                </dl>
+                {j.retried && j.attempts[0] !== j.id && (
+                  <p className="small" style={{ margin: 0 }}>
+                    <Link to={`${ctx.web}/-/jobs/${j.attempts[0]}`}>A newer attempt exists</Link>
+                  </p>
+                )}
                 {j.failure_reason && j.status === "failed" && (
                   <div className={`alert ${j.allow_failure ? "" : "error"}`}>
                     {j.allow_failure ? "Failed (allowed to fail)" : "Failed"}: {j.failure_reason.replace(/_/g, " ")}
