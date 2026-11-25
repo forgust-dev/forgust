@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, LEVELS, timeAgo, type S } from "../api/client";
 import { Badge, ErrorBox, Field, LevelSelect, NewSecret, Q, StateBadge } from "./ui";
-import { AddActions, ListSection } from "./settings";
+import { AddActions, EmptyRow, ListSection } from "./settings";
 import { Ban } from "lucide-react";
 
 const SCOPES = ["api", "read_api", "read_repository", "write_repository", "mcp"];
@@ -84,7 +84,7 @@ export function AccessTokens({ base, title, description }: { base: string; title
       <Q q={list}>
         {(tokens) =>
           tokens.length === 0 ? (
-            <p className="muted">No access tokens.</p>
+            <EmptyRow>No access tokens.</EmptyRow>
           ) : (
             <div className="list">
               {tokens.map((t) => (
@@ -177,14 +177,17 @@ export function DeployTokens({ base, title, description }: { base: string; title
       <Q q={list}>
         {(tokens) =>
           tokens.length === 0 ? (
-            <p className="muted">No deploy tokens.</p>
+            <EmptyRow>No deploy tokens.</EmptyRow>
           ) : (
             <div className="list">
               {tokens.map((t) => (
                 <div className="item" key={t.id}>
                   <div className="grow">
                     <strong>{t.name}</strong> <code className="small">{t.username}</code>
-                    <div className="small muted">{t.scopes.join(", ")}</div>
+                    <div className="small muted">
+                      {t.scopes.includes("write_repository") ? "Can clone and push" : "Can clone"} ·{" "}
+                      {t.expires_at ? `expires ${new Date(t.expires_at).toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" })}` : "never expires"}
+                    </div>
                   </div>
                   {t.revoked ? (
                     <StateBadge tone="neutral" icon={Ban}>

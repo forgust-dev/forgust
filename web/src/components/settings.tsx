@@ -223,3 +223,17 @@ export function AddActions({ label, disabled, busy, onCancel }: { label: string;
     </div>
   );
 }
+
+/** Who a protection lets do something, in words. */
+export function whoCan(level: string) {
+  return ({ no_one: "Nobody", developer: "Developers and Maintainers", maintainer: "Maintainers", owner: "Owners" } as Record<string, string>)[level] ?? level;
+}
+
+/** A list with nothing in it yet: one line, in the list's own box. */
+export function EmptyRow({ children }: { children: ReactNode }) {
+  return (
+    <div className="list">
+      <div className="item muted">{children}</div>
+    </div>
+  );
+}

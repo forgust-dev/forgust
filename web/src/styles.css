@@ -1613,6 +1613,17 @@ kbd {
 .danger-row p {
   margin: 2px 0 0;
 }
+/* more settings, folded until needed (the push rules' patterns) */
+.more-rules > summary {
+  width: fit-content;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.more-rules[open] > summary {
+  margin-bottom: 12px;
+}
 /* an add form, opened from its list's button */
 .add-form {
   border-color: var(--border-strong);

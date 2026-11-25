@@ -7,6 +7,8 @@ test("push rules are saved from settings, and a bad pattern is explained", async
   const project = await (await page.request.get(`/api/v1/resolve?path=${P.slice(1)}`)).json();
   try {
     await page.goto(`${P}/-/settings/repository`);
+    // the patterns are folded while none is set
+    await page.getByText(/^Advanced rules/).click();
     const field = page.getByLabel("Commit messages must match");
     await field.fill("(");
     await page.getByRole("button", { name: "Save push rules" }).click();

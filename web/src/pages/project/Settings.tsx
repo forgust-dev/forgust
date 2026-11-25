@@ -16,7 +16,7 @@ import { StatusBadge } from "./ci/Status";
 import { useConfirm, usePrompt } from "../../shell/dialog";
 import { settingsPage, type SettingsSlug } from "./settingsPages";
 import { useTopOnSwitch } from "../../shell/scroll";
-import { AddActions, ListSection, SaveRow, SettingSwitch, useSaved } from "../../components/settings";
+import { AddActions, EmptyRow, ListSection, SaveRow, SettingSwitch, useSaved, whoCan } from "../../components/settings";
 import { saveCiSettings, useCiSettings } from "./ciSettings";
 const CiSettings = lazy(() => import("./ci/Settings").then((m) => ({ default: m.CiSettings })));
 
@@ -563,23 +563,36 @@ function ProtectedBranches({ ctx }: { ctx: Ctx }) {
       }
     >
       <Q q={list}>
-        {(rules) => (
-          <div className="list">
-            {rules.length === 0 && <div className="item muted">No protected branches.</div>}
-            {rules.map((r) => (
-              <div className="item" key={r.id}>
-                <code className="grow">{r.name}</code>
-                <Badge>push: {r.push_access_level.replace("_", " ")}</Badge>
-                {r.allow_force_push && <Badge>force push</Badge>}
-                {r.allow_deploy_keys && <Badge>deploy keys</Badge>}
-                {r.code_owner_approval_required && <Badge>code owners approve</Badge>}
-                <button className="btn small danger" onClick={() => del.mutate(r.id)}>
-                  Unprotect
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
+        {(rules) =>
+          rules.length === 0 ? (
+            <EmptyRow>No protected branches.</EmptyRow>
+          ) : (
+            <div className="list" aria-label="Protected branches">
+              {rules.map((r) => (
+                <div className="item" key={r.id}>
+                  <div className="grow" style={{ minWidth: 0 }}>
+                    <code>{r.name}</code>
+                    <div className="small muted">
+                      {[
+                        r.merge_access_level === r.push_access_level
+                          ? `${whoCan(r.push_access_level)} can push and merge`
+                          : `${whoCan(r.push_access_level)} can push, ${whoCan(r.merge_access_level)} can merge`,
+                        r.allow_force_push ? "force push allowed" : "no force push",
+                        r.allow_deploy_keys && "deploy keys can push",
+                        r.code_owner_approval_required && "code owners must approve",
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </div>
+                  </div>
+                  <button className="btn small danger" onClick={() => del.mutate(r.id)} aria-label={`Unprotect ${r.name}`}>
+                    Unprotect
+                  </button>
+                </div>
+              ))}
+            </div>
+          )
+        }
       </Q>
     </ListSection>
   );
@@ -611,6 +624,8 @@ function PushRulesForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S["PushRu
     onChange: (e: ChangeEvent<HTMLInputElement>) => setR({ ...r, [k]: e.target.value }),
     className: "mono",
   });
+  // the patterns are folded unless one is set
+  const patterns = !!(initial.commit_message_regex || initial.commit_message_negative_regex || initial.author_email_regex || initial.branch_name_regex);
   return (
     <form
       className="stack"
@@ -620,33 +635,36 @@ function PushRulesForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S["PushRu
       }}
     >
       <ErrorBox error={error} />
-      <div className="grid2">
-        <Field label="Commit messages must match" hint="A regular expression, e.g. ^(feat|fix|docs): ">
-          <input {...text("commit_message_regex")} />
-        </Field>
-        <Field label="Commit messages must not match" hint="e.g. (?i)wip|fixup!">
-          <input {...text("commit_message_negative_regex")} />
-        </Field>
-        <Field label="Author emails must match" hint="e.g. @example\.com$">
-          <input {...text("author_email_regex")} />
-        </Field>
-        <Field label="New branch names must match" hint="e.g. ^(main|feature/.+|fix/.+)$">
-          <input {...text("branch_name_regex")} />
-        </Field>
+      <label className="check">
+        <input type="checkbox" checked={r.prevent_secrets} onChange={(e) => setR({ ...r, prevent_secrets: e.target.checked })} />
+        Refuse files that look like secrets (private keys, credentials)
+      </label>
+      <label className="check">
+        <input type="checkbox" checked={r.reject_unsigned_commits} onChange={(e) => setR({ ...r, reject_unsigned_commits: e.target.checked })} />
+        Accept only verified signed commits
+      </label>
+      <div style={{ maxWidth: 260 }}>
         <Field label="Largest file, in MB" hint="0: no limit (Git LFS files do not count)">
           <input type="number" min={0} value={r.max_file_size_mb} onChange={(e) => setR({ ...r, max_file_size_mb: Math.max(0, Number(e.target.value) || 0) })} />
         </Field>
       </div>
-      <div className="row wrap" style={{ gap: 20 }}>
-        <label className="check">
-          <input type="checkbox" checked={r.prevent_secrets} onChange={(e) => setR({ ...r, prevent_secrets: e.target.checked })} />
-          Refuse files that look like secrets (private keys, credentials)
-        </label>
-        <label className="check">
-          <input type="checkbox" checked={r.reject_unsigned_commits} onChange={(e) => setR({ ...r, reject_unsigned_commits: e.target.checked })} />
-          Accept only verified signed commits
-        </label>
-      </div>
+      <details className="more-rules" open={patterns}>
+        <summary>Advanced rules: patterns for commit messages, author emails and branch names</summary>
+        <div className="grid2">
+          <Field label="Commit messages must match" hint="A regular expression, e.g. ^(feat|fix|docs): ">
+            <input {...text("commit_message_regex")} />
+          </Field>
+          <Field label="Commit messages must not match" hint="e.g. (?i)wip|fixup!">
+            <input {...text("commit_message_negative_regex")} />
+          </Field>
+          <Field label="Author emails must match" hint="e.g. @example\.com$">
+            <input {...text("author_email_regex")} />
+          </Field>
+          <Field label="New branch names must match" hint="e.g. ^(main|feature/.+|fix/.+)$">
+            <input {...text("branch_name_regex")} />
+          </Field>
+        </div>
+      </details>
       <SaveRow dirty={rules.dirty} busy={save.isPending} saved={rules.saved} label="Save push rules" />
     </form>
   );
@@ -1003,8 +1021,10 @@ function ProtectedTags({ ctx }: { ctx: Ctx }) {
             {rules.length === 0 && <div className="item muted">No protected tags.</div>}
             {rules.map((r) => (
               <div className="item" key={r.id}>
-                <code className="grow">{r.name}</code>
-                <Badge>create: {r.create_access_level.replace("_", " ")}</Badge>
+                <div className="grow" style={{ minWidth: 0 }}>
+                  <code>{r.name}</code>
+                  <div className="small muted">{whoCan(r.create_access_level)} can create matching tags</div>
+                </div>
                 <button className="btn small danger" onClick={() => del.mutate(r.id)} aria-label={`Unprotect ${r.name}`}>
                   Unprotect
                 </button>
@@ -1074,16 +1094,17 @@ function DeployKeys({ ctx }: { ctx: Ctx }) {
       <Q q={list}>
         {(keys) =>
           keys.length === 0 ? (
-            <p className="muted">No deploy keys.</p>
+            <EmptyRow>No deploy keys.</EmptyRow>
           ) : (
             <div className="list">
               {keys.map((k) => (
                 <div className="item" key={k.id}>
-                  <div className="grow">
+                  <div className="grow" style={{ minWidth: 0 }}>
                     <strong>{k.title}</strong>
-                    <div className="small faint mono">{k.fingerprint}</div>
+                    <div className="small muted">
+                      {k.can_push ? "Can read and push" : "Can read"} · added {timeAgo(k.created_at)} · <span className="mono">{k.fingerprint}</span>
+                    </div>
                   </div>
-                  <Badge>{k.can_push ? "read-write" : "read-only"}</Badge>
                   <button className="btn small danger" onClick={() => del.mutate(k.id)}>
                     Remove
                   </button>
@@ -1217,7 +1238,7 @@ function Mirrors({ ctx }: { ctx: Ctx }) {
       <Q q={list}>
         {(mirrors) =>
           mirrors.length === 0 ? (
-            <p className="muted">No mirrors.</p>
+            <EmptyRow>No mirrors.</EmptyRow>
           ) : (
             <div className="list">
               {mirrors.map((m) => (

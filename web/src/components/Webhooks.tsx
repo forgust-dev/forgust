@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, timeAgo, type S } from "../api/client";
 import { Badge, ErrorBox, Field, levelName, Q, StateBadge } from "./ui";
 import { Select } from "./controls";
-import { AddActions, ListSection } from "./settings";
+import { AddActions, EmptyRow, ListSection } from "./settings";
 import { CircleCheck, CircleX, Clock } from "lucide-react";
 
 const EVENTS = ["push", "merge_request", "issue", "confidential_issue", "note", "confidential_note", "release", "pipeline", "build"];
@@ -97,7 +97,7 @@ export function Webhooks({ base, title, description }: { base: string; title: st
       <Q q={list}>
         {(hooks) =>
           hooks.length === 0 ? (
-            <p className="muted">No webhooks.</p>
+            <EmptyRow>No webhooks.</EmptyRow>
           ) : (
             <div className="list">
               {hooks.map((h) => (
@@ -234,14 +234,14 @@ export function ApprovalRules({ projectId }: { projectId: number }) {
       <Q q={list}>
         {(rules) =>
           rules.length === 0 ? (
-            <p className="muted">No approval rules: merge requests can be merged without approvals.</p>
+            <EmptyRow>No approval rules: merge requests can be merged without approvals.</EmptyRow>
           ) : (
             <div className="list">
               {rules.map((r) => (
                 <div className="item" key={r.id}>
                   <strong className="grow">{r.name}</strong>
-                  <span>
-                    {r.approvals_required} from {names[r.min_access_level]}s
+                  <span className="small muted">
+                    {r.approvals_required} approval{r.approvals_required === 1 ? "" : "s"} from {levelName(names[r.min_access_level] ?? "maintainer")}s and above
                   </span>
                   <button className="btn small danger" onClick={() => del.mutate(r.id)}>
                     Remove

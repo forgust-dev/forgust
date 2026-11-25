@@ -3,9 +3,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff, KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api, timeAgo, type S } from "../../../api/client";
-import { Section, Empty, ErrorBox, Field, Q, ListHead } from "../../../components/ui";
+import { Section, ErrorBox, Field, Q, ListHead } from "../../../components/ui";
 import { RunnersPanel } from "./Runners";
-import { AddActions, ListSection, SaveRow, SettingSwitch, useSaved } from "../../../components/settings";
+import { AddActions, EmptyRow, ListSection, SaveRow, SettingSwitch, useSaved } from "../../../components/settings";
 import { saveCiSettings, useCiSettings } from "../ciSettings";
 import { Select } from "../../../components/controls";
 import { useToast } from "../../../shell/toast";
@@ -122,7 +122,7 @@ export function VariablesPanel({ base }: { base: string }) {
         <Q q={q}>
           {(list) =>
             list.length === 0 ? (
-              <Empty>No variables yet.</Empty>
+              <EmptyRow>No variables yet.</EmptyRow>
             ) : (
               <div className="list">
                 {list.map((v) => (
@@ -296,7 +296,7 @@ function JobTokenAllowlist({ ctx }: { ctx: Ctx }) {
         <Q q={q}>
           {(list) =>
             list.length === 0 ? (
-              <span className="faint small">Only this project's own jobs.</span>
+              <EmptyRow>No other project: only this project's own jobs can use its job token.</EmptyRow>
             ) : (
               <div className="list">
                 {list.map((a) => (
@@ -370,7 +370,7 @@ function ProtectedEnvironments({ ctx }: { ctx: Ctx }) {
       toast.error(err);
     }
   };
-  const levelName = (l: number) => (l >= 50 ? "Owners" : l >= 40 ? "Maintainers" : "Developers");
+  const levelName = (l: number) => (l >= 50 ? "Owners" : l >= 40 ? "Maintainers" : "Developers and Maintainers");
   return (
     <ListSection
       id="protected-environments"
@@ -408,8 +408,10 @@ function ProtectedEnvironments({ ctx }: { ctx: Ctx }) {
             {list.length === 0 && <div className="item muted">No protected environments.</div>}
             {list.map((pe) => (
               <div className="item" key={pe.id}>
-                <code className="grow">{pe.name}</code>
-                <span className="small muted">{levelName(pe.deploy_access_level)}</span>
+                <div className="grow" style={{ minWidth: 0 }}>
+                  <code>{pe.name}</code>
+                  <div className="small muted">Only {levelName(pe.deploy_access_level)} can deploy to it or stop it</div>
+                </div>
                 <button className="btn small danger" onClick={() => del(pe.id)}>
                   Unprotect
                 </button>
