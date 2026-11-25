@@ -1,13 +1,18 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT lower(email) AS \"email!\", username FROM users\n           WHERE lower(email) = ANY($1) AND email_verified_at IS NOT NULL AND state = 'active'\n             AND user_type IN ('human', 'renovate_bot')",
+  "query": "SELECT c.email AS \"email!\", u.username FROM confirmed_emails c JOIN users u ON u.id = c.user_id\n           WHERE c.email = ANY($1) AND u.state = 'active' AND u.user_type IN ('human', 'renovate_bot')",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
         "name": "email!",
         "type_info": "Text",
-        "origin": "Expression"
+        "origin": {
+          "Table": {
+            "table": "confirmed_emails",
+            "name": "email"
+          }
+        }
       },
       {
         "ordinal": 1,
@@ -27,9 +32,9 @@
       ]
     },
     "nullable": [
-      null,
+      true,
       false
     ]
   },
-  "hash": "5cfec552d70240afd56a82cb37082fb723f9cdf360f14df9af793aeef8bb3e82"
+  "hash": "dbc28687a286909695eb6acccfa54b186f0306bdd06efad46821557a8f5d2f11"
 }

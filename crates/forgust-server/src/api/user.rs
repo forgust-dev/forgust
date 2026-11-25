@@ -3,6 +3,7 @@ use axum::extract::{Path, Query, State};
 use chrono::{DateTime, Utc};
 use forgust_db::ssh_keys::SshKey;
 use forgust_db::tokens::AccessToken;
+use forgust_db::user_emails::UserEmail;
 use russh::keys::ssh_key::{HashAlg, PublicKey};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -68,10 +69,8 @@ pub async fn update_me(
     let reauthed = if changes && (!pending || at_once) { Some(reauth(&state, &jar, ip, u.id, &req.current_password).await?) } else { None };
     paths::validate_name(&req.name)?;
     paths::validate_email(email)?;
-    if let Some(other) = forgust_db::users::find_by_email(&state.db, email).await?
-        && other.id != u.id
-    {
-        return Err(ApiError::conflict("email is already in use"));
+    if changes {
+        services::emails::check_free_as_own(&state.db, u.id, email).await?;
     }
     // a new address takes over only once confirmed from its own inbox
     forgust_db::users::update_profile(&state.db, u.id, &req.name, &u.email).await?;
@@ -1019,4 +1018,68 @@ pub async fn resend_confirmation(State(state): State<AppState>, SignedIn(u, p): 
     };
     services::accounts::send_confirmation(&state, &u, &email).await?;
     Ok(Json(json!({ "sent_to": email })))
+}
+
+/// Your other email addresses: commits made with a confirmed one show as yours.
+#[utoipa::path(get, path = "/api/v1/user/emails", responses((status = 200, body = [UserEmail])), tag = "user")]
+pub async fn list_emails(State(state): State<AppState>, SignedIn(u, _): SignedIn) -> ApiResult<Json<Vec<UserEmail>>> {
+    Ok(Json(forgust_db::user_emails::list(&state.db, u.id).await?))
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct AddEmail {
+    pub email: String,
+    /// Needed when the address is confirmed as it is added (an instance that
+    /// sends no email): a borrowed session must not be able to claim one.
+    #[serde(default)]
+    pub current_password: String,
+}
+
+/// Add an address: a link is mailed to it; without email, an administrator
+/// confirms it (or it is confirmed at once: see `services::emails`).
+pub async fn add_email(
+    State(state): State<AppState>,
+    SignedIn(u, p): SignedIn,
+    jar: axum_extra::extract::CookieJar,
+    ip: ClientIp,
+    Json(req): Json<AddEmail>,
+) -> ApiResult<Json<UserEmail>> {
+    require_interactive(&u, &p)?;
+    let email = req.email.trim();
+    let confirmed_by = services::emails::confirmed_as_added(&state, &u).await?;
+    let reauthed = if confirmed_by.is_some() {
+        Some(reauth(&state, &jar, ip, u.id, &req.current_password).await?)
+    } else {
+        // each one sends a link
+        if state.cfg.email.enabled() && !state.login_limiter.allow(&format!("confirm|{}", u.id)) {
+            return Err(ApiError::forbidden("too many emails; try again in a minute"));
+        }
+        None
+    };
+    let row = services::emails::add(&state, &p, &u, email, confirmed_by).await?;
+    if let Some(r) = reauthed {
+        r.spend(&state).await?;
+    }
+    Ok(Json(row))
+}
+
+pub async fn remove_email(State(state): State<AppState>, SignedIn(u, p): SignedIn, Path(id): Path<i64>) -> ApiResult<Json<Value>> {
+    require_interactive(&u, &p)?;
+    services::emails::remove(&state, &p, &u, id).await?;
+    Ok(Json(json!({ "ok": true })))
+}
+
+/// Mail the link for one of your addresses again.
+pub async fn resend_email(State(state): State<AppState>, SignedIn(u, p): SignedIn, Path(id): Path<i64>) -> ApiResult<Json<Value>> {
+    require_interactive(&u, &p)?;
+    services::accounts::require_email(&state)?;
+    let row = forgust_db::user_emails::find(&state.db, u.id, id).await?.ok_or(ApiError::NotFound)?;
+    if row.confirmed_at.is_some() {
+        return Err(ApiError::bad("this address is already confirmed"));
+    }
+    if !state.login_limiter.allow(&format!("confirm|{}", u.id)) {
+        return Err(ApiError::forbidden("too many emails; try again in a minute"));
+    }
+    services::emails::send_link(&state, &u, &row).await?;
+    Ok(Json(json!({ "sent_to": row.email })))
 }

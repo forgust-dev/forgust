@@ -407,3 +407,14 @@ impl Mcp {
             .collect()
     }
 }
+
+/// The token of the `page` link in an email body.
+pub fn link_token(body: &str, page: &str) -> String {
+    let i = body.find(&format!("/{page}?token=")).unwrap_or_else(|| panic!("no {page} link in {body}"));
+    body[i + page.len() + 8..].chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_').collect()
+}
+
+/// The last email sent to `to`.
+pub fn last_mail_to(srv: &TestServer, to: &str) -> Option<forgust_server::services::notify::Email> {
+    srv.state.mailer.sent().into_iter().rev().find(|m| m.to.iter().any(|t| t == to))
+}

@@ -125,7 +125,27 @@ pub const EVENTS: &[EventType] = &[
         &["confirmed"],
         "The account's address changed (`confirmed`: an administrator vouched for the new one).",
     ),
-    e("email_confirmed", ACCOUNT, U, &["by"], "An address was confirmed (`by`: administrator when one vouched for it)."),
+    e(
+        "email_confirmed",
+        ACCOUNT,
+        U,
+        &["by", "email_id"],
+        "An address was confirmed (`by`: administrator when one vouched for it; `email_id`: one of the account's other addresses).",
+    ),
+    e(
+        "email_added",
+        ACCOUNT,
+        U,
+        &["email_id", "confirmed_by"],
+        "Another address was added to the account (`confirmed_by`: admin or auto when it was confirmed as it was added, on an instance without email).",
+    ),
+    e(
+        "email_removed",
+        ACCOUNT,
+        U,
+        &["email_id", "by"],
+        "One of the account's other addresses was removed (`by`: administrator when one did).",
+    ),
     e("confirmation_resent", ACCOUNT, U, &[], "An administrator sent the confirmation email again."),
     e("profile_updated", ACCOUNT, U, &[], "The user changed their profile."),
     e(

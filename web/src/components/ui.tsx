@@ -7,36 +7,56 @@ import { useConfirm, type Ask } from "../shell/dialog";
 
 /** How long a wait goes unmarked: a page that comes sooner never shows a loader. */
 const SPINNER_DELAY = 400;
+/** A loader that comes within this of the last one's leaving goes on with its wait. */
+const SAME_WAIT = 100;
 // One wait can pass through several loaders (the session, a page's code, then its data):
 // they share when it began, so the next one goes on where the last one was.
 let waitBegan = 0;
 let loaders = 0;
 let lastGone = -Infinity;
+/** The wait on screen is a page's: the session, a page's code, then its data. */
+let pageWait = false;
 
-/** A loader that shows only once a wait has lasted SPINNER_DELAY (styles.css fades it in). */
-export function Spinner({ label = "Loading…" }: { label?: string }) {
+/** A loader that shows only once a wait has lasted SPINNER_DELAY (styles.css fades it in). A
+ *  page's (`page`: the session, a page's code, under the app's top bar) is a line under that bar,
+ *  and so is a loader that goes on with its wait (the page's data): the page builds up beneath it
+ *  without moving it, where a spinner would go down with each layer. A loader that starts a wait of
+ *  its own, in a page already there, is a spinner where its content will be. */
+export function Spinner({ label = "Loading…", page = false }: { label?: string; page?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
+  // read once, as it first renders: whether a page's wait is going on
+  const [line] = useState(() => page || (pageWait && (loaders > 0 || performance.now() - lastGone <= SAME_WAIT)));
   // timed when it reaches the screen, not when it renders: React can hold a render back
   // (a page's code arrived just after its fallback showed), and a loader hidden by a
   // Suspense fallback comes back through here too
   useLayoutEffect(() => {
     const now = performance.now();
     // a new wait unless another loader is on screen or just left it
-    if (loaders === 0 && now - lastGone > 100) waitBegan = now;
+    if (loaders === 0 && now - lastGone > SAME_WAIT) {
+      waitBegan = now;
+      pageWait = line;
+    } else if (line) pageWait = true;
     loaders++;
     const waited = now - waitBegan;
     const el = ref.current;
     if (el) {
       el.style.animationDelay = `${SPINNER_DELAY - waited}ms`;
-      // the arc goes on turning from where the last loader's was
-      const icon = el.firstElementChild as SVGElement | null;
-      if (icon) icon.style.animationDelay = `${-waited}ms`;
+      // the arc goes on turning, the line on running, from where the last loader's was
+      const moving = el.firstElementChild as HTMLElement | SVGElement | null;
+      if (moving) moving.style.animationDelay = `${-waited}ms`;
     }
     return () => {
       loaders--;
       lastGone = performance.now();
     };
-  }, []);
+  }, [line]);
+  if (line) {
+    return (
+      <div className="page-loading" ref={ref} role="progressbar" aria-label={label}>
+        <span />
+      </div>
+    );
+  }
   return (
     <div className="spinner" ref={ref}>
       <Loader2 size={16} className="spin" aria-hidden="true" />

@@ -971,6 +971,9 @@ pub async fn update_user(
             return Err(ApiError::bad("bots have no address of their own"));
         }
         services::paths::validate_email(email)?;
+        if !email.eq_ignore_ascii_case(&u.email) && forgust_db::user_emails::reserved_by(&state.db, email).await? == Some(u.id) {
+            return Err(ApiError::conflict("this is one of their other addresses: remove it from there first"));
+        }
         services::accounts::set_email(&state, &p, &u, email, true).await?;
         // the old inbox hears of it (nothing is sent without email)
         services::notify::send_to(
@@ -1008,6 +1011,7 @@ pub struct UpdateInstanceSettings {
     pub default_branch_name: String,
     pub mcp_enabled: Option<bool>,
     pub update_check_enabled: Option<bool>,
+    pub auto_confirm_emails: Option<bool>,
 }
 
 pub async fn update_settings(
@@ -1028,6 +1032,7 @@ pub async fn update_settings(
         default_branch_name: req.default_branch_name,
         mcp_enabled: req.mcp_enabled.unwrap_or(before.mcp_enabled),
         update_check_enabled: req.update_check_enabled.unwrap_or(before.update_check_enabled),
+        auto_confirm_emails: req.auto_confirm_emails.unwrap_or(before.auto_confirm_emails),
     };
     forgust_db::settings::update(&mut *tx, &after).await?;
     tx.commit().await?;
@@ -1081,4 +1086,37 @@ pub struct AuditCatalogue {
 /// Every event the audit log can hold, with its fields.
 pub async fn audit_catalogue(Admin(..): Admin) -> Json<AuditCatalogue> {
     Json(AuditCatalogue { version: services::audit_events::VERSION, events: services::audit_events::EVENTS })
+}
+
+/// Someone's other email addresses.
+pub async fn list_user_emails(
+    State(state): State<AppState>,
+    Admin(..): Admin,
+    Path(id): Path<i64>,
+) -> ApiResult<Json<Vec<forgust_db::user_emails::UserEmail>>> {
+    let u = person(&state, id).await?;
+    Ok(Json(forgust_db::user_emails::list(&state.db, u.id).await?))
+}
+
+/// Confirm one of someone's addresses without a link: the administrator
+/// vouches that it is theirs (an instance without email has no other way).
+pub async fn confirm_user_email(
+    State(state): State<AppState>,
+    Admin(_, p): Admin,
+    Path((id, email_id)): Path<(i64, i64)>,
+) -> ApiResult<Json<forgust_db::user_emails::UserEmail>> {
+    let u = person(&state, id).await?;
+    Ok(Json(services::emails::confirm_by_admin(&state, &p, &u, email_id).await?))
+}
+
+/// Remove one of someone's addresses (one they should not hold, or that
+/// holds back its owner: a confirmed one is nobody else's).
+pub async fn remove_user_email(
+    State(state): State<AppState>,
+    Admin(_, p): Admin,
+    Path((id, email_id)): Path<(i64, i64)>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let u = person(&state, id).await?;
+    services::emails::remove(&state, &p, &u, email_id).await?;
+    Ok(Json(json!({ "ok": true })))
 }

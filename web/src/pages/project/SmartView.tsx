@@ -304,7 +304,7 @@ function RunNote({ ctx, view }: { ctx: Ctx; view: S["SmartView"] }) {
     return (
       <Empty>
         The Smart View is off for this project. Turned on, a job maps the code at each new commit of the default branch and of open merge requests.{" "}
-        {ctx.p.can_admin ? <Link to={`${ctx.web}/-/settings#smart-view`}>Turn it on in the settings</Link> : "A Maintainer turns it on in the project's settings."}
+        {ctx.p.can_admin ? <Link to={`${ctx.web}/-/settings/automation#smart-view`}>Turn it on in the settings</Link> : "A Maintainer turns it on in the project's settings."}
       </Empty>
     );
   }

@@ -178,7 +178,18 @@ async fn ssh_signed_commits_are_verified_and_can_be_required(pool: sqlx::PgPool)
     let out = push(&srv, &work, "olivia", "main").await;
     assert!(!out.ok && out.stderr.contains("not verified (unverified)"), "{}", out.stderr);
     assert!(out.stderr.contains("commit with an email address confirmed on your profile"), "{}", out.stderr);
-    must(git(&work, &["reset", "-q", "--hard", "HEAD~1"]).await);
+    // the same commit once that address is one of hers, confirmed: verified
+    let oid = srv.user_id("olivia").await;
+    let other = forgust_db::user_emails::insert(&srv.state.db, oid, "someone@example.com", None).await.unwrap();
+    assert!(!push(&srv, &work, "olivia", "main").await.ok, "not while it waits for confirmation");
+    forgust_db::user_emails::confirm(&srv.state.db, other.id, "admin").await.unwrap();
+    let sha = must(git(&work, &["rev-parse", "HEAD"]).await);
+    must(push(&srv, &work, "olivia", "main").await);
+    let (_, v) = signature(&owner, project, &sha).await;
+    assert_eq!((v["verification_status"].as_str(), v["signer"].as_str()), (Some("verified"), Some("olivia")), "{v}");
+    // removed, it no longer is
+    forgust_db::user_emails::delete(&srv.state.db, oid, other.id).await.unwrap();
+    assert_eq!(signature(&owner, project, &sha).await.1["verification_status"], "unverified");
     // signed with a key not added for signing: the refusal says how to add it
     let (other, _) = ssh_signing_key(&srv.work_dir("other-keys"));
     let mut env = OLIVIA.to_vec();

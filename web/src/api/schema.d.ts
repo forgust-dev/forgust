@@ -2646,6 +2646,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/user/emails": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Your other email addresses: commits made with a confirmed one show as yours. */
+        get: operations["list_emails"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/user/gpg_keys": {
         parameters: {
             query?: never;
@@ -2937,6 +2954,14 @@ export interface components {
             key: string;
             title: string;
         };
+        AddEmail: {
+            /**
+             * @description Needed when the address is confirmed as it is added (an instance that
+             *     sends no email): a borrowed session must not be able to claim one.
+             */
+            current_password?: string;
+            email: string;
+        };
         AddGpgKey: {
             /** @description The armored public key (`gpg --armor --export <id>`). */
             key: string;
@@ -3125,6 +3150,13 @@ export interface components {
             /** Format: date-time */
             last_sign_in_at?: string | null;
             name: string;
+            /**
+             * Format: int64
+             * @description Its other email addresses, and how many of them wait for confirmation.
+             */
+            other_emails: number;
+            /** Format: int64 */
+            other_emails_unconfirmed: number;
             /** @description Sign-in providers linked to the account. */
             providers: string[];
             /**
@@ -4360,6 +4392,11 @@ export interface components {
         };
         InstanceSettings: {
             allow_personal_projects: boolean;
+            /**
+             * @description While the instance sends no email and sign-up is closed, the addresses
+             *     people add to their account are confirmed at once.
+             */
+            auto_confirm_emails: boolean;
             default_branch_name: string;
             /** @description The MCP server answers. */
             mcp_enabled: boolean;
@@ -6785,6 +6822,7 @@ export interface components {
          */
         UpdateInstanceSettings: {
             allow_personal_projects: boolean;
+            auto_confirm_emails?: boolean | null;
             default_branch_name: string;
             mcp_enabled?: boolean | null;
             signup_enabled: boolean;
@@ -6914,6 +6952,23 @@ export interface components {
             unconfirmed_email?: string | null;
             user_type: string;
             username: string;
+        };
+        UserEmail: {
+            /**
+             * Format: date-time
+             * @description When it was confirmed (None: not yet).
+             */
+            confirmed_at?: string | null;
+            /**
+             * @description How: `link` (from its inbox), `admin` (an administrator vouched for
+             *     it) or `auto` (the instance trusted it, sending no email).
+             */
+            confirmed_by?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            email: string;
+            /** Format: int64 */
+            id: number;
         };
         VariableBody: {
             description?: string;
@@ -11332,6 +11387,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UserDto"];
+                };
+            };
+        };
+    };
+    list_emails: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserEmail"][];
                 };
             };
         };

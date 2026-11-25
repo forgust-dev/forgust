@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM user_tokens WHERE user_id = $1 AND purpose = 'extra_email' AND lower(email) = lower($2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2bb361e4a8993d4665f058854f21c9464f3dd2ebc51772110d4c2ddf2e20585d"
+}

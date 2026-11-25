@@ -12,6 +12,7 @@ import { Combobox, Menu, Select, type MenuItem } from "../components/controls";
 import { MoreHorizontal, Ban, ShieldCheck } from "lucide-react";
 import { useAct, useToast } from "../shell/toast";
 import { useConfirm, usePrompt, type Ask } from "../shell/dialog";
+import { AdminUserEmails } from "../components/UserEmails";
 import { RunnersPanel } from "./project/ci/Runners";
 import { AdminBackups, AdminHealth, AdminJobs, AdminOverview, AdminProjects, AdminStorage, BannerForm } from "./AdminTools";
 
@@ -249,6 +250,10 @@ function Users() {
                           }),
                       },
                       { label: "Resend the confirmation email", disabled: u.email_verified || !emailEnabled, onSelect: () => act(() => api.post(`${path}/resend_confirmation`), "Confirmation email sent") },
+                      {
+                        label: u.other_emails ? `Other email addresses (${u.other_emails})…` : "Other email addresses…",
+                        onSelect: () => void confirm({ title: `${u.username}'s other email addresses`, body: <AdminUserEmails user={u} />, action: "Done" }),
+                      },
                       ...(providers.data ?? []).map(
                         (pr): MenuItem =>
                           u.providers.includes(pr.name)
@@ -305,6 +310,12 @@ function Users() {
                       </div>
                       <div className="small muted ellipsis">
                         {u.email} {human && !u.email_verified && <span className="warn-text">· not confirmed</span>}
+                        {u.other_emails_unconfirmed > 0 && (
+                          <span className="warn-text">
+                            {" "}
+                            · {u.other_emails_unconfirmed} other address{u.other_emails_unconfirmed === 1 ? "" : "es"} to confirm
+                          </span>
+                        )}
                       </div>
                     </div>
                     <span className="small faint nowrap hide-narrow" title={u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleString() : undefined}>
@@ -359,6 +370,7 @@ function Settings() {
 
 function SettingsForm({ initial }: { initial: S["InstanceSettings"] }) {
   const qc = useQueryClient();
+  const { emailEnabled } = useSession();
   const [s, setS] = useState(initial);
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -392,6 +404,16 @@ function SettingsForm({ initial }: { initial: S["InstanceSettings"] }) {
       <label className="check">
         <input type="checkbox" checked={s.allow_personal_projects} onChange={(e) => setS({ ...s, allow_personal_projects: e.target.checked })} />
         Allow personal projects
+      </label>
+      <label className="check">
+        <input type="checkbox" checked={s.auto_confirm_emails} onChange={(e) => setS({ ...s, auto_confirm_emails: e.target.checked })} />
+        <span>
+          Trust the email addresses people add{" "}
+          <span className="muted small">
+            — {emailEnabled ? "only applies while this instance sends no email: now, links confirm them" : "they are confirmed at once, with no administrator"}; only
+            while sign-up is closed, and for people whose own address is confirmed
+          </span>
+        </span>
       </label>
       <label className="check">
         <input type="checkbox" checked={s.mcp_enabled} onChange={(e) => setS({ ...s, mcp_enabled: e.target.checked })} />

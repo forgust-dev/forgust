@@ -853,6 +853,7 @@ export function ShellFrame() {
   if (!wasSignedIn()) {
     // the sign-in pages bring their own frame
     if (AUTH_PATHS.includes(loc.pathname)) {
+      // no top bar here to run a line under
       return (
         <main className="main-solo">
           <Spinner />
@@ -873,7 +874,7 @@ export function ShellFrame() {
           </Link>
         </header>
         <main className="main-solo">
-          <Spinner />
+          <Spinner page />
         </main>
       </>
     );
@@ -895,7 +896,7 @@ export function ShellFrame() {
         <CollapseButton collapsed={collapsed} setCollapsed={setCollapsed} />
       </aside>
       <main className="main">
-        <Spinner />
+        <Spinner page />
       </main>
     </div>
   );

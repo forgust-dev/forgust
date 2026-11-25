@@ -15,9 +15,9 @@ use crate::error::{ApiError, ApiResult};
 use crate::state::AppState;
 
 const RESET_HOURS: i64 = 1;
-const CONFIRM_HOURS: i64 = 24;
+pub(super) const CONFIRM_HOURS: i64 = 24;
 
-fn link(state: &AppState, page: &str, token: &str) -> String {
+pub(super) fn link(state: &AppState, page: &str, token: &str) -> String {
     state.cfg.web_url(&format!("{page}?token={token}"))
 }
 
@@ -64,7 +64,7 @@ pub async fn set_email(state: &AppState, by: &Principal, user: &User, email: &st
     let mut tx = state.db.begin().await?;
     let set =
         if vouched { udb::confirm_email(&mut *tx, user.id, email).await } else { udb::set_unproven_email(&mut *tx, user.id, email).await };
-    set.map_err(|e| if forgust_db::is_unique_violation(&e) { ApiError::conflict("email is already in use") } else { e.into() })?;
+    set.map_err(super::emails::email_in_use)?;
     // links sent to the old address prove nothing about this one
     udb::delete_tokens(&mut *tx, user.id, "email").await?;
     udb::delete_tokens(&mut *tx, user.id, "password_reset").await?;
@@ -131,11 +131,15 @@ pub async fn reset(state: &AppState, token: &str, password: &str) -> ApiResult<U
 /// replaces it. Only the account itself, signed in, may: someone who receives
 /// the link for an account another person registered with their address
 /// cannot hand that account their address by clicking it.
-pub async fn confirm(state: &AppState, token: &str, signed_in: Option<i64>) -> ApiResult<User> {
+/// Answers the address confirmed.
+pub async fn confirm(state: &AppState, token: &str, signed_in: Option<i64>) -> ApiResult<String> {
     let mut tx = state.db.begin().await?;
-    let t = udb::take_token(&mut *tx, &crypto::token_hash(token), "email")
-        .await?
-        .ok_or_else(|| ApiError::bad("this link is invalid or has expired; ask for a new one"))?;
+    let hash = crypto::token_hash(token);
+    let (t, extra) = match udb::take_token(&mut *tx, &hash, "email").await? {
+        Some(t) => (Some(t), false),
+        None => (udb::take_token(&mut *tx, &hash, "extra_email").await?, true),
+    };
+    let t = t.ok_or_else(|| ApiError::bad("this link is invalid or has expired; ask for a new one"))?;
     let user = udb::find(&mut *tx, t.user_id).await?.ok_or(ApiError::NotFound)?;
     if signed_in != Some(user.id) {
         // the link stays usable (the transaction rolls back)
@@ -145,13 +149,20 @@ pub async fn confirm(state: &AppState, token: &str, signed_in: Option<i64>) -> A
         )));
     }
     let email = t.email.unwrap_or_default();
+    if extra {
+        let row = super::emails::confirm_by_link(&mut tx, &user, &email)
+            .await?
+            .ok_or_else(|| ApiError::bad("this link is for an address the account no longer has"))?;
+        tx.commit().await?;
+        let by = Principal::User { user: user.clone(), scopes: None };
+        super::audit(state, &by, "email_confirmed", Some(("user", user.id)), json!({ "email_id": row.id }), None).await;
+        return Ok(row.email);
+    }
     if email.eq_ignore_ascii_case(&user.email) {
         udb::set_email_verified(&mut *tx, user.id).await?;
     } else if user.unconfirmed_email.as_deref().is_some_and(|u| u.eq_ignore_ascii_case(&email)) {
-        if udb::find_by_email(&mut *tx, &email).await?.is_some_and(|o| o.id != user.id) {
-            return Err(ApiError::conflict("this address is now used by another account"));
-        }
-        udb::confirm_email(&mut *tx, user.id, &email).await?;
+        super::emails::check_free_as_own(&mut *tx, user.id, &email).await?;
+        udb::confirm_email(&mut *tx, user.id, &email).await.map_err(super::emails::email_in_use)?;
         // a reset link sent to the old address proves nothing about this one
         udb::delete_tokens(&mut *tx, user.id, "password_reset").await?;
     } else {
@@ -160,5 +171,5 @@ pub async fn confirm(state: &AppState, token: &str, signed_in: Option<i64>) -> A
     tx.commit().await?;
     super::audit(state, &Principal::User { user: user.clone(), scopes: None }, "email_confirmed", Some(("user", user.id)), json!({}), None)
         .await;
-    Ok(udb::find(&state.db, user.id).await?.unwrap_or(user))
+    Ok(email)
 }
