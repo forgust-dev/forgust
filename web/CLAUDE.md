@@ -48,6 +48,8 @@ GitHub's colors, and a job log keeps its terminal palette.
 
 The sidebar, the top bar and the job list are painted `--bg-side`, which in light is the color
 of `--bg-hover`: a hover there takes `--side-hover`, or it does not show.
+On a card, a hovered row takes `--row-hover`: in light, `--bg-subtle` is almost the page's
+color, and the card seemed to fade.
 
 Never put a hex color in a component. Data that carries its own color is the exception: a label
 and its swatches, code highlighting, the Smart View's block kinds and logos.
