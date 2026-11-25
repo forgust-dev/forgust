@@ -219,7 +219,7 @@ function ArchivedBanner({ p }: { p: S["ProjectDetail"] }) {
   const toast = useToast();
   if (!p.archived) return null;
   return (
-    <div className="banner" role="status">
+    <div className="banner neutral" role="status">
       <Archive size={16} />
       <span className="grow small">
         This project is <strong>archived</strong>: everything stays readable, nothing can change (code, issues, merge requests, CI, settings).

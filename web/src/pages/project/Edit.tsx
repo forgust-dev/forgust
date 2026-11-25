@@ -139,7 +139,7 @@ function Editor({ ctx, res, mode }: { ctx: Ctx; res: S["RefResolved"]; mode: Mod
       <form className="stack editor-form" onSubmit={submit}>
         <ErrorBox error={error} />
         {assay && (
-          <div className="banner" role="note">
+          <div className="banner info" role="note">
             <MapIcon size={16} aria-hidden />
             <span className="grow small">
               The Smart View&apos;s correction is written in below. Check it, then commit it here or on a new branch with a merge request.

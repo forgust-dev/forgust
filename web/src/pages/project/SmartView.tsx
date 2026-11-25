@@ -316,7 +316,7 @@ function RunNote({ ctx, view }: { ctx: Ctx; view: S["SmartView"] }) {
   const commit = <code>{run.commit.slice(0, 8)}</code>;
   if (run.state === "pending") {
     return (
-      <div className="banner" role="status">
+      <div className="banner info" role="status">
         <span className="grow small">
           {view.map ? <>A newer commit ({commit}) is being mapped by {job}: this is the map of the one before.</> : <>The code is being mapped by {job}: the map shows here when it is done.</>}
         </span>

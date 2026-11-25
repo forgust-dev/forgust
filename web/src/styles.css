@@ -809,6 +809,22 @@ a.milestone-chip:hover {
   background: var(--border-strong);
   text-decoration: none;
 }
+/* ---- the UI convention's reference page (/-/ui) */
+.ui-kit-rows {
+  display: grid;
+  gap: 14px;
+}
+.ui-kit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.ui-kit-bell {
+  position: relative;
+  display: inline-flex;
+  padding: 6px;
+}
 
 .alert {
   padding: 10px 14px;
@@ -830,6 +846,11 @@ a.milestone-chip:hover {
   border-color: var(--warn-border);
   background: var(--warn-soft);
   color: var(--warn);
+}
+/* an alert's icon sits in its first line, centered on the text */
+.alert > svg {
+  margin-right: 6px;
+  vertical-align: -0.2em;
 }
 
 .tabs {
@@ -2375,33 +2396,39 @@ kbd {
   transition-timing-function: var(--ease-out);
   pointer-events: none;
 }
+/* a banner: the state of the whole page, in the tone of what it says (amber unless told: a
+   caution; info for what runs or what to know, neutral for a state, danger when it broke) */
 .banner {
+  --tone: var(--warn);
+  --tone-soft: var(--warn-soft);
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 8px 8px 8px 14px;
   margin-bottom: 16px;
-  border: 1px solid var(--warn-border);
+  border: 1px solid color-mix(in srgb, var(--tone) 32%, transparent);
   border-radius: var(--radius);
-  background: var(--warn-soft);
+  background: var(--tone-soft);
 }
 .banner > svg {
-  color: var(--warn);
+  color: var(--tone);
   flex: none;
 }
-.banner.danger {
-  border-color: var(--danger);
-  background: var(--danger-soft);
+.banner.info {
+  --tone: var(--info);
+  --tone-soft: var(--info-soft);
 }
-.banner.danger > svg {
-  color: var(--danger);
+.banner.neutral {
+  --tone: var(--text-muted);
+  --tone-soft: var(--bg-hover);
+}
+.banner.danger {
+  --tone: var(--danger);
+  --tone-soft: var(--danger-soft);
 }
 .site-banner.info {
-  border-color: var(--accent-soft);
-  background: var(--accent-soft);
-}
-.site-banner.info > svg {
-  color: var(--accent);
+  --tone: var(--info);
+  --tone-soft: var(--info-soft);
 }
 /* the bottom of the sidebar, for administrators: the version, and a newer one */
 .side-version {
@@ -3896,7 +3923,7 @@ a.status-badge:hover {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: var(--emph-link);
+  color: var(--emph-muted);
   font-size: 12.5px;
   font-weight: 600;
 }
@@ -3952,7 +3979,7 @@ a.status-badge:hover {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: var(--emph-link);
+  color: var(--emph-muted);
   font-size: 12.5px;
   font-weight: 600;
 }

@@ -152,7 +152,7 @@ export function RecentBranchBanner({ ctx }: { ctx: Ctx }) {
   return (
     <>
       {recent.map((b) => (
-        <div className="banner" key={b.name}>
+        <div className="banner info" key={b.name}>
           <GitBranch size={16} />
           <span className="grow">
             <strong>{b.name}</strong> <span className="muted">had recent changes {timeAgo(b.commit!.committed_at)}</span>
