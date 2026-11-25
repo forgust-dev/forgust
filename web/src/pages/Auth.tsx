@@ -4,7 +4,7 @@ import { api, ApiError, type S } from "../api/client";
 import { cancelled, getCredential, webauthnSupported } from "../api/webauthn";
 import { useProviders, useSetup } from "../prefetch";
 import { useSession } from "../session";
-import { ErrorBox, Field } from "../components/ui";
+import { ErrorBox, Field, PasswordInput } from "../components/ui";
 import { Logo } from "../components/Logo";
 import { ThemeButton } from "../shell/Shell";
 
@@ -224,7 +224,7 @@ export function Login() {
             </Field>
             <div className="auth-pw">
               <Field label="Password">
-                <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+                <PasswordInput autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
               </Field>
               <Link className="auth-forgot" to={`/forgot-password${login ? `?login=${encodeURIComponent(login)}` : ""}`}>
                 Forgot password?
@@ -295,7 +295,7 @@ export function Setup() {
           <input type="email" value={form.email} onChange={set("email")} />
         </Field>
         <Field label="Password" hint="At least 8 characters">
-          <input type="password" value={form.password} onChange={set("password")} />
+          <PasswordInput autoComplete="new-password" value={form.password} onChange={set("password")} />
         </Field>
         <button className="btn primary auth-submit">Create administrator</button>
       </form>
@@ -396,10 +396,10 @@ export function ResetPassword() {
           <ErrorBox error={error} />
           {!token && <p className="muted">This page needs the link from your email.</p>}
           <Field label="New password" hint="At least 8 characters">
-            <input type="password" autoFocus autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <PasswordInput autoFocus autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </Field>
           <Field label="Repeat it">
-            <input type="password" autoComplete="new-password" value={again} onChange={(e) => setAgain(e.target.value)} aria-invalid={mismatch} />
+            <PasswordInput autoComplete="new-password" value={again} onChange={(e) => setAgain(e.target.value)} aria-invalid={mismatch} />
           </Field>
           {mismatch && <span className="small danger-text">The two passwords differ.</span>}
           <button className="btn primary auth-submit" aria-busy={busy} disabled={busy || !token || password.length < 8 || password !== again}>

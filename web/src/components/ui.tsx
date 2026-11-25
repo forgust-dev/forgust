@@ -1,5 +1,5 @@
-import { Component, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { Check, Copy, EyeOff, Loader2, Lock, Search, type LucideIcon } from "lucide-react";
+import { Component, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type InputHTMLAttributes, type ReactNode } from "react";
+import { Check, Copy, Eye, EyeOff, Loader2, Lock, Search, type LucideIcon } from "lucide-react";
 import { Link, NavLink } from "react-router-dom";
 import { ApiError, LEVELS, bytes } from "../api/client";
 import { Select } from "./controls";
@@ -147,6 +147,22 @@ export function StateBadge({ tone, icon: Icon, children, className, title }: { t
  *  grey outline, never colored, so that it never reads as a state. */
 export function Badge({ children }: { children: ReactNode }) {
   return <span className="badge">{children}</span>;
+}
+
+/**
+ * A password input with a button that shows what was typed, and hides it again. The button is
+ * named "Show" (pressed while shown): a name with "password" in it would answer for the field.
+ */
+export function PasswordInput(props: Omit<InputHTMLAttributes<HTMLInputElement>, "type">) {
+  const [shown, setShown] = useState(false);
+  return (
+    <span className="password-input">
+      <input {...props} type={shown ? "text" : "password"} />
+      <button type="button" className="icon-btn" aria-label="Show" aria-pressed={shown} title={shown ? "Hide the password" : "Show the password"} onClick={() => setShown(!shown)}>
+        {shown ? <EyeOff size={15} /> : <Eye size={15} />}
+      </button>
+    </span>
+  );
 }
 
 export function Field({ label, hint, children }: { label: string; hint?: ReactNode; children: ReactNode }) {

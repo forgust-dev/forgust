@@ -1564,6 +1564,21 @@ kbd {
   background: var(--bg-hover);
   color: var(--text);
 }
+/* a password field and its Show button, inside it on the right */
+.password-input {
+  position: relative;
+  display: block;
+}
+.password-input input {
+  padding-right: 38px;
+}
+.password-input .icon-btn {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 28px;
+  height: 28px;
+}
 /* the top bar has the sidebar's color, which --bg-hover matches in light */
 .topbar .icon-btn:hover {
   background: var(--side-hover);
