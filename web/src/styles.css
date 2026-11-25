@@ -2580,6 +2580,45 @@ kbd {
   gap: 8px;
   margin-top: 20px;
 }
+/* a window that adds a row to a list or changes one (FormDialog): the confirmation's look,
+   wider; a long form scrolls under its title, its buttons stay in view at the bottom */
+.modal.form-modal {
+  top: 10vh;
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100dvh - 10vh - 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 20px 22px 0;
+}
+.form-modal .modal-title {
+  margin-bottom: 14px;
+}
+.form-modal .modal-actions {
+  position: sticky;
+  bottom: 0;
+  margin: 6px -22px 0;
+  padding: 14px 22px 18px;
+  background: var(--bg);
+}
+@media (max-width: 600px) {
+  .modal.form-modal {
+    top: 12px;
+    max-height: calc(100dvh - 24px);
+  }
+}
+/* the row just added to a list: highlighted as it comes, then back to itself in a second */
+@keyframes just-added {
+  0%,
+  30% {
+    background-color: var(--accent-soft);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+.just-added {
+  animation: just-added 1400ms var(--ease-out);
+}
 /* what cannot be undone, confirmed: the one red button */
 .btn.danger.solid {
   border-color: var(--danger);
@@ -4763,14 +4802,7 @@ a.status-badge:hover {
   align-items: center;
   gap: 6px;
 }
-/* the form: when it runs, as a sentence of fields */
-.sched-form {
-  max-width: 760px;
-}
-.sched-form-title {
-  margin: 0;
-  font-size: 16px;
-}
+/* the form (in its window): when it runs, as a sentence of fields */
 .sched-when {
   display: flex;
   flex-wrap: wrap;

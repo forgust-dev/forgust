@@ -2,7 +2,8 @@ import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, LEVELS, timeAgo, type S } from "../api/client";
 import { Badge, ErrorBox, Field, LevelSelect, NewSecret, Q, StateBadge } from "./ui";
-import { AddActions, EmptyRow, ListSection } from "./settings";
+import { EmptyRow, ListSection } from "./settings";
+import { FormActions, useJustAdded } from "./FormDialog";
 import { Ban } from "lucide-react";
 
 const SCOPES = ["api", "read_api", "read_repository", "write_repository", "mcp"];
@@ -35,14 +36,15 @@ export function AccessTokens({ base, title, description }: { base: string; title
   const [scopes, setScopes] = useState<string[]>(["read_repository"]);
   const [created, setCreated] = useState<S["NewToken"] | null>(null);
   const [adding, setAdding] = useState(false);
-  // the new token is shown once: it stays on screen once its form has closed
+  const fresh = useJustAdded();
+  // the new token is shown once: in the window, in place of its form, until Done
   const { list, add: create, remove: revoke, error, setError } = useCrudList<S["AccessTokenDto"], S["NewToken"]>(["access-tokens", base], `${base}/access_tokens`, (t) => {
     setCreated(t);
-    setName("");
-    setAdding(false);
+    fresh.mark(name);
   });
   const close = () => {
     setAdding(false);
+    setCreated(null);
     setName("");
     setError(null);
   };
@@ -52,7 +54,10 @@ export function AccessTokens({ base, title, description }: { base: string; title
       title={title}
       description={description}
       add="Create a token"
+      result={created && <NewSecret token={created.token} username={created.username} />}
+      resultTitle="Token created"
       adding={adding}
+      onClose={close}
       onAdd={() => {
         setCreated(null);
         setAdding(true);
@@ -76,12 +81,11 @@ export function AccessTokens({ base, title, description }: { base: string; title
             </Field>
           </div>
           <ScopePicker scopes={scopes} onChange={setScopes} />
-          <AddActions label="Create token" disabled={!name} busy={create.isPending} onCancel={close} />
+          <FormActions label="Create token" disabled={!name} busy={create.isPending} onCancel={close} />
         </form>
       }
     >
       {!adding && <ErrorBox error={error} />}
-      {created && <NewSecret token={created.token} username={created.username} />}
       <Q q={list}>
         {(tokens) =>
           tokens.length === 0 ? (
@@ -89,7 +93,7 @@ export function AccessTokens({ base, title, description }: { base: string; title
           ) : (
             <div className="list">
               {tokens.map((t) => (
-                <div className="item" key={t.bot_user_id + t.name}>
+                <div className={"item" + fresh.fresh(t.name)} key={t.bot_user_id + t.name}>
                   <div className="grow">
                     <strong>{t.name}</strong> <span className="faint small">@{t.bot_username}</span>
                     <div className="small muted">{t.scopes.join(", ")}</div>
@@ -133,14 +137,15 @@ export function DeployTokens({ base, title, description }: { base: string; title
   const [scopes, setScopes] = useState<string[]>(["read_repository"]);
   const [created, setCreated] = useState<S["NewToken"] | null>(null);
   const [adding, setAdding] = useState(false);
-  // the new token is shown once: it stays on screen once its form has closed
+  const fresh = useJustAdded();
+  // the new token is shown once: in the window, in place of its form, until Done
   const { list, add: create, remove: revoke, error, setError } = useCrudList<S["DeployToken"], S["NewToken"]>(["deploy-tokens", base], `${base}/deploy_tokens`, (t) => {
     setCreated(t);
-    setName("");
-    setAdding(false);
+    fresh.mark(name);
   });
   const close = () => {
     setAdding(false);
+    setCreated(null);
     setName("");
     setError(null);
   };
@@ -150,7 +155,10 @@ export function DeployTokens({ base, title, description }: { base: string; title
       title={title}
       description={description}
       add="Create a deploy token"
+      result={created && <NewSecret token={created.token} username={created.username} />}
+      resultTitle="Deploy token created"
       adding={adding}
+      onClose={close}
       onAdd={() => {
         setCreated(null);
         setAdding(true);
@@ -169,12 +177,11 @@ export function DeployTokens({ base, title, description }: { base: string; title
             <input value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
           <ScopePicker scopes={scopes} onChange={setScopes} options={["read_repository", "write_repository"]} />
-          <AddActions label="Create deploy token" disabled={!name} busy={create.isPending} onCancel={close} />
+          <FormActions label="Create deploy token" disabled={!name} busy={create.isPending} onCancel={close} />
         </form>
       }
     >
       {!adding && <ErrorBox error={error} />}
-      {created && <NewSecret token={created.token} username={created.username} />}
       <Q q={list}>
         {(tokens) =>
           tokens.length === 0 ? (
@@ -182,7 +189,7 @@ export function DeployTokens({ base, title, description }: { base: string; title
           ) : (
             <div className="list">
               {tokens.map((t) => (
-                <div className="item" key={t.id}>
+                <div className={"item" + fresh.fresh(t.name)} key={t.id}>
                   <div className="grow">
                     <strong>{t.name}</strong> <code className="small">{t.username}</code>
                     <div className="small muted">

@@ -6,6 +6,7 @@ import { Check, Plus } from "lucide-react";
 import { useConfirm } from "../shell/dialog";
 import { Switch } from "./controls";
 import { ErrorBox, Section } from "./ui";
+import { FormDialog } from "./FormDialog";
 
 /** The forms of this page that have changes not saved yet. */
 const unsaved = new Set<symbol>();
@@ -165,9 +166,10 @@ export function SettingSwitch({
 }
 
 /**
- * A settings section that holds a list: what is there first (or why nothing is), and the form to
- * add one only once its button is pressed, above the list, until it is done or canceled. The
- * button sits under the section's description, where every section keeps its actions.
+ * A settings section that holds a list: what is there first (or why nothing is), and its button
+ * under the section's description, where every section keeps its actions. The button opens the
+ * form in a window (FormDialog) titled with its words; `result`, once set, replaces the form
+ * there (a token to copy). Cancel, Esc, Done and a click outside all go through `onClose`.
  */
 export function ListSection({
   id,
@@ -176,43 +178,45 @@ export function ListSection({
   add,
   adding,
   onAdd,
+  onClose,
   form,
+  result,
+  resultTitle,
   children,
 }: {
   id?: string;
   title: ReactNode;
   description?: ReactNode;
-  /** the button's words ("Protect a branch"); none when nothing can be added here */
+  /** the button's words ("Protect a branch"), the window's title; none when nothing can be added here */
   add?: string;
   adding: boolean;
   onAdd: () => void;
+  onClose: () => void;
   form: ReactNode;
+  result?: ReactNode;
+  /** the window's title while it shows the result ("Token created") */
+  resultTitle?: string;
   children: ReactNode;
 }) {
-  const button = useRef<HTMLButtonElement>(null);
-  const card = useRef<HTMLDivElement>(null);
-  useFocusSwap(adding, card, button);
   return (
     <Section
       id={id}
       title={title}
       description={description}
       actions={
-        add && !adding ? (
-          <button ref={button} type="button" className="btn small" onClick={onAdd}>
+        add ? (
+          <button type="button" className="btn small" onClick={onAdd}>
             <Plus size={14} /> {add}
           </button>
         ) : undefined
       }
     >
-      <div className="stack">
-        {adding && (
-          <div ref={card} className="card card-body add-form">
-            {form}
-          </div>
-        )}
-        {children}
-      </div>
+      <div className="stack">{children}</div>
+      {add && (
+        <FormDialog open={adding} onClose={onClose} title={result ? (resultTitle ?? add) : add} result={result}>
+          {form}
+        </FormDialog>
+      )}
     </Section>
   );
 }
@@ -228,20 +232,6 @@ export function useFocusSwap(open: boolean, form: React.RefObject<HTMLElement | 
     if (!open && was.current) button.current?.focus();
     was.current = open;
   }, [open, form, button]);
-}
-
-/** An add form's buttons: what it does, and Cancel. */
-export function AddActions({ label, disabled, busy, onCancel }: { label: string; disabled?: boolean; busy?: boolean; onCancel: () => void }) {
-  return (
-    <div className="row wrap">
-      <button className="btn primary" aria-busy={busy} disabled={disabled || busy}>
-        {label}
-      </button>
-      <button type="button" className="btn" onClick={onCancel}>
-        Cancel
-      </button>
-    </div>
-  );
 }
 
 /** Who a protection lets do something, in words. */

@@ -70,7 +70,7 @@ test("commit list shows pipeline status", async ({ page }) => {
 test("schedules", async ({ page }) => {
   test.skip(isMobile(page), "the form is the same on mobile");
   await page.goto(`${P}/-/pipeline_schedules`);
-  await page.getByRole("button", { name: "New schedule" }).click();
+  await page.getByRole("button", { name: "Add a schedule" }).click();
   await page.getByPlaceholder("Nightly build").fill("Nightly e2e");
   // when, asked as a sentence: every weekday, at the 03:00 a new schedule starts with
   await page.getByRole("combobox", { name: "Repeat" }).click();

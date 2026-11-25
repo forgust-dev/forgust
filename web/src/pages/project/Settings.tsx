@@ -16,7 +16,8 @@ import { StatusBadge } from "./ci/Status";
 import { useConfirm, usePrompt } from "../../shell/dialog";
 import { settingsPage, type SettingsSlug } from "./settingsPages";
 import { useTopOnSwitch } from "../../shell/scroll";
-import { AddActions, EmptyRow, ListSection, SaveRow, SettingSwitch, useSaved, whoCan } from "../../components/settings";
+import { EmptyRow, ListSection, SaveRow, SettingSwitch, useSaved, whoCan } from "../../components/settings";
+import { FormActions, useJustAdded } from "../../components/FormDialog";
 import { saveCiSettings, useCiSettings } from "./ciSettings";
 const CiSettings = lazy(() => import("./ci/Settings").then((m) => ({ default: m.CiSettings })));
 
@@ -531,6 +532,7 @@ function ProtectedBranches({ ctx }: { ctx: Ctx }) {
   };
   const [form, setForm] = useState(blank);
   const [adding, setAdding] = useState(false);
+  const fresh = useJustAdded();
   const [error, setError] = useState<unknown>(null);
   const close = () => {
     setAdding(false);
@@ -540,6 +542,7 @@ function ProtectedBranches({ ctx }: { ctx: Ctx }) {
   const add = useMutation({
     mutationFn: () => api.post(`/projects/${ctx.p.id}/protected_branches`, form),
     onSuccess: () => {
+      fresh.mark(form.name);
       close();
       qc.invalidateQueries({ queryKey: key });
     },
@@ -553,6 +556,7 @@ function ProtectedBranches({ ctx }: { ctx: Ctx }) {
       description="Who can push and force-push to matching branches."
       add="Protect a branch"
       adding={adding}
+      onClose={close}
       onAdd={() => setAdding(true)}
       form={
       <form
@@ -590,7 +594,7 @@ function ProtectedBranches({ ctx }: { ctx: Ctx }) {
             Require approval from code owners
           </label>
         </div>
-        <AddActions label="Protect" disabled={!form.name} busy={add.isPending} onCancel={close} />
+        <FormActions label="Protect" disabled={!form.name} busy={add.isPending} onCancel={close} />
       </form>
       }
     >
@@ -601,7 +605,7 @@ function ProtectedBranches({ ctx }: { ctx: Ctx }) {
           ) : (
             <div className="list" aria-label="Protected branches">
               {rules.map((r) => (
-                <div className="item" key={r.id}>
+                <div className={"item" + fresh.fresh(r.name)} key={r.id}>
                   <div className="grow" style={{ minWidth: 0 }}>
                     <code>{r.name}</code>
                     <div className="small muted">
@@ -1001,6 +1005,7 @@ function ProtectedTags({ ctx }: { ctx: Ctx }) {
   const blank = { name: "", create_access_level: "maintainer" };
   const [form, setForm] = useState(blank);
   const [adding, setAdding] = useState(false);
+  const fresh = useJustAdded();
   const [error, setError] = useState<unknown>(null);
   const close = () => {
     setAdding(false);
@@ -1010,6 +1015,7 @@ function ProtectedTags({ ctx }: { ctx: Ctx }) {
   const add = useMutation({
     mutationFn: () => api.post(`/projects/${ctx.p.id}/protected_tags`, form),
     onSuccess: () => {
+      fresh.mark(form.name);
       close();
       qc.invalidateQueries({ queryKey: key });
     },
@@ -1023,6 +1029,7 @@ function ProtectedTags({ ctx }: { ctx: Ctx }) {
       description="Who can create matching tags. Nobody can move or delete them by pushing; Maintainers can delete them here."
       add="Protect a tag"
       adding={adding}
+      onClose={close}
       onAdd={() => setAdding(true)}
       form={
       <form
@@ -1042,7 +1049,7 @@ function ProtectedTags({ ctx }: { ctx: Ctx }) {
             <Select value={form.create_access_level} onChange={(v) => setForm({ ...form, create_access_level: v })} options={PROTECT_LEVELS} />
           </Field>
         </div>
-        <AddActions label="Protect tags" disabled={!form.name} busy={add.isPending} onCancel={close} />
+        <FormActions label="Protect tags" disabled={!form.name} busy={add.isPending} onCancel={close} />
       </form>
       }
     >
@@ -1051,7 +1058,7 @@ function ProtectedTags({ ctx }: { ctx: Ctx }) {
           <div className="list" aria-label="Protected tags">
             {rules.length === 0 && <div className="item muted">No protected tags.</div>}
             {rules.map((r) => (
-              <div className="item" key={r.id}>
+              <div className={"item" + fresh.fresh(r.name)} key={r.id}>
                 <div className="grow" style={{ minWidth: 0 }}>
                   <code>{r.name}</code>
                   <div className="small muted">{whoCan(r.create_access_level)} can create matching tags</div>
@@ -1075,6 +1082,7 @@ function DeployKeys({ ctx }: { ctx: Ctx }) {
   const blank = { title: "", key: "", can_push: false };
   const [form, setForm] = useState(blank);
   const [adding, setAdding] = useState(false);
+  const fresh = useJustAdded();
   const [error, setError] = useState<unknown>(null);
   const close = () => {
     setAdding(false);
@@ -1084,6 +1092,7 @@ function DeployKeys({ ctx }: { ctx: Ctx }) {
   const add = useMutation({
     mutationFn: () => api.post(`/projects/${ctx.p.id}/deploy_keys`, form),
     onSuccess: () => {
+      fresh.mark(form.title);
       close();
       qc.invalidateQueries({ queryKey: key });
     },
@@ -1097,6 +1106,7 @@ function DeployKeys({ ctx }: { ctx: Ctx }) {
       description="SSH keys that reach this repository only, read-only unless allowed to write."
       add="Add a deploy key"
       adding={adding}
+      onClose={close}
       onAdd={() => setAdding(true)}
       form={
       <form
@@ -1118,7 +1128,7 @@ function DeployKeys({ ctx }: { ctx: Ctx }) {
           <input type="checkbox" checked={form.can_push} onChange={(e) => setForm({ ...form, can_push: e.target.checked })} />
           Grant write access
         </label>
-        <AddActions label="Add key" disabled={!form.key} busy={add.isPending} onCancel={close} />
+        <FormActions label="Add key" disabled={!form.key} busy={add.isPending} onCancel={close} />
       </form>
       }
     >
@@ -1129,7 +1139,7 @@ function DeployKeys({ ctx }: { ctx: Ctx }) {
           ) : (
             <div className="list">
               {keys.map((k) => (
-                <div className="item" key={k.id}>
+                <div className={"item" + fresh.fresh(k.title)} key={k.id}>
                   <div className="grow" style={{ minWidth: 0 }}>
                     <strong>{k.title}</strong>
                     <div className="small muted">
@@ -1175,6 +1185,7 @@ function Mirrors({ ctx }: { ctx: Ctx }) {
   });
   const [form, setForm] = useState<MirrorForm>(NEW_MIRROR);
   const [adding, setAdding] = useState(false);
+  const fresh = useJustAdded();
   const [error, setError] = useState<unknown>(null);
   const close = () => {
     setAdding(false);
@@ -1189,6 +1200,7 @@ function Mirrors({ ctx }: { ctx: Ctx }) {
   const add = useMutation({
     mutationFn: () => api.post<S["MirrorDto"][]>(base, { ...form, interval_minutes: Number(form.interval_minutes) }),
     onSuccess: (l) => {
+      fresh.mark(form.url.trim());
       close();
       done(l);
     },
@@ -1218,6 +1230,7 @@ function Mirrors({ ctx }: { ctx: Ctx }) {
       description="Keep this repository in step with another one, on any forge: pull its branches and tags from there (this repository is then read-only), or push them there after every change. Only the repository is mirrored: not issues, merge requests or LFS files."
       add="Add a mirror"
       adding={adding}
+      onClose={close}
       onAdd={() => setAdding(true)}
       form={
       <form
@@ -1263,7 +1276,7 @@ function Mirrors({ ctx }: { ctx: Ctx }) {
             Protected branches only <span className="faint small">· and nothing deleted there</span>
           </label>
         )}
-        <AddActions label="Add mirror" disabled={!form.url.trim()} busy={add.isPending} onCancel={close} />
+        <FormActions label="Add mirror" disabled={!form.url.trim()} busy={add.isPending} onCancel={close} />
       </form>
       }
     >
@@ -1275,7 +1288,7 @@ function Mirrors({ ctx }: { ctx: Ctx }) {
           ) : (
             <div className="list">
               {mirrors.map((m) => (
-                <div className="item mirror-row" key={m.id}>
+                <div className={"item mirror-row" + fresh.fresh(m.url)} key={m.id}>
                   <Badge>{m.direction === "pull" ? "Pull" : "Push"}</Badge>
                   <div className="grow" style={{ minWidth: 0 }}>
                     <div className="mono small ellipsis">{m.url}</div>

@@ -3,7 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, timeAgo, type S } from "../api/client";
 import { ErrorBox, Field, levelName, Q, StateBadge } from "./ui";
 import { Select } from "./controls";
-import { AddActions, EmptyRow, ListSection } from "./settings";
+import { EmptyRow, ListSection } from "./settings";
+import { FormActions, useJustAdded } from "./FormDialog";
 import { CircleCheck, CircleX, Clock } from "lucide-react";
 
 const EVENTS = ["push", "merge_request", "issue", "confidential_issue", "note", "confidential_note", "release", "pipeline", "build"];
@@ -44,6 +45,7 @@ export function Webhooks({ base, title, description }: { base: string; title: st
   const [format, setFormat] = useState("generic");
   const [open, setOpen] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
+  const fresh = useJustAdded();
   const [error, setError] = useState<unknown>(null);
   const close = () => {
     setAdding(false);
@@ -54,6 +56,7 @@ export function Webhooks({ base, title, description }: { base: string; title: st
   const add = useMutation({
     mutationFn: () => api.post(`${base}/hooks`, { url, secret, events, format }),
     onSuccess: () => {
+      fresh.mark(url);
       close();
       qc.invalidateQueries({ queryKey: key });
     },
@@ -67,6 +70,7 @@ export function Webhooks({ base, title, description }: { base: string; title: st
       description={description}
       add="Add a webhook"
       adding={adding}
+      onClose={close}
       onAdd={() => setAdding(true)}
       form={
       <form
@@ -104,7 +108,7 @@ export function Webhooks({ base, title, description }: { base: string; title: st
             </label>
           ))}
         </div>
-        <AddActions label="Add webhook" disabled={!url || events.length === 0} busy={add.isPending} onCancel={close} />
+        <FormActions label="Add webhook" disabled={!url || events.length === 0} busy={add.isPending} onCancel={close} />
       </form>
       }
     >
@@ -116,7 +120,7 @@ export function Webhooks({ base, title, description }: { base: string; title: st
             <div className="list">
               {hooks.map((h) => (
                 <div key={h.id} className="list-group">
-                  <div className="item">
+                  <div className={"item" + fresh.fresh(h.url)}>
                     <div className="grow" style={{ minWidth: 0 }}>
                       <code className="ellipsis" style={{ display: "block" }} title={h.url}>
                         {h.url}
@@ -202,6 +206,7 @@ export function ApprovalRules({ projectId }: { projectId: number }) {
   const [level, setLevel] = useState("maintainer");
   const [error, setError] = useState<unknown>(null);
   const [adding, setAdding] = useState(false);
+  const fresh = useJustAdded();
   const close = () => {
     setAdding(false);
     setError(null);
@@ -209,6 +214,7 @@ export function ApprovalRules({ projectId }: { projectId: number }) {
   const save = useMutation({
     mutationFn: () => api.post(`/projects/${projectId}/approval_rules`, { name, approvals_required: required, min_access_level: level }),
     onSuccess: () => {
+      fresh.mark(name);
       close();
       qc.invalidateQueries({ queryKey: key });
     },
@@ -223,6 +229,7 @@ export function ApprovalRules({ projectId }: { projectId: number }) {
       description="How many approvals a merge request needs, and from whom, before it can be merged."
       add="Add a rule"
       adding={adding}
+      onClose={close}
       onAdd={() => setAdding(true)}
       form={
       <form
@@ -246,7 +253,7 @@ export function ApprovalRules({ projectId }: { projectId: number }) {
           options={["reporter", "developer", "maintainer", "owner"].map((l) => ({ value: l, label: `${levelName(l)}s and above` }))}
         />
         </div>
-        <AddActions label="Save rule" busy={save.isPending} onCancel={close} />
+        <FormActions label="Save rule" busy={save.isPending} onCancel={close} />
       </form>
       }
     >
@@ -257,7 +264,7 @@ export function ApprovalRules({ projectId }: { projectId: number }) {
           ) : (
             <div className="list">
               {rules.map((r) => (
-                <div className="item" key={r.id}>
+                <div className={"item" + fresh.fresh(r.name)} key={r.id}>
                   <strong className="grow">{r.name}</strong>
                   <span className="small muted">
                     {r.approvals_required} approval{r.approvals_required === 1 ? "" : "s"} from {levelName(names[r.min_access_level] ?? "maintainer")}s and above

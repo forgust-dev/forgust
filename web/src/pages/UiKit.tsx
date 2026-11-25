@@ -1,7 +1,8 @@
 import { AlertTriangle, Archive, Ban, Bell, CircleCheck, CircleX, Clock, Copy, GitBranch, GitMerge, Globe, HardDrive, Loader2, Lock, Milestone, Pencil, Plus, Shield, Star, Tag, Trash2, UserRound, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { Badge, Card, Field, ListHead, Section, StateBadge, type Tone } from "../components/ui";
-import { AddActions, EmptyRow, ListSection, SaveRow, SettingSwitch, useSaved } from "../components/settings";
+import { EmptyRow, ListSection, SaveRow, SettingSwitch, useSaved } from "../components/settings";
+import { FormActions, useJustAdded } from "../components/FormDialog";
 import { StateMark, StateOf, issueLook, mrLook } from "../components/states";
 import { LabelChip } from "../components/labels";
 import { DecideCard } from "../components/decide";
@@ -246,6 +247,7 @@ function SettingsDemo() {
   const [adding, setAdding] = useState(false);
   const [rules, setRules] = useState<string[]>([]);
   const [pattern, setPattern] = useState("");
+  const fresh = useJustAdded();
   return (
     <>
       <Section
@@ -270,9 +272,10 @@ function SettingsDemo() {
       </Section>
       <ListSection
         title="Settings: a list"
-        description="What is there first, or one line when nothing is; the form opens from this button and closes once done. Each rule says what it lets happen."
+        description="What is there first, or one line when nothing is. Its button opens the form in a window; the row added is highlighted as it comes. Each rule says what it lets happen."
         add="Protect a branch"
         adding={adding}
+      onClose={() => setAdding(false)}
         onAdd={() => setAdding(true)}
         form={
           <form
@@ -280,6 +283,7 @@ function SettingsDemo() {
             onSubmit={(e) => {
               e.preventDefault();
               setRules([...rules, pattern]);
+              fresh.mark(pattern);
               setPattern("");
               setAdding(false);
             }}
@@ -287,7 +291,7 @@ function SettingsDemo() {
             <Field label="Branch or pattern">
               <input value={pattern} onChange={(e) => setPattern(e.target.value)} />
             </Field>
-            <AddActions label="Protect" disabled={!pattern.trim()} onCancel={() => setAdding(false)} />
+            <FormActions label="Protect" disabled={!pattern.trim()} onCancel={() => setAdding(false)} />
           </form>
         }
       >
@@ -296,7 +300,7 @@ function SettingsDemo() {
         ) : (
           <div className="list">
             {rules.map((r) => (
-              <div className="item" key={r}>
+              <div className={"item" + fresh.fresh(r)} key={r}>
                 <div className="grow">
                   <code>{r}</code>
                   <div className="small muted">Maintainers can push and merge · no force push</div>

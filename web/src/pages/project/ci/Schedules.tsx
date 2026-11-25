@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { GitBranch, Pause, Pencil, Play, Plus, RotateCw, Trash2 } from "lucide-react";
@@ -8,6 +8,7 @@ import { Empty, ErrorBox, Field, FieldGroup, Q, ListHead, StateBadge } from "../
 import { Select } from "../../../components/controls";
 import { useToast } from "../../../shell/toast";
 import { useConfirm } from "../../../shell/dialog";
+import { FormActions, FormDialog, useJustAdded } from "../../../components/FormDialog";
 import type { Ctx } from "../Project";
 import { VariableRows } from "./Pipelines";
 import { StatusIcon, statusLabel } from "./Status";
@@ -192,9 +193,12 @@ function ScheduleRow({
   onToggle,
   onEdit,
   onRemove,
+  fresh = "",
 }: {
   ctx: Ctx;
   s: S["ScheduleDto"];
+  /** " just-added" when it was just added or saved */
+  fresh?: string;
   runs: S["PipelineSummary"][];
   onPlay: () => void;
   onToggle: () => void;
@@ -206,7 +210,7 @@ function ScheduleRow({
   const name = s.description || words || "Custom schedule";
   const said = words != null && !!s.description;
   return (
-    <article className={`sched-row${s.active ? "" : " paused"}`} aria-label={`Schedule ${name}`}>
+    <article className={`sched-row${s.active ? "" : " paused"}${fresh}`} aria-label={`Schedule ${name}`}>
       <div className="sched-main">
         <div className="sched-name-line">
           <h2 className="sched-name ellipsis">{name}</h2>
@@ -285,17 +289,15 @@ export function Schedules({ ctx }: { ctx: Ctx }) {
   const branches = useBranches(ctx);
   const [form, setForm] = useState<Form | null>(null);
   const [error, setError] = useState<unknown>(null);
-  const formRef = useRef<HTMLFormElement>(null);
+  const fresh = useJustAdded();
+  const close = () => {
+    setForm(null);
+    setError(null);
+  };
   // a browser without a configured zone reports one the server does not know
   // (Etc/Unknown in containers): offer UTC then
   const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const tz = browserTz && zones().includes(browserTz) ? browserTz : "UTC";
-  // the form opens where it is read, also from a schedule further down
-  const opened = form ? (form.id ?? "new") : null;
-  useEffect(() => {
-    if (opened != null) formRef.current?.scrollIntoView({ block: "nearest" });
-  }, [opened]);
-
   const save = async (e: FormEvent) => {
     e.preventDefault();
     if (!form) return;
@@ -303,9 +305,10 @@ export function Schedules({ ctx }: { ctx: Ctx }) {
     try {
       const body = { description: form.description, ref: form.ref, cron: form.cron.trim(), cron_timezone: form.cron_timezone, active: form.active, variables: form.variables.filter((v) => v.key) };
       if (form.id) await api.put(`${base}/${form.id}`, body);
-      else await api.post(base, body);
+      const id = form.id ?? (await api.post<S["ScheduleDto"]>(base, body)).id;
+      fresh.mark(id);
       toast.ok("Schedule saved");
-      setForm(null);
+      close();
       qc.invalidateQueries({ queryKey: ["schedules", ctx.p.id] });
     } catch (err) {
       setError(err);
@@ -380,12 +383,12 @@ export function Schedules({ ctx }: { ctx: Ctx }) {
           className="btn primary"
           onClick={() => setForm({ description: "", ref: ctx.p.default_branch ?? "main", cron: cronOf(DEFAULT_WHEN), cron_timezone: tz, active: true, variables: [], custom: false })}
         >
-          <Plus size={15} /> New schedule
+          <Plus size={15} /> Add a schedule
         </button>
       </ListHead>
-      {form && (
-        <form ref={formRef} className="card card-body stack sched-form" onSubmit={save}>
-          <h2 className="sched-form-title">{form.id ? "Edit the schedule" : "New schedule"}</h2>
+      <FormDialog open={form != null} onClose={close} title={form?.id ? "Edit the schedule" : "Add a schedule"}>
+        {form && (
+        <form className="stack sched-form" onSubmit={save}>
           <ErrorBox error={error} />
           <Field label="Name" hint="Optional: without one, the schedule is called by when it runs">
             <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Nightly build" />
@@ -400,14 +403,10 @@ export function Schedules({ ctx }: { ctx: Ctx }) {
           <p className="small muted" style={{ margin: 0 }}>
             {theirs ? `It runs as ${form.owner} today. Saving makes it yours: its pipelines will run as you.` : "Its pipelines run as you, with your access."}
           </p>
-          <div className="row">
-            <button className="btn primary">Save schedule</button>
-            <button type="button" className="btn" onClick={() => setForm(null)}>
-              Cancel
-            </button>
-          </div>
+          <FormActions label="Save schedule" onCancel={close} />
         </form>
-      )}
+        )}
+      </FormDialog>
       <Q q={q}>
         {(list) =>
           list.length === 0 ? (
@@ -415,7 +414,7 @@ export function Schedules({ ctx }: { ctx: Ctx }) {
           ) : (
             <div className="sched-list">
               {list.map((s) => (
-                <ScheduleRow key={s.id} ctx={ctx} s={s} runs={runsOf(s)} onPlay={() => play(s.id)} onToggle={() => toggle(s)} onEdit={() => edit(s)} onRemove={() => remove(s.id)} />
+                <ScheduleRow key={s.id} ctx={ctx} s={s} runs={runsOf(s)} onPlay={() => play(s.id)} onToggle={() => toggle(s)} onEdit={() => edit(s)} onRemove={() => remove(s.id)} fresh={fresh.fresh(s.id)} />
               ))}
             </div>
           )

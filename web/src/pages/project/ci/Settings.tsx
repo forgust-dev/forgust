@@ -5,7 +5,8 @@ import { Link } from "react-router-dom";
 import { api, timeAgo, type S } from "../../../api/client";
 import { Section, ErrorBox, Field, Q, ListHead } from "../../../components/ui";
 import { RunnersPanel } from "./Runners";
-import { AddActions, EmptyRow, ListSection, SaveRow, SettingSwitch, useSaved } from "../../../components/settings";
+import { EmptyRow, ListSection, SaveRow, SettingSwitch, useSaved } from "../../../components/settings";
+import { FormActions, useJustAdded } from "../../../components/FormDialog";
 import { saveCiSettings, useCiSettings } from "../ciSettings";
 import { Select } from "../../../components/controls";
 import { useToast } from "../../../shell/toast";
@@ -246,6 +247,7 @@ function JobTokenAllowlist({ ctx }: { ctx: Ctx }) {
   const q = useQuery({ queryKey: ["allowlist", ctx.p.id], queryFn: () => api.get<S["AllowedProject"][]>(`/projects/${ctx.p.id}/job_token_allowlist`) });
   const [path, setPath] = useState("");
   const [adding, setAdding] = useState(false);
+  const fresh = useJustAdded();
   const close = () => {
     setAdding(false);
     setPath("");
@@ -254,6 +256,7 @@ function JobTokenAllowlist({ ctx }: { ctx: Ctx }) {
     e.preventDefault();
     try {
       await api.post(`/projects/${ctx.p.id}/job_token_allowlist`, { project: path });
+      fresh.mark(path.trim());
       close();
       qc.invalidateQueries({ queryKey: ["allowlist", ctx.p.id] });
     } catch (err) {
@@ -276,13 +279,14 @@ function JobTokenAllowlist({ ctx }: { ctx: Ctx }) {
       description="Other projects whose CI job tokens may reach this one."
       add="Add a project"
       adding={adding}
+      onClose={close}
       onAdd={() => setAdding(true)}
       form={
         <form className="stack" aria-label="Allow a project" onSubmit={add}>
           <Field label="Project path">
             <input placeholder="group/project" value={path} onChange={(e) => setPath(e.target.value)} />
           </Field>
-          <AddActions label="Add project" disabled={!path.trim()} onCancel={close} />
+          <FormActions label="Add project" disabled={!path.trim()} onCancel={close} />
         </form>
       }
     >
@@ -301,7 +305,7 @@ function JobTokenAllowlist({ ctx }: { ctx: Ctx }) {
             ) : (
               <div className="list">
                 {list.map((a) => (
-                  <div className="item" key={a.project_id}>
+                  <div className={"item" + fresh.fresh(a.full_path)} key={a.project_id}>
                     <span className="grow">{a.full_path}</span>
                     <button className="icon-btn" aria-label={`Remove ${a.full_path}`} onClick={() => remove(a.project_id)}>
                       <Trash2 size={15} />
@@ -347,6 +351,7 @@ function ProtectedEnvironments({ ctx }: { ctx: Ctx }) {
   const [name, setName] = useState("");
   const [level, setLevel] = useState("maintainer");
   const [adding, setAdding] = useState(false);
+  const fresh = useJustAdded();
   const [error, setError] = useState<unknown>(null);
   const close = () => {
     setAdding(false);
@@ -357,6 +362,7 @@ function ProtectedEnvironments({ ctx }: { ctx: Ctx }) {
     e.preventDefault();
     try {
       await api.post(`/projects/${ctx.p.id}/protected_environments`, { name, deploy_access_level: level });
+      fresh.mark(name.trim());
       close();
       qc.invalidateQueries({ queryKey: key });
     } catch (err) {
@@ -379,6 +385,7 @@ function ProtectedEnvironments({ ctx }: { ctx: Ctx }) {
       description="Only these roles may deploy to (or stop) matching environments; others' jobs fail."
       add="Protect an environment"
       adding={adding}
+      onClose={close}
       onAdd={() => setAdding(true)}
       form={
       <form className="stack" aria-label="Protect an environment" onSubmit={add}>
@@ -399,7 +406,7 @@ function ProtectedEnvironments({ ctx }: { ctx: Ctx }) {
           />
         </Field>
         </div>
-        <AddActions label="Protect" disabled={!name.trim()} onCancel={close} />
+        <FormActions label="Protect" disabled={!name.trim()} onCancel={close} />
       </form>
       }
     >
@@ -408,7 +415,7 @@ function ProtectedEnvironments({ ctx }: { ctx: Ctx }) {
           <div className="list">
             {list.length === 0 && <div className="item muted">No protected environments.</div>}
             {list.map((pe) => (
-              <div className="item" key={pe.id}>
+              <div className={"item" + fresh.fresh(pe.name)} key={pe.id}>
                 <div className="grow" style={{ minWidth: 0 }}>
                   <code>{pe.name}</code>
                   <div className="small muted">Only {levelName(pe.deploy_access_level)} can deploy to it or stop it</div>
