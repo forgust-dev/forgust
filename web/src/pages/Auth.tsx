@@ -182,7 +182,7 @@ export function Login() {
         {challenge ? (
           <>
             {withKey && !recovery && (
-              <button type="button" className={`btn auth-submit${factors?.totp ? "" : " primary"}`} disabled={busy} onClick={securityKey}>
+              <button type="button" className={`btn auth-submit${factors?.totp ? "" : " primary"}`} aria-busy={busy} disabled={busy} onClick={securityKey}>
                 Use your security key
               </button>
             )}
@@ -233,7 +233,7 @@ export function Login() {
           </>
         )}
         {(!challenge || codeField) && (
-          <button className="btn primary auth-submit" disabled={busy}>
+          <button className="btn primary auth-submit" aria-busy={busy} disabled={busy}>
             {challenge ? "Verify" : "Sign in"}
           </button>
         )}
@@ -345,7 +345,7 @@ export function ForgotPassword() {
           <Field label="Username or email">
             <input autoFocus autoComplete="username" value={login} onChange={(e) => setLogin(e.target.value)} />
           </Field>
-          <button className="btn primary auth-submit" disabled={busy || !login.trim() || !setup.data}>
+          <button className="btn primary auth-submit" aria-busy={busy} disabled={busy || !login.trim() || !setup.data}>
             Send the link
           </button>
           <Link className="small" to="/login">
@@ -402,7 +402,7 @@ export function ResetPassword() {
             <input type="password" autoComplete="new-password" value={again} onChange={(e) => setAgain(e.target.value)} aria-invalid={mismatch} />
           </Field>
           {mismatch && <span className="small danger-text">The two passwords differ.</span>}
-          <button className="btn primary auth-submit" disabled={busy || !token || password.length < 8 || password !== again}>
+          <button className="btn primary auth-submit" aria-busy={busy} disabled={busy || !token || password.length < 8 || password !== again}>
             Set the password
           </button>
         </form>

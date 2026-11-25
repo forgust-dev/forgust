@@ -193,7 +193,7 @@ function SmartViewSettingForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S[
         merge request is kept. An <code>assay.toml</code> at the top of the repository corrects what is found.
       </p>
       <div>
-        <button className="btn primary" disabled={save.isPending || enabled === initial.enabled}>
+        <button className="btn primary" aria-busy={save.isPending} disabled={save.isPending || enabled === initial.enabled}>
           Save
         </button>
       </div>
@@ -247,7 +247,7 @@ function AiReviewForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S["AiRevie
         . A <code>.forgust/review.md</code> on the target branch adds the project&apos;s own guidelines.
       </p>
       <div>
-        <button className="btn primary" disabled={save.isPending || enabled === initial.enabled}>
+        <button className="btn primary" aria-busy={save.isPending} disabled={save.isPending || enabled === initial.enabled}>
           Save
         </button>
       </div>
@@ -592,7 +592,7 @@ function PushRulesForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S["PushRu
         </label>
         <div className="spacer" />
         {saved && <span className="small muted">Saved.</span>}
-        <button className="btn primary" disabled={save.isPending}>
+        <button className="btn primary" aria-busy={save.isPending} disabled={save.isPending}>
           Save push rules
         </button>
       </div>
@@ -695,7 +695,7 @@ function DependencyUpdatesForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S
         </div>
       )}
       <div>
-        <button className="btn primary" disabled={save.isPending}>
+        <button className="btn primary" aria-busy={save.isPending} disabled={save.isPending}>
           Save
         </button>
       </div>
@@ -810,7 +810,7 @@ function SecurityScanningForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S[
         </div>
       )}
       <div>
-        <button className="btn primary" disabled={save.isPending}>
+        <button className="btn primary" aria-busy={save.isPending} disabled={save.isPending}>
           Save
         </button>
       </div>
@@ -1119,7 +1119,7 @@ function Mirrors({ ctx }: { ctx: Ctx }) {
           </label>
         )}
         <div className="form-actions">
-          <button className="btn primary" disabled={!form.url.trim() || add.isPending}>
+          <button className="btn primary" aria-busy={add.isPending} disabled={!form.url.trim() || add.isPending}>
             Add mirror
           </button>
         </div>

@@ -94,6 +94,7 @@ export function OtherEmails() {
           <div>
             <button
               className="btn primary"
+              aria-busy={add.isPending}
               disabled={!email.trim() || add.isPending}
             >
               Add address

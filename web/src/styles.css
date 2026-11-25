@@ -364,6 +364,13 @@ h3 {
   background: var(--primary-hover);
   border-color: var(--primary-hover);
 }
+/* a main button that cannot act yet steps back to the grey of a disabled secondary, so the eye
+   goes to what can be done now; one that is working (aria-busy) keeps its color, dimmed */
+.btn.primary:disabled:not([aria-busy="true"]) {
+  background: var(--bg);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
 .btn.danger {
   color: var(--danger);
   border-color: var(--danger);
@@ -3531,6 +3538,10 @@ kbd {
 .link-btn:disabled {
   color: var(--text-faint);
   cursor: default;
+}
+/* an action written as a word that destroys something (deleting a comment) */
+.link-btn.danger {
+  color: var(--danger);
 }
 .link-btn.small,
 .btn .small {

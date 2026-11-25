@@ -130,7 +130,7 @@ export function UiKit() {
         </div>
       </Section>
 
-      <Section title="Buttons" description="Primary: the one main action of a page or a section. Secondary: every other one. Ghost: an action in a list or a card. Danger: outlined in a list, solid only in the confirmation. An icon alone has its tooltip.">
+      <Section title="Buttons" description="Primary: the one main action of a page or a section; grey while it cannot act yet, its own color dimmed while it works (aria-busy). Secondary: every other one. Ghost: an action in a list or a card. Danger: outlined in a list, solid only in the confirmation, a red word in a line of text. An icon alone has its tooltip.">
         <div className="ui-kit-rows">
           <div className="ui-kit-row">
             <button type="button" className="btn primary">
@@ -173,8 +173,19 @@ export function UiKit() {
             <button type="button" className="btn small primary" disabled>
               Add member
             </button>
+            <button type="button" className="btn small primary" disabled aria-busy="true">
+              Saving…
+            </button>
             <button type="button" className="btn small" disabled>
               Share
+            </button>
+          </div>
+          <div className="ui-kit-row">
+            <button type="button" className="link-btn small">
+              Reply
+            </button>
+            <button type="button" className="link-btn small danger">
+              Delete
             </button>
           </div>
         </div>

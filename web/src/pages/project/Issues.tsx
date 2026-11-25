@@ -529,7 +529,7 @@ function IssueComment({ ctx, i, n, refresh, toast }: { ctx: Ctx; i: S["IssueDeta
         )}
         {(own || ctx.p.can_admin) && (
           <button
-            className="link-btn small"
+            className="link-btn small danger"
             aria-label="Delete comment"
             onClick={async () => {
               if (!(await confirm({ title: "Delete this comment?", action: "Delete comment", danger: true }))) return;
@@ -537,7 +537,7 @@ function IssueComment({ ctx, i, n, refresh, toast }: { ctx: Ctx; i: S["IssueDeta
               refresh();
             }}
           >
-            <Trash2 size={12} />
+            Delete
           </button>
         )}
       </div>

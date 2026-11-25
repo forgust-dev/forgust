@@ -290,7 +290,7 @@ export function RunPipeline({ ctx }: { ctx: Ctx }) {
         <VariableRows rows={rows} setRows={setRows} />
       </FieldGroup>
       <div className="row">
-        <button className="btn primary" disabled={busy}>
+        <button className="btn primary" aria-busy={busy} disabled={busy}>
           <Play size={15} /> Run pipeline
         </button>
         <Link className="btn" to={`${ctx.web}/-/pipelines`}>

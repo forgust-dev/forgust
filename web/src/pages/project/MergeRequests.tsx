@@ -917,6 +917,7 @@ function Readiness({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
                       <>
                         <button
                           className="btn primary block"
+                          aria-busy={busy}
                           disabled={busy || why != null}
                           onClick={() => run(
                               () =>
@@ -962,14 +963,14 @@ function Readiness({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
                       }, "Set to auto-merge");
                     if (s.can_merge && !waiting) {
                       return (
-                        <button className="btn primary block" disabled={busy || ffBlocked} onClick={merge}>
+                        <button className="btn primary block" aria-busy={busy} disabled={busy || ffBlocked} onClick={merge}>
                           {busy ? "Working…" : `Merge into ${m.target_branch}`}
                         </button>
                       );
                     }
                     return (
                       <>
-                        <button className="btn primary block" disabled={busy || ffBlocked || s.conflicts.length > 0 || m.draft} onClick={auto} title="Merges as you once every check passes; new commits or a failed pipeline cancel it">
+                        <button className="btn primary block" aria-busy={busy} disabled={busy || ffBlocked || s.conflicts.length > 0 || m.draft} onClick={auto} title="Merges as you once every check passes; new commits or a failed pipeline cancel it">
                           <Clock3 size={15} /> {busy ? "Working…" : "Set to auto-merge"}
                         </button>
                         {s.can_merge && (
@@ -1121,7 +1122,7 @@ function Thread({ ctx, m, root, replies, boxed }: { ctx: Ctx; m: S["MrDetail"]; 
                 <ImportedMark x={n} />
                 {user?.id === n.author_id && (
                   <button
-                    className="link-btn small"
+                    className="link-btn small danger"
                     onClick={async () => {
                       if (!(await confirm({ title: "Delete this comment?", action: "Delete comment", danger: true }))) return;
                       await api.del(`${path}/notes/${n.id}`).catch(setError);

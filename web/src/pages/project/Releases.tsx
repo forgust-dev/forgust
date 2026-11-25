@@ -484,7 +484,7 @@ function Form({ ctx, r }: { ctx: Ctx; r?: S["ReleaseDto"] }) {
           />
         </fieldset>
         <div className="row">
-          <button className="btn primary" disabled={busy || uploading > 0 || !tag.trim() || !!taken || (!tagExists && !from.trim())}>
+          <button className="btn primary" aria-busy={busy || uploading > 0} disabled={busy || uploading > 0 || !tag.trim() || !!taken || (!tagExists && !from.trim())}>
             {busy ? "Saving…" : r ? "Save changes" : "Create release"}
           </button>
           <button type="button" className="btn" onClick={() => nav(-1)}>

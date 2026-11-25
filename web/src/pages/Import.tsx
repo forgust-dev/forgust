@@ -169,7 +169,7 @@ export function ImportPage() {
               : "People are matched to accounts here by the email they show; the others keep their name as text."}
           </p>
           <div className="form-actions">
-            <button className="btn primary" disabled={busy || !url.trim() || (mode === "one" && !path.trim())}>
+            <button className="btn primary" aria-busy={busy} disabled={busy || !url.trim() || (mode === "one" && !path.trim())}>
               {busy ? <Loader2 size={15} className="spin" /> : null} {mode === "one" ? "Find the project" : "Connect"}
             </button>
           </div>
@@ -267,7 +267,7 @@ function PlanButton({ busy, disabled, back, onClick }: { busy: boolean; disabled
         <button className="btn" onClick={back}>
           Back
         </button>
-        <button className="btn primary" disabled={busy || disabled} onClick={onClick}>
+        <button className="btn primary" aria-busy={busy} disabled={busy || disabled} onClick={onClick}>
           {busy ? <Loader2 size={15} className="spin" /> : null} Plan the import
         </button>
       </div>
