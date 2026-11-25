@@ -62,7 +62,7 @@ export function PathRoute() {
   const loading = (
     <>
       <KeepNav />
-      <Spinner />
+      <Spinner page />
     </>
   );
   if (q.isLoading) return loading;

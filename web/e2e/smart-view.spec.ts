@@ -38,6 +38,7 @@ test("the Smart View maps the code into blocks and tells what each needs", async
     await page.goto(`${web}/-/smart_view`);
     await expect(page.getByRole("heading", { name: "Smart View" })).toBeVisible();
     await expect(page.getByText("The Smart View is off for this project.")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Turn it on in the settings" })).toHaveAttribute("href", `${web}/-/settings/automation#smart-view`);
 
     // turned on, a job maps the default branch: an instance runner of this test takes it
     before = (await api("get", "/admin/smart_view")).settings;

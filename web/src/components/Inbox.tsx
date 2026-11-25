@@ -100,7 +100,7 @@ export function InboxBell() {
               Mark all read
             </button>
           )}
-          <Link className="small" to="/profile/notifications" onClick={() => setOpen(false)}>
+          <Link className="link-btn small" to="/profile/notifications" onClick={() => setOpen(false)}>
             Settings
           </Link>
         </div>

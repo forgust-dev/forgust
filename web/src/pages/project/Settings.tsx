@@ -42,7 +42,29 @@ export function ProjectSettings({ ctx, page }: { ctx: Ctx; page: string }) {
 }
 
 /** Sections that had an anchor here before they moved to a page of their own. */
-const MOVED: Record<string, SettingsSlug> = { "#pages": "ci_cd", "#security-scanning": "automation" };
+const MOVED: Record<string, SettingsSlug> = { "#pages": "ci_cd", "#security-scanning": "automation", "#smart-view": "automation" };
+
+/** Brings the section of the address's anchor (`#id`) to the top once it is `ready`, and keeps it
+ *  there while the sections above it load and grow, until the page settles or someone scrolls. */
+function useAnchor(id: string, ready: boolean) {
+  useEffect(() => {
+    const el = document.getElementById(id);
+    if (!ready || window.location.hash !== `#${id}` || !el) return;
+    const place = () => el.scrollIntoView({ block: "start" });
+    place();
+    const grows = new ResizeObserver(place);
+    grows.observe(el.parentElement ?? document.body);
+    const stop = () => grows.disconnect();
+    const settled = window.setTimeout(stop, 1500);
+    const away = ["wheel", "touchstart", "keydown"] as const;
+    for (const ev of away) window.addEventListener(ev, stop, { once: true, passive: true });
+    return () => {
+      stop();
+      window.clearTimeout(settled);
+      for (const ev of away) window.removeEventListener(ev, stop);
+    };
+  }, [id, ready]);
+}
 
 function RepositorySettings({ ctx }: { ctx: Ctx }) {
   const p = ctx.p;
@@ -130,6 +152,8 @@ function SmartViewSetting({ ctx }: { ctx: Ctx }) {
   const qc = useQueryClient();
   const key = ["smart-view-settings", ctx.p.id];
   const q = useQuery({ queryKey: key, queryFn: () => api.get<S["SmartViewSettings"]>(`/projects/${ctx.p.id}/smart_view`) });
+  // the Smart View's page links here when it is off
+  useAnchor("smart-view", !!q.data);
   const done = () => {
     qc.invalidateQueries({ queryKey: key });
     qc.invalidateQueries({ queryKey: ["map", ctx.p.id] });
@@ -832,10 +856,7 @@ function LockedFiles({ ctx }: { ctx: Ctx }) {
 function StorageUse({ ctx }: { ctx: Ctx }) {
   const q = useQuery({ queryKey: ["storage", ctx.p.id], queryFn: () => api.get<S["ProjectStorageUse"]>(`/projects/${ctx.p.id}/storage`) });
   // the storage banner links here: once the numbers are in, show them
-  const loaded = !!q.data;
-  useEffect(() => {
-    if (loaded && window.location.hash === "#storage") document.getElementById("storage")?.scrollIntoView({ block: "start" });
-  }, [loaded]);
+  useAnchor("storage", !!q.data);
   return (
     <Q q={q}>
       {(u) => (

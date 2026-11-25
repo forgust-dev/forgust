@@ -144,7 +144,7 @@ export function ProjectPage({ id, fullPath, rest }: { id: number; fullPath: stri
                 <EmptyRepo p={p} />
               ) : (
                 // a section still loading: a spinner here, the header and sidebar stay
-                <Suspense fallback={<Spinner />}>
+                <Suspense fallback={<Spinner page />}>
                   {section === "" && (
                     <div className="repo-layout">
                       <div className="repo-main">
