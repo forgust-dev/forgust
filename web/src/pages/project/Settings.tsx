@@ -1,4 +1,4 @@
-import { lazy, useEffect, useState, type ChangeEvent, type ComponentType } from "react";
+import { lazy, useEffect, useState, type ChangeEvent, type ComponentType, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, timeAgo, type S, bytes } from "../../api/client";
@@ -15,6 +15,7 @@ import { StatusBadge } from "./ci/Status";
 import { useConfirm } from "../../shell/dialog";
 import { settingsPage, type SettingsSlug } from "./settingsPages";
 import { useTopOnSwitch } from "../../shell/scroll";
+import { SaveRow, useSaved } from "../../components/settings";
 const CiSettings = lazy(() => import("./ci/Settings").then((m) => ({ default: m.CiSettings })));
 
 /** Who may push or merge to a protected branch, or create a protected tag. */
@@ -276,10 +277,24 @@ function GeneralSettings({ ctx }: { ctx: Ctx }) {
   const p = ctx.p;
   const qc = useQueryClient();
   const nav = useNavigate();
-  const [name, setName] = useState(p.name);
-  const [description, setDescription] = useState(p.description);
-  const [visibility, setVisibility] = useState(p.visibility);
-  const [defaultBranch, setDefaultBranch] = useState(p.default_branch ?? "");
+  const general = useSaved({ name: p.name, description: p.description, visibility: p.visibility, default_branch: p.default_branch ?? "" });
+  const g = general.value;
+  const [savingGeneral, setSavingGeneral] = useState(false);
+  const [generalError, setGeneralError] = useState<unknown>(null);
+  const saveGeneral = async (e: FormEvent) => {
+    e.preventDefault();
+    setSavingGeneral(true);
+    setGeneralError(null);
+    try {
+      await api.put(`/projects/${p.id}`, { name: g.name, description: g.description, visibility: g.visibility, default_branch: g.default_branch || null });
+      general.done();
+      qc.invalidateQueries({ queryKey: ["project", p.id] });
+    } catch (err) {
+      setGeneralError(err);
+    } finally {
+      setSavingGeneral(false);
+    }
+  };
   const [path, setPath] = useState(p.path);
   const [target, setTarget] = useState("");
   const branches = useBranches(ctx);
@@ -313,26 +328,25 @@ function GeneralSettings({ ctx }: { ctx: Ctx }) {
             />
           </Section>
           <Section title="General" description="Name, description, who can see the project, and the branch it opens on.">
-            <form className="stack" onSubmit={run(() => api.put(`/projects/${p.id}`, { name, description, visibility, default_branch: defaultBranch || null }), "Saved.")}>
+            <form className="stack" onSubmit={saveGeneral}>
+              <ErrorBox error={generalError} />
               <Field label="Name">
-                <input value={name} onChange={(e) => setName(e.target.value)} />
+                <input value={g.name} onChange={(e) => general.set({ ...g, name: e.target.value })} />
               </Field>
               <Field label="Description">
-                <input value={description} onChange={(e) => setDescription(e.target.value)} />
+                <input value={g.description} onChange={(e) => general.set({ ...g, description: e.target.value })} />
               </Field>
               <Field label="Visibility">
-                <VisibilitySelect value={visibility} onChange={setVisibility} />
+                <VisibilitySelect value={g.visibility} onChange={(v) => general.set({ ...g, visibility: v })} />
               </Field>
               <Field label="Default branch">
                 <Select
-                  value={defaultBranch}
-                  onChange={setDefaultBranch}
-                  options={(branches.data ?? [{ name: defaultBranch } as S["BranchDto"]]).map((b) => ({ value: b.name, label: b.name }))}
+                  value={g.default_branch}
+                  onChange={(v) => general.set({ ...g, default_branch: v })}
+                  options={(branches.data ?? [{ name: g.default_branch } as S["BranchDto"]]).map((b) => ({ value: b.name, label: b.name }))}
                 />
               </Field>
-              <div>
-                <button className="btn primary">Save</button>
-              </div>
+              <SaveRow dirty={general.dirty} busy={savingGeneral} saved={general.saved} />
             </form>
           </Section>
         </>
@@ -537,20 +551,18 @@ function PushRules({ ctx }: { ctx: Ctx }) {
 }
 
 function PushRulesForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S["PushRules"]; onSaved: () => void }) {
-  const [r, setR] = useState(initial);
+  const rules = useSaved(initial);
+  const r = rules.value;
+  const setR = rules.set;
   const [error, setError] = useState<unknown>(null);
-  const [saved, setSaved] = useState(false);
   const save = useMutation({
     mutationFn: () => api.put(`/projects/${ctx.p.id}/push_rule`, r),
     onSuccess: () => {
       setError(null);
-      setSaved(true);
+      rules.done();
       onSaved();
     },
-    onError: (e) => {
-      setSaved(false);
-      setError(e);
-    },
+    onError: setError,
   });
   const text = (k: "commit_message_regex" | "commit_message_negative_regex" | "author_email_regex" | "branch_name_regex") => ({
     value: r[k],
@@ -592,12 +604,8 @@ function PushRulesForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S["PushRu
           <input type="checkbox" checked={r.reject_unsigned_commits} onChange={(e) => setR({ ...r, reject_unsigned_commits: e.target.checked })} />
           Accept only verified signed commits
         </label>
-        <div className="spacer" />
-        {saved && <span className="small muted">Saved.</span>}
-        <button className="btn primary" aria-busy={save.isPending} disabled={save.isPending}>
-          Save push rules
-        </button>
       </div>
+      <SaveRow dirty={rules.dirty} busy={save.isPending} saved={rules.saved} label="Save push rules" />
     </form>
   );
 }
@@ -618,9 +626,11 @@ function DependencyUpdates({ ctx }: { ctx: Ctx }) {
 }
 
 function DependencyUpdatesForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S["RenovateStatus"]; onSaved: () => void }) {
-  const [enabled, setEnabled] = useState(initial.enabled);
-  const [hours, setHours] = useState(initial.interval_hours);
-  const [onboarding, setOnboarding] = useState(initial.onboarding);
+  const form = useSaved({ enabled: initial.enabled, interval_hours: initial.interval_hours, onboarding: initial.onboarding });
+  const { enabled, interval_hours: hours, onboarding } = form.value;
+  const setEnabled = (v: boolean) => form.set({ ...form.value, enabled: v });
+  const setHours = (v: number) => form.set({ ...form.value, interval_hours: v });
+  const setOnboarding = (v: boolean) => form.set({ ...form.value, onboarding: v });
   const [error, setError] = useState<unknown>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const done = (m: string) => {
@@ -630,7 +640,10 @@ function DependencyUpdatesForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S
   };
   const save = useMutation({
     mutationFn: () => api.put(`/projects/${ctx.p.id}/renovate`, { enabled, interval_hours: hours, onboarding }),
-    onSuccess: () => done(enabled ? "Dependency updates are on: the first run starts within a minute." : "Dependency updates are off."),
+    onSuccess: () => {
+      form.done();
+      done(enabled ? "Dependency updates are on: the first run starts within a minute." : "Dependency updates are off.");
+    },
     onError: setError,
   });
   const runNow = useMutation({
@@ -696,11 +709,7 @@ function DependencyUpdatesForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S
           </div>
         </div>
       )}
-      <div>
-        <button className="btn primary" aria-busy={save.isPending} disabled={save.isPending}>
-          Save
-        </button>
-      </div>
+      <SaveRow dirty={form.dirty} busy={save.isPending} saved={form.saved} />
     </form>
   );
 }
@@ -721,10 +730,12 @@ function SecurityScanning({ ctx }: { ctx: Ctx }) {
 }
 
 function SecurityScanningForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S["ScanningStatus"]; onSaved: () => void }) {
-  const [enabled, setEnabled] = useState(initial.enabled);
-  const [scanners, setScanners] = useState<string[]>(initial.scanners);
-  const [hours, setHours] = useState(initial.interval_hours);
-  const [sbom, setSbom] = useState(initial.sbom_on_tags);
+  const form = useSaved({ enabled: initial.enabled, scanners: initial.scanners, interval_hours: initial.interval_hours, sbom_on_tags: initial.sbom_on_tags });
+  const { enabled, scanners, interval_hours: hours, sbom_on_tags: sbom } = form.value;
+  const setEnabled = (v: boolean) => form.set({ ...form.value, enabled: v });
+  const setScanners = (v: string[]) => form.set({ ...form.value, scanners: v });
+  const setHours = (v: number) => form.set({ ...form.value, interval_hours: v });
+  const setSbom = (v: boolean) => form.set({ ...form.value, sbom_on_tags: v });
   const [error, setError] = useState<unknown>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const done = (m: string) => {
@@ -734,7 +745,10 @@ function SecurityScanningForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S[
   };
   const save = useMutation({
     mutationFn: () => api.put(`/projects/${ctx.p.id}/security/scanning`, { enabled, scanners, interval_hours: hours, sbom_on_tags: sbom }),
-    onSuccess: () => done(enabled ? "Security scanning is on: the first scan starts within a minute, as you." : "Security scanning is off; findings stay."),
+    onSuccess: () => {
+      form.done();
+      done(enabled ? "Security scanning is on: the first scan starts within a minute, as you." : "Security scanning is off; findings stay.");
+    },
     onError: setError,
   });
   const runNow = useMutation({
@@ -811,11 +825,7 @@ function SecurityScanningForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S[
           </div>
         </div>
       )}
-      <div>
-        <button className="btn primary" aria-busy={save.isPending} disabled={save.isPending}>
-          Save
-        </button>
-      </div>
+      <SaveRow dirty={form.dirty} busy={save.isPending} saved={form.saved} />
     </form>
   );
 }

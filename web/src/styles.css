@@ -1579,6 +1579,21 @@ kbd {
   width: 28px;
   height: 28px;
 }
+/* a settings form's foot: Save, and "Saved" beside it after a save (components/settings.tsx) */
+.save-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.saved-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ok);
+  font-size: 13px;
+  font-weight: 600;
+}
 /* a date, typed or picked on a calendar (components/DateField.tsx) */
 .date-field {
   position: relative;

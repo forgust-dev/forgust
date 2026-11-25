@@ -23,6 +23,7 @@ import { PaletteHost } from "./shell/palette";
 import { ThemeProvider } from "./shell/theme";
 import { ToastProvider } from "./shell/toast";
 import { DialogProvider } from "./shell/dialog";
+import { UnsavedGuard } from "./components/settings";
 // code split per route: each page loads only what it needs
 const PathRoute = lazy(() => import("./pages/PathRoute").then((m) => ({ default: m.PathRoute })));
 const Profile = lazy(() => import("./pages/Profile").then((m) => ({ default: m.Profile })));
@@ -116,6 +117,7 @@ void fonts.then(() =>
               <ToastProvider>
                 <DialogProvider>
                   <NavProvider>
+                    <UnsavedGuard />
                     <App />
                   </NavProvider>
                 </DialogProvider>
