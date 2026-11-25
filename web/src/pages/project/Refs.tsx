@@ -10,6 +10,7 @@ import { CommitList } from "./History";
 import type { Ctx } from "./Project";
 import { useBranches, useTags } from "./Code";
 import { useConfirm } from "../../shell/dialog";
+import { FormActions, FormDialog, useJustAdded } from "../../components/FormDialog";
 
 /** Subject and age of a ref's tip, for list rows. */
 function Tip({ ctx, c }: { ctx: Ctx; c?: S["CommitSummary"] | null }) {
@@ -30,7 +31,7 @@ function Tip({ ctx, c }: { ctx: Ctx; c?: S["CommitSummary"] | null }) {
 }
 
 /** Create a branch from a branch, tag or commit. */
-function NewBranch({ ctx, done }: { ctx: Ctx; done: () => void }) {
+function NewBranch({ ctx, onCreated, onCancel }: { ctx: Ctx; onCreated: (name: string) => void; onCancel: () => void }) {
   const [name, setName] = useState("");
   const [from, setFrom] = useState(ctx.p.default_branch ?? "main");
   const [error, setError] = useState<unknown>(null);
@@ -38,7 +39,7 @@ function NewBranch({ ctx, done }: { ctx: Ctx; done: () => void }) {
   const toast = useToast();
   return (
     <form
-      className="card stack new-branch"
+      className="stack"
       onSubmit={async (e) => {
         e.preventDefault();
         setError(null);
@@ -46,27 +47,20 @@ function NewBranch({ ctx, done }: { ctx: Ctx; done: () => void }) {
           await api.post(`${ctx.base}/branches`, { branch: name.trim(), ref: from.trim() });
           toast.ok(`Branch ${name.trim()} created`);
           qc.invalidateQueries({ queryKey: ["branches", ctx.p.id] });
-          done();
+          onCreated(name.trim());
         } catch (err) {
           setError(err);
         }
       }}
     >
       <ErrorBox error={error} />
-      <div className="row wrap" style={{ gap: 10, alignItems: "flex-end" }}>
-        <Field label="Branch name">
-          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="feature/my-change" spellCheck={false} />
-        </Field>
-        <Field label="From" hint="A branch, tag or commit">
-          <input value={from} onChange={(e) => setFrom(e.target.value)} spellCheck={false} />
-        </Field>
-        <button className="btn primary" disabled={!name.trim() || !from.trim()}>
-          Create branch
-        </button>
-        <button type="button" className="btn" onClick={done}>
-          Cancel
-        </button>
-      </div>
+      <Field label="Branch name">
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="feature/my-change" spellCheck={false} />
+      </Field>
+      <Field label="From" hint="A branch, tag or commit">
+        <input value={from} onChange={(e) => setFrom(e.target.value)} spellCheck={false} />
+      </Field>
+      <FormActions label="Create branch" disabled={!name.trim() || !from.trim()} onCancel={onCancel} />
     </form>
   );
 }
@@ -74,6 +68,7 @@ function NewBranch({ ctx, done }: { ctx: Ctx; done: () => void }) {
 export function Branches({ ctx }: { ctx: Ctx }) {
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
+  const fresh = useJustAdded();
   const qc = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
@@ -98,13 +93,24 @@ export function Branches({ ctx }: { ctx: Ctx }) {
   return (
     <div className="stack list-page">
       <ListHead title="Branches">
-        {ctx.p.can_write_repository && !creating && (
+        {ctx.p.can_write_repository && (
           <button className="btn primary" onClick={() => setCreating(true)}>
-            <Plus size={14} /> New branch
+            <Plus size={14} /> Create a branch
           </button>
         )}
       </ListHead>
-      {creating && <NewBranch ctx={ctx} done={() => setCreating(false)} />}
+      <FormDialog open={creating} onClose={() => setCreating(false)} title="Create a branch">
+        {creating && (
+          <NewBranch
+            ctx={ctx}
+            onCancel={() => setCreating(false)}
+            onCreated={(name) => {
+              fresh.mark(name);
+              setCreating(false);
+            }}
+          />
+        )}
+      </FormDialog>
       <div className="list-toolbar plain">
         <SearchField value={search} onChange={setSearch} placeholder="Filter branches" />
       </div>
@@ -115,7 +121,7 @@ export function Branches({ ctx }: { ctx: Ctx }) {
           ) : (
             <div className="list rows">
               {list.map((b) => (
-                <div className="item ref-row" key={b.name}>
+                <div className={"item ref-row" + fresh.fresh(b.name)} key={b.name}>
                   <span className="row-icon faint">
                     <GitBranch size={16} />
                   </span>
@@ -163,7 +169,7 @@ export function Branches({ ctx }: { ctx: Ctx }) {
 }
 
 /** Create a tag, annotated when it has a message. */
-function NewTag({ ctx, done }: { ctx: Ctx; done: () => void }) {
+function NewTag({ ctx, onCreated, onCancel }: { ctx: Ctx; onCreated: (name: string) => void; onCancel: () => void }) {
   const [name, setName] = useState("");
   const [from, setFrom] = useState(ctx.p.default_branch ?? "main");
   const [message, setMessage] = useState("");
@@ -172,7 +178,7 @@ function NewTag({ ctx, done }: { ctx: Ctx; done: () => void }) {
   const toast = useToast();
   return (
     <form
-      className="card stack new-branch"
+      className="stack"
       onSubmit={async (e) => {
         e.preventDefault();
         setError(null);
@@ -180,32 +186,23 @@ function NewTag({ ctx, done }: { ctx: Ctx; done: () => void }) {
           await api.post(`${ctx.base}/tags`, { tag_name: name.trim(), ref: from.trim(), message: message.trim() || undefined });
           toast.ok(`Tag ${name.trim()} created`);
           qc.invalidateQueries({ queryKey: ["tags", ctx.p.id] });
-          done();
+          onCreated(name.trim());
         } catch (err) {
           setError(err);
         }
       }}
     >
       <ErrorBox error={error} />
-      <div className="row wrap" style={{ gap: 10, alignItems: "flex-end" }}>
-        <Field label="Tag name">
-          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="v1.0.0" spellCheck={false} />
-        </Field>
-        <Field label="From" hint="A branch, tag or commit">
-          <input value={from} onChange={(e) => setFrom(e.target.value)} spellCheck={false} />
-        </Field>
-      </div>
+      <Field label="Tag name">
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="v1.0.0" spellCheck={false} />
+      </Field>
+      <Field label="From" hint="A branch, tag or commit">
+        <input value={from} onChange={(e) => setFrom(e.target.value)} spellCheck={false} />
+      </Field>
       <Field label="Message" hint="Optional: makes an annotated tag">
         <textarea rows={2} value={message} onChange={(e) => setMessage(e.target.value)} />
       </Field>
-      <div className="row" style={{ gap: 10 }}>
-        <button className="btn primary" disabled={!name.trim() || !from.trim()}>
-          Create tag
-        </button>
-        <button type="button" className="btn" onClick={done}>
-          Cancel
-        </button>
-      </div>
+      <FormActions label="Create tag" disabled={!name.trim() || !from.trim()} onCancel={onCancel} />
     </form>
   );
 }
@@ -213,6 +210,7 @@ function NewTag({ ctx, done }: { ctx: Ctx; done: () => void }) {
 export function Tags({ ctx }: { ctx: Ctx }) {
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
+  const fresh = useJustAdded();
   const qc = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
@@ -237,13 +235,24 @@ export function Tags({ ctx }: { ctx: Ctx }) {
   return (
     <div className="stack list-page">
       <ListHead title="Tags">
-        {ctx.p.can_write_repository && !creating && (
+        {ctx.p.can_write_repository && (
           <button className="btn primary" onClick={() => setCreating(true)}>
-            <Plus size={14} /> New tag
+            <Plus size={14} /> Create a tag
           </button>
         )}
       </ListHead>
-      {creating && <NewTag ctx={ctx} done={() => setCreating(false)} />}
+      <FormDialog open={creating} onClose={() => setCreating(false)} title="Create a tag">
+        {creating && (
+          <NewTag
+            ctx={ctx}
+            onCancel={() => setCreating(false)}
+            onCreated={(name) => {
+              fresh.mark(name);
+              setCreating(false);
+            }}
+          />
+        )}
+      </FormDialog>
       <div className="list-toolbar plain">
         <SearchField value={search} onChange={setSearch} placeholder="Filter tags" />
       </div>
@@ -255,7 +264,7 @@ export function Tags({ ctx }: { ctx: Ctx }) {
           ) : (
             <div className="list rows">
               {list.map((t) => (
-                <div className="item ref-row" key={t.name}>
+                <div className={"item ref-row" + fresh.fresh(t.name)} key={t.name}>
                   <span className="row-icon faint">
                     <Tag size={16} />
                   </span>

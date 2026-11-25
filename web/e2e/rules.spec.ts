@@ -29,8 +29,13 @@ test("push rules are saved from settings, and a bad pattern is explained", async
 
 test("a GPG key that is not one is refused in the profile", async ({ page }) => {
   await page.goto("/profile/gpg_keys");
-  await page.getByLabel("Public key").fill("hello");
-  await page.getByRole("button", { name: "Add key" }).click();
-  await expect(page.locator(".alert, .error-box, [role=alert]").first()).toContainText("not an armored OpenPGP public key");
+  await page.getByRole("button", { name: "Add a GPG key" }).click();
+  const window = page.getByRole("dialog", { name: "Add a GPG key" });
+  await window.getByLabel("Public key").fill("hello");
+  await window.getByRole("button", { name: "Add key" }).click();
+  // refused in the window, which stays open with what was typed
+  await expect(window.locator(".alert, .error-box, [role=alert]").first()).toContainText("not an armored OpenPGP public key");
+  await expect(window.getByLabel("Public key")).toHaveValue("hello");
+  await window.getByRole("button", { name: "Cancel" }).click();
   await expect(page.getByText("No GPG keys yet.")).toBeVisible();
 });

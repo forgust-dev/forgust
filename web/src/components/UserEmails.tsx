@@ -6,7 +6,9 @@ import { useSession } from "../session";
 import { useAct } from "../shell/toast";
 import { ResendLink } from "./ResendLink";
 import { useCrudList } from "./Tokens";
-import { Card, ErrorBox, Field, Q, StateBadge } from "./ui";
+import { ErrorBox, Field, Q, StateBadge } from "./ui";
+import { EmptyRow, ListSection } from "./settings";
+import { FormActions, useJustAdded } from "./FormDialog";
 
 /** How an address got confirmed, for its state's tooltip. */
 const CONFIRMED_BY: Record<string, string> = {
@@ -29,19 +31,28 @@ function State({ e }: { e: S["UserEmail"] }) {
   );
 }
 
-/** Your other addresses (Your settings > Profile): commits made with a confirmed one show as yours. */
+/** Your other addresses (Your settings > Profile), a section of their own: commits made with a
+ *  confirmed one show as yours. */
 export function OtherEmails() {
   const { emailEnabled } = useSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const fresh = useJustAdded();
+  const close = () => {
+    setAdding(false);
+    setEmail("");
+    setPassword("");
+    setError(null);
+  };
   const { list, add, remove, error, setError } = useCrudList<
     S["UserEmail"],
     S["UserEmail"]
   >(["user-emails"], "/user/emails", (row) => {
-    setEmail("");
-    setPassword("");
-    setError(null);
+    fresh.mark(row.id);
+    close();
+    // what happens next, under the list
     setMsg(
       row.confirmed_at
         ? `${row.email} is confirmed.`
@@ -51,18 +62,25 @@ export function OtherEmails() {
     );
   });
   return (
-    <div className="stack">
-      <Card title="Add an address">
+    <ListSection
+      title="Other email addresses"
+      description="Commits made with a confirmed one show as yours, and imported contributions under it become yours. Emails still go to your address above."
+      add="Add an address"
+      adding={adding}
+      onAdd={() => {
+        setMsg(null);
+        setAdding(true);
+      }}
+      onClose={close}
+      form={
         <form
           className="stack"
           onSubmit={(e) => {
             e.preventDefault();
-            setMsg(null);
             add.mutate({ email, current_password: password });
           }}
         >
           <ErrorBox error={error} />
-          {msg && <div className="alert ok">{msg}</div>}
           <Field
             label="Email address"
             hint={
@@ -91,27 +109,20 @@ export function OtherEmails() {
               />
             </Field>
           )}
-          <div>
-            <button
-              className="btn primary"
-              aria-busy={add.isPending}
-              disabled={!email.trim() || add.isPending}
-            >
-              Add address
-            </button>
-          </div>
+          <FormActions label="Add address" disabled={!email.trim()} busy={add.isPending} onCancel={close} />
         </form>
-      </Card>
+      }
+    >
+      {msg && <div className="alert ok">{msg}</div>}
+      {!adding && <ErrorBox error={error} />}
       <Q q={list}>
         {(rows) =>
           rows.length === 0 ? (
-            <p className="muted small" style={{ margin: 0 }}>
-              No other addresses yet.
-            </p>
+            <EmptyRow>No other addresses yet.</EmptyRow>
           ) : (
             <div className="list">
               {rows.map((e) => (
-                <div className="item" key={e.id}>
+                <div className={"item" + fresh.fresh(e.id)} key={e.id}>
                   <div className="grow" style={{ minWidth: 0 }}>
                     <strong className="ellipsis">{e.email}</strong>
                   </div>
@@ -138,7 +149,7 @@ export function OtherEmails() {
           )
         }
       </Q>
-    </div>
+    </ListSection>
   );
 }
 

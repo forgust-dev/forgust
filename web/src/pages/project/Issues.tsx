@@ -19,6 +19,7 @@ import { DueDateFact, MilestoneFact, day, overdue, useMilestones } from "./Miles
 import { ReactionBar } from "../../components/Reactions";
 import { Markdown } from "../../components/Markdown";
 import { StateMark, StateOf, issueLook } from "../../components/states";
+import { FormDialog, useJustAdded } from "../../components/FormDialog";
 
 type State = "opened" | "closed" | "all";
 
@@ -585,21 +586,38 @@ export function LabelsPage({ ctx }: { ctx: Ctx }) {
   const labels = useLabels(ctx.p.id);
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<number | "new" | null>(null);
+  const fresh = useJustAdded();
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["labels", ctx.p.id] });
     qc.invalidateQueries({ queryKey: ["issues", ctx.p.id] });
     qc.invalidateQueries({ queryKey: ["issue", ctx.p.id] });
   };
+  const target = typeof editing === "number" ? labels.data?.find((l) => l.id === editing) : undefined;
+  const close = () => setEditing(null);
   return (
     <div className="stack list-page">
       <ListHead title="Labels" sub="Sort issues and merge requests by topic, priority or team.">
-        {ctx.p.can_push && editing !== "new" && (
+        {ctx.p.can_push && (
           <button className="btn primary" onClick={() => setEditing("new")}>
-            <Plus size={15} /> New label
+            <Plus size={15} /> Add a label
           </button>
         )}
       </ListHead>
-      {editing === "new" && <LabelForm ctx={ctx} done={() => (setEditing(null), refresh())} />}
+      <FormDialog open={editing != null} onClose={close} title={editing === "new" ? "Add a label" : "Edit the label"}>
+        {(editing === "new" || target) && (
+          <LabelForm
+            key={String(editing)}
+            ctx={ctx}
+            label={target}
+            onCancel={close}
+            onSaved={(name) => {
+              fresh.mark(name);
+              close();
+              refresh();
+            }}
+          />
+        )}
+      </FormDialog>
       <div className="list-toolbar plain">
         <SearchField value={search} onChange={setSearch} placeholder="Filter labels" />
       </div>
@@ -609,13 +627,8 @@ export function LabelsPage({ ctx }: { ctx: Ctx }) {
           if (list.length === 0) return <Empty>{search ? "No label matches." : ctx.p.can_push ? "No labels yet. Create one to sort issues and merge requests." : "No labels yet."}</Empty>;
           return (
             <div className="list rows">
-              {list.map((l) =>
-                editing === l.id ? (
-                  <div className="item" key={l.id}>
-                    <LabelForm ctx={ctx} label={l} done={() => (setEditing(null), refresh())} />
-                  </div>
-                ) : (
-                  <div className="item label-row" key={l.id}>
+              {list.map((l) => (
+                  <div className={"item label-row" + fresh.fresh(l.name)} key={l.id}>
                     <div className="label-row-name">
                       <LabelChip label={l} />
                     </div>
@@ -659,8 +672,7 @@ export function LabelsPage({ ctx }: { ctx: Ctx }) {
                       </>
                     )}
                   </div>
-                ),
-              )}
+              ))}
             </div>
           );
         }}
@@ -671,7 +683,8 @@ export function LabelsPage({ ctx }: { ctx: Ctx }) {
 
 const SWATCHES = ["#6366f1", "#0ea5e9", "#14b8a6", "#22c55e", "#eab308", "#f97316", "#ef4444", "#ec4899", "#a855f7", "#64748b"];
 
-function LabelForm({ ctx, label, done }: { ctx: Ctx; label?: S["LabelWithCounts"]; done: () => void }) {
+/** A label to add or change, in its window: its chip shows as it is typed. */
+function LabelForm({ ctx, label, onSaved, onCancel }: { ctx: Ctx; label?: S["LabelWithCounts"]; onSaved: (name: string) => void; onCancel: () => void }) {
   const [name, setName] = useState(label?.name ?? "");
   const [color, setColor] = useState(label?.color ?? SWATCHES[Math.floor(Math.random() * SWATCHES.length)]);
   const [description, setDescription] = useState(label?.description ?? "");
@@ -681,17 +694,16 @@ function LabelForm({ ctx, label, done }: { ctx: Ctx; label?: S["LabelWithCounts"
     try {
       if (label) await api.put(`/projects/${ctx.p.id}/labels/${label.id}`, { name, color, description });
       else await api.post(`/projects/${ctx.p.id}/labels`, { name, color, description });
-      done();
+      onSaved(name.trim());
     } catch (err) {
       setError(err);
     }
   };
   return (
-    <form className="label-form" onSubmit={submit}>
+    <form className="stack" onSubmit={submit}>
       <ErrorBox error={error} />
-      <div className="label-form-fields">
         <Field label="Name">
-          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="bug" />
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="bug" />
         </Field>
         <Field label="Description">
           <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Something does not work" />
@@ -704,10 +716,9 @@ function LabelForm({ ctx, label, done }: { ctx: Ctx; label?: S["LabelWithCounts"
             <input className="swatch-hex" value={color} onChange={(e) => setColor(e.target.value)} aria-label="Hex color" />
           </div>
         </FieldGroup>
-      </div>
-      <div className="row">
+      <div className="modal-actions">
         <span className="grow">{name.trim() && <LabelChip label={{ name: name.trim(), color: /^#[0-9a-f]{6}$/i.test(color) ? color : "var(--text-faint)", description }} />}</span>
-        <button type="button" className="btn" onClick={done}>
+        <button type="button" className="btn" onClick={onCancel}>
           Cancel
         </button>
         <button className="btn primary" disabled={!name.trim()}>

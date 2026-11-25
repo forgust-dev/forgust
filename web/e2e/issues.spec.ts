@@ -4,9 +4,10 @@ test("open an issue, label it, comment and close it", async ({ page }) => {
   const name = `bug-${Date.now() % 100000}`;
   // a label to pick
   await page.goto(`${P}/-/labels`);
-  await page.getByRole("button", { name: "New label" }).click();
-  await page.getByLabel("Name").fill(name);
-  await page.getByRole("button", { name: "Create label" }).click();
+  await page.getByRole("button", { name: "Add a label" }).click();
+  const window = page.getByRole("dialog", { name: "Add a label" });
+  await window.getByLabel("Name").fill(name);
+  await window.getByRole("button", { name: "Create label" }).click();
   await expect(page.locator(".label-row", { hasText: name })).toBeVisible();
 
   // a new issue with that label

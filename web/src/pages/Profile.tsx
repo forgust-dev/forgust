@@ -5,6 +5,8 @@ import { api, enc, timeAgo, type S } from "../api/client";
 import { useSession } from "../session";
 import { Avatar, Badge, Card, CopyLabel, ErrorBox, Field, NewSecret, Q, Section, useCopy, useFormRun, StateBadge } from "../components/ui";
 import { ScopePicker, useCrudList } from "../components/Tokens";
+import { EmptyRow, ListSection } from "../components/settings";
+import { FormActions, useJustAdded } from "../components/FormDialog";
 import { ResendLink } from "../components/ResendLink";
 import { OtherEmails } from "../components/UserEmails";
 import { AvatarUpload } from "../components/AvatarUpload";
@@ -108,12 +110,7 @@ function ProfileForm() {
           </div>
         </form>
       </Section>
-      <Section
-        title="Other email addresses"
-        description="Commits made with a confirmed one show as yours, and imported contributions under it become yours. Emails still go to your address above."
-      >
-        <OtherEmails />
-      </Section>
+      <OtherEmails />
     </div>
   );
 }
@@ -121,18 +118,27 @@ function ProfileForm() {
 /** OpenPGP keys: commits signed with them, by your confirmed address, show as verified. */
 function GpgKeys() {
   const [key, setKey] = useState("");
-  const { list, add, remove: del, error, setError } = useCrudList<S["GpgKey"]>(["gpg-keys"], "/user/gpg_keys", () => {
+  const [adding, setAdding] = useState(false);
+  const fresh = useJustAdded();
+  const { list, add, remove: del, error, setError } = useCrudList<S["GpgKey"], S["GpgKey"]>(["gpg-keys"], "/user/gpg_keys", (k) => {
+    fresh.mark(k.id);
+    close();
+  });
+  const close = () => {
+    setAdding(false);
     setKey("");
     setError(null);
-  });
+  };
   return (
     <div className="settings-page">
-      <Section
+      <ListSection
         title="GPG keys"
         description="Commits you sign with these keys show as verified when they are committed with your confirmed email address (and the key lists it)."
-      >
-        <div className="stack">
-          <Card title="Add a GPG key">
+        add="Add a GPG key"
+        adding={adding}
+        onAdd={() => setAdding(true)}
+        onClose={close}
+        form={
             <form
               className="stack"
               onSubmit={(e) => {
@@ -144,21 +150,19 @@ function GpgKeys() {
               <Field label="Public key" hint="The output of gpg --armor --export <your key id>">
                 <textarea value={key} onChange={(e) => setKey(e.target.value)} placeholder="-----BEGIN PGP PUBLIC KEY BLOCK-----" rows={6} />
               </Field>
-              <div>
-                <button className="btn primary" disabled={!key.trim()}>
-                  Add key
-                </button>
-              </div>
+              <FormActions label="Add key" disabled={!key.trim()} busy={add.isPending} onCancel={close} />
             </form>
-          </Card>
+        }
+      >
+          {!adding && <ErrorBox error={error} />}
           <Q q={list}>
             {(keys) =>
               keys.length === 0 ? (
-                <p className="muted small" style={{ margin: 0 }}>No GPG keys yet.</p>
+                <EmptyRow>No GPG keys yet.</EmptyRow>
               ) : (
                 <div className="list">
                   {keys.map((k) => (
-                    <div className="item" key={k.id}>
+                    <div className={"item" + fresh.fresh(k.id)} key={k.id}>
                       <div className="grow">
                         <strong className="mono">{k.fingerprint.replace(/(.{4})/g, "$1 ").trim()}</strong>
                         <div className="small faint">{k.emails.length ? k.emails.join(", ") : "no email in the key"}</div>
@@ -173,8 +177,7 @@ function GpgKeys() {
               )
             }
           </Q>
-        </div>
-      </Section>
+      </ListSection>
     </div>
   );
 }
@@ -208,20 +211,29 @@ function SshKeys() {
   const [title, setTitle] = useState("");
   const [key, setKey] = useState("");
   const [usage, setUsage] = useState<S["KeyUsage"]>("auth_and_signing");
-  const { list, add, remove: del, error, setError } = useCrudList<S["SshKey"]>(["ssh-keys"], "/user/keys", () => {
+  const [adding, setAdding] = useState(false);
+  const fresh = useJustAdded();
+  const { list, add, remove: del, error, setError } = useCrudList<S["SshKey"], S["SshKey"]>(["ssh-keys"], "/user/keys", (k) => {
+    fresh.mark(k.id);
+    close();
+  });
+  const close = () => {
+    setAdding(false);
     setTitle("");
     setKey("");
     setUsage("auth_and_signing");
     setError(null);
-  });
+  };
   return (
     <div className="settings-page">
-      <Section
+      <ListSection
         title="SSH keys"
         description="Public keys that let you push and pull over SSH as yourself (authentication), and that verify the commits you sign with them (signing)."
-      >
-        <div className="stack">
-          <Card title="Add an SSH key">
+        add="Add an SSH key"
+        adding={adding}
+        onAdd={() => setAdding(true)}
+        onClose={close}
+        form={
             <form
               className="stack"
               onSubmit={(e) => {
@@ -265,21 +277,19 @@ function SshKeys() {
                   ))}
                 </select>
               </Field>
-              <div>
-                <button className="btn primary" disabled={!key}>
-                  Add key
-                </button>
-              </div>
+              <FormActions label="Add key" disabled={!key.trim()} busy={add.isPending} onCancel={close} />
             </form>
-          </Card>
+        }
+      >
+          {!adding && <ErrorBox error={error} />}
           <Q q={list}>
             {(keys) =>
               keys.length === 0 ? (
-                <p className="muted small" style={{ margin: 0 }}>No SSH keys yet.</p>
+                <EmptyRow>No SSH keys yet.</EmptyRow>
               ) : (
                 <div className="list">
                   {keys.map((k) => (
-                    <div className="item" key={k.id}>
+                    <div className={"item" + fresh.fresh(k.id)} key={k.id}>
                       <div className="grow">
                         <strong>{k.title}</strong> <Badge>{KEY_USAGE[k.usage_type]}</Badge>
                         <div className="small faint mono">{k.fingerprint}</div>
@@ -297,8 +307,7 @@ function SshKeys() {
               )
             }
           </Q>
-        </div>
-      </Section>
+      </ListSection>
     </div>
   );
 }
@@ -309,15 +318,32 @@ function Tokens() {
   const [scopes, setScopes] = useState<string[]>(["read_repository", "write_repository"]);
   const [expires, setExpires] = useState("");
   const [created, setCreated] = useState<S["NewToken"] | null>(null);
-  const { list, add: create, remove: revoke, error } = useCrudList<S["AccessToken"], S["NewToken"]>(["pats"], "/user/tokens", (t) => {
+  const [adding, setAdding] = useState(false);
+  const fresh = useJustAdded();
+  // the new token is shown once: in the window, in place of its form, until Done
+  const { list, add: create, remove: revoke, error, setError } = useCrudList<S["AccessToken"], S["NewToken"]>(["pats"], "/user/tokens", (t) => {
     setCreated(t);
-    setName("");
+    fresh.mark(name);
   });
+  const close = () => {
+    setAdding(false);
+    setCreated(null);
+    setName("");
+    setExpires("");
+    setError(null);
+  };
   return (
     <div className="settings-page">
-      <Section title="Personal access tokens" description="Tokens for scripts, the API and Git over HTTPS, acting as you within their scopes.">
-        <div className="stack">
-          <Card title="New personal access token">
+      <ListSection
+        title="Personal access tokens"
+        description="Tokens for scripts, the API and Git over HTTPS, acting as you within their scopes."
+        add="Create a token"
+        adding={adding}
+        onAdd={() => setAdding(true)}
+        onClose={close}
+        result={created && <NewSecret token={created.token} />}
+        resultTitle="Token created"
+        form={
             <form
               className="stack"
               onSubmit={(e) => {
@@ -326,7 +352,6 @@ function Tokens() {
               }}
             >
               <ErrorBox error={error} />
-              {created && <NewSecret token={created.token} />}
               <div className="grid2">
                 <Field label="Name">
                   <input value={name} onChange={(e) => setName(e.target.value)} />
@@ -345,21 +370,19 @@ function Tokens() {
                 <code>{`${location.origin}/api/v4/mcp`}</code> with a <code>mcp</code> token (read-only) or an <code>api</code> one (it can change things too), or
                 let it sign in through the browser.
               </p>
-              <div>
-                <button className="btn primary" disabled={!name}>
-                  Create token
-                </button>
-              </div>
+              <FormActions label="Create token" disabled={!name.trim()} busy={create.isPending} onCancel={close} />
             </form>
-          </Card>
+        }
+      >
+          {!adding && <ErrorBox error={error} />}
           <Q q={list}>
             {(tokens) =>
               tokens.length === 0 ? (
-                <p className="muted">No tokens.</p>
+                <EmptyRow>No tokens.</EmptyRow>
               ) : (
                 <div className="list">
                   {tokens.map((t) => (
-                    <div className="item" key={t.id}>
+                    <div className={"item" + fresh.fresh(t.name)} key={t.id}>
                       <div className="grow">
                         <strong>{t.name}</strong>
                         <div className="small muted">
@@ -383,8 +406,7 @@ function Tokens() {
               )
             }
           </Q>
-        </div>
-      </Section>
+      </ListSection>
     </div>
   );
 }

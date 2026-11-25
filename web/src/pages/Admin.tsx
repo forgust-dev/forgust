@@ -10,7 +10,8 @@ import { Avatar, Badge, Card, ErrorBox, Field, FilterTabs, NotFound, Q, SearchFi
 import { adminPage } from "./adminPages";
 import { useTopOnSwitch } from "../shell/scroll";
 import { Combobox, Menu, Select, type MenuItem } from "../components/controls";
-import { MoreHorizontal, Ban, ShieldCheck } from "lucide-react";
+import { MoreHorizontal, Ban, Plus, ShieldCheck } from "lucide-react";
+import { FormActions, FormDialog, useJustAdded } from "../components/FormDialog";
 import { useAct, useToast } from "../shell/toast";
 import { useConfirm, usePrompt, type Ask } from "../shell/dialog";
 import { AdminUserEmails } from "../components/UserEmails";
@@ -129,20 +130,28 @@ function Users() {
     if (!email || email === u.email) return;
     await run(() => api.put(`/admin/users/${u.id}`, { email }), "Email address changed");
   };
-  const [form, setForm] = useState({ username: "", email: "", password: "", is_admin: false });
+  const blank = { username: "", email: "", password: "", is_admin: false };
+  const [form, setForm] = useState(blank);
   const [error, setError] = useState<unknown>(null);
+  const [adding, setAdding] = useState(false);
+  const fresh = useJustAdded();
+  const close = () => {
+    setAdding(false);
+    setForm(blank);
+    setError(null);
+  };
   const create = useMutation({
     mutationFn: () => api.post("/admin/users", form),
     onSuccess: () => {
-      setForm({ username: "", email: "", password: "", is_admin: false });
+      fresh.mark(form.username.trim());
+      close();
       qc.invalidateQueries({ queryKey: ["admin-users"] });
     },
     onError: setError,
   });
   return (
     <div className="stack">
-      <ErrorBox error={error} />
-      <Card title="New user">
+      <FormDialog open={adding} onClose={close} title="Add a user">
         <form
           className="stack"
           onSubmit={(e: FormEvent) => {
@@ -150,6 +159,7 @@ function Users() {
             create.mutate();
           }}
         >
+          <ErrorBox error={error} />
           <div className="grid2">
             <Field label="Username">
               <input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
@@ -165,16 +175,15 @@ function Users() {
               Administrator
             </label>
           </div>
-          <div>
-            <button className="btn primary" disabled={!form.username || !form.email}>
-              Create user
-            </button>
-          </div>
+          <FormActions label="Create user" disabled={!form.username.trim() || !form.email.trim()} busy={create.isPending} onCancel={close} />
         </form>
-      </Card>
+      </FormDialog>
       <div className="list-toolbar">
         <FilterTabs label="Show" value={filter} onChange={setFilter} options={USER_FILTERS} />
         <SearchField value={search} onChange={setSearch} placeholder="Name, username or email" />
+        <button type="button" className="btn primary" onClick={() => setAdding(true)}>
+          <Plus size={15} /> Add a user
+        </button>
       </div>
       <Q q={list}>
         {(users) =>
@@ -287,7 +296,7 @@ function Users() {
                     ]
                   : [];
                 return (
-                  <div className="item admin-user" key={u.id}>
+                  <div className={"item admin-user" + fresh.fresh(u.username)} key={u.id}>
                     <Avatar name={u.name || u.username} username={u.username} />
                     <div className="grow" style={{ minWidth: 0 }}>
                       <div className="row wrap" style={{ gap: 6 }}>

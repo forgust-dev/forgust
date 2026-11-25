@@ -1662,10 +1662,6 @@ kbd {
 .more-rules[open] > summary {
   margin-bottom: 12px;
 }
-/* an add form, opened from its list's button */
-.add-form {
-  border-color: var(--border-strong);
-}
 /* a date, typed or picked on a calendar (components/DateField.tsx) */
 .date-field {
   position: relative;
@@ -6457,27 +6453,6 @@ a.label-chip:hover {
   flex: none;
   font-size: 12.5px;
 }
-.label-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  width: 100%;
-  padding: 14px 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--bg-subtle);
-}
-.list .item .label-form {
-  padding: 4px 0;
-  border: 0;
-  background: none;
-}
-.label-form-fields {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
-  gap: 12px;
-  align-items: start;
-}
 .swatches {
   display: flex;
   flex-wrap: wrap;
@@ -6503,9 +6478,6 @@ a.label-chip:hover {
   font-size: 12px;
 }
 @media (max-width: 900px) {
-  .label-form-fields {
-    grid-template-columns: minmax(0, 1fr);
-  }
   .label-row-name {
     width: auto;
   }
@@ -7205,9 +7177,6 @@ a.item.import-row:hover {
 }
 .commit-target .check.disabled {
   opacity: 0.55;
-}
-.new-branch {
-  padding: 12px 14px;
 }
 
 /* ---------------------------------------------------------------- releases (M7) */
