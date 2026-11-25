@@ -34,10 +34,17 @@ Each tone has one meaning on every page (`Tone` in `src/components/ui.tsx`). Its
 - `neutral`, grey: nothing to say (closed, canceled, skipped, draft). Every attribute is grey
   too.
 
-Orange (`--accent`) is only for links and unread. Never put a hex color in a component.
-Data that carries its own color is the exception: a label and its swatches, code
-highlighting, the Smart View's block kinds and logos. A spinner (`Loader2`) always turns, with `className="spin"`. `StateBadge` adds it
-on its own.
+Orange (`--accent`) means interaction: links, focus, what is selected or current, and unread.
+It is never a state, an attribute, a count, progress or decoration. A few marks keep the logo's
+orange on purpose: the logo, the contribution heatmap, a project's tile without a picture,
+folder icons (they open) and the page-loading bar (it answers a click). Progress takes the tone
+of what it counts: green for what is done and fine (the readiness ring), blue for what runs (an
+import).
+
+Never put a hex color in a component. Data that carries its own color is the exception: a label
+and its swatches, code highlighting, the Smart View's block kinds and logos.
+
+A spinner (`Loader2`) always turns, with `className="spin"`. `StateBadge` adds it on its own.
 
 ## Buttons
 

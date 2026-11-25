@@ -2422,7 +2422,7 @@ kbd {
   padding: 10px 8px 10px 12px;
 }
 .toast.info > svg:first-child {
-  color: var(--accent);
+  color: var(--info);
   margin-top: 2px;
 }
 .toast-body {
@@ -2781,9 +2781,6 @@ kbd {
 }
 .ic-ok {
   color: var(--ok);
-}
-.ic-accent {
-  color: var(--accent);
 }
 .ic-merged {
   color: var(--merged);
@@ -3348,8 +3345,9 @@ kbd {
 .ready-ring .track {
   stroke: var(--emph-line);
 }
+/* what is done is fine: the green of the ticks beside it */
 .ready-ring .done {
-  stroke: var(--brand);
+  stroke: var(--emph-ok);
 }
 .ready-ring .done {
   transition: stroke-dashoffset 400ms var(--ease-out);
@@ -3611,15 +3609,6 @@ kbd {
 }
 .related-mr:hover .ellipsis {
   text-decoration: underline;
-}
-.related-closes {
-  flex: none;
-  padding: 0 5px;
-  border-radius: 4px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-size: 11px;
-  font-weight: 600;
 }
 .mr-mark {
   flex: none;
@@ -4153,6 +4142,9 @@ a.status-badge:hover {
 /* the small ring of a list row (your work): on a light surface, no count inside */
 .ready-ring.mini .track {
   stroke: var(--border);
+}
+.ready-ring.mini .done {
+  stroke: var(--ok);
 }
 .decide-label {
   margin: 0;
@@ -6363,7 +6355,7 @@ a.label-chip:hover {
 .import-bar > span {
   display: block;
   height: 100%;
-  background: var(--accent);
+  background: var(--info);
 }
 .import-warnings ul {
   margin: 6px 0 0;
@@ -6634,22 +6626,22 @@ a.item.import-row:hover {
   height: 11px;
 }
 
-/* auto-merge set */
+/* auto-merge set, or a place on the merge train: it merges on its own (info) */
 .auto-merge-on {
   display: flex;
   align-items: flex-start;
   gap: 8px;
   margin-top: 14px;
   padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border: 1px solid color-mix(in srgb, var(--info) 35%, var(--border));
   border-radius: var(--radius);
-  background: var(--accent-soft);
+  background: var(--info-soft);
   font-size: 13px;
 }
 .auto-merge-on svg {
   flex: none;
   margin-top: 2px;
-  color: var(--accent);
+  color: var(--info);
 }
 
 /* links to people */

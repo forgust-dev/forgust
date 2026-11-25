@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, GitMerge, GitPullRequestClosed, GitPullRequestArrow, MessageSquare, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { api, qs, timeAgo, type S } from "../../api/client";
-import { AuthorLink, Avatar, ConfidentialMark, Empty, ErrorBox, Field, FieldGroup, FilterTabs, ImportedMark, InternalMark, InternalToggle, ListHead, Q, SearchField, authorOf, Pager, useDebounced } from "../../components/ui";
+import { AuthorLink, Avatar, Badge, ConfidentialMark, Empty, ErrorBox, Field, FieldGroup, FilterTabs, ImportedMark, InternalMark, InternalToggle, ListHead, Q, SearchField, authorOf, Pager, useDebounced } from "../../components/ui";
 import { Select, Switch } from "../../components/controls";
 import { TemplatePicker } from "../../components/templates";
 import { MarkdownEditor } from "../../components/MarkdownEditor";
@@ -334,7 +334,7 @@ export function IssuePage({ ctx, iid }: { ctx: Ctx; iid: number }) {
                           <MrStateMark state={m.state} />
                           <span className="ellipsis">{m.title}</span>
                           <span className="faint nowrap">!{m.iid}</span>
-                          {m.closes && <span className="related-closes">closes</span>}
+                          {m.closes && <Badge>closes</Badge>}
                         </Link>
                       ))}
                     </div>
