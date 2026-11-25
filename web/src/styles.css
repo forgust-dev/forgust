@@ -4613,87 +4613,60 @@ a.status-badge:hover {
 
 /* schedules: a card each, in time (how often, when next, how the latest runs went),
    not rows like the pipelines' */
-.sched-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr));
-  gap: 14px;
+/* pipeline schedules, one row each, said in words (ci/Schedules.tsx) */
+.sched-list {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+  overflow: hidden;
 }
-.sched-card {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 16px 18px;
-}
-.sched-card.paused {
-  background: var(--bg-subtle);
-}
-.sched-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-.sched-icon {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius);
-  background: var(--bg-hover);
-  color: var(--text-muted);
-}
-.sched-card.paused .sched-icon {
-  background: var(--bg-hover);
-  color: var(--text-faint);
-}
-.sched-title {
-  margin: 0;
-  font-size: 17px;
-  font-weight: 650;
-}
-.sched-when {
-  margin: 2px 0 0;
-  color: var(--text-muted);
-  font-size: 13.5px;
-}
-.sched-facts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 16px;
-  margin: 0;
-}
-.sched-facts dt {
-  color: var(--text-faint);
-  font-size: 12px;
-  font-weight: 600;
-}
-.sched-facts dd {
-  min-width: 0;
-  margin: 2px 0 0;
-  font-size: 13.5px;
-  overflow-wrap: anywhere;
-}
-.sched-facts dd.mono {
-  font-size: 12.5px;
-}
-.sched-runs {
+.sched-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
-  padding-top: 12px;
+  gap: 10px 16px;
+  padding: 14px 16px;
   border-top: 1px solid var(--border);
 }
-.sched-runs-label {
-  color: var(--text-faint);
-  font-size: 12px;
+.sched-row:first-child {
+  border-top: 0;
+}
+.sched-row.paused {
+  background: var(--bg-subtle);
+}
+.sched-main {
+  display: flex;
+  flex: 1 1 320px;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.sched-name-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.sched-name {
+  margin: 0;
+  font-size: 15px;
   font-weight: 600;
+}
+.sched-sentence,
+.sched-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin: 0;
+}
+.sched-meta {
+  color: var(--text-muted);
+  font-size: 13px;
 }
 .sched-dots {
   display: inline-flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  gap: 2px;
 }
 .sched-dots a {
   display: inline-flex;
@@ -4701,7 +4674,37 @@ a.status-badge:hover {
 .sched-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+}
+/* the form: when it runs, as a sentence of fields */
+.sched-form {
+  max-width: 760px;
+}
+.sched-form-title {
+  margin: 0;
+  font-size: 16px;
+}
+.sched-when {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px;
+}
+.sched-when > .field {
+  flex: 0 1 auto;
+  min-width: 110px;
+}
+.sched-when > .field:first-child,
+.sched-when > .field:last-child {
+  min-width: 220px;
+}
+.sched-summary {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.sched-summary strong {
+  color: var(--text);
 }
 
 /* environments: the review apps' folders fold, their environments sit under them;

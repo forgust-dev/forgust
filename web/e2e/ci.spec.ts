@@ -72,13 +72,16 @@ test("schedules", async ({ page }) => {
   await page.goto(`${P}/-/pipeline_schedules`);
   await page.getByRole("button", { name: "New schedule" }).click();
   await page.getByPlaceholder("Nightly build").fill("Nightly e2e");
-  await page.getByRole("button", { name: "Every weekday (03:00)" }).click();
+  // when, asked as a sentence: every weekday, at the 03:00 a new schedule starts with
+  await page.getByRole("combobox", { name: "Repeat" }).click();
+  await page.getByRole("option", { name: /^Every weekday/ }).click();
+  await expect(page.getByText("Runs every weekday at 03:00")).toBeVisible();
   await page.getByRole("button", { name: "Save schedule" }).click();
-  // a card, in words and in cron
-  const card = page.getByRole("article", { name: "Schedule Nightly e2e" }).first();
-  await expect(card).toContainText("Every weekday at 03:00");
-  await expect(card).toContainText("0 3 * * 1-5");
-  await card.getByRole("button", { name: "Delete schedule" }).click();
+  // a row, in words; its cron line in the sentence's title
+  const row = page.getByRole("article", { name: "Schedule Nightly e2e" }).first();
+  await expect(row).toContainText("Every weekday at 03:00");
+  await expect(row.locator(".sched-sentence")).toHaveAttribute("title", "cron: 0 3 * * 1-5");
+  await row.getByRole("button", { name: "Delete schedule" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Delete schedule" }).click();
   await expect(page.getByRole("article", { name: "Schedule Nightly e2e" })).toHaveCount(0);
 });
