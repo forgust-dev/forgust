@@ -10,9 +10,10 @@ import { ApprovalRules, Webhooks } from "../../components/Webhooks";
 import type { Ctx } from "./Project";
 import { HostRules } from "../../components/HostRules";
 import { useBranches } from "./Code";
-import { fetchers } from "../../prefetch";
+import { useGroups } from "../../prefetch";
+import { useSession } from "../../session";
 import { StatusBadge } from "./ci/Status";
-import { useConfirm } from "../../shell/dialog";
+import { useConfirm, usePrompt } from "../../shell/dialog";
 import { settingsPage, type SettingsSlug } from "./settingsPages";
 import { useTopOnSwitch } from "../../shell/scroll";
 import { AddActions, ListSection, SaveRow, useSaved } from "../../components/settings";
@@ -335,6 +336,27 @@ function GeneralSettings({ ctx }: { ctx: Ctx }) {
   };
   const [path, setPath] = useState(p.path);
   const [target, setTarget] = useState("");
+  const { user } = useSession();
+  const groups = useGroups(p.can_own);
+  const places = [
+    ...(user?.namespace_id ? [{ value: String(user.namespace_id), label: `${user.username} (personal)` }] : []),
+    ...(groups.data ?? []).map((g) => ({ value: String(g.id), label: g.full_path })),
+  ].filter((o) => o.value !== String(p.namespace_id));
+  const prompt = usePrompt();
+  const remove = async () => {
+    const typed = await prompt({
+      title: `Delete ${p.full_path}?`,
+      body: "Its repository, issues, merge requests, pipelines and everything else go with it. This cannot be undone.",
+      action: "Delete project",
+      danger: true,
+      input: { label: `Type ${p.full_path} to confirm`, match: p.full_path, mono: true },
+    });
+    if (typed === null) return;
+    await run(async () => {
+      await api.del(`/projects/${p.id}`);
+      nav("/");
+    }, "Deleted.")();
+  };
   const branches = useBranches(ctx);
   const { run, msg, error } = useFormRun(() => qc.invalidateQueries({ queryKey: ["project", p.id] }));
   // old links to a section that moved: follow it
@@ -396,44 +418,59 @@ function GeneralSettings({ ctx }: { ctx: Ctx }) {
         </Section>
       )}
       {p.can_own && (
-        <Section title="Advanced" description="Change the path, move the project to another group, or delete it." danger>
+        <Section id="path" title="Path and place" description="Where the project lives: its address, and the group or namespace it belongs to.">
           <div className="stack">
-            {p.redirects.length > 0 && (
-              <p className="muted small" style={{ margin: 0 }}>
-                Old paths still redirecting here: {p.redirects.join(", ")}
-              </p>
-            )}
             <form
-              className="row wrap"
+              className="stack"
               onSubmit={run(async () => {
                 const np = await api.post<S["ProjectDto"]>(`/projects/${p.id}/path`, { path });
                 nav(`/${np.full_path}/-/settings`, { replace: true });
               }, "Path changed. Old URLs and remotes keep working.")}
             >
-              <Field label="Change path">
+              <Field
+                label="Change path"
+                hint={
+                  p.redirects.length > 0
+                    ? `Old addresses and clone remotes keep working: they lead here. Leading here already: ${p.redirects.join(", ")}`
+                    : "Old addresses and clone remotes keep working: they lead here."
+                }
+              >
                 <input value={path} onChange={(e) => setPath(e.target.value)} />
               </Field>
-              <button className="btn" style={{ alignSelf: "flex-end" }}>
-                Rename
-              </button>
+              <div>
+                <button className="btn" disabled={!path.trim() || path === p.path}>
+                  Rename
+                </button>
+              </div>
             </form>
             <form
-              className="row wrap"
+              className="stack"
               onSubmit={run(async () => {
-                const ns = await fetchers.pathResolve(target);
-                const np = await api.post<S["ProjectDto"]>(`/projects/${p.id}/transfer`, { namespace_id: ns.id });
+                const np = await api.post<S["ProjectDto"]>(`/projects/${p.id}/transfer`, { namespace_id: Number(target) });
                 nav(`/${np.full_path}/-/settings`, { replace: true });
               }, "Project moved.")}
             >
-              <Field label="Move to another group" hint="Target group or user path">
-                <input placeholder="acme/platform" value={target} onChange={(e) => setTarget(e.target.value)} />
+              <Field label="Move to another group" hint="An organization, a subgroup, or your personal namespace">
+                <Select value={target} onChange={setTarget} placeholder="Choose where" options={places} />
               </Field>
-              <button className="btn" style={{ alignSelf: "flex-end" }}>
-                Move
-              </button>
+              <div>
+                <button className="btn" disabled={!target}>
+                  Move
+                </button>
+              </div>
             </form>
+          </div>
+        </Section>
+      )}
+      {p.can_own && (
+        <Section id="danger-zone" title="Danger zone" description="What touches the whole project at once." danger>
+          <div className="danger-rows">
             {archived ? (
-              <div className="row wrap" style={{ gap: 8, alignItems: "center" }}>
+              <div className="danger-row">
+                <div className="grow">
+                  <strong>Unarchive this project</strong>
+                  <p className="small muted">Writable again for its members, as before it was archived.</p>
+                </div>
                 <button
                   className="btn"
                   onClick={run(async () => {
@@ -444,10 +481,13 @@ function GeneralSettings({ ctx }: { ctx: Ctx }) {
                 >
                   Unarchive project
                 </button>
-                <span className="small muted">Writable again for its members, as before it was archived.</span>
               </div>
             ) : (
-              <div className="row wrap" style={{ gap: 8, alignItems: "center" }}>
+              <div className="danger-row">
+                <div className="grow">
+                  <strong>Archive this project</strong>
+                  <p className="small muted">Read-only for everyone (code, issues, merge requests, CI, settings), kept and readable until it is unarchived.</p>
+                </div>
                 <button
                   className="btn"
                   onClick={run(
@@ -465,26 +505,14 @@ function GeneralSettings({ ctx }: { ctx: Ctx }) {
                 >
                   Archive project
                 </button>
-                <span className="small muted">Read-only, kept and readable; unarchive it from its page or here.</span>
               </div>
             )}
-            <div>
-              <button
-                className="btn danger"
-                onClick={run(
-                  async () => {
-                    await api.del(`/projects/${p.id}`);
-                    nav("/");
-                  },
-                  "Deleted.",
-                  {
-                    title: `Delete ${p.full_path}?`,
-                    body: "Its repository, issues, merge requests, pipelines and everything else go with it. This cannot be undone.",
-                    action: "Delete project",
-                    danger: true,
-                  },
-                )}
-              >
+            <div className="danger-row">
+              <div className="grow">
+                <strong>Delete this project</strong>
+                <p className="small muted">Its repository, issues, merge requests, pipelines and everything else go with it, for good.</p>
+              </div>
+              <button className="btn danger" onClick={remove}>
                 Delete project
               </button>
             </div>

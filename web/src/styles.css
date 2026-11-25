@@ -1594,6 +1594,29 @@ kbd {
   font-size: 13px;
   font-weight: 600;
 }
+/* the danger zone of a settings page: one row per action, what it does beside it */
+.danger-rows {
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border));
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+}
+.danger-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 12px 14px;
+}
+.danger-row + .danger-row {
+  border-top: 1px solid var(--border);
+}
+.danger-row p {
+  margin: 2px 0 0;
+}
+/* an add form, opened from its list's button */
+.add-form {
+  border-color: var(--border-strong);
+}
 /* a date, typed or picked on a calendar (components/DateField.tsx) */
 .date-field {
   position: relative;
