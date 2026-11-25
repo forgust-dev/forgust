@@ -8,7 +8,11 @@ test("dependency updates: turn on, run now, turn off", async ({ page }) => {
   try {
     await page.goto(`${web}/-/settings/automation`);
     const section = page.locator("section.settings-section", { has: page.getByRole("heading", { name: "Dependency updates" }) });
-    await section.getByRole("checkbox", { name: /update dependencies/ }).check();
+    // a switch: its options show once it is on, and Save keeps them
+    const toggle = section.locator(".switch-row", { hasText: "update dependencies" }).getByRole("switch");
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-checked", "true");
+    await expect(section.getByRole("combobox", { name: "Runs" })).toBeVisible();
     await section.getByRole("button", { name: "Save", exact: true }).click();
     await expect(section.getByText("the first run starts within a minute")).toBeVisible();
     await expect(section.getByText(`@renovate-bot-${project.id}`)).toBeVisible();
@@ -31,7 +35,8 @@ test("dependency updates: turn on, run now, turn off", async ({ page }) => {
     await section.getByRole("button", { name: "Delete npm.example.com" }).click();
     await expect(section.locator(".item", { hasText: "npm.example.com" })).toHaveCount(0);
 
-    await section.getByRole("checkbox", { name: /update dependencies/ }).uncheck();
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-checked", "false");
     await section.getByRole("button", { name: "Save", exact: true }).click();
     await expect(section.getByText("Dependency updates are off.")).toBeVisible();
   } finally {

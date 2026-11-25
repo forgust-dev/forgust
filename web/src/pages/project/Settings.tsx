@@ -2,9 +2,9 @@ import { lazy, useEffect, useState, type ChangeEvent, type ComponentType, type F
 import { useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, timeAgo, type S, bytes } from "../../api/client";
-import { Badge, Section, ErrorBox, Field, Q, VisibilitySelect, ListHead, NotFound, Tile, QuotaBar, useFormRun } from "../../components/ui";
+import { Badge, Section, ErrorBox, Field, FieldGroup, Q, VisibilitySelect, ListHead, NotFound, Tile, QuotaBar, useFormRun } from "../../components/ui";
 import { AvatarUpload } from "../../components/AvatarUpload";
-import { Segmented, Select } from "../../components/controls";
+import { Segmented, Select, Switch } from "../../components/controls";
 import { AccessTokens, DeployTokens } from "../../components/Tokens";
 import { ApprovalRules, Webhooks } from "../../components/Webhooks";
 import type { Ctx } from "./Project";
@@ -16,7 +16,7 @@ import { StatusBadge } from "./ci/Status";
 import { useConfirm, usePrompt } from "../../shell/dialog";
 import { settingsPage, type SettingsSlug } from "./settingsPages";
 import { useTopOnSwitch } from "../../shell/scroll";
-import { AddActions, ListSection, SaveRow, useSaved } from "../../components/settings";
+import { AddActions, ListSection, SaveRow, SettingSwitch, useSaved } from "../../components/settings";
 import { saveCiSettings, useCiSettings } from "./ciSettings";
 const CiSettings = lazy(() => import("./ci/Settings").then((m) => ({ default: m.CiSettings })));
 
@@ -174,7 +174,6 @@ function AutomationSettings({ ctx }: { ctx: Ctx }) {
         description="Renovate opens merge requests that update this project's dependencies, as a bot member of the project. No token or pipeline to set up."
       >
         <DependencyUpdates ctx={ctx} />
-        <HostRules base={`/projects/${ctx.p.id}/renovate/host_rules`} empty="None. This instance's container registry needs none." />
       </Section>
       <Section
         id="ai-review"
@@ -208,42 +207,24 @@ function SmartViewSetting({ ctx }: { ctx: Ctx }) {
 }
 
 function SmartViewSettingForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S["SmartViewSettings"]; onSaved: () => void }) {
-  const [enabled, setEnabled] = useState(initial.enabled);
-  const [error, setError] = useState<unknown>(null);
-  const [msg, setMsg] = useState<string | null>(null);
-  const save = useMutation({
-    mutationFn: () => api.put(`/projects/${ctx.p.id}/smart_view`, { enabled }),
-    onSuccess: () => {
-      setError(null);
-      setMsg(enabled ? "The Smart View is on: the default branch is being mapped." : "The Smart View is off: its maps were removed.");
-      onSaved();
-    },
-    onError: setError,
-  });
   if (!initial.available && !initial.enabled) return <div className="muted small">This instance does not offer the Smart View.</div>;
   return (
-    <form
-      className="stack"
-      onSubmit={(e) => {
-        e.preventDefault();
-        save.mutate();
-      }}
-    >
-      <ErrorBox error={error} />
-      {msg && <div className="alert ok">{msg}</div>}
-      <label className="check">
-        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Map this project for the Smart View
-      </label>
+    <div className="stack">
+      <SettingSwitch
+        checked={initial.enabled}
+        onSave={async (on) => {
+          await api.put(`/projects/${ctx.p.id}/smart_view`, { enabled: on });
+          onSaved();
+        }}
+        confirmOff={{ title: "Turn the Smart View off?", body: "Its maps of this project are removed; turning it on again maps the default branch anew.", action: "Turn it off" }}
+      >
+        Map this project for the Smart View
+      </SettingSwitch>
       <p className="small muted" style={{ margin: 0 }}>
         The job runs as a bot of the project that can only read it, and nothing leaves the instance. Only the latest map of the default branch and of each open
         merge request is kept. An <code>assay.toml</code> at the top of the repository corrects what is found.
       </p>
-      <div>
-        <button className="btn primary" aria-busy={save.isPending} disabled={save.isPending || enabled === initial.enabled}>
-          Save
-        </button>
-      </div>
-    </form>
+    </div>
   );
 }
 
@@ -255,32 +236,18 @@ function AiReview({ ctx }: { ctx: Ctx }) {
 }
 
 function AiReviewForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S["AiReviewSettings"]; onSaved: () => void }) {
-  const [enabled, setEnabled] = useState(initial.enabled);
-  const [error, setError] = useState<unknown>(null);
-  const [msg, setMsg] = useState<string | null>(null);
-  const save = useMutation({
-    mutationFn: () => api.put(`/projects/${ctx.p.id}/ai_review`, { enabled }),
-    onSuccess: () => {
-      setError(null);
-      setMsg(enabled ? "AI review is on: merge requests show a Request AI review button." : "AI review is off.");
-      onSaved();
-    },
-    onError: setError,
-  });
   if (!initial.available && !initial.enabled) return <div className="muted small">This instance does not offer AI review.</div>;
   return (
-    <form
-      className="stack"
-      onSubmit={(e) => {
-        e.preventDefault();
-        save.mutate();
-      }}
-    >
-      <ErrorBox error={error} />
-      {msg && <div className="alert ok">{msg}</div>}
-      <label className="check">
-        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Offer AI review on merge requests
-      </label>
+    <div className="stack">
+      <SettingSwitch
+        checked={initial.enabled}
+        onSave={async (on) => {
+          await api.put(`/projects/${ctx.p.id}/ai_review`, { enabled: on });
+          onSaved();
+        }}
+      >
+        Offer AI review on merge requests
+      </SettingSwitch>
       <p className="small muted" style={{ margin: 0 }}>
         A review sends the merge request&apos;s changes, title and description to{" "}
         {initial.endpoint ? <strong>{initial.endpoint}</strong> : "the instance's model endpoint"}
@@ -292,12 +259,7 @@ function AiReviewForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S["AiRevie
         )}
         . A <code>.forgust/review.md</code> on the target branch adds the project&apos;s own guidelines.
       </p>
-      <div>
-        <button className="btn primary" aria-busy={save.isPending} disabled={save.isPending || enabled === initial.enabled}>
-          Save
-        </button>
-      </div>
-    </form>
+    </div>
   );
 }
 
@@ -697,6 +659,11 @@ const INTERVALS: [number, string][] = [
   [24, "Every day"],
   [168, "Every week"],
 ];
+/** The intervals, and the one a project already has if it is none of them. */
+const intervals = (hours: number) => [
+  ...INTERVALS.map(([h, label]) => ({ value: String(h), label })),
+  ...(INTERVALS.some(([h]) => h === hours) ? [] : [{ value: String(hours), label: `Every ${hours} hours` }]),
+];
 
 function DependencyUpdates({ ctx }: { ctx: Ctx }) {
   const qc = useQueryClient();
@@ -734,6 +701,7 @@ function DependencyUpdatesForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S
   if (!initial.available) return <div className="muted small">This instance does not offer dependency updates.</div>;
   const last = initial.last_run;
   return (
+    <>
     <form
       className="stack"
       onSubmit={(e) => {
@@ -743,27 +711,27 @@ function DependencyUpdatesForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S
     >
       <ErrorBox error={error} />
       {msg && <div className="alert ok">{msg}</div>}
-      <label className="check">
-        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Open merge requests that update dependencies
-      </label>
-      <div className="grid2">
-        <Field label="Runs">
-          <select value={hours} onChange={(e) => setHours(Number(e.target.value))} disabled={!enabled}>
-            {INTERVALS.map(([h, label]) => (
-              <option key={h} value={h}>
-                {label}
-              </option>
-            ))}
-            {!INTERVALS.some(([h]) => h === hours) && <option value={hours}>Every {hours} hours</option>}
-          </select>
-        </Field>
-        <Field label="Configuration">
-          <select value={onboarding ? "onboarding" : "defaults"} onChange={(e) => setOnboarding(e.target.value === "onboarding")} disabled={!enabled}>
-            <option value="onboarding">First, a merge request that adds renovate.json</option>
-            <option value="defaults">Renovate's defaults, no config file needed</option>
-          </select>
-        </Field>
-      </div>
+      <Switch checked={enabled} onChange={setEnabled}>
+        Open merge requests that update dependencies
+      </Switch>
+      {/* its options, once it is on (kept and sent as they are while it is off) */}
+      {enabled && (
+        <div className="grid2">
+          <Field label="Runs">
+            <Select value={String(hours)} onChange={(v) => setHours(Number(v))} options={intervals(hours)} />
+          </Field>
+          <Field label="Configuration">
+            <Select
+              value={onboarding ? "onboarding" : "defaults"}
+              onChange={(v) => setOnboarding(v === "onboarding")}
+              options={[
+                { value: "onboarding", label: "First, a merge request that adds renovate.json" },
+                { value: "defaults", label: "Renovate's defaults, no config file needed" },
+              ]}
+            />
+          </Field>
+        </div>
+      )}
       {initial.enabled && (
         <div className="list" aria-label="Dependency updates status">
           <div className="item">
@@ -791,6 +759,8 @@ function DependencyUpdatesForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S
       )}
       <SaveRow dirty={form.dirty} busy={save.isPending} saved={form.saved} />
     </form>
+    {enabled && <HostRules base={`/projects/${ctx.p.id}/renovate/host_rules`} empty="None. This instance's container registry needs none." />}
+    </>
   );
 }
 
@@ -847,40 +817,31 @@ function SecurityScanningForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S[
     >
       <ErrorBox error={error} />
       {msg && <div className="alert ok">{msg}</div>}
-      <label className="check">
-        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Scan the default branch and merge requests
-      </label>
-      <div className="stack" style={{ gap: 6 }}>
-        {initial.available.map((sc) => (
-          <label key={sc} className="check">
-            <input
-              type="checkbox"
-              disabled={!enabled}
-              checked={scanners.includes(sc)}
-              onChange={(e) => setScanners(e.target.checked ? [...scanners, sc] : scanners.filter((x) => x !== sc))}
-            />{" "}
-            {SCANNER_LABEL[sc] ?? sc}
+      <Switch checked={enabled} onChange={setEnabled}>
+        Scan the default branch and merge requests
+      </Switch>
+      {/* its scanners and schedule, once it is on (kept and sent as they are while it is off) */}
+      {enabled && (
+        <>
+          <FieldGroup label="Scanners" hint="The ones this instance runs.">
+            <div className="stack" style={{ gap: 6 }}>
+              {initial.available.map((sc) => (
+                <label key={sc} className="check">
+                  <input type="checkbox" checked={scanners.includes(sc)} onChange={(e) => setScanners(e.target.checked ? [...scanners, sc] : scanners.filter((x) => x !== sc))} />{" "}
+                  {SCANNER_LABEL[sc] ?? sc}
+                </label>
+              ))}
+            </div>
+          </FieldGroup>
+          <Field label="Default branch scans" hint="Also after pushes to the default branch (at most every 10 minutes) and on each new commit of a merge request. Scans run without the project's CI/CD variables.">
+            <Select value={String(hours)} onChange={(v) => setHours(Number(v))} options={intervals(hours)} />
+          </Field>
+          <label className="check">
+            <input type="checkbox" checked={sbom} onChange={(e) => setSbom(e.target.checked)} /> Make an SBOM (CycloneDX and SPDX) of each new tag, attached to its release
+            (for those who can read the code)
           </label>
-        ))}
-      </div>
-      <Field label="Default branch scans">
-        <select value={hours} onChange={(e) => setHours(Number(e.target.value))} disabled={!enabled}>
-          {INTERVALS.map(([h, label]) => (
-            <option key={h} value={h}>
-              {label}
-            </option>
-          ))}
-          {!INTERVALS.some(([h]) => h === hours) && <option value={hours}>Every {hours} hours</option>}
-        </select>
-      </Field>
-      <p className="small muted" style={{ margin: 0 }}>
-        Also after pushes to the default branch (at most every 10 minutes) and on each new commit of a merge request. Scans run without the project's CI/CD
-        variables.
-      </p>
-      <label className="check">
-        <input type="checkbox" disabled={!enabled} checked={sbom} onChange={(e) => setSbom(e.target.checked)} /> Make an SBOM (CycloneDX and SPDX) of each new tag,
-        attached to its release (for those who can read the code)
-      </label>
+        </>
+      )}
       {initial.enabled && (
         <div className="list" aria-label="Security scanning status">
           <div className="item">

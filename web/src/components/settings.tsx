@@ -111,13 +111,28 @@ export function SaveRow({ dirty, busy, saved, label = "Save", children }: { dirt
  * A setting that is one switch: saved as soon as it is flipped, with "Saved" beside it; back
  * where it was if the save fails.
  */
-export function SettingSwitch({ checked, onSave, children, disabled }: { checked: boolean; onSave: (on: boolean) => Promise<unknown>; children: ReactNode; disabled?: boolean }) {
+export function SettingSwitch({
+  checked,
+  onSave,
+  children,
+  disabled,
+  confirmOff,
+}: {
+  checked: boolean;
+  onSave: (on: boolean) => Promise<unknown>;
+  children: ReactNode;
+  disabled?: boolean;
+  /** asked first when turning it off undoes something (maps removed…) */
+  confirmOff?: { title: string; body: string; action: string };
+}) {
+  const confirm = useConfirm();
   const [on, setOn] = useState(checked);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<unknown>(null);
   useEffect(() => setOn(checked), [checked]);
   const flip = async (v: boolean) => {
+    if (!v && confirmOff && !(await confirm({ ...confirmOff, danger: true }))) return;
     setOn(v);
     setBusy(true);
     setSaved(false);
