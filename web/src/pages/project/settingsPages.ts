@@ -34,7 +34,8 @@ export const SETTINGS_SECTIONS: { slug: SettingsSlug; id: string; label: string;
   { slug: "repository", id: "protected-tags", label: "Protected tags", words: "protect release" },
   { slug: "repository", id: "push-rules", label: "Push rules", words: "commit messages regex secrets signed signatures file size" },
   { slug: "repository", id: "locked-files", label: "Locked files", words: "lfs lock" },
-  { slug: "repository", id: "deploy-keys", label: "Deploy keys", words: "ssh keys" },
+  // no "ssh": that is your own SSH keys, too often added as a deploy key
+  { slug: "repository", id: "deploy-keys", label: "Deploy keys" },
   { slug: "repository", id: "deploy-tokens", label: "Deploy tokens", words: "clone credentials" },
   { slug: "repository", id: "mirroring", label: "Mirroring", words: "mirrors push pull sync github gitlab" },
   { slug: "merge_requests", id: "merge-checks", label: "Merge checks", words: "pipeline must succeed merge trains security findings" },
