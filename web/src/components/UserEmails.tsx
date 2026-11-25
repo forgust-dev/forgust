@@ -1,28 +1,31 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { CircleCheck, Clock } from "lucide-react";
 import { api, timeAgo, type S } from "../api/client";
 import { useSession } from "../session";
 import { useAct } from "../shell/toast";
 import { ResendLink } from "./ResendLink";
 import { useCrudList } from "./Tokens";
-import { Badge, Card, ErrorBox, Field, Q } from "./ui";
+import { Card, ErrorBox, Field, Q, StateBadge } from "./ui";
 
-/** How an address got confirmed, for its badge's tooltip. */
+/** How an address got confirmed, for its state's tooltip. */
 const CONFIRMED_BY: Record<string, string> = {
   link: "confirmed from its inbox",
   admin: "confirmed by an administrator",
   auto: "confirmed as it was added (this instance trusts its people's addresses)",
 };
 
+/** An address's state: confirmed (trusted, when the instance confirmed it as it was added), or
+ *  waiting to be. */
 function State({ e }: { e: S["UserEmail"] }) {
   return e.confirmed_at ? (
-    <span title={CONFIRMED_BY[e.confirmed_by ?? ""]}>
-      <Badge tone="ok">
-        {e.confirmed_by === "auto" ? "trusted" : "confirmed"}
-      </Badge>
-    </span>
+    <StateBadge tone="ok" icon={CircleCheck} title={CONFIRMED_BY[e.confirmed_by ?? ""]}>
+      {e.confirmed_by === "auto" ? "Trusted" : "Confirmed"}
+    </StateBadge>
   ) : (
-    <Badge tone="warn">not confirmed</Badge>
+    <StateBadge tone="warn" icon={Clock}>
+      Not confirmed
+    </StateBadge>
   );
 }
 
