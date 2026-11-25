@@ -18,6 +18,20 @@ const FORMATS = [
   { value: "teams", label: "Microsoft Teams (workflow)" },
 ];
 const formatName = (f: string) => FORMATS.find((x) => x.value === f)?.label.split(" (")[0] ?? f;
+/** What each event is, in words, for a hook's line. */
+const EVENT_WORDS: Record<string, string> = {
+  push: "pushes",
+  merge_request: "merge requests",
+  issue: "issues",
+  confidential_issue: "confidential issues",
+  note: "comments",
+  confidential_note: "confidential comments",
+  release: "releases",
+  pipeline: "pipelines",
+  build: "jobs",
+};
+/** "pushes, issues and releases" */
+const listed = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 
 /** Webhooks of a project (`/projects/:id`) or group (`/groups/:id`). */
 export function Webhooks({ base, title, description }: { base: string; title: string; description: ReactNode }) {
@@ -108,8 +122,7 @@ export function Webhooks({ base, title, description }: { base: string; title: st
                         {h.url}
                       </code>
                       <div className="small muted">
-                        {h.format !== "generic" && `${formatName(h.format)} · `}
-                        called on {h.events.join(", ")}
+                        {h.format === "generic" ? "Called" : `Posts to ${formatName(h.format)}`} on {listed(h.events.map((e) => EVENT_WORDS[e] ?? e))}
                       </div>
                     </div>
                     <div className="row" style={{ flex: "none", gap: 6 }}>
