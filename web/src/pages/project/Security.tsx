@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, ShieldAlert, ShieldCheck } from "lucide-react";
 import { api, listAnd, plural, qs, refLink, timeAgo, timeUntil, type S } from "../../api/client";
 import { Empty, FilterTabs, ListHead, Q, SearchField, useDebounced } from "../../components/ui";
@@ -211,6 +211,8 @@ export function SecurityPage({ ctx }: { ctx: Ctx }) {
   const q = useQuery({
     queryKey: ["security", ctx.p.id, state, severity, kind, term],
     queryFn: () => api.get<S["SecurityOverview"]>(`/projects/${ctx.p.id}/security/findings${qs({ state, severity, report_type: kind, search: term, per_page: 100 })}`),
+    // a filter keeps the list on screen until its own arrives: no spinner flashing in between
+    placeholderData: keepPreviousData,
   });
   useEffect(() => {
     if (focus == null) return;

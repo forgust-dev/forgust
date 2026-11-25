@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDownToLine, ChevronDown, ChevronRight, Download, FileText, Play, RotateCcw, Square, FolderOpen } from "lucide-react";
 import { api, bytes, timeAgo, timeUntil, type S } from "../../../api/client";
@@ -13,10 +13,13 @@ import { LogParser, sectionDuration, type LogLine, type Span } from "./log";
 import { RETRYABLE, StatusBadge, StatusIcon, duration, isActive } from "./Status";
 import { PipelineHeader, pipelineHref, useConfirmRun, usePipeline } from "./Pipelines";
 
-/** The job log, fetched incrementally while the job runs. */
+/**
+ * The job log, fetched incrementally while the job runs. Opening another job keeps this one's log
+ * on screen until the other's first bytes arrive, so the pane never goes blank in between.
+ */
 function useTrace(pid: number, jobId: number, status: string | undefined) {
-  const [text, setText] = useState("");
-  const [complete, setComplete] = useState(false);
+  const [log, setLog] = useState({ job: jobId, text: "", complete: false });
+  const job = useRef(jobId);
   const offset = useRef(0);
   const busy = useRef(false);
   const want = useRef(false);
@@ -30,27 +33,28 @@ function useTrace(pid: number, jobId: number, status: string | undefined) {
     try {
       for (;;) {
         want.current = false;
-        const c = await api.get<S["TraceChunk"]>(`/projects/${pid}/jobs/${jobId}/trace?offset=${offset.current}`);
+        const id = job.current;
+        const c = await api.get<S["TraceChunk"]>(`/projects/${pid}/jobs/${id}/trace?offset=${offset.current}`);
+        // another job was opened meanwhile: start over, for it
+        if (job.current !== id) continue;
         if (c.offset !== offset.current) break;
-        if (c.content) {
-          // sizes are in bytes; keep our own byte offset from the server's answer
-          offset.current = c.size;
-          setText((t) => t + c.content);
-        }
-        setComplete(c.complete);
+        // sizes are in bytes; keep our own byte offset from the server's answer
+        if (c.content) offset.current = c.size;
+        // a job's first answer replaces the last job's log; the next ones add to it
+        setLog((l) => (l.job === id ? { job: id, text: l.text + (c.content ?? ""), complete: c.complete } : { job: id, text: c.content ?? "", complete: c.complete }));
         if (!want.current && !c.more) break;
       }
     } catch {
-      /* the next event or poll retries */
+      // the next event or poll retries; meanwhile no other job's log stands in for this one
+      setLog((l) => (l.job === job.current ? l : { job: job.current, text: "", complete: false }));
     } finally {
       busy.current = false;
     }
   };
 
   useEffect(() => {
+    job.current = jobId;
     offset.current = 0;
-    setText("");
-    setComplete(false);
     pull();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pid, jobId]);
@@ -61,12 +65,12 @@ function useTrace(pid: number, jobId: number, status: string | undefined) {
   });
   // fallback poll while running (events are hints)
   useEffect(() => {
-    if (complete || (status && !isActive(status))) return;
+    if (log.complete || (status && !isActive(status))) return;
     const t = window.setInterval(pull, 5000);
     return () => window.clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [complete, status, jobId]);
-  return { text, complete };
+  }, [log.complete, status, jobId]);
+  return log;
 }
 
 function SpanView({ s }: { s: Span }) {
@@ -233,10 +237,21 @@ export function JobPage({ ctx, jobId }: { ctx: Ctx; jobId: number }) {
   const qc = useQueryClient();
   const confirmRun = useConfirmRun();
   const nav = useNavigate();
-  const q = useQuery({ queryKey: ["job", ctx.p.id, jobId], queryFn: () => api.get<S["JobDetail"]>(`/projects/${ctx.p.id}/jobs/${jobId}`) });
+  // another job keeps this one on screen until it arrives: no spinner flashing in between
+  const q = useQuery({ queryKey: ["job", ctx.p.id, jobId], queryFn: () => api.get<S["JobDetail"]>(`/projects/${ctx.p.id}/jobs/${jobId}`), placeholderData: keepPreviousData });
   // status changes: through usePipeline's live updates (the "job" queries too)
   const pipeline = usePipeline(ctx, q.data?.pipeline_iid);
   const trace = useTrace(ctx.p.id, jobId, q.data?.status);
+  // a job opened from further down: its pane starts at its top, as a page of its own would
+  const pane = useRef<HTMLElement>(null);
+  const shown = useRef(trace.job);
+  useEffect(() => {
+    if (shown.current === trace.job) return;
+    shown.current = trace.job;
+    const top = pane.current?.getBoundingClientRect().top;
+    const bar = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--topbar-h")) || 56;
+    if (top != null && top < bar) window.scrollTo({ top: window.scrollY + top - bar - 16 });
+  }, [trace.job]);
   const run = useAct(() => {
     qc.invalidateQueries({ queryKey: ["job", ctx.p.id] });
     qc.invalidateQueries({ queryKey: ["pipeline", ctx.p.id] });
@@ -257,8 +272,8 @@ export function JobPage({ ctx, jobId }: { ctx: Ctx; jobId: number }) {
           <div className="stack" style={{ gap: 18 }}>
             {pipeline.data && <PipelineHeader ctx={ctx} p={pipeline.data} tab="jobs" />}
             <div className="jobs-split">
-              {pipeline.data && <JobList ctx={ctx} p={pipeline.data} current={j.id} />}
-              <section className="job-pane" aria-label={`Job ${j.name}`}>
+              {pipeline.data && <JobList ctx={ctx} p={pipeline.data} current={jobId} />}
+              <section ref={pane} className="job-pane" aria-label={`Job ${j.name}`}>
                 <div className="job-pane-head">
                   <StatusIcon status={j.status} allowFailure={j.allow_failure} size={18} />
                   <h2 className="grow">{j.name}</h2>
@@ -351,7 +366,7 @@ export function JobPage({ ctx, jobId }: { ctx: Ctx; jobId: number }) {
                     </div>
                   </details>
                 )}
-                <LogView key={jobId} text={trace.text} live={live && !trace.complete} />
+                <LogView key={trace.job} text={trace.text} live={live && !trace.complete} />
               </section>
             </div>
           </div>

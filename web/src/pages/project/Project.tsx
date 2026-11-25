@@ -186,7 +186,7 @@ export function ProjectPage({ id, fullPath, rest }: { id: number; fullPath: stri
                   {section === "pipelines" && more.length === 0 && <PipelineList ctx={ctx} />}
                   {section === "pipelines" && more[0] === "new" && <RunPipeline ctx={ctx} />}
                   {section === "pipelines" && /^\d+$/.test(more[0] ?? "") && <PipelinePage ctx={ctx} iid={Number(more[0])} />}
-                  {section === "jobs" && /^\d+$/.test(more[0] ?? "") && !more[1] && <JobPage key={more[0]} ctx={ctx} jobId={Number(more[0])} />}
+                  {section === "jobs" && /^\d+$/.test(more[0] ?? "") && !more[1] && <JobPage ctx={ctx} jobId={Number(more[0])} />}
                   {section === "jobs" && /^\d+$/.test(more[0] ?? "") && more[1] === "artifacts" && <ArtifactBrowser ctx={ctx} jobId={Number(more[0])} />}
                   {section === "pipeline_schedules" && (p.can_push ? <Schedules ctx={ctx} /> : <NotFound />)}
                   {section === "environments" && (more.length === 0 || more[0] === "stopped") && <Environments ctx={ctx} stopped={more[0] === "stopped"} />}
