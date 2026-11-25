@@ -41,10 +41,12 @@ folder icons (they open) and the page-loading bar (it answers a click). Progress
 of what it counts: green for what is done and fine (the readiness ring), blue for what runs (an
 import).
 
-A tone has one color per surface: the page tokens (`--ok`, `--danger`…) on the page, `--emph-*`
-on a dark panel (lighter on purpose, like its text), `--chart-*` only inside charts. Text on a
-filled tone uses `--on-tone` (or `--accent-text` on orange), never `#fff`. README alerts keep
-GitHub's colors, and a job log keeps its terminal palette.
+A tone has one color per theme (`--ok`, `--danger`…), charts included: one green and one red
+on light, one of each on dark. On the dark panel, in light, `--emph-*` takes the dark theme's
+color, as its text does. Text on a filled tone uses `--on-tone` (or `--accent-text` on orange),
+never `#fff`. README alerts keep GitHub's colors, and a job log keeps its terminal palette, whose
+base green and red are the site's. A dot that stands for a state or a series (a stage, a
+legend) is round.
 
 The sidebar, the top bar and the job list are painted `--bg-side`, which in light is the color
 of `--bg-hover`: a hover there takes `--side-hover`, or it does not show.

@@ -65,19 +65,17 @@
   --emph-row: #2a2520;
   --emph-line: #3a342d;
   --emph-link: #ffb27d;
-  --emph-ok: #8fe0a9;
-  --emph-bad: #ff9b8f;
-  --emph-warn: #f2c25c;
-  --emph-info: #8db8ff;
+  /* on the dark panel, a tone takes the dark theme's color: one green, one red… per theme */
+  --emph-ok: #5fcf98;
+  --emph-bad: #f0738a;
+  --emph-warn: #f2b04f;
+  --emph-info: #6aa7ff;
   --emph-btn-bg: #f5f1ec;
   --emph-btn-text: #1c1915;
-  --chart-ok: #2f9e5a;
-  --chart-bad: #a8261d;
   --chart-other: #8b8378;
   --shadow: 0 1px 2px rgba(60, 40, 20, 0.05), 0 1px 3px rgba(60, 40, 20, 0.04);
   /* what floats over the page: menus, popovers, toasts */
   --shadow-pop: 0 12px 32px rgba(60, 40, 20, 0.14), 0 2px 6px rgba(60, 40, 20, 0.06);
-  --chart-warn: #b07800;
   /* motion: strong curves (the built-in ones are too weak to read) */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
@@ -153,10 +151,7 @@
     --emph-info: #6aa7ff;
     --emph-btn-bg: #f5f5f6;
     --emph-btn-text: #0d0e12;
-    --chart-ok: #5fcf98;
-    --chart-bad: #f0738a;
     --chart-other: #767e8c;
-    --chart-warn: #f2b04f;
     --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.5);
     color-scheme: dark;
   }
@@ -226,10 +221,7 @@
   --emph-info: #6aa7ff;
   --emph-btn-bg: #f5f5f6;
   --emph-btn-text: #0d0e12;
-  --chart-ok: #5fcf98;
-  --chart-bad: #f0738a;
   --chart-other: #767e8c;
-  --chart-warn: #f2b04f;
   --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.5);
   color-scheme: dark;
 }
@@ -3790,7 +3782,7 @@ kbd {
 :root {
   --term-black: #2e3436;
   --term-red: #c4314b;
-  --term-green: #1f8a5a;
+  --term-green: #1f7a3d;
   --term-yellow: #a26500;
   --term-blue: #2f6fd0;
   --term-magenta: #9c3fb5;
@@ -4702,6 +4694,7 @@ a.status-badge:hover {
   background: var(--border-strong);
 }
 .dot {
+  flex: none;
   width: 10px;
   height: 10px;
   border-radius: 50%;
@@ -7543,18 +7536,19 @@ button.test-case-row:hover {
 }
 .pipe-legend i {
   display: inline-block;
+  flex: none; /* a flex item: without it, a narrow legend squeezes the dot into an oval */
   width: 9px;
   height: 9px;
   margin-left: 6px;
-  border-radius: 2px;
+  border-radius: 50%;
 }
 .pipe-legend i.ok,
 .pipe-bar .pipe-seg.ok {
-  background: var(--chart-ok);
+  background: var(--ok);
 }
 .pipe-legend i.bad,
 .pipe-bar .pipe-seg.bad {
-  background: var(--chart-bad);
+  background: var(--danger);
 }
 .pipe-legend i.other,
 .pipe-bar .pipe-seg.other {
