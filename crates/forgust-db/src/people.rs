@@ -183,13 +183,12 @@ pub async fn by_usernames(e: impl PgExecutor<'_>, names: &[String]) -> Result<Ve
     .await
 }
 
-/// Usernames of active people (and Renovate bots) by verified email, lowercased:
-/// commit authors linked to their accounts.
+/// Usernames of active people (and Renovate bots) by confirmed email (their
+/// own or an extra one), lowercased: commit authors linked to their accounts.
 pub async fn usernames_by_email(e: impl PgExecutor<'_>, emails: &[String]) -> Result<Vec<(String, String)>> {
     let rows = sqlx::query!(
-        r#"SELECT lower(email) AS "email!", username FROM users
-           WHERE lower(email) = ANY($1) AND email_verified_at IS NOT NULL AND state = 'active'
-             AND user_type IN ('human', 'renovate_bot')"#,
+        r#"SELECT c.email AS "email!", u.username FROM confirmed_emails c JOIN users u ON u.id = c.user_id
+           WHERE c.email = ANY($1) AND u.state = 'active' AND u.user_type IN ('human', 'renovate_bot')"#,
         emails
     )
     .fetch_all(e)

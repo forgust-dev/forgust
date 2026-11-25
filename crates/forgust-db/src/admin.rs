@@ -533,9 +533,13 @@ pub struct AdminUser {
     pub tokens: i64,
     /// Sign-in providers linked to the account.
     pub providers: Vec<String>,
+    /// Its other email addresses, and how many of them wait for confirmation.
+    pub other_emails: i64,
+    pub other_emails_unconfirmed: i64,
 }
 
-/// `filter`: `all` (people), `admins`, `blocked`, `external`, `unconfirmed`, `two_factor_off` or `bots`.
+/// `filter`: `all` (people), `admins`, `blocked`, `external`, `unconfirmed` (their own address or
+/// another one waits for confirmation), `two_factor_off` or `bots`.
 pub async fn users(e: impl PgExecutor<'_>, search: &str, filter: &str, limit: i64, offset: i64) -> Result<Vec<AdminUser>> {
     sqlx::query_as!(
         AdminUser,
@@ -545,15 +549,19 @@ pub async fn users(e: impl PgExecutor<'_>, search: &str, filter: &str, limit: i6
                   (SELECT count(*) FROM sessions s WHERE s.user_id = u.id AND s.expires_at > now()) AS "sessions!",
                   (SELECT count(*) FROM personal_access_tokens t WHERE t.user_id = u.id AND NOT t.revoked
                      AND (t.expires_at IS NULL OR t.expires_at > now())) AS "tokens!",
-                  COALESCE((SELECT array_agg(DISTINCT i.provider) FROM identities i WHERE i.user_id = u.id), '{}') AS "providers!"
+                  COALESCE((SELECT array_agg(DISTINCT i.provider) FROM identities i WHERE i.user_id = u.id), '{}') AS "providers!",
+                  x.n AS "other_emails!", x.pending AS "other_emails_unconfirmed!"
              FROM users u
-            WHERE ($1 = '' OR u.username ILIKE '%' || $1 || '%' OR u.name ILIKE '%' || $1 || '%' OR u.email ILIKE '%' || $1 || '%')
+             CROSS JOIN LATERAL (SELECT count(*) AS n, count(*) FILTER (WHERE confirmed_at IS NULL) AS pending
+                                   FROM user_emails WHERE user_id = u.id) x
+            WHERE ($1 = '' OR u.username ILIKE '%' || $1 || '%' OR u.name ILIKE '%' || $1 || '%' OR u.email ILIKE '%' || $1 || '%'
+                   OR EXISTS (SELECT 1 FROM user_emails e WHERE e.user_id = u.id AND e.email ILIKE '%' || $1 || '%'))
               AND CASE $2
                     WHEN 'bots' THEN u.user_type <> 'human'
                     WHEN 'admins' THEN u.user_type = 'human' AND u.is_admin
                     WHEN 'blocked' THEN u.user_type = 'human' AND u.state = 'blocked'
                     WHEN 'external' THEN u.user_type = 'human' AND u.is_external
-                    WHEN 'unconfirmed' THEN u.user_type = 'human' AND u.email_verified_at IS NULL
+                    WHEN 'unconfirmed' THEN u.user_type = 'human' AND (u.email_verified_at IS NULL OR x.pending > 0)
                     WHEN 'two_factor_off' THEN u.user_type = 'human' AND NOT u.two_factor_enabled
                     ELSE u.user_type = 'human' END
             ORDER BY u.username LIMIT $3 OFFSET $4"#,

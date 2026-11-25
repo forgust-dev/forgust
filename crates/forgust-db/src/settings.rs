@@ -12,12 +12,15 @@ pub struct InstanceSettings {
     pub mcp_enabled: bool,
     /// Ask GitHub for new Forgust releases, to tell administrators.
     pub update_check_enabled: bool,
+    /// While the instance sends no email and sign-up is closed, the addresses
+    /// people add to their account are confirmed at once.
+    pub auto_confirm_emails: bool,
 }
 
 pub async fn get(e: impl PgExecutor<'_>) -> Result<InstanceSettings> {
     sqlx::query_as!(
         InstanceSettings,
-        "SELECT signup_enabled, allow_personal_projects, default_branch_name, mcp_enabled, update_check_enabled FROM instance_settings"
+        "SELECT signup_enabled, allow_personal_projects, default_branch_name, mcp_enabled, update_check_enabled, auto_confirm_emails FROM instance_settings"
     )
     .fetch_one(e)
     .await
@@ -28,7 +31,7 @@ pub async fn get(e: impl PgExecutor<'_>) -> Result<InstanceSettings> {
 pub async fn get_for_update(e: impl PgExecutor<'_>) -> Result<InstanceSettings> {
     sqlx::query_as!(
         InstanceSettings,
-        "SELECT signup_enabled, allow_personal_projects, default_branch_name, mcp_enabled, update_check_enabled FROM instance_settings FOR UPDATE"
+        "SELECT signup_enabled, allow_personal_projects, default_branch_name, mcp_enabled, update_check_enabled, auto_confirm_emails FROM instance_settings FOR UPDATE"
     )
     .fetch_one(e)
     .await
@@ -36,12 +39,13 @@ pub async fn get_for_update(e: impl PgExecutor<'_>) -> Result<InstanceSettings> 
 
 pub async fn update(e: impl PgExecutor<'_>, s: &InstanceSettings) -> Result<()> {
     sqlx::query!(
-        "UPDATE instance_settings SET signup_enabled = $1, allow_personal_projects = $2, default_branch_name = $3, mcp_enabled = $4, update_check_enabled = $5, updated_at = now()",
+        "UPDATE instance_settings SET signup_enabled = $1, allow_personal_projects = $2, default_branch_name = $3, mcp_enabled = $4, update_check_enabled = $5, auto_confirm_emails = $6, updated_at = now()",
         s.signup_enabled,
         s.allow_personal_projects,
         s.default_branch_name,
         s.mcp_enabled,
-        s.update_check_enabled
+        s.update_check_enabled,
+        s.auto_confirm_emails
     )
     .execute(e)
     .await?;

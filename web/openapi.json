@@ -4769,6 +4769,29 @@
         }
       }
     },
+    "/api/v1/user/emails": {
+      "get": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Your other email addresses: commits made with a confirmed one show as yours.",
+        "operationId": "list_emails",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserEmail"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/user/gpg_keys": {
       "get": {
         "tags": [
@@ -5308,6 +5331,21 @@
           }
         }
       },
+      "AddEmail": {
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "properties": {
+          "current_password": {
+            "type": "string",
+            "description": "Needed when the address is confirmed as it is added (an instance that\nsends no email): a borrowed session must not be able to claim one."
+          },
+          "email": {
+            "type": "string"
+          }
+        }
+      },
       "AddGpgKey": {
         "type": "object",
         "required": [
@@ -5832,7 +5870,9 @@
           "created_at",
           "sessions",
           "tokens",
-          "providers"
+          "providers",
+          "other_emails",
+          "other_emails_unconfirmed"
         ],
         "properties": {
           "created_at": {
@@ -5864,6 +5904,15 @@
           },
           "name": {
             "type": "string"
+          },
+          "other_emails": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Its other email addresses, and how many of them wait for confirmation."
+          },
+          "other_emails_unconfirmed": {
+            "type": "integer",
+            "format": "int64"
           },
           "providers": {
             "type": "array",
@@ -9841,11 +9890,16 @@
           "allow_personal_projects",
           "default_branch_name",
           "mcp_enabled",
-          "update_check_enabled"
+          "update_check_enabled",
+          "auto_confirm_emails"
         ],
         "properties": {
           "allow_personal_projects": {
             "type": "boolean"
+          },
+          "auto_confirm_emails": {
+            "type": "boolean",
+            "description": "While the instance sends no email and sign-up is closed, the addresses\npeople add to their account are confirmed at once."
           },
           "default_branch_name": {
             "type": "string"
@@ -17188,6 +17242,12 @@
           "allow_personal_projects": {
             "type": "boolean"
           },
+          "auto_confirm_emails": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
           "default_branch_name": {
             "type": "string"
           },
@@ -17615,6 +17675,42 @@
           },
           "username": {
             "type": "string"
+          }
+        }
+      },
+      "UserEmail": {
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "created_at"
+        ],
+        "properties": {
+          "confirmed_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When it was confirmed (None: not yet)."
+          },
+          "confirmed_by": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "How: `link` (from its inbox), `admin` (an administrator vouched for\nit) or `auto` (the instance trusted it, sending no email)."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "email": {
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
           }
         }
       },

@@ -12,6 +12,7 @@ pub mod builtin;
 pub mod chat;
 pub mod codeowners;
 pub mod edits;
+pub mod emails;
 pub mod groups;
 pub mod issues;
 pub mod members;
