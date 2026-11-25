@@ -145,7 +145,6 @@ export function DateField({ value, onChange, label }: { value: string; onChange:
     <span className="date-field">
       <input
         type="text"
-        inputMode="numeric"
         autoComplete="off"
         placeholder="YYYY-MM-DD"
         aria-label={label}

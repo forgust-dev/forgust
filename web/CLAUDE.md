@@ -59,6 +59,9 @@ and its swatches, code highlighting, the Smart View's block kinds and logos.
 
 A spinner (`Loader2`) always turns, with `className="spin"`. `StateBadge` adds it on its own.
 
+A date is a `DateField` (typed, or picked on a calendar), never `type="date"` and its browser
+picker; a password a `PasswordInput`, with its Show button.
+
 ## Buttons
 
 - `btn primary`: the one main action of a page or a section. It is black on light and white
