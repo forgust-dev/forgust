@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, LEVELS, timeAgo, type S } from "../api/client";
-import { Badge, Card, ErrorBox, Field, LevelSelect, NewSecret, Q, StateBadge } from "./ui";
+import { Badge, ErrorBox, Field, LevelSelect, NewSecret, Q, StateBadge } from "./ui";
+import { AddActions, ListSection } from "./settings";
 import { Ban } from "lucide-react";
 
 const SCOPES = ["api", "read_api", "read_repository", "write_repository", "mcp"];
@@ -28,27 +29,43 @@ export function useCrudList<T, N = unknown>(queryKey: unknown[], url: string, on
   return { list, add, remove, error, setError };
 }
 
-export function AccessTokens({ base }: { base: string }) {
+export function AccessTokens({ base, title, description }: { base: string; title: string; description: ReactNode }) {
   const [name, setName] = useState("");
   const [level, setLevel] = useState("developer");
   const [scopes, setScopes] = useState<string[]>(["read_repository"]);
   const [created, setCreated] = useState<S["NewToken"] | null>(null);
-  const { list, add: create, remove: revoke, error } = useCrudList<S["AccessTokenDto"], S["NewToken"]>(["access-tokens", base], `${base}/access_tokens`, (t) => {
+  const [adding, setAdding] = useState(false);
+  // the new token is shown once: it stays on screen once its form has closed
+  const { list, add: create, remove: revoke, error, setError } = useCrudList<S["AccessTokenDto"], S["NewToken"]>(["access-tokens", base], `${base}/access_tokens`, (t) => {
     setCreated(t);
     setName("");
+    setAdding(false);
   });
+  const close = () => {
+    setAdding(false);
+    setName("");
+    setError(null);
+  };
   return (
-    <div className="stack">
-      <Card title="New access token">
+    <ListSection
+      title={title}
+      description={description}
+      add="Create a token"
+      adding={adding}
+      onAdd={() => {
+        setCreated(null);
+        setAdding(true);
+      }}
+      form={
         <form
           className="stack"
+          aria-label="New access token"
           onSubmit={(e) => {
             e.preventDefault();
             create.mutate({ name, access_level: level, scopes });
           }}
         >
           <ErrorBox error={error} />
-          {created && <NewSecret token={created.token} username={created.username} />}
           <div className="grid2">
             <Field label="Name">
               <input value={name} onChange={(e) => setName(e.target.value)} />
@@ -58,13 +75,12 @@ export function AccessTokens({ base }: { base: string }) {
             </Field>
           </div>
           <ScopePicker scopes={scopes} onChange={setScopes} />
-          <div>
-            <button className="btn primary" disabled={!name}>
-              Create token
-            </button>
-          </div>
+          <AddActions label="Create token" disabled={!name} busy={create.isPending} onCancel={close} />
         </form>
-      </Card>
+      }
+    >
+      {!adding && <ErrorBox error={error} />}
+      {created && <NewSecret token={created.token} username={created.username} />}
       <Q q={list}>
         {(tokens) =>
           tokens.length === 0 ? (
@@ -94,7 +110,7 @@ export function AccessTokens({ base }: { base: string }) {
           )
         }
       </Q>
-    </div>
+    </ListSection>
   );
 }
 
@@ -111,37 +127,53 @@ export function ScopePicker({ scopes, onChange, options = SCOPES }: { scopes: st
   );
 }
 
-export function DeployTokens({ base }: { base: string }) {
+export function DeployTokens({ base, title, description }: { base: string; title: string; description: ReactNode }) {
   const [name, setName] = useState("");
   const [scopes, setScopes] = useState<string[]>(["read_repository"]);
   const [created, setCreated] = useState<S["NewToken"] | null>(null);
-  const { list, add: create, remove: revoke, error } = useCrudList<S["DeployToken"], S["NewToken"]>(["deploy-tokens", base], `${base}/deploy_tokens`, (t) => {
+  const [adding, setAdding] = useState(false);
+  // the new token is shown once: it stays on screen once its form has closed
+  const { list, add: create, remove: revoke, error, setError } = useCrudList<S["DeployToken"], S["NewToken"]>(["deploy-tokens", base], `${base}/deploy_tokens`, (t) => {
     setCreated(t);
     setName("");
+    setAdding(false);
   });
+  const close = () => {
+    setAdding(false);
+    setName("");
+    setError(null);
+  };
   return (
-    <div className="stack">
-      <Card title="New deploy token">
+    <ListSection
+      id="deploy-tokens"
+      title={title}
+      description={description}
+      add="Create a deploy token"
+      adding={adding}
+      onAdd={() => {
+        setCreated(null);
+        setAdding(true);
+      }}
+      form={
         <form
           className="stack"
+          aria-label="New deploy token"
           onSubmit={(e) => {
             e.preventDefault();
             create.mutate({ name, scopes });
           }}
         >
           <ErrorBox error={error} />
-          {created && <NewSecret token={created.token} username={created.username} />}
           <Field label="Name">
             <input value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
           <ScopePicker scopes={scopes} onChange={setScopes} options={["read_repository", "write_repository"]} />
-          <div>
-            <button className="btn primary" disabled={!name}>
-              Create deploy token
-            </button>
-          </div>
+          <AddActions label="Create deploy token" disabled={!name} busy={create.isPending} onCancel={close} />
         </form>
-      </Card>
+      }
+    >
+      {!adding && <ErrorBox error={error} />}
+      {created && <NewSecret token={created.token} username={created.username} />}
       <Q q={list}>
         {(tokens) =>
           tokens.length === 0 ? (
@@ -169,6 +201,6 @@ export function DeployTokens({ base }: { base: string }) {
           )
         }
       </Q>
-    </div>
+    </ListSection>
   );
 }

@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, timeAgo, type S } from "../api/client";
 import { Badge, ErrorBox, Field, levelName, Q, StateBadge } from "./ui";
 import { Select } from "./controls";
+import { AddActions, ListSection } from "./settings";
 import { CircleCheck, CircleX, Clock } from "lucide-react";
 
 const EVENTS = ["push", "merge_request", "issue", "confidential_issue", "note", "confidential_note", "release", "pipeline", "build"];
@@ -19,7 +20,7 @@ const FORMATS = [
 const formatName = (f: string) => FORMATS.find((x) => x.value === f)?.label.split(" (")[0] ?? f;
 
 /** Webhooks of a project (`/projects/:id`) or group (`/groups/:id`). */
-export function Webhooks({ base }: { base: string }) {
+export function Webhooks({ base, title, description }: { base: string; title: string; description: ReactNode }) {
   const qc = useQueryClient();
   const key = ["hooks", base];
   const list = useQuery({ queryKey: key, queryFn: () => api.get<S["Webhook"][]>(`${base}/hooks`) });
@@ -28,28 +29,41 @@ export function Webhooks({ base }: { base: string }) {
   const [events, setEvents] = useState<string[]>(["push", "merge_request"]);
   const [format, setFormat] = useState("generic");
   const [open, setOpen] = useState<number | null>(null);
+  const [adding, setAdding] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const close = () => {
+    setAdding(false);
+    setUrl("");
+    setSecret("");
+    setError(null);
+  };
   const add = useMutation({
     mutationFn: () => api.post(`${base}/hooks`, { url, secret, events, format }),
     onSuccess: () => {
-      setUrl("");
-      setSecret("");
-      setError(null);
+      close();
       qc.invalidateQueries({ queryKey: key });
     },
     onError: setError,
   });
   const del = useMutation({ mutationFn: (id: number) => api.del(`${base}/hooks/${id}`), onSuccess: () => qc.invalidateQueries({ queryKey: key }) });
   return (
-    <div className="stack">
-      <ErrorBox error={error} />
+    <ListSection
+      id="webhooks"
+      title={title}
+      description={description}
+      add="Add a webhook"
+      adding={adding}
+      onAdd={() => setAdding(true)}
+      form={
       <form
         className="stack"
+        aria-label="New webhook"
         onSubmit={(e) => {
           e.preventDefault();
           add.mutate();
         }}
       >
+        <ErrorBox error={error} />
         <div className="grid2">
           <Field label="URL" hint="Private and loopback addresses are refused">
             <input placeholder="https://ci.example.com/hooks/forgust" value={url} onChange={(e) => setUrl(e.target.value)} />
@@ -75,12 +89,11 @@ export function Webhooks({ base }: { base: string }) {
               <code>{ev}</code>
             </label>
           ))}
-          <div className="spacer" />
-          <button className="btn primary" disabled={!url || events.length === 0}>
-            Add webhook
-          </button>
         </div>
+        <AddActions label="Add webhook" disabled={!url || events.length === 0} busy={add.isPending} onCancel={close} />
       </form>
+      }
+    >
       <Q q={list}>
         {(hooks) =>
           hooks.length === 0 ? (
@@ -109,7 +122,7 @@ export function Webhooks({ base }: { base: string }) {
           )
         }
       </Q>
-    </div>
+    </ListSection>
   );
 }
 
@@ -169,23 +182,40 @@ export function ApprovalRules({ projectId }: { projectId: number }) {
   const [required, setRequired] = useState(1);
   const [level, setLevel] = useState("maintainer");
   const [error, setError] = useState<unknown>(null);
+  const [adding, setAdding] = useState(false);
+  const close = () => {
+    setAdding(false);
+    setError(null);
+  };
   const save = useMutation({
     mutationFn: () => api.post(`/projects/${projectId}/approval_rules`, { name, approvals_required: required, min_access_level: level }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: key }),
+    onSuccess: () => {
+      close();
+      qc.invalidateQueries({ queryKey: key });
+    },
     onError: setError,
   });
   const del = useMutation({ mutationFn: (id: number) => api.del(`/projects/${projectId}/approval_rules/${id}`), onSuccess: () => qc.invalidateQueries({ queryKey: key }) });
   const names: Record<number, string> = { 20: "reporter", 30: "developer", 40: "maintainer", 50: "owner" };
   return (
-    <div className="stack">
-      <ErrorBox error={error} />
+    <ListSection
+      id="approvals"
+      title="Merge request approvals"
+      description="How many approvals a merge request needs, and from whom, before it can be merged."
+      add="Add a rule"
+      adding={adding}
+      onAdd={() => setAdding(true)}
+      form={
       <form
-        className="row wrap"
+        className="stack"
+        aria-label="New approval rule"
         onSubmit={(e) => {
           e.preventDefault();
           save.mutate();
         }}
       >
+        <ErrorBox error={error} />
+        <div className="row wrap">
         <input style={{ width: 200 }} value={name} onChange={(e) => setName(e.target.value)} aria-label="Rule name" />
         <input style={{ width: 80 }} type="number" min={1} max={20} value={required} onChange={(e) => setRequired(Number(e.target.value))} aria-label="Approvals required" />
         <span className="muted">approvals from</span>
@@ -196,8 +226,11 @@ export function ApprovalRules({ projectId }: { projectId: number }) {
           label="Minimum role"
           options={["reporter", "developer", "maintainer", "owner"].map((l) => ({ value: l, label: `${levelName(l)}s and above` }))}
         />
-        <button className="btn primary">Save rule</button>
+        </div>
+        <AddActions label="Save rule" busy={save.isPending} onCancel={close} />
       </form>
+      }
+    >
       <Q q={list}>
         {(rules) =>
           rules.length === 0 ? (
@@ -219,6 +252,6 @@ export function ApprovalRules({ projectId }: { projectId: number }) {
           )
         }
       </Q>
-    </div>
+    </ListSection>
   );
 }

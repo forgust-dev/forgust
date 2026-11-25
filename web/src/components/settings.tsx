@@ -2,10 +2,10 @@
 // saved yet. web/CLAUDE.md, "Settings", says when to use which.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check } from "lucide-react";
+import { Check, Plus } from "lucide-react";
 import { useConfirm } from "../shell/dialog";
 import { Switch } from "./controls";
-import { ErrorBox } from "./ui";
+import { ErrorBox, Section } from "./ui";
 
 /** The forms of this page that have changes not saved yet. */
 const unsaved = new Set<symbol>();
@@ -145,6 +145,66 @@ export function SettingSwitch({ checked, onSave, children, disabled }: { checked
           </span>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * A settings section that holds a list: what is there first (or why nothing is), and the form to
+ * add one only once its button is pressed, above the list, until it is done or canceled. The
+ * button sits under the section's description, where every section keeps its actions.
+ */
+export function ListSection({
+  id,
+  title,
+  description,
+  add,
+  adding,
+  onAdd,
+  form,
+  children,
+}: {
+  id?: string;
+  title: ReactNode;
+  description?: ReactNode;
+  /** the button's words ("Protect a branch"); none when nothing can be added here */
+  add?: string;
+  adding: boolean;
+  onAdd: () => void;
+  form: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <Section
+      id={id}
+      title={title}
+      description={description}
+      actions={
+        add && !adding ? (
+          <button type="button" className="btn small" onClick={onAdd}>
+            <Plus size={14} /> {add}
+          </button>
+        ) : undefined
+      }
+    >
+      <div className="stack">
+        {adding && <div className="card card-body add-form">{form}</div>}
+        {children}
+      </div>
+    </Section>
+  );
+}
+
+/** An add form's buttons: what it does, and Cancel. */
+export function AddActions({ label, disabled, busy, onCancel }: { label: string; disabled?: boolean; busy?: boolean; onCancel: () => void }) {
+  return (
+    <div className="row wrap">
+      <button className="btn primary" aria-busy={busy} disabled={disabled || busy}>
+        {label}
+      </button>
+      <button type="button" className="btn" onClick={onCancel}>
+        Cancel
+      </button>
     </div>
   );
 }

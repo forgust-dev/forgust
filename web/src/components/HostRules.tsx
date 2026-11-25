@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type S } from "../api/client";
+import { Plus } from "lucide-react";
 import { ErrorBox, Field, Q } from "./ui";
 
 /** Credentials Renovate uses for private registries; passwords are write-only. */
@@ -10,13 +11,18 @@ export function HostRules({ base, empty: emptyText, title = "Private registries"
   const q = useQuery({ queryKey: key, queryFn: () => api.get<S["HostRule"][]>(base) });
   const empty = { match_host: "", host_type: "", username: "", password: "" };
   const [r, setR] = useState(empty);
+  const [adding, setAdding] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const refresh = () => qc.invalidateQueries({ queryKey: key });
+  const close = () => {
+    setAdding(false);
+    setR(empty);
+    setError(null);
+  };
   const add = useMutation({
     mutationFn: () => api.post(base, { ...r, host_type: r.host_type || null }),
     onSuccess: () => {
-      setR(empty);
-      setError(null);
+      close();
       refresh();
     },
     onError: setError,
@@ -45,6 +51,15 @@ export function HostRules({ base, empty: emptyText, title = "Private registries"
           </div>
         )}
       </Q>
+      {/* the list first; the form once asked for */}
+      {!adding ? (
+        <div>
+          <button type="button" className="btn small" onClick={() => setAdding(true)}>
+            <Plus size={14} /> Add a registry
+          </button>
+        </div>
+      ) : (
+      <div className="card card-body add-form stack" role="group" aria-label="New registry">
       <div className="grid2">
         <Field label="Host">
           <input value={r.match_host} placeholder="npm.example.com" onChange={(e) => setR({ ...r, match_host: e.target.value })} />
@@ -59,11 +74,16 @@ export function HostRules({ base, empty: emptyText, title = "Private registries"
           <input type="password" value={r.password} autoComplete="new-password" onChange={(e) => setR({ ...r, password: e.target.value })} />
         </Field>
       </div>
-      <div>
-        <button type="button" className="btn" disabled={add.isPending || !r.match_host || !r.password} onClick={() => add.mutate()}>
+      <div className="row wrap">
+        <button type="button" className="btn primary" aria-busy={add.isPending} disabled={add.isPending || !r.match_host || !r.password} onClick={() => add.mutate()}>
           Add registry
         </button>
+        <button type="button" className="btn" onClick={close}>
+          Cancel
+        </button>
       </div>
+      </div>
+      )}
     </div>
   );
 }

@@ -9,6 +9,8 @@ test("a push mirror is added and removed in the repository settings", async ({ p
   await page.goto(`/${SEED.group}/${SEED.other}/-/settings/repository#mirroring`);
   const section = page.locator("#mirroring");
   await expect(section.getByText("No mirrors.")).toBeVisible();
+  // the list first: the form opens on asking
+  await section.getByRole("button", { name: "Add a mirror" }).click();
   await section.getByRole("textbox", { name: /^Repository address/ }).fill(url);
   await section.getByRole("button", { name: "Add mirror" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Push mirror" }).click();

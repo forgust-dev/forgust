@@ -5,7 +5,7 @@ import { Link } from "react-router-dom";
 import { api, timeAgo, type S } from "../../../api/client";
 import { Section, Empty, ErrorBox, Field, Q, ListHead } from "../../../components/ui";
 import { RunnersPanel } from "./Runners";
-import { SaveRow, SettingSwitch, useSaved } from "../../../components/settings";
+import { AddActions, ListSection, SaveRow, SettingSwitch, useSaved } from "../../../components/settings";
 import { saveCiSettings, useCiSettings } from "../ciSettings";
 import { Select } from "../../../components/controls";
 import { useToast } from "../../../shell/toast";
@@ -244,11 +244,16 @@ function JobTokenAllowlist({ ctx }: { ctx: Ctx }) {
   const toast = useToast();
   const q = useQuery({ queryKey: ["allowlist", ctx.p.id], queryFn: () => api.get<S["AllowedProject"][]>(`/projects/${ctx.p.id}/job_token_allowlist`) });
   const [path, setPath] = useState("");
+  const [adding, setAdding] = useState(false);
+  const close = () => {
+    setAdding(false);
+    setPath("");
+  };
   const add = async (e: FormEvent) => {
     e.preventDefault();
     try {
       await api.post(`/projects/${ctx.p.id}/job_token_allowlist`, { project: path });
-      setPath("");
+      close();
       qc.invalidateQueries({ queryKey: ["allowlist", ctx.p.id] });
     } catch (err) {
       toast.error(err);
@@ -264,8 +269,22 @@ function JobTokenAllowlist({ ctx }: { ctx: Ctx }) {
   };
   const ci = useCiSettings(ctx.p.id);
   return (
-    <Section id="job-token-access" title="Job token access" description="Other projects whose CI job tokens may reach this one.">
-      <div className="stack">
+    <ListSection
+      id="job-token-access"
+      title="Job token access"
+      description="Other projects whose CI job tokens may reach this one."
+      add="Add a project"
+      adding={adding}
+      onAdd={() => setAdding(true)}
+      form={
+        <form className="stack" aria-label="Allow a project" onSubmit={add}>
+          <Field label="Project path">
+            <input placeholder="group/project" value={path} onChange={(e) => setPath(e.target.value)} />
+          </Field>
+          <AddActions label="Add project" disabled={!path.trim()} onCancel={close} />
+        </form>
+      }
+    >
         {ci.data && (
           <SettingSwitch checked={ci.data.job_token_scope_enabled} onSave={(on) => saveCiSettings(qc, ctx.p.id, { job_token_scope_enabled: on })}>
             Only the projects listed here can use their job tokens to access this project
@@ -274,12 +293,6 @@ function JobTokenAllowlist({ ctx }: { ctx: Ctx }) {
         <p className="muted small" style={{ margin: 0 }}>
           Jobs of these projects can read this one with <code>CI_JOB_TOKEN</code> (clone, artifacts), within what their pipeline's user can see.
         </p>
-        <form className="row" onSubmit={add}>
-          <input className="grow" placeholder="group/project" value={path} onChange={(e) => setPath(e.target.value)} aria-label="Project path" />
-          <button className="btn" disabled={!path.trim()}>
-            Add project
-          </button>
-        </form>
         <Q q={q}>
           {(list) =>
             list.length === 0 ? (
@@ -298,8 +311,7 @@ function JobTokenAllowlist({ ctx }: { ctx: Ctx }) {
             )
           }
         </Q>
-      </div>
-    </Section>
+    </ListSection>
   );
 }
 
@@ -333,13 +345,18 @@ function ProtectedEnvironments({ ctx }: { ctx: Ctx }) {
   const q = useQuery({ queryKey: key, queryFn: () => api.get<S["ProtectedEnvironment"][]>(`/projects/${ctx.p.id}/protected_environments`) });
   const [name, setName] = useState("");
   const [level, setLevel] = useState("maintainer");
+  const [adding, setAdding] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const close = () => {
+    setAdding(false);
+    setName("");
+    setError(null);
+  };
   const add = async (e: FormEvent) => {
     e.preventDefault();
     try {
       await api.post(`/projects/${ctx.p.id}/protected_environments`, { name, deploy_access_level: level });
-      setName("");
-      setError(null);
+      close();
       qc.invalidateQueries({ queryKey: key });
     } catch (err) {
       setError(err);
@@ -355,8 +372,17 @@ function ProtectedEnvironments({ ctx }: { ctx: Ctx }) {
   };
   const levelName = (l: number) => (l >= 50 ? "Owners" : l >= 40 ? "Maintainers" : "Developers");
   return (
-    <Section title="Protected environments" description="Only these roles may deploy to (or stop) matching environments; others' jobs fail.">
-      <form className="row wrap" style={{ gap: 10 }} onSubmit={add}>
+    <ListSection
+      id="protected-environments"
+      title="Protected environments"
+      description="Only these roles may deploy to (or stop) matching environments; others' jobs fail."
+      add="Protect an environment"
+      adding={adding}
+      onAdd={() => setAdding(true)}
+      form={
+      <form className="stack" aria-label="Protect an environment" onSubmit={add}>
+        <ErrorBox error={error} />
+        <div className="grid2">
         <Field label="Environment or pattern">
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="production or review/*" />
         </Field>
@@ -371,16 +397,14 @@ function ProtectedEnvironments({ ctx }: { ctx: Ctx }) {
             ]}
           />
         </Field>
-        <div style={{ alignSelf: "end" }}>
-          <button className="btn primary" disabled={!name.trim()}>
-            Protect
-          </button>
         </div>
+        <AddActions label="Protect" disabled={!name.trim()} onCancel={close} />
       </form>
-      <ErrorBox error={error} />
+      }
+    >
       <Q q={q}>
         {(list) => (
-          <div className="list" style={{ marginTop: 10 }}>
+          <div className="list">
             {list.length === 0 && <div className="item muted">No protected environments.</div>}
             {list.map((pe) => (
               <div className="item" key={pe.id}>
@@ -394,7 +418,7 @@ function ProtectedEnvironments({ ctx }: { ctx: Ctx }) {
           </div>
         )}
       </Q>
-    </Section>
+    </ListSection>
   );
 }
 

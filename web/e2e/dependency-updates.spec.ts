@@ -21,6 +21,7 @@ test("dependency updates: turn on, run now, turn off", async ({ page }) => {
 
     // a private registry: the password is never shown again
     await page.goto(`${web}/-/settings/automation`);
+    await section.getByRole("button", { name: "Add a registry" }).click();
     await section.getByLabel("Host").fill("npm.example.com");
     await section.getByLabel("Type").fill("npm");
     await section.getByLabel("Password or token").fill("e2e-npm-token");

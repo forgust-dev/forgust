@@ -457,6 +457,7 @@ test("protect tags in settings; protected tags are marked", async ({ page }) => 
   const tag = pattern.replace("*", "1");
   try {
     await page.goto(`${P}/-/settings/repository`);
+    await page.getByRole("button", { name: "Protect a tag" }).click();
     await page.getByLabel(/^Tag or pattern/).fill(pattern);
     await page.getByRole("button", { name: "Protect tags" }).click();
     await expect(page.locator('[aria-label="Protected tags"]')).toContainText(pattern);

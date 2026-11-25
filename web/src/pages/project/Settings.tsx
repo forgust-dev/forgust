@@ -15,7 +15,7 @@ import { StatusBadge } from "./ci/Status";
 import { useConfirm } from "../../shell/dialog";
 import { settingsPage, type SettingsSlug } from "./settingsPages";
 import { useTopOnSwitch } from "../../shell/scroll";
-import { SaveRow, useSaved } from "../../components/settings";
+import { AddActions, ListSection, SaveRow, useSaved } from "../../components/settings";
 import { saveCiSettings, useCiSettings } from "./ciSettings";
 const CiSettings = lazy(() => import("./ci/Settings").then((m) => ({ default: m.CiSettings })));
 
@@ -75,31 +75,17 @@ function RepositorySettings({ ctx }: { ctx: Ctx }) {
   return (
     <div className="stack settings-page">
       <ListHead title="Repository settings" sub="Protected branches and tags, push rules, locked files, and keys and tokens to clone the repository." />
-      <Section title="Protected branches" description="Who can push and force-push to matching branches.">
-        <ProtectedBranches ctx={ctx} />
-      </Section>
-      <Section title="Protected tags" description="Who can create matching tags. Nobody can move or delete them by pushing; Maintainers can delete them here.">
-        <ProtectedTags ctx={ctx} />
-      </Section>
+      <ProtectedBranches ctx={ctx} />
+      <ProtectedTags ctx={ctx} />
       <Section title="Push rules" description="Checks every push (and every commit made in the browser) must pass.">
         <PushRules ctx={ctx} />
       </Section>
       <Section title="Locked files" description="Files locked with git lfs lock: on the default branch, only their owner can change them.">
         <LockedFiles ctx={ctx} />
       </Section>
-      <Section title="Deploy keys" description="SSH keys that reach this repository only, read-only unless allowed to write.">
-        <DeployKeys ctx={ctx} />
-      </Section>
-      <Section title="Deploy tokens" description="Credentials to clone the repository without a user account.">
-        <DeployTokens base={`/projects/${p.id}`} />
-      </Section>
-      <Section
-        id="mirroring"
-        title="Mirroring"
-        description="Keep this repository in step with another one, on any forge: pull its branches and tags from there (this repository is then read-only), or push them there after every change. Only the repository is mirrored: not issues, merge requests or LFS files."
-      >
-        <Mirrors ctx={ctx} />
-      </Section>
+      <DeployKeys ctx={ctx} />
+      <DeployTokens base={`/projects/${p.id}`} title="Deploy tokens" description="Credentials to clone the repository without a user account." />
+      <Mirrors ctx={ctx} />
     </div>
   );
 }
@@ -112,9 +98,7 @@ function MergeRequestSettings({ ctx }: { ctx: Ctx }) {
       <Section id="merge-checks" title="Merge checks" description="What a merge request needs, besides approvals, before it can be merged.">
         <MergeChecks ctx={ctx} />
       </Section>
-      <Section id="approvals" title="Merge request approvals" description="How many approvals a merge request needs, and from whom, before it can be merged.">
-        <ApprovalRules projectId={p.id} />
-      </Section>
+      <ApprovalRules projectId={p.id} />
     </div>
   );
 }
@@ -321,12 +305,8 @@ function IntegrationSettings({ ctx }: { ctx: Ctx }) {
   return (
     <div className="stack settings-page">
       <ListHead title="Integration settings" sub="Webhooks and access tokens for scripts and other services." />
-      <Section title="Webhooks" description="Call a URL when something happens in this project.">
-        <Webhooks base={`/projects/${p.id}`} />
-      </Section>
-      <Section title="Access tokens" description="Tokens for scripts and integrations, acting as a bot member of this project.">
-        <AccessTokens base={`/projects/${p.id}`} />
-      </Section>
+      <Webhooks base={`/projects/${p.id}`} title="Webhooks" description="Call a URL when something happens in this project." />
+      <AccessTokens base={`/projects/${p.id}`} title="Access tokens" description="Tokens for scripts and integrations, acting as a bot member of this project." />
     </div>
   );
 }
@@ -519,34 +499,49 @@ function ProtectedBranches({ ctx }: { ctx: Ctx }) {
   const qc = useQueryClient();
   const key = ["protected", ctx.p.id];
   const list = useQuery({ queryKey: key, queryFn: () => api.get<S["ProtectedBranchDto"][]>(`/projects/${ctx.p.id}/protected_branches`) });
-  const [form, setForm] = useState({
+  const blank = {
     name: "",
     push_access_level: "maintainer",
     merge_access_level: "maintainer",
     allow_force_push: false,
     allow_deploy_keys: false,
     code_owner_approval_required: false,
-  });
+  };
+  const [form, setForm] = useState(blank);
+  const [adding, setAdding] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const close = () => {
+    setAdding(false);
+    setForm(blank);
+    setError(null);
+  };
   const add = useMutation({
     mutationFn: () => api.post(`/projects/${ctx.p.id}/protected_branches`, form),
     onSuccess: () => {
-      setForm({ ...form, name: "" });
+      close();
       qc.invalidateQueries({ queryKey: key });
     },
     onError: setError,
   });
   const del = useMutation({ mutationFn: (id: number) => api.del(`/projects/${ctx.p.id}/protected_branches/${id}`), onSuccess: () => qc.invalidateQueries({ queryKey: key }) });
   return (
-    <div className="stack">
-      <ErrorBox error={error} />
+    <ListSection
+      id="protected-branches"
+      title="Protected branches"
+      description="Who can push and force-push to matching branches."
+      add="Protect a branch"
+      adding={adding}
+      onAdd={() => setAdding(true)}
+      form={
       <form
         className="stack"
+        aria-label="Protect a branch"
         onSubmit={(e) => {
           e.preventDefault();
           add.mutate();
         }}
       >
+        <ErrorBox error={error} />
         <div className="grid2">
           <Field label="Branch or pattern" hint="e.g. main or release/*">
             <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
@@ -572,12 +567,11 @@ function ProtectedBranches({ ctx }: { ctx: Ctx }) {
             />
             Require approval from code owners
           </label>
-          <div className="spacer" />
-          <button className="btn primary" disabled={!form.name}>
-            Protect
-          </button>
         </div>
+        <AddActions label="Protect" disabled={!form.name} busy={add.isPending} onCancel={close} />
       </form>
+      }
+    >
       <Q q={list}>
         {(rules) => (
           <div className="list">
@@ -597,7 +591,7 @@ function ProtectedBranches({ ctx }: { ctx: Ctx }) {
           </div>
         )}
       </Q>
-    </div>
+    </ListSection>
   );
 }
 
@@ -966,27 +960,42 @@ function ProtectedTags({ ctx }: { ctx: Ctx }) {
   const qc = useQueryClient();
   const key = ["protected-tags", ctx.p.id];
   const list = useQuery({ queryKey: key, queryFn: () => api.get<S["ProtectedTagDto"][]>(`/projects/${ctx.p.id}/protected_tags`) });
-  const [form, setForm] = useState({ name: "", create_access_level: "maintainer" });
+  const blank = { name: "", create_access_level: "maintainer" };
+  const [form, setForm] = useState(blank);
+  const [adding, setAdding] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const close = () => {
+    setAdding(false);
+    setForm(blank);
+    setError(null);
+  };
   const add = useMutation({
     mutationFn: () => api.post(`/projects/${ctx.p.id}/protected_tags`, form),
     onSuccess: () => {
-      setForm({ ...form, name: "" });
+      close();
       qc.invalidateQueries({ queryKey: key });
     },
     onError: setError,
   });
   const del = useMutation({ mutationFn: (id: number) => api.del(`/projects/${ctx.p.id}/protected_tags/${id}`), onSuccess: () => qc.invalidateQueries({ queryKey: key }) });
   return (
-    <div className="stack">
-      <ErrorBox error={error} />
+    <ListSection
+      id="protected-tags"
+      title="Protected tags"
+      description="Who can create matching tags. Nobody can move or delete them by pushing; Maintainers can delete them here."
+      add="Protect a tag"
+      adding={adding}
+      onAdd={() => setAdding(true)}
+      form={
       <form
         className="stack"
+        aria-label="Protect a tag"
         onSubmit={(e) => {
           e.preventDefault();
           add.mutate();
         }}
       >
+        <ErrorBox error={error} />
         <div className="grid2">
           <Field label="Tag or pattern" hint="e.g. v1.0 or v*">
             <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
@@ -995,13 +1004,10 @@ function ProtectedTags({ ctx }: { ctx: Ctx }) {
             <Select value={form.create_access_level} onChange={(v) => setForm({ ...form, create_access_level: v })} options={PROTECT_LEVELS} />
           </Field>
         </div>
-        <div className="row">
-          <div className="spacer" />
-          <button className="btn primary" disabled={!form.name}>
-            Protect tags
-          </button>
-        </div>
+        <AddActions label="Protect tags" disabled={!form.name} busy={add.isPending} onCancel={close} />
       </form>
+      }
+    >
       <Q q={list}>
         {(rules) => (
           <div className="list" aria-label="Protected tags">
@@ -1018,7 +1024,7 @@ function ProtectedTags({ ctx }: { ctx: Ctx }) {
           </div>
         )}
       </Q>
-    </div>
+    </ListSection>
   );
 }
 
@@ -1026,43 +1032,56 @@ function DeployKeys({ ctx }: { ctx: Ctx }) {
   const qc = useQueryClient();
   const key = ["deploy-keys", ctx.p.id];
   const list = useQuery({ queryKey: key, queryFn: () => api.get<S["DeployKey"][]>(`/projects/${ctx.p.id}/deploy_keys`) });
-  const [form, setForm] = useState({ title: "", key: "", can_push: false });
+  const blank = { title: "", key: "", can_push: false };
+  const [form, setForm] = useState(blank);
+  const [adding, setAdding] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const close = () => {
+    setAdding(false);
+    setForm(blank);
+    setError(null);
+  };
   const add = useMutation({
     mutationFn: () => api.post(`/projects/${ctx.p.id}/deploy_keys`, form),
     onSuccess: () => {
-      setForm({ title: "", key: "", can_push: false });
+      close();
       qc.invalidateQueries({ queryKey: key });
     },
     onError: setError,
   });
   const del = useMutation({ mutationFn: (id: number) => api.del(`/projects/${ctx.p.id}/deploy_keys/${id}`), onSuccess: () => qc.invalidateQueries({ queryKey: key }) });
   return (
-    <div className="stack">
-      <ErrorBox error={error} />
+    <ListSection
+      id="deploy-keys"
+      title="Deploy keys"
+      description="SSH keys that reach this repository only, read-only unless allowed to write."
+      add="Add a deploy key"
+      adding={adding}
+      onAdd={() => setAdding(true)}
+      form={
       <form
         className="stack"
+        aria-label="New deploy key"
         onSubmit={(e) => {
           e.preventDefault();
           add.mutate();
         }}
       >
+        <ErrorBox error={error} />
         <Field label="Title">
           <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
         </Field>
         <Field label="Public key">
           <textarea placeholder="ssh-ed25519 AAAA…" value={form.key} onChange={(e) => setForm({ ...form, key: e.target.value })} />
         </Field>
-        <div className="row">
-          <label className="check grow">
-            <input type="checkbox" checked={form.can_push} onChange={(e) => setForm({ ...form, can_push: e.target.checked })} />
-            Grant write access
-          </label>
-          <button className="btn primary" disabled={!form.key}>
-            Add key
-          </button>
-        </div>
+        <label className="check">
+          <input type="checkbox" checked={form.can_push} onChange={(e) => setForm({ ...form, can_push: e.target.checked })} />
+          Grant write access
+        </label>
+        <AddActions label="Add key" disabled={!form.key} busy={add.isPending} onCancel={close} />
       </form>
+      }
+    >
       <Q q={list}>
         {(keys) =>
           keys.length === 0 ? (
@@ -1085,7 +1104,7 @@ function DeployKeys({ ctx }: { ctx: Ctx }) {
           )
         }
       </Q>
-    </div>
+    </ListSection>
   );
 }
 
@@ -1112,7 +1131,13 @@ function Mirrors({ ctx }: { ctx: Ctx }) {
     refetchInterval: (q) => (Date.now() < pollUntil || q.state.data?.some((m) => m.enabled && !m.last_success_at && !m.last_error) ? 2000 : false),
   });
   const [form, setForm] = useState<MirrorForm>(NEW_MIRROR);
+  const [adding, setAdding] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const close = () => {
+    setAdding(false);
+    setForm(NEW_MIRROR);
+    setError(null);
+  };
   const done = (list: S["MirrorDto"][]) => {
     setPollUntil(Date.now() + 30_000);
     qc.setQueryData(key, list);
@@ -1121,8 +1146,7 @@ function Mirrors({ ctx }: { ctx: Ctx }) {
   const add = useMutation({
     mutationFn: () => api.post<S["MirrorDto"][]>(base, { ...form, interval_minutes: Number(form.interval_minutes) }),
     onSuccess: (l) => {
-      setForm(NEW_MIRROR);
-      setError(null);
+      close();
       done(l);
     },
     onError: setError,
@@ -1145,15 +1169,23 @@ function Mirrors({ ctx }: { ctx: Ctx }) {
     if (ok) add.mutate();
   };
   return (
-    <div className="stack">
-      <ErrorBox error={error} />
+    <ListSection
+      id="mirroring"
+      title="Mirroring"
+      description="Keep this repository in step with another one, on any forge: pull its branches and tags from there (this repository is then read-only), or push them there after every change. Only the repository is mirrored: not issues, merge requests or LFS files."
+      add="Add a mirror"
+      adding={adding}
+      onAdd={() => setAdding(true)}
+      form={
       <form
         className="stack"
+        aria-label="New mirror"
         onSubmit={(e) => {
           e.preventDefault();
           submit();
         }}
       >
+        <ErrorBox error={error} />
         <Segmented
           label="Direction"
           value={form.direction}
@@ -1188,12 +1220,11 @@ function Mirrors({ ctx }: { ctx: Ctx }) {
             Protected branches only <span className="faint small">· and nothing deleted there</span>
           </label>
         )}
-        <div className="form-actions">
-          <button className="btn primary" aria-busy={add.isPending} disabled={!form.url.trim() || add.isPending}>
-            Add mirror
-          </button>
-        </div>
+        <AddActions label="Add mirror" disabled={!form.url.trim()} busy={add.isPending} onCancel={close} />
       </form>
+      }
+    >
+      {!adding && <ErrorBox error={error} />}
       <Q q={list}>
         {(mirrors) =>
           mirrors.length === 0 ? (
@@ -1253,6 +1284,6 @@ function Mirrors({ ctx }: { ctx: Ctx }) {
           )
         }
       </Q>
-    </div>
+    </ListSection>
   );
 }

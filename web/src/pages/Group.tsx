@@ -307,15 +307,9 @@ function GroupSettings({ group }: { group: S["GroupDetail"] }) {
       >
         <GroupSecurityScanning groupId={group.id} />
       </Section>
-      <Section title="Webhooks" description="Call a URL when something happens in any project of the group.">
-        <Webhooks base={`/groups/${group.id}`} />
-      </Section>
-      <Section title="Access tokens" description="Tokens for scripts and integrations, acting as a bot member of this group.">
-        <AccessTokens base={`/groups/${group.id}`} />
-      </Section>
-      <Section title="Deploy tokens" description="Credentials to clone the group's repositories without a user account.">
-        <DeployTokens base={`/groups/${group.id}`} />
-      </Section>
+      <Webhooks base={`/groups/${group.id}`} title="Webhooks" description="Call a URL when something happens in any project of the group." />
+      <AccessTokens base={`/groups/${group.id}`} title="Access tokens" description="Tokens for scripts and integrations, acting as a bot member of this group." />
+      <DeployTokens base={`/groups/${group.id}`} title="Deploy tokens" description="Credentials to clone the group's repositories without a user account." />
       <Section title="Advanced" description="Change the path, move the group, or delete it." danger>
         <div className="stack">
           <form
