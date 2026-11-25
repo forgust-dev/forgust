@@ -1,10 +1,12 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff, KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api, timeAgo, type S } from "../../../api/client";
 import { Section, Empty, ErrorBox, Field, Q, ListHead } from "../../../components/ui";
 import { RunnersPanel } from "./Runners";
+import { SaveRow, SettingSwitch, useSaved } from "../../../components/settings";
+import { saveCiSettings, useCiSettings } from "../ciSettings";
 import { Select } from "../../../components/controls";
 import { useToast } from "../../../shell/toast";
 import { useConfirm } from "../../../shell/dialog";
@@ -166,78 +168,74 @@ export function VariablesPanel({ base }: { base: string }) {
 
 // ---------------------------------------------------------------- runners
 
-function General({ ctx }: { ctx: Ctx }) {
+/** Where the configuration lives, how long a job may run, how deep it clones, older pipelines. */
+function Pipelines({ ctx }: { ctx: Ctx }) {
+  const q = useCiSettings(ctx.p.id);
+  return (
+    <Section id="pipelines" title="Pipelines" description="Where the pipeline configuration lives, how long a job may run, how deep it clones, and what happens to older pipelines.">
+      <Q q={q}>{(s) => <PipelinesForm ctx={ctx} initial={s} />}</Q>
+    </Section>
+  );
+}
+
+function PipelinesForm({ ctx, initial }: { ctx: Ctx; initial: S["ProjectCiSettings"] }) {
   const qc = useQueryClient();
-  const toast = useToast();
-  const q = useQuery({ queryKey: ["ci-settings", ctx.p.id], queryFn: () => api.get<S["ProjectCiSettings"]>(`/projects/${ctx.p.id}/ci/settings`) });
-  const [s, setS] = useState<S["ProjectCiSettings"] | null>(null);
-  useEffect(() => {
-    if (q.data) setS(q.data);
-  }, [q.data]);
+  const form = useSaved({
+    ci_config_path: initial.ci_config_path,
+    default_timeout_secs: initial.default_timeout_secs,
+    default_git_depth: initial.default_git_depth,
+    auto_cancel_redundant: initial.auto_cancel_redundant,
+  });
+  const s = form.value;
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
-  if (!s) return <Q q={q}>{() => null}</Q>;
   const save = async (e: FormEvent) => {
     e.preventDefault();
+    setBusy(true);
     setError(null);
     try {
-      await api.put(`/projects/${ctx.p.id}/ci/settings`, s);
-      toast.ok("CI/CD settings saved");
-      qc.invalidateQueries({ queryKey: ["ci-settings", ctx.p.id] });
+      await saveCiSettings(qc, ctx.p.id, s);
+      form.done();
     } catch (err) {
       setError(err);
+    } finally {
+      setBusy(false);
     }
   };
   return (
-    <Section title="General pipelines" description="Where the pipeline configuration lives, job timeouts and clone depth, and when merge requests may merge.">
-      <form className="stack" onSubmit={save}>
-        <ErrorBox error={error} />
-        <div className="grid2">
-          <Field label="CI/CD configuration file">
-            <input value={s.ci_config_path} onChange={(e) => setS({ ...s, ci_config_path: e.target.value })} />
-          </Field>
-          <Field label="Job timeout (minutes)">
-            <input type="number" min={10} value={Math.round(s.default_timeout_secs / 60)} onChange={(e) => setS({ ...s, default_timeout_secs: Number(e.target.value) * 60 })} />
-          </Field>
-          <Field label="Git shallow clone depth" hint="0 fetches everything">
-            <input type="number" min={0} max={1000} value={s.default_git_depth} onChange={(e) => setS({ ...s, default_git_depth: Number(e.target.value) })} />
-          </Field>
-        </div>
-        <label className="check">
-          <input type="checkbox" checked={s.only_merge_if_pipeline_succeeds} onChange={(e) => setS({ ...s, only_merge_if_pipeline_succeeds: e.target.checked, merge_trains_enabled: e.target.checked && s.merge_trains_enabled })} /> Merge requests can
-          only be merged when the pipeline succeeds
-        </label>
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={s.merge_trains_enabled}
-            disabled={!s.only_merge_if_pipeline_succeeds}
-            onChange={(e) => setS({ ...s, merge_trains_enabled: e.target.checked })}
-          />{" "}
-          Merge through merge trains: each merge request is tested on top of the ones queued ahead of it, then they merge in order
-        </label>
-        <label className="check">
-          <input type="checkbox" checked={s.block_new_security_findings} onChange={(e) => setS({ ...s, block_new_security_findings: e.target.checked })} />
-          <span>Merge requests whose pipeline finds new critical or high security findings can only be merged once those are fixed or dismissed</span>
-        </label>
-        <label className="check">
-          <input type="checkbox" checked={s.auto_cancel_redundant} onChange={(e) => setS({ ...s, auto_cancel_redundant: e.target.checked })} />
-          <span>
-            Cancel older pipelines of a branch when a pipeline for a newer commit starts (jobs marked <code>interruptible</code>, and jobs not started yet)
-          </span>
-        </label>
-        <label className="check">
-          <input type="checkbox" checked={s.instance_runners_enabled} onChange={(e) => setS({ ...s, instance_runners_enabled: e.target.checked })} /> Use the instance's shared
-          runners
-        </label>
-        <label className="check">
-          <input type="checkbox" checked={s.job_token_scope_enabled} onChange={(e) => setS({ ...s, job_token_scope_enabled: e.target.checked })} /> Only projects on the job
-          token allowlist below can use their job tokens to access this project
-        </label>
-        <div>
-          <button className="btn primary">Save</button>
-        </div>
-      </form>
-    </Section>
+    <form className="stack" onSubmit={save}>
+      <ErrorBox error={error} />
+      <div className="grid2">
+        <Field label="CI/CD configuration file">
+          <input value={s.ci_config_path} onChange={(e) => form.set({ ...s, ci_config_path: e.target.value })} />
+        </Field>
+        <Field label="Job timeout (minutes)">
+          <input type="number" min={10} value={Math.round(s.default_timeout_secs / 60)} onChange={(e) => form.set({ ...s, default_timeout_secs: Number(e.target.value) * 60 })} />
+        </Field>
+        <Field label="Git shallow clone depth" hint="0 fetches everything">
+          <input type="number" min={0} max={1000} value={s.default_git_depth} onChange={(e) => form.set({ ...s, default_git_depth: Number(e.target.value) })} />
+        </Field>
+      </div>
+      <label className="check">
+        <input type="checkbox" checked={s.auto_cancel_redundant} onChange={(e) => form.set({ ...s, auto_cancel_redundant: e.target.checked })} />
+        <span>
+          Cancel older pipelines of a branch when a pipeline for a newer commit starts (jobs marked <code>interruptible</code>, and jobs not started yet)
+        </span>
+      </label>
+      <SaveRow dirty={form.dirty} busy={busy} saved={form.saved} />
+    </form>
+  );
+}
+
+/** The instance's runners for this project: one switch, beside the runners it adds. */
+function SharedRunners({ ctx }: { ctx: Ctx }) {
+  const qc = useQueryClient();
+  const q = useCiSettings(ctx.p.id);
+  if (!q.data) return null;
+  return (
+    <SettingSwitch checked={q.data.instance_runners_enabled} onSave={(on) => saveCiSettings(qc, ctx.p.id, { instance_runners_enabled: on })}>
+      Use the instance&apos;s shared runners
+    </SettingSwitch>
   );
 }
 
@@ -264,9 +262,15 @@ function JobTokenAllowlist({ ctx }: { ctx: Ctx }) {
       toast.error(err);
     }
   };
+  const ci = useCiSettings(ctx.p.id);
   return (
-    <Section title="Job token access" description="Other projects whose CI job tokens may reach this one.">
+    <Section id="job-token-access" title="Job token access" description="Other projects whose CI job tokens may reach this one.">
       <div className="stack">
+        {ci.data && (
+          <SettingSwitch checked={ci.data.job_token_scope_enabled} onSave={(on) => saveCiSettings(qc, ctx.p.id, { job_token_scope_enabled: on })}>
+            Only the projects listed here can use their job tokens to access this project
+          </SettingSwitch>
+        )}
         <p className="muted small" style={{ margin: 0 }}>
           Jobs of these projects can read this one with <code>CI_JOB_TOKEN</code> (clone, artifacts), within what their pipeline's user can see.
         </p>
@@ -303,12 +307,14 @@ export function CiSettings({ ctx }: { ctx: Ctx }) {
   return (
     <div className="stack settings-page">
       <ListHead title="CI/CD settings" sub="Pipelines, runners, variables, environments and Pages of this project." />
-      <General ctx={ctx} />
+      <Pipelines ctx={ctx} />
       <RunnersPanel
         list={`/projects/${ctx.p.id}/runners`}
         create={`/projects/${ctx.p.id}/runners`}
         note="Project runners, plus the runners of its groups and the instance's shared runners. A new runner here serves this project only."
-      />
+      >
+        <SharedRunners ctx={ctx} />
+      </RunnersPanel>
       <VariablesPanel base={`/projects/${ctx.p.id}`} />
       <ProtectedEnvironments ctx={ctx} />
       <Section id="pages" title="Pages" description="A static site built by CI: a job named pages (or with pages: true) publishes the public/ folder of its artifacts.">

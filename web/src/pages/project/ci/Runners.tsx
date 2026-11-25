@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Lock, Plus, Server, Trash2 } from "lucide-react";
 import { api, timeAgo, type S } from "../../../api/client";
@@ -24,7 +24,7 @@ function RegisterHelp({ token }: { token: string }) {
 }
 
 /** Runners at one level: `list` and `create` are API paths. */
-export function RunnersPanel({ list, create, title = "Runners", note }: { list: string; create?: string; title?: string; note?: string }) {
+export function RunnersPanel({ list, create, title = "Runners", note, children }: { list: string; create?: string; title?: string; note?: string; children?: ReactNode }) {
   const qc = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
@@ -86,6 +86,7 @@ export function RunnersPanel({ list, create, title = "Runners", note }: { list: 
       }
     >
       <div className="stack">
+        {children}
         {token && <RegisterHelp token={token} />}
         {form && (
           <form className="card card-body stack" onSubmit={submit}>

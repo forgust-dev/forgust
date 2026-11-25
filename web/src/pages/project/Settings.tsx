@@ -16,6 +16,7 @@ import { useConfirm } from "../../shell/dialog";
 import { settingsPage, type SettingsSlug } from "./settingsPages";
 import { useTopOnSwitch } from "../../shell/scroll";
 import { SaveRow, useSaved } from "../../components/settings";
+import { saveCiSettings, useCiSettings } from "./ciSettings";
 const CiSettings = lazy(() => import("./ci/Settings").then((m) => ({ default: m.CiSettings })));
 
 /** Who may push or merge to a protected branch, or create a protected tag. */
@@ -108,10 +109,67 @@ function MergeRequestSettings({ ctx }: { ctx: Ctx }) {
   return (
     <div className="stack settings-page">
       <ListHead title="Merge request settings" sub="What a merge request needs before it can be merged." />
-      <Section title="Merge request approvals" description="How many approvals a merge request needs, and from whom, before it can be merged.">
+      <Section id="merge-checks" title="Merge checks" description="What a merge request needs, besides approvals, before it can be merged.">
+        <MergeChecks ctx={ctx} />
+      </Section>
+      <Section id="approvals" title="Merge request approvals" description="How many approvals a merge request needs, and from whom, before it can be merged.">
         <ApprovalRules projectId={p.id} />
       </Section>
     </div>
+  );
+}
+
+/** The pipeline, merge trains and security findings a merge request must get past (CI settings, saved in part). */
+function MergeChecks({ ctx }: { ctx: Ctx }) {
+  const q = useCiSettings(ctx.p.id);
+  return <Q q={q}>{(s) => <MergeChecksForm ctx={ctx} initial={s} />}</Q>;
+}
+
+function MergeChecksForm({ ctx, initial }: { ctx: Ctx; initial: S["ProjectCiSettings"] }) {
+  const qc = useQueryClient();
+  const form = useSaved({
+    only_merge_if_pipeline_succeeds: initial.only_merge_if_pipeline_succeeds,
+    merge_trains_enabled: initial.merge_trains_enabled,
+    block_new_security_findings: initial.block_new_security_findings,
+  });
+  const s = form.value;
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await saveCiSettings(qc, ctx.p.id, s);
+      form.done();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <form className="stack" onSubmit={save}>
+      <ErrorBox error={error} />
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={s.only_merge_if_pipeline_succeeds}
+          // merge trains test each merge request's pipeline: without this rule, they go too
+          onChange={(e) => form.set({ ...s, only_merge_if_pipeline_succeeds: e.target.checked, merge_trains_enabled: e.target.checked && s.merge_trains_enabled })}
+        />{" "}
+        Merge requests can only be merged when the pipeline succeeds
+      </label>
+      <label className="check">
+        <input type="checkbox" checked={s.merge_trains_enabled} disabled={!s.only_merge_if_pipeline_succeeds} onChange={(e) => form.set({ ...s, merge_trains_enabled: e.target.checked })} />{" "}
+        Merge through merge trains: each merge request is tested on top of the ones queued ahead of it, then they merge in order
+      </label>
+      <label className="check">
+        <input type="checkbox" checked={s.block_new_security_findings} onChange={(e) => form.set({ ...s, block_new_security_findings: e.target.checked })} />
+        <span>Merge requests whose pipeline finds new critical or high security findings can only be merged once those are fixed or dismissed</span>
+      </label>
+      <SaveRow dirty={form.dirty} busy={busy} saved={form.saved} />
+    </form>
   );
 }
 

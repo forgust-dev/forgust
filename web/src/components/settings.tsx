@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Check } from "lucide-react";
 import { useConfirm } from "../shell/dialog";
+import { Switch } from "./controls";
+import { ErrorBox } from "./ui";
 
 /** The forms of this page that have changes not saved yet. */
 const unsaved = new Set<symbol>();
@@ -101,6 +103,48 @@ export function SaveRow({ dirty, busy, saved, label = "Save", children }: { dirt
         </span>
       )}
       {children}
+    </div>
+  );
+}
+
+/**
+ * A setting that is one switch: saved as soon as it is flipped, with "Saved" beside it; back
+ * where it was if the save fails.
+ */
+export function SettingSwitch({ checked, onSave, children, disabled }: { checked: boolean; onSave: (on: boolean) => Promise<unknown>; children: ReactNode; disabled?: boolean }) {
+  const [on, setOn] = useState(checked);
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  useEffect(() => setOn(checked), [checked]);
+  const flip = async (v: boolean) => {
+    setOn(v);
+    setBusy(true);
+    setSaved(false);
+    setError(null);
+    try {
+      await onSave(v);
+      setSaved(true);
+    } catch (e) {
+      setOn(!v);
+      setError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="stack" style={{ gap: 6 }}>
+      <ErrorBox error={error} />
+      <div className="save-row">
+        <Switch checked={on} onChange={flip} disabled={disabled || busy}>
+          {children}
+        </Switch>
+        {saved && (
+          <span className="saved-mark" role="status">
+            <Check size={14} /> Saved
+          </span>
+        )}
+      </div>
     </div>
   );
 }

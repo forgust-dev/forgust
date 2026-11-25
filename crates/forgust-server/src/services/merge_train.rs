@@ -45,7 +45,7 @@ pub async fn add(state: &AppState, principal: &Principal, p: &Project, m: &Merge
     let user = principal.direct_user().ok_or(ApiError::Unauthorized)?.clone();
     let settings = forgust_db::ci::settings(&state.db, p.id).await?;
     if !settings.merge_trains_enabled {
-        return Err(ApiError::conflict("merge trains are off for this project (CI/CD settings)"));
+        return Err(ApiError::conflict("merge trains are off for this project (merge request settings)"));
     }
     let status = mr::merge_status(state, principal, p, m).await?;
     if !status.user_can_merge {
