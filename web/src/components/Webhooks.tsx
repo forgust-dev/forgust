@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, timeAgo, type S } from "../api/client";
+import { api, listAnd, timeAgo, type S } from "../api/client";
 import { ErrorBox, Field, levelName, PasswordInput, Q, StateBadge } from "./ui";
 import { Select } from "./controls";
 import { EmptyRow, ListSection } from "./settings";
@@ -31,8 +31,6 @@ const EVENT_WORDS: Record<string, string> = {
   pipeline: "pipelines",
   build: "jobs",
 };
-/** "pushes, issues and releases" */
-const listed = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 
 /** Webhooks of a project (`/projects/:id`) or group (`/groups/:id`). */
 export function Webhooks({ base, title, description }: { base: string; title: string; description: ReactNode }) {
@@ -126,7 +124,7 @@ export function Webhooks({ base, title, description }: { base: string; title: st
                         {h.url}
                       </code>
                       <div className="small muted">
-                        {h.format === "generic" ? "Called" : `Posts to ${formatName(h.format)}`} on {listed(h.events.map((e) => EVENT_WORDS[e] ?? e))}
+                        {h.format === "generic" ? "Called" : `Posts to ${formatName(h.format)}`} on {listAnd(h.events.map((e) => EVENT_WORDS[e] ?? e))}
                       </div>
                     </div>
                     <div className="row" style={{ flex: "none", gap: 6 }}>
