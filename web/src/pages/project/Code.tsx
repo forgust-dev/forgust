@@ -279,7 +279,7 @@ function TreeView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
   const listRef = useRef<HTMLDivElement>(null);
   const entries = tree.data?.entries ?? [];
   const virtual = entries.length > 300;
-  const v = useWindowVirtualizer({ count: entries.length, estimateSize: () => 34, overscan: 20, scrollMargin: listRef.current?.offsetTop ?? 0 });
+  const v = useWindowVirtualizer({ count: entries.length, estimateSize: () => (matchMedia("(pointer: coarse)").matches ? 36 : 30), overscan: 20, scrollMargin: listRef.current?.offsetTop ?? 0 });
   const navigate = useNavigate();
   const [sel, setSel] = useState(-1);
   useEffect(() => setSel(-1), [res.commit, res.path]);
