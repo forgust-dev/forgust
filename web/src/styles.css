@@ -9307,23 +9307,14 @@ button.test-case-row:hover {
   border-color: var(--warn);
   box-shadow: 0 0 0 1px var(--warn), var(--shadow);
 }
+/* its tone from `.tone-*`, as a state's */
 .smart-mark-tag {
   padding: 0 6px;
   border-radius: 999px;
+  background: var(--tone-soft);
+  color: var(--tone);
   font-size: 10.5px;
   font-weight: 600;
-}
-.smart-mark-tag.added {
-  background: var(--ok-soft);
-  color: var(--ok);
-}
-.smart-mark-tag.removed {
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-.smart-mark-tag.changed {
-  background: var(--warn-soft);
-  color: var(--warn);
 }
 .smart-frame .react-flow__edge.is-added .smart-link {
   stroke: var(--ok);

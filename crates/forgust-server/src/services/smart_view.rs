@@ -203,7 +203,7 @@ async fn start(state: &AppState, project: &Project, mr: Option<&MergeRequest>, g
     if let Some(id) = claimed {
         // the default branch's history goes on from the last commit read of it
         let kept = match mr {
-            None => db::history_head(&state.db, project.id).await?.filter(|(branch, _)| branch == git_ref).map(|(_, head)| head),
+            None => db::history(&state.db, project.id).await?.filter(|h| h.git_ref == git_ref).map(|h| h.head),
             Some(_) => None,
         };
         let reads = if mr.is_none() { Reads::History { since: kept.as_deref() } } else { Reads::Map };

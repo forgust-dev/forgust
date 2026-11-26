@@ -291,14 +291,6 @@ pub async fn ended_pending(e: impl PgExecutor<'_>) -> Result<Vec<(i64, String)>>
     .collect())
 }
 
-/// The history kept of a project's default branch: which branch, and the last commit read.
-pub async fn history_head(e: impl PgExecutor<'_>, project_id: i64) -> Result<Option<(String, String)>> {
-    Ok(sqlx::query!("SELECT git_ref, head FROM smart_view_history WHERE project_id = $1", project_id)
-        .fetch_optional(e)
-        .await?
-        .map(|r| (r.git_ref, r.head)))
-}
-
 /// A commit that changed the map, to keep.
 #[derive(Debug, Clone)]
 pub struct NewChapter {
@@ -398,7 +390,7 @@ pub async fn history(e: impl PgExecutor<'_>, project_id: i64) -> Result<Option<H
 }
 
 /// A commit that changed the map, with the merge request merged as it (a squash) or as its merge:
-/// its title, its description, and how many comments it had (not the system's).
+/// its title, its description, and its id (its comments are counted as everywhere else).
 #[derive(Debug, Clone)]
 pub struct Chapter {
     pub sha: String,
@@ -411,7 +403,7 @@ pub struct Chapter {
     pub mr_iid: Option<i64>,
     pub mr_title: Option<String>,
     pub mr_description: Option<String>,
-    pub mr_comments: Option<i64>,
+    pub mr_id: Option<i64>,
 }
 
 /// The chapters kept of a project's history, oldest first.
@@ -419,11 +411,10 @@ pub async fn chapters(e: impl PgExecutor<'_>, project_id: i64) -> Result<Vec<Cha
     sqlx::query_as!(
         Chapter,
         r#"SELECT c.sha, c.merge_sha, c.author_name, c.author_email, c.at, c.title, c.changes,
-                  mr.iid AS "mr_iid?", mr.title AS "mr_title?", mr.description AS "mr_description?", mr.comments AS "mr_comments?"
+                  mr.iid AS "mr_iid?", mr.title AS "mr_title?", mr.description AS "mr_description?", mr.id AS "mr_id?"
              FROM smart_view_chapters c
              LEFT JOIN LATERAL (
-                  SELECT m.iid, m.title, m.description,
-                         (SELECT count(*) FROM notes n WHERE n.merge_request_id = m.id AND NOT n.system AND NOT n.internal) AS comments
+                  SELECT m.id, m.iid, m.title, m.description
                     FROM merge_requests m
                    WHERE m.project_id = c.project_id AND m.state = 'merged' AND m.merge_commit_sha IN (c.sha, c.merge_sha)
                    -- the merge request of the commit itself first: a squash merged into a release branch

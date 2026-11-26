@@ -60,12 +60,13 @@ import "@xyflow/react/dist/base.css";
 import ELK from "elkjs/lib/elk.bundled.js";
 import type { ElkExtendedEdge, ElkNode } from "elkjs/lib/elk-api";
 import { api, listAnd, qs, refLink, timeAgo, type S } from "../../api/client";
-import { Avatar, Empty, ListHead, Q, UserLink } from "../../components/ui";
+import { Avatar, Empty, ListHead, Q, UserLink, type Tone } from "../../components/ui";
 import { Select } from "../../components/controls";
 import { useProjectEvents } from "../../shell/live";
 import { useSession } from "../../session";
 import type { AssayEdit } from "./assayToml";
 import { LINK_VERB, blockTitle } from "./blocks";
+import { useTags } from "./Code";
 import { StatusIcon, duration, statusLabel } from "./ci/Status";
 import { LOGOS, type Brand, type Logo } from "./logos";
 import { chapterTitle, linkKey, replay, size, stories, storyOf, type Chapter, type Event, type Step, type Told } from "./mapHistory";
@@ -479,19 +480,23 @@ function MapView({ ctx, gitRef, map, lay, found, words }: { ctx: Ctx; gitRef: st
   const chain = params.get("impact") === "1";
   // the blocks only one person knows, to share (`?share=1`)
   const share = params.get("share") === "1";
-  const setParam = useCallback(
-    (key: string, value: string | null) =>
+  // the address's parameters changed in place, in order (null: gone)
+  const patch = useCallback(
+    (changes: Record<string, string | null>) =>
       setParams(
         (now) => {
           const next = new URLSearchParams(now);
-          if (value) next.set(key, value);
-          else next.delete(key);
+          for (const [key, value] of Object.entries(changes)) {
+            if (value) next.set(key, value);
+            else next.delete(key);
+          }
           return next;
         },
         { replace: true },
       ),
     [setParams],
   );
+  const setParam = useCallback((key: string, value: string | null) => patch({ [key]: value }), [patch]);
   const select = useCallback((id: string | null) => setParam("block", id), [setParam]);
   const setChain = useCallback((on: boolean) => setParam("impact", on ? "1" : null), [setParam]);
   useEffect(() => {
@@ -525,20 +530,7 @@ function MapView({ ctx, gitRef, map, lay, found, words }: { ctx: Ctx; gitRef: st
   const at = params.get("history");
   const past = !mr && at && read?.chapters.length ? read : null;
   // another chapter of the history (none: back to now); it plays only when asked again
-  const setAt = useCallback(
-    (commit: string | null) =>
-      setParams(
-        (now) => {
-          const next = new URLSearchParams(now);
-          if (commit) next.set("history", commit);
-          else next.delete("history");
-          next.delete("play");
-          return next;
-        },
-        { replace: true },
-      ),
-    [setParams],
-  );
+  const setAt = useCallback((commit: string | null) => patch({ history: commit, play: null }), [patch]);
   // what this browser has not seen of the history yet, said once
   const visit = useLastVisit(ctx.p.id, mr ? undefined : read);
   const [quiet, setQuiet] = useState(false);
@@ -557,18 +549,9 @@ function MapView({ ctx, gitRef, map, lay, found, words }: { ctx: Ctx; gitRef: st
   // a block chosen in the map of then: as it is now, when it still is
   const pick = useCallback(
     (id: string | null) => {
-      if (!id || !byId.has(id)) return;
-      setParams(
-        (now) => {
-          const next = new URLSearchParams(now);
-          next.delete("history");
-          next.set("block", id);
-          return next;
-        },
-        { replace: true },
-      );
+      if (id && byId.has(id)) patch({ history: null, block: id });
     },
-    [byId, setParams],
+    [byId, patch],
   );
   // what stays bright, the rest stepping back: the chosen block and what is near it (or, asked,
   // all that depends on it); else the blocks found; else those the merge request changes (and,
@@ -733,17 +716,7 @@ function MapView({ ctx, gitRef, map, lay, found, words }: { ctx: Ctx; gitRef: st
                 <button
                   type="button"
                   className="btn small"
-                  onClick={() =>
-                    setParams(
-                      (now) => {
-                        const next = new URLSearchParams(now);
-                        next.set("history", read.chapters[0].commit);
-                        next.set("play", "1");
-                        return next;
-                      },
-                      { replace: true },
-                    )
-                  }
+                  onClick={() => patch({ history: read.chapters[0].commit, play: "1" })}
                 >
                   <Play size={13} aria-hidden /> Watch it grow
                 </button>
@@ -860,6 +833,7 @@ type Mark = "added" | "removed" | "changed";
 type NodeState = "absent" | "present" | Mark;
 const markOf = (s?: NodeState): Mark | undefined => (s === "added" || s === "removed" || s === "changed" ? s : undefined);
 const MARK_LABEL: Record<Mark, string> = { added: "New", removed: "Gone", changed: "Changed" };
+const MARK_TONE: Record<Mark, Tone> = { added: "ok", removed: "danger", changed: "warn" };
 /** A line's id on the canvas. */
 const edgeId = (e: { from: string; to: string; kind: string }) => `${e.from}>${e.to}:${e.kind}`;
 
@@ -1175,7 +1149,7 @@ function BlockCard({ b, status, waits, chosen, dim, onSelect, links, mark }: Car
         <span>{`${kind}${b.role ? ` · ${ROLE[b.role]}` : ""}`}</span>
         {(solo(b) || status || waits || mark) && (
           <span className="smart-flags">
-            {mark && <span className={`smart-mark-tag ${mark}`}>{MARK_LABEL[mark]}</span>}
+            {mark && <span className={`smart-mark-tag tone-${MARK_TONE[mark]}`}>{MARK_LABEL[mark]}</span>}
             {solo(b) && (
               <span className="smart-solo" title={SOLO}>
                 1 person
@@ -1512,9 +1486,17 @@ function Details({ ctx, gitRef, map, lay, b, jobs, pipeline, waits, chain, setCh
 }
 
 /** A day, as a chapter of the history says when it came: `24 Nov 2026`. */
-const longDate = (at: string) => new Date(at).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+// one formatter each, not one a call: a timeline's dots each have their date
+const LONG_DATE = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" });
+const MONTH = new Intl.DateTimeFormat(undefined, { month: "short", year: "numeric" });
+const longDate = (at: string) => LONG_DATE.format(new Date(at));
 /** `Nov 2026`. */
-const month = (at: string) => new Date(at).toLocaleDateString(undefined, { month: "short", year: "numeric" });
+const month = (at: string) => MONTH.format(new Date(at));
+
+/** Someone by name, a link to their profile when they have an account here. */
+function Person({ p }: { p: { name: string; username?: string | null } }) {
+  return p.username ? <UserLink username={p.username}>{p.name}</UserLink> : <>{p.name}</>;
+}
 
 /** Where a chapter of the history comes from: its merge request (`!12 Its title`), else its
  *  commit's title. `short`: the merge request's number, or the commit's start, alone. */
@@ -1595,7 +1577,7 @@ function BlockHistory({
                     {what}
                   </span>
                   <span className="smart-sub">
-                    <ChapterLink ctx={ctx} c={c} /> · {c.author.username ? <UserLink username={c.author.username}>{c.author.name}</UserLink> : c.author.name} ·{" "}
+                    <ChapterLink ctx={ctx} c={c} /> · <Person p={c.author} /> ·{" "}
                     <span title={longDate(c.at)}>{timeAgo(c.at)}</span>
                   </span>
                 </span>
@@ -1816,11 +1798,8 @@ function HistoryView({ ctx, map, history, at, setAt, autoplay, room, measure, pi
     }
     setPlaying(true);
   };
-  const tags = useQuery({
-    queryKey: ["tags", ctx.p.id],
-    queryFn: () => api.get<S["TagDto"][]>(`/projects/${ctx.p.id}/repository/tags`),
-    staleTime: 60_000,
-  });
+  // the releases: the tags every page reads (one query, one cache)
+  const tags = useTags(ctx);
   const releases = useMemo(() => (tags.data ?? []).flatMap((t) => (t.commit ? [{ name: t.name, at: t.commit.committed_at }] : [])), [tags.data]);
   // a block this chapter removed or renamed is named as it was
   const gone = new Map([...c.changes.blocks_removed.map((b): [string, string] => [b.id, chapterTitle(b)]), ...c.changes.blocks_renamed.map((r): [string, string] => [r.from.id, chapterTitle(r.from)])]);
@@ -1856,7 +1835,7 @@ function HistoryView({ ctx, map, history, at, setAt, autoplay, room, measure, pi
         <div className="smart-history-title">
           <span className="meta">{when}</span>
           <ChapterLink ctx={ctx} c={c} />
-          <span className="meta">{c.author.username ? <UserLink username={c.author.username}>{c.author.name}</UserLink> : c.author.name}</span>
+          <span className="meta"><Person p={c.author} /></span>
           {mr && mr.comments > 0 && (
             <Link className="meta" to={`${ctx.web}/-/merge_requests/${mr.iid}`}>
               {plural(mr.comments, "comment")}
@@ -1977,6 +1956,8 @@ function Timeline({ chapters, index, onChange, releases }: { chapters: Chapter[]
     End: () => n - 1,
   };
   const c = chapters[index];
+  // a step other than this one
+  const go = (to: number) => to !== index && onChange(to);
   return (
     <div className="smart-timeline">
       <div className="smart-timeline-names" aria-hidden>
@@ -2000,18 +1981,14 @@ function Timeline({ chapters, index, onChange, releases }: { chapters: Chapter[]
           const move = keys[e.key];
           if (!move) return;
           e.preventDefault();
-          const to = clamp(move(index), 0, n - 1);
-          if (to !== index) onChange(to);
+          go(clamp(move(index), 0, n - 1));
         }}
         onPointerDown={(e) => {
           e.currentTarget.setPointerCapture(e.pointerId);
-          const to = at(e.clientX);
-          if (to !== index) onChange(to);
+          go(at(e.clientX));
         }}
         onPointerMove={(e) => {
-          if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
-          const to = at(e.clientX);
-          if (to !== index) onChange(to);
+          if (e.currentTarget.hasPointerCapture(e.pointerId)) go(at(e.clientX));
         }}
       >
         <span className="smart-timeline-line" />
@@ -2319,7 +2296,7 @@ function ToShare({
                   </button>
                 </span>
                 <span className="smart-sub">
-                  {who && (who.username ? <UserLink username={who.username}>{who.name}</UserLink> : who.name)}
+                  {who && <Person p={who} />}
                   {who && ` · ${plural(who.commits, "commit")}`}
                   {` · ${reach ? `${plural(reach, "block")} depend on it` : "nothing depends on it"}`}
                 </span>

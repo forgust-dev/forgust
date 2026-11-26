@@ -439,16 +439,12 @@ pub async fn mr_blocks(
     let suggested_reviewers = suggest(&state, &p, &mr, &blocks).await?;
     // its own map against the default branch's, once both are there; merged, what the history
     // tells it changed (its own map goes, and the default branch's has its changes already)
-    let changes = if mr.state == "merged" {
-        match kept(&state, &p, None).await? {
-            Some(now) => merged_changes(&state, &p, &mr, &now.map).await?,
-            None => None,
-        }
-    } else {
-        match (kept(&state, &p, Some(mr.id)).await?, kept(&state, &p, None).await?) {
-            (Some(own), Some(base)) if own.map.commit != base.map.commit => Some(map_changes(&base.map, &own.map, &changed)),
-            _ => None,
-        }
+    // (`map` is its own, else the default branch's: the same commit as `base` then)
+    let base = kept(&state, &p, None).await?;
+    let changes = match base {
+        Some(now) if mr.state == "merged" => merged_changes(&state, &p, &mr, &now.map).await?,
+        Some(base) if base.map.commit != map.map.commit => Some(map_changes(&base.map, &map.map, &changed)),
+        _ => None,
     };
     Ok(Json(MrBlocks { commit: map.map.commit.clone(), blocks, unassigned, suggested_reviewers, changes }))
 }
@@ -679,8 +675,12 @@ pub async fn history(State(state): State<AppState>, Viewer(v): Viewer, Path(id):
     let read: Vec<(db::Chapter, forgust_assay::Changes)> = db::chapters(&state.db, p.id)
         .await?
         .into_iter()
-        .filter_map(|c| serde_json::from_value(c.changes.clone()).ok().map(|ch| (c, ch)))
+        .filter_map(|c| forgust_assay::Changes::deserialize(&c.changes).ok().map(|ch| (c, ch)))
         .collect();
+    let mut mr_ids: Vec<i64> = read.iter().filter_map(|(c, _)| c.mr_id).collect();
+    mr_ids.sort_unstable();
+    mr_ids.dedup();
+    let comments: HashMap<i64, i64> = mrdb::user_notes_counts(&state.db, &mr_ids).await?.into_iter().collect();
     let mut emails: Vec<String> = read.iter().map(|(c, _)| c.author_email.to_lowercase()).collect();
     emails.sort();
     emails.dedup();
@@ -693,7 +693,7 @@ pub async fn history(State(state): State<AppState>, Viewer(v): Viewer, Path(id):
                 iid,
                 title,
                 description: c.mr_description.as_deref().and_then(excerpt),
-                comments: c.mr_comments.unwrap_or(0),
+                comments: c.mr_id.and_then(|id| comments.get(&id).copied()).unwrap_or(0),
             }),
             commit: c.sha,
             merge_commit: c.merge_sha,
@@ -729,18 +729,25 @@ fn fold_reverts<T>(chapters: Vec<(T, forgust_assay::Changes)>, title: impl Fn(&T
 /// heading nor a template's comment, on one line, cut on a word past 240 characters.
 fn excerpt(text: &str) -> Option<String> {
     const MAX: usize = 240;
-    // a description written on GitHub (imported) ends its lines with `\r\n`
-    let text = text.replace("\r\n", "\n");
     // a template's comments say nothing, even those over several paragraphs
     let mut plain = String::with_capacity(text.len());
-    let mut rest = text.as_str();
+    let mut rest = text;
     while let Some(i) = rest.find("<!--") {
         plain.push_str(&rest[..i]);
         rest = rest[i..].find("-->").map_or("", |j| &rest[i + j + 3..]);
     }
     plain.push_str(rest);
-    let first = plain.split("\n\n").map(str::trim).find(|p| !p.is_empty() && !p.starts_with('#'))?;
-    let line = first.split_whitespace().collect::<Vec<_>>().join(" ");
+    // a paragraph ends at a blank line, even one of spaces, or of a `\r` (GitHub's, imported)
+    let mut lines = plain.lines().map(str::trim);
+    let first = loop {
+        let paragraph: Vec<&str> = lines.by_ref().skip_while(|l| l.is_empty()).take_while(|l| !l.is_empty()).collect();
+        match paragraph.first() {
+            None => return None,
+            Some(l) if l.starts_with('#') => continue,
+            Some(_) => break paragraph,
+        }
+    };
+    let line = first.iter().flat_map(|l| l.split_whitespace()).collect::<Vec<_>>().join(" ");
     if line.chars().count() <= MAX {
         return Some(line);
     }
@@ -1171,6 +1178,7 @@ mod tests {
         assert_eq!(excerpt("<!-- the template -->\n\nA fix."), Some("A fix.".into()));
         assert_eq!(excerpt("## Summary\r\n\r\nReads the stock.\r\n\r\nMore."), Some("Reads the stock.".into()), "GitHub's line ends");
         assert_eq!(excerpt("<!-- Say why.\n\nAnd how. -->\n\nA fix."), Some("A fix.".into()), "a comment over paragraphs");
+        assert_eq!(excerpt("## Why\n \nReads the stock."), Some("Reads the stock.".into()), "a blank line of spaces");
         let long = excerpt(&"word ".repeat(80)).unwrap();
         assert!(long.ends_with("word…") && long.chars().count() <= 241, "{long}");
     }
