@@ -840,10 +840,11 @@ function SecurityScanning({ ctx }: { ctx: Ctx }) {
 }
 
 function SecurityScanningForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S["ScanningStatus"]; onSaved: () => void }) {
-  const form = useSaved({ enabled: initial.enabled, scanners: initial.scanners, interval_hours: initial.interval_hours, sbom_on_tags: initial.sbom_on_tags });
+  // sorted, here and as they are ticked, so ticking one off and on again changes nothing
+  const form = useSaved({ enabled: initial.enabled, scanners: [...initial.scanners].sort(), interval_hours: initial.interval_hours, sbom_on_tags: initial.sbom_on_tags });
   const { enabled, scanners, interval_hours: hours, sbom_on_tags: sbom } = form.value;
   const setEnabled = (v: boolean) => form.set({ ...form.value, enabled: v });
-  const setScanners = (v: string[]) => form.set({ ...form.value, scanners: v });
+  const setScanners = (v: string[]) => form.set({ ...form.value, scanners: [...v].sort() });
   const setHours = (v: number) => form.set({ ...form.value, interval_hours: v });
   const setSbom = (v: boolean) => form.set({ ...form.value, sbom_on_tags: v });
   const [error, setError] = useState<unknown>(null);
