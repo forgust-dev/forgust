@@ -1908,10 +1908,12 @@ pub async fn mark_started(e: impl PgExecutor<'_>, build_id: i64) -> Result<()> {
 }
 
 /// The latest pipeline of each of these branches: (branch, iid, status). Checked at run time.
+/// One look into `ci_pipelines_ref_idx` per branch, not every pipeline of each.
 pub async fn latest_per_branch(e: impl PgExecutor<'_>, project_id: i64, branches: &[String]) -> Result<Vec<(String, i64, String)>> {
     let rows = sqlx::query(
-        "SELECT DISTINCT ON (ref) ref, iid, status FROM ci_pipelines
-          WHERE project_id = $1 AND NOT tag AND ref = ANY($2) ORDER BY ref, id DESC",
+        "SELECT b.ref, p.iid, p.status FROM unnest($2::text[]) AS b(ref)
+          CROSS JOIN LATERAL (SELECT iid, status FROM ci_pipelines
+            WHERE project_id = $1 AND ref = b.ref AND NOT tag ORDER BY id DESC LIMIT 1) p",
     )
     .bind(project_id)
     .bind(branches)

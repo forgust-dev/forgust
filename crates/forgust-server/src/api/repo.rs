@@ -711,7 +711,7 @@ pub async fn branches(
     let refs = state.storage.refs(p.id, "refs/heads/").await?;
     let (page, total) = page_refs(refs, "refs/heads/", &q);
     let rules = forgust_db::protected_branches::list(&state.db, p.id).await?;
-    let out: Vec<BranchDto> = page
+    let mut out: Vec<BranchDto> = page
         .into_iter()
         .map(|r| {
             let name = r.name.trim_start_matches("refs/heads/").to_string();
@@ -728,17 +728,20 @@ pub async fn branches(
             }
         })
         .collect();
-    let mut out = out;
     if q.details {
         let names: Vec<String> = out.iter().map(|b| b.name.clone()).collect();
         // the distance of the branches on this page only (100 at most), the default one aside
         let others: Vec<String> = out.iter().filter(|b| !b.default).map(|b| b.name.clone()).collect();
-        let counts = match &p.default_branch {
-            Some(base) => state.storage.ahead_behind(p.id, base, &others).await?,
-            None => vec![],
+        // the git walk and the two queries at once
+        let counts = async {
+            Ok::<_, ApiError>(match &p.default_branch {
+                Some(base) => state.storage.ahead_behind(p.id, base, &others).await?,
+                None => vec![],
+            })
         };
-        let pipelines = forgust_db::ci::latest_per_branch(&state.db, p.id, &names).await?;
-        let mrs = forgust_db::merge_requests::open_per_source_branch(&state.db, p.id, &names).await?;
+        let pipelines = async { Ok::<_, ApiError>(forgust_db::ci::latest_per_branch(&state.db, p.id, &names).await?) };
+        let mrs = async { Ok::<_, ApiError>(forgust_db::merge_requests::open_per_source_branch(&state.db, p.id, &names).await?) };
+        let (counts, pipelines, mrs) = tokio::try_join!(counts, pipelines, mrs)?;
         for b in out.iter_mut() {
             if !b.default
                 && let Some((_, ahead, behind)) = counts.iter().find(|(n, _, _)| *n == b.name)
