@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, type ReactElement } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { CircleDot, GitCommitHorizontal, GitMerge, MessageSquare, ThumbsUp } from "lucide-react";
@@ -15,6 +15,30 @@ function iso(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+/** The days' words' column, as in styles.css (`.contrib-grid`). */
+const LABELS = 30;
+
+/**
+ * The squares and the gap between them in whole pixels of the screen (`dpr` of them to a CSS
+ * pixel), so that they all paint alike at 125 or 150 % too: a square of 11.48 px fell
+ * differently on each row and column, some came out a pixel taller or further apart. 53 weeks
+ * share `width`, a square from 8 to 16 px; what is left goes on both sides (`inset`).
+ */
+function fitSquares(width: number, dpr: number) {
+  const gap = Math.max(1, Math.round(3 * dpr));
+  const room = Math.floor(((width - LABELS) * dpr - WEEKS * gap) / WEEKS);
+  const cell = Math.max(Math.ceil(8 * dpr), Math.min(Math.floor(16 * dpr), room));
+  const left = width - LABELS - (WEEKS * (cell + gap)) / dpr;
+  return { cell: cell / dpr, gap: gap / dpr, inset: Math.max(0, Math.floor((left / 2) * dpr) / dpr) };
+}
+
+/** The width inside a box, without its padding and border, to the fraction of a pixel. */
+function contentWidth(el: HTMLElement) {
+  const s = getComputedStyle(el);
+  const px = (v: string) => parseFloat(v) || 0;
+  return el.getBoundingClientRect().width - px(s.paddingLeft) - px(s.paddingRight) - px(s.borderLeftWidth) - px(s.borderRightWidth);
+}
+
 /** 0-4 by quartiles of the busiest day, like GitHub. */
 function level(n: number, max: number) {
   if (n <= 0) return 0;
@@ -27,7 +51,27 @@ function level(n: number, max: number) {
  * the last column; the newest weeks are scrolled into view on narrow screens.
  */
 export function ContributionCalendar({ days }: { days: S["Day"][] }) {
+  const box = useRef<HTMLElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
+  // the squares' size, measured before the calendar is first painted, then again when the card's
+  // width or the screen's density changes (a zoom, or a sidebar folded)
+  const [size, setSize] = useState<ReturnType<typeof fitSquares> | null>(null);
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const fit = () => {
+      const next = fitSquares(contentWidth(el), window.devicePixelRatio || 1);
+      setSize((was) => (was && was.cell === next.cell && was.gap === next.gap && was.inset === next.inset ? was : next));
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    window.addEventListener("resize", fit);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", fit);
+    };
+  }, []);
   const { weeks, months, max } = useMemo(() => {
     const counts = new Map(days.map((d) => [d.date, d.count]));
     const today = new Date();
@@ -53,10 +97,11 @@ export function ContributionCalendar({ days }: { days: S["Day"][] }) {
   useEffect(() => {
     const el = scroller.current;
     if (el) el.scrollLeft = el.scrollWidth;
-  }, [weeks]);
+  }, [weeks, size?.cell]);
   const total = days.reduce((n, d) => n + d.count, 0);
+  const sizes = size ? ({ "--cell": `${size.cell}px`, "--gap": `${size.gap}px`, "--inset": `${size.inset}px` } as CSSProperties) : undefined;
   return (
-    <figure className="contrib">
+    <figure className="contrib" ref={box} style={sizes}>
       <figcaption className="contrib-caption">
         <strong>{total.toLocaleString()}</strong> contribution{total === 1 ? "" : "s"} in the last year
       </figcaption>
@@ -107,7 +152,7 @@ export function ContributionCalendar({ days }: { days: S["Day"][] }) {
 const ACTIVITY: Record<string, { icon: ReactElement; verb: string; tone?: string }> = {
   pushed: { icon: <GitCommitHorizontal size={12} />, verb: "pushed to" },
   opened_merge_request: { icon: <GitMerge size={12} />, verb: "opened" },
-  merged_merge_request: { icon: <GitMerge size={12} />, verb: "merged", tone: "accent" },
+  merged_merge_request: { icon: <GitMerge size={12} />, verb: "merged", tone: "merged" },
   opened_issue: { icon: <CircleDot size={12} />, verb: "opened" },
   closed_issue: { icon: <CircleDot size={12} />, verb: "closed" },
   commented_merge_request: { icon: <MessageSquare size={12} />, verb: "commented on" },

@@ -1,8 +1,11 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, timeAgo, type S } from "../api/client";
-import { Badge, ErrorBox, Field, levelName, Q } from "./ui";
+import { api, listAnd, timeAgo, type S } from "../api/client";
+import { ErrorBox, Field, levelName, PasswordInput, Q, StateBadge } from "./ui";
 import { Select } from "./controls";
+import { EmptyRow, ListSection } from "./settings";
+import { FormActions, useJustAdded } from "./FormDialog";
+import { CircleCheck, CircleX, Clock } from "lucide-react";
 
 const EVENTS = ["push", "merge_request", "issue", "confidential_issue", "note", "confidential_note", "release", "pipeline", "build"];
 
@@ -16,9 +19,21 @@ const FORMATS = [
   { value: "teams", label: "Microsoft Teams (workflow)" },
 ];
 const formatName = (f: string) => FORMATS.find((x) => x.value === f)?.label.split(" (")[0] ?? f;
+/** What each event is, in words, for a hook's line. */
+const EVENT_WORDS: Record<string, string> = {
+  push: "pushes",
+  merge_request: "merge requests",
+  issue: "issues",
+  confidential_issue: "confidential issues",
+  note: "comments",
+  confidential_note: "confidential comments",
+  release: "releases",
+  pipeline: "pipelines",
+  build: "jobs",
+};
 
 /** Webhooks of a project (`/projects/:id`) or group (`/groups/:id`). */
-export function Webhooks({ base }: { base: string }) {
+export function Webhooks({ base, title, description }: { base: string; title: string; description: ReactNode }) {
   const qc = useQueryClient();
   const key = ["hooks", base];
   const list = useQuery({ queryKey: key, queryFn: () => api.get<S["Webhook"][]>(`${base}/hooks`) });
@@ -27,34 +42,50 @@ export function Webhooks({ base }: { base: string }) {
   const [events, setEvents] = useState<string[]>(["push", "merge_request"]);
   const [format, setFormat] = useState("generic");
   const [open, setOpen] = useState<number | null>(null);
+  const [adding, setAdding] = useState(false);
+  const fresh = useJustAdded();
   const [error, setError] = useState<unknown>(null);
+  const close = () => {
+    setAdding(false);
+    setUrl("");
+    setSecret("");
+    setError(null);
+  };
   const add = useMutation({
     mutationFn: () => api.post(`${base}/hooks`, { url, secret, events, format }),
     onSuccess: () => {
-      setUrl("");
-      setSecret("");
-      setError(null);
+      fresh.mark(url);
+      close();
       qc.invalidateQueries({ queryKey: key });
     },
     onError: setError,
   });
   const del = useMutation({ mutationFn: (id: number) => api.del(`${base}/hooks/${id}`), onSuccess: () => qc.invalidateQueries({ queryKey: key }) });
   return (
-    <div className="stack">
-      <ErrorBox error={error} />
+    <ListSection
+      id="webhooks"
+      title={title}
+      description={description}
+      add="Add a webhook"
+      adding={adding}
+      onClose={close}
+      onAdd={() => setAdding(true)}
+      form={
       <form
         className="stack"
+        aria-label="New webhook"
         onSubmit={(e) => {
           e.preventDefault();
           add.mutate();
         }}
       >
+        <ErrorBox error={error} />
         <div className="grid2">
           <Field label="URL" hint="Private and loopback addresses are refused">
             <input placeholder="https://ci.example.com/hooks/forgust" value={url} onChange={(e) => setUrl(e.target.value)} />
           </Field>
           <Field label="Secret" hint="Signs each delivery: X-Forgust-Signature: sha256=HMAC(secret, body)">
-            <input type="password" value={secret} onChange={(e) => setSecret(e.target.value)} />
+            <PasswordInput autoComplete="new-password" value={secret} onChange={(e) => setSecret(e.target.value)} />
           </Field>
         </div>
         <Field
@@ -74,32 +105,36 @@ export function Webhooks({ base }: { base: string }) {
               <code>{ev}</code>
             </label>
           ))}
-          <div className="spacer" />
-          <button className="btn primary" disabled={!url || events.length === 0}>
-            Add webhook
-          </button>
         </div>
+        <FormActions label="Add webhook" disabled={!url || events.length === 0} busy={add.isPending} onCancel={close} />
       </form>
+      }
+    >
       <Q q={list}>
         {(hooks) =>
           hooks.length === 0 ? (
-            <p className="muted">No webhooks.</p>
+            <EmptyRow>No webhooks.</EmptyRow>
           ) : (
             <div className="list">
               {hooks.map((h) => (
                 <div key={h.id} className="list-group">
-                  <div className="item">
-                    <code className="grow ellipsis">{h.url}</code>
-                    {h.format !== "generic" && <Badge tone="accent">{formatName(h.format)}</Badge>}
-                    {h.events.map((e) => (
-                      <Badge key={e}>{e}</Badge>
-                    ))}
-                    <button className="btn small" onClick={() => setOpen(open === h.id ? null : h.id)}>
-                      Deliveries
-                    </button>
-                    <button className="btn small danger" onClick={() => del.mutate(h.id)}>
-                      Remove
-                    </button>
+                  <div className={"item" + fresh.fresh(h.url)}>
+                    <div className="grow" style={{ minWidth: 0 }}>
+                      <code className="ellipsis" style={{ display: "block" }} title={h.url}>
+                        {h.url}
+                      </code>
+                      <div className="small muted">
+                        {h.format === "generic" ? "Called" : `Posts to ${formatName(h.format)}`} on {listAnd(h.events.map((e) => EVENT_WORDS[e] ?? e))}
+                      </div>
+                    </div>
+                    <div className="row" style={{ flex: "none", gap: 6 }}>
+                      <button className="btn small" onClick={() => setOpen(open === h.id ? null : h.id)}>
+                        Deliveries
+                      </button>
+                      <button className="btn small danger" onClick={() => del.mutate(h.id)}>
+                        Remove
+                      </button>
+                    </div>
                   </div>
                   {open === h.id && <Deliveries base={base} id={h.id} />}
                 </div>
@@ -108,7 +143,7 @@ export function Webhooks({ base }: { base: string }) {
           )
         }
       </Q>
-    </div>
+    </ListSection>
   );
 }
 
@@ -126,7 +161,19 @@ function Deliveries({ base, id }: { base: string; id: number }) {
                 {list.map((d) => (
                   <tr key={d.id}>
                     <td>
-                      <Badge tone={d.status === "delivered" ? "ok" : d.status === "failed" ? "warn" : undefined}>{d.status}</Badge>
+                      {d.status === "delivered" ? (
+                        <StateBadge tone="ok" icon={CircleCheck}>
+                          Delivered
+                        </StateBadge>
+                      ) : d.status === "failed" ? (
+                        <StateBadge tone="danger" icon={CircleX}>
+                          Failed
+                        </StateBadge>
+                      ) : (
+                        <StateBadge tone="neutral" icon={Clock}>
+                          {d.status[0].toUpperCase() + d.status.slice(1)}
+                        </StateBadge>
+                      )}
                     </td>
                     <td>
                       <code>{d.event}</code>
@@ -156,23 +203,43 @@ export function ApprovalRules({ projectId }: { projectId: number }) {
   const [required, setRequired] = useState(1);
   const [level, setLevel] = useState("maintainer");
   const [error, setError] = useState<unknown>(null);
+  const [adding, setAdding] = useState(false);
+  const fresh = useJustAdded();
+  const close = () => {
+    setAdding(false);
+    setError(null);
+  };
   const save = useMutation({
     mutationFn: () => api.post(`/projects/${projectId}/approval_rules`, { name, approvals_required: required, min_access_level: level }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: key }),
+    onSuccess: () => {
+      fresh.mark(name);
+      close();
+      qc.invalidateQueries({ queryKey: key });
+    },
     onError: setError,
   });
   const del = useMutation({ mutationFn: (id: number) => api.del(`/projects/${projectId}/approval_rules/${id}`), onSuccess: () => qc.invalidateQueries({ queryKey: key }) });
   const names: Record<number, string> = { 20: "reporter", 30: "developer", 40: "maintainer", 50: "owner" };
   return (
-    <div className="stack">
-      <ErrorBox error={error} />
+    <ListSection
+      id="approvals"
+      title="Merge request approvals"
+      description="How many approvals a merge request needs, and from whom, before it can be merged."
+      add="Add a rule"
+      adding={adding}
+      onClose={close}
+      onAdd={() => setAdding(true)}
+      form={
       <form
-        className="row wrap"
+        className="stack"
+        aria-label="New approval rule"
         onSubmit={(e) => {
           e.preventDefault();
           save.mutate();
         }}
       >
+        <ErrorBox error={error} />
+        <div className="row wrap">
         <input style={{ width: 200 }} value={name} onChange={(e) => setName(e.target.value)} aria-label="Rule name" />
         <input style={{ width: 80 }} type="number" min={1} max={20} value={required} onChange={(e) => setRequired(Number(e.target.value))} aria-label="Approvals required" />
         <span className="muted">approvals from</span>
@@ -183,19 +250,22 @@ export function ApprovalRules({ projectId }: { projectId: number }) {
           label="Minimum role"
           options={["reporter", "developer", "maintainer", "owner"].map((l) => ({ value: l, label: `${levelName(l)}s and above` }))}
         />
-        <button className="btn primary">Save rule</button>
+        </div>
+        <FormActions label="Save rule" busy={save.isPending} onCancel={close} />
       </form>
+      }
+    >
       <Q q={list}>
         {(rules) =>
           rules.length === 0 ? (
-            <p className="muted">No approval rules: merge requests can be merged without approvals.</p>
+            <EmptyRow>No approval rules: merge requests can be merged without approvals.</EmptyRow>
           ) : (
             <div className="list">
               {rules.map((r) => (
-                <div className="item" key={r.id}>
+                <div className={"item" + fresh.fresh(r.name)} key={r.id}>
                   <strong className="grow">{r.name}</strong>
-                  <span>
-                    {r.approvals_required} from {names[r.min_access_level]}s
+                  <span className="small muted">
+                    {r.approvals_required} approval{r.approvals_required === 1 ? "" : "s"} from {levelName(names[r.min_access_level] ?? "maintainer")}s and above
                   </span>
                   <button className="btn small danger" onClick={() => del.mutate(r.id)}>
                     Remove
@@ -206,6 +276,6 @@ export function ApprovalRules({ projectId }: { projectId: number }) {
           )
         }
       </Q>
-    </div>
+    </ListSection>
   );
 }

@@ -1,6 +1,6 @@
 // Form controls on Base UI primitives (keyboard, focus and ARIA handled there),
 // styled by `styles.css` (`.select`, `.switch`, `.segmented`, `.choices`, `.dropdown`).
-import type { CSSProperties, ReactElement, ReactNode } from "react";
+import { createContext, useContext, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import { Combobox as BCombobox } from "@base-ui/react/combobox";
 import { Menu as BMenu } from "@base-ui/react/menu";
 import { Popover as BPopover } from "@base-ui/react/popover";
@@ -9,6 +9,11 @@ import { RadioGroup } from "@base-ui/react/radio-group";
 import { Select as BSelect } from "@base-ui/react/select";
 import { Switch as BSwitch } from "@base-ui/react/switch";
 import { Check, ChevronDown } from "lucide-react";
+
+/** Inside a window (FormDialog): the popups its fields open show above it. */
+export const InWindow = createContext(false);
+/** A popup's layer: above the window it was opened from, if any (styles.css, `.positioner`). */
+const usePositioner = () => (useContext(InWindow) ? "positioner over-window" : "positioner");
 
 export type Option = { value: string; label: ReactNode; hint?: ReactNode; disabled?: boolean; group?: string };
 
@@ -57,6 +62,7 @@ export function Select({
   style?: CSSProperties;
   disabled?: boolean;
 }) {
+  const layer = usePositioner();
   return (
     // `items` gives the box the chosen option's label; "" is a value like any other
     <BSelect.Root value={value} onValueChange={(v) => onChange(v ?? "")} items={options.map((o) => ({ value: o.value, label: o.label }))} disabled={disabled}>
@@ -68,7 +74,7 @@ export function Select({
       </BSelect.Trigger>
       <BSelect.Portal>
         {/* under the box, as a list (not over it, with the chosen option on the box) */}
-        <BSelect.Positioner className="positioner" side="bottom" align="start" sideOffset={4} alignItemWithTrigger={false}>
+        <BSelect.Positioner className={layer} side="bottom" align="start" sideOffset={4} alignItemWithTrigger={false}>
           <BSelect.Popup className="select-menu">
             {groups(options).map(([group, opts], gi) =>
               group ? (
@@ -105,6 +111,7 @@ export function Combobox({
   label: string;
   style?: CSSProperties;
 }) {
+  const layer = usePositioner();
   // the items are the options themselves: the box shows the chosen one's label,
   // the filter matches labels; a value no option has shows as it is
   const chosen = options.find((o) => o.value === value) ?? { value, label: value };
@@ -125,7 +132,7 @@ export function Combobox({
         </BCombobox.Icon>
       </BCombobox.Trigger>
       <BCombobox.Portal>
-        <BCombobox.Positioner className="positioner" side="bottom" align="start" sideOffset={4}>
+        <BCombobox.Positioner className={layer} side="bottom" align="start" sideOffset={4}>
           <BCombobox.Popup className="select-menu combo" aria-label={label}>
             <BCombobox.Input type="search" placeholder="Filter…" aria-label={`Filter: ${label}`} />
             <BCombobox.Empty className="combo-empty">Nothing matches</BCombobox.Empty>
@@ -160,11 +167,24 @@ export function Switch({ checked, onChange, children, disabled }: { checked: boo
 
 /** One choice among a few, shown side by side: radios (one is always chosen). */
 export function Segmented<T extends string>({ value, onChange, options, label }: { value: T; onChange: (v: T) => void; options: (Option & { value: T })[]; label: string }) {
+  const at = options.findIndex((o) => o.value === value);
   return (
-    <RadioGroup className="segmented" aria-label={label} value={value} onValueChange={(v) => onChange(v as T)}>
+    <RadioGroup
+      className="segmented"
+      aria-label={label}
+      value={value}
+      onValueChange={(v) => onChange(v as T)}
+      // where the pill of the chosen segment stands; it slides to the next one (styles.css)
+      style={{ "--n": options.length, "--at": Math.max(at, 0) } as CSSProperties}
+      data-none={at < 0 ? "" : undefined}
+    >
       {options.map((o) => (
         <Radio.Root key={o.value} value={o.value} className="segment" disabled={o.disabled} title={typeof o.hint === "string" ? o.hint : undefined}>
-          {o.label}
+          {/* the label in bold, hidden, holds the width: choosing a segment does not resize the control */}
+          <span className="segment-width" aria-hidden="true">
+            {o.label}
+          </span>
+          <span>{o.label}</span>
         </Radio.Root>
       ))}
     </RadioGroup>
@@ -189,11 +209,12 @@ export type MenuItem = { label: ReactNode; icon?: ReactNode; onSelect: () => voi
 
 /** A dropdown menu opened by `trigger` (a button, or a component that passes its props and ref to one). */
 export function Menu({ trigger, items, align = "end" }: { trigger: ReactElement; items: MenuItem[]; align?: "start" | "end" }) {
+  const layer = usePositioner();
   return (
     <BMenu.Root modal={false}>
       <BMenu.Trigger render={trigger} />
       <BMenu.Portal>
-        <BMenu.Positioner className="positioner" align={align} sideOffset={6}>
+        <BMenu.Positioner className={layer} align={align} sideOffset={6}>
           <BMenu.Popup className="dropdown">
             {items.map((it, i) =>
               it === "separator" ? (
@@ -229,11 +250,12 @@ export function Popover({
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
+  const layer = usePositioner();
   return (
     <BPopover.Root open={open} onOpenChange={onOpenChange && ((o) => onOpenChange(o))}>
       <BPopover.Trigger render={trigger} />
       <BPopover.Portal>
-        <BPopover.Positioner className="positioner" align={align} sideOffset={6}>
+        <BPopover.Positioner className={layer} align={align} sideOffset={6}>
           <BPopover.Popup className="popover" aria-label={label}>
             {children}
           </BPopover.Popup>

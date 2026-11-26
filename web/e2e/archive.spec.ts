@@ -10,7 +10,7 @@ test("archive a project, then unarchive it", async ({ page }) => {
     // asked in the app's dialog
     await page.getByRole("alertdialog").getByRole("button", { name: "Archive project" }).click();
     await expect(page.getByRole("status").filter({ hasText: "This project is archived" })).toBeVisible();
-    await expect(page.locator(".pill", { hasText: "Archived" })).toBeVisible();
+    await expect(page.locator(".state", { hasText: "Archived" })).toBeVisible();
     // writes are refused with the reason
     const r = await page.request.post(`/api/v1/projects/${project.id}/issues`, {
       headers: { "x-csrf-token": (await (await page.request.get("/api/v1/session")).json()).csrf_token },

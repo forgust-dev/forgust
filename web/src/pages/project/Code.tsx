@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { api, bytes, qs, refLink, timeAgo, type S } from "../../api/client";
+import { api, bytes, qs, refLink, timeAgo, type S, filesLink } from "../../api/client";
 import { Avatar, Badge, CopyField, GitPerson, Q, useCopy } from "../../components/ui";
 import { Popover, Segmented, Select } from "../../components/controls";
 import { type Ctx } from "./Project";
@@ -45,7 +45,7 @@ export function RefPicker({ ctx, current, path, kind }: { ctx: Ctx; current: str
       style={{ width: "auto", maxWidth: 260, fontFamily: "var(--mono)", fontSize: 13, fontWeight: 600 }}
       value={current}
       label="Branch or tag"
-      onChange={(v) => nav(`${ctx.web}/-/${kind}/${v}${path ? `/${path}` : ""}`)}
+      onChange={(v) => nav(kind === "tree" ? filesLink(ctx.web, v, ctx.p.default_branch, path) : `${ctx.web}/-/${kind}/${v}${path ? `/${path}` : ""}`)}
       options={options}
     />
   );
@@ -53,7 +53,7 @@ export function RefPicker({ ctx, current, path, kind }: { ctx: Ctx; current: str
 
 /** A project's branches and tags (the first 100), shared by every page that offers them. */
 export const useBranches = (ctx: Ctx, enabled = true) =>
-  // the key of the Branches page with no search: one request for both
+  // every picker shares this list; the Branches page asks for its details on its own key
   useQuery({ queryKey: ["branches", ctx.p.id, ""], queryFn: () => api.get<S["BranchDto"][]>(`${ctx.base}/branches${qs({ per_page: 100 })}`), enabled });
 export const useTags = (ctx: Ctx, enabled = true) => useQuery({ queryKey: ["tags", ctx.p.id], queryFn: () => api.get<S["TagDto"][]>(`${ctx.base}/tags${qs({ per_page: 100 })}`), enabled });
 const atLeast = (n: number) => (n >= 100 ? "100+" : String(n));
@@ -157,13 +157,13 @@ export function PathCrumbs({ ctx, gitRef, path }: { ctx: Ctx; gitRef: string; pa
   const parts = path ? path.split("/") : [];
   return (
     <div className="crumbs" style={{ margin: 0 }}>
-      <Link to={refLink(ctx.web, "tree", gitRef)}>
+      <Link to={filesLink(ctx.web, gitRef, ctx.p.default_branch)}>
         <strong>{ctx.p.path}</strong>
       </Link>
       {parts.map((part, i) => (
         <span key={i} className="row" style={{ gap: 4 }}>
           <span className="sep">/</span>
-          {i === parts.length - 1 ? <strong>{part}</strong> : <Link to={refLink(ctx.web, "tree", gitRef, parts.slice(0, i + 1).join("/"))}>{part}</Link>}
+          {i === parts.length - 1 ? <strong>{part}</strong> : <Link to={filesLink(ctx.web, gitRef, ctx.p.default_branch, parts.slice(0, i + 1).join("/"))}>{part}</Link>}
         </span>
       ))}
     </div>
@@ -279,7 +279,9 @@ function TreeView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
   const listRef = useRef<HTMLDivElement>(null);
   const entries = tree.data?.entries ?? [];
   const virtual = entries.length > 300;
-  const v = useWindowVirtualizer({ count: entries.length, estimateSize: () => 34, overscan: 20, scrollMargin: listRef.current?.offsetTop ?? 0 });
+  // asked once a render, not once per row the virtualizer estimates
+  const rowH = matchMedia("(pointer: coarse)").matches ? 36 : 30;
+  const v = useWindowVirtualizer({ count: entries.length, estimateSize: () => rowH, overscan: 20, scrollMargin: listRef.current?.offsetTop ?? 0 });
   const navigate = useNavigate();
   const [sel, setSel] = useState(-1);
   useEffect(() => setSel(-1), [res.commit, res.path]);
@@ -317,13 +319,13 @@ function TreeView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
         {res.path ? <PathCrumbs ctx={ctx} gitRef={res.ref} path={res.path} /> : <RefCounts ctx={ctx} />}
         {res.path && <BlockChip ctx={ctx} path={res.path} />}
         <div className="spacer" />
-        <button className="btn" onClick={() => openPalette("files")} title="Find a file (t)">
-          <Search size={14} /> Go to file <kbd>t</kbd>
+        <button className="btn" onClick={() => openPalette("files")} title="Find a file (t)" aria-label="Go to file">
+          <Search size={14} /> <span className="repo-wide-only">Go to file</span> <kbd>t</kbd>
         </button>
         <CodeSearchBox ctx={ctx} path={res.path} />
         {ctx.p.can_write_repository && (
           <Link className="btn" to={`${ctx.web}/-/new/${res.ref}${res.path ? `/${res.path}` : ""}`} title="Create a file here" aria-label="New file">
-            <FilePlus2 size={14} /> <span className="hide-narrow">New file</span>
+            <FilePlus2 size={14} /> <span className="hide-narrow repo-wide-only">New file</span>
           </Link>
         )}
         <CloneMenu ctx={ctx} gitRef={res.ref} />
@@ -337,7 +339,7 @@ function TreeView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
                 <span className="icon">
                   <CornerLeftUp size={16} />
                 </span>
-                <Link to={refLink(ctx.web, "tree", res.ref, res.path.split("/").slice(0, -1).join("/"))}>..</Link>
+                <Link to={filesLink(ctx.web, res.ref, ctx.p.default_branch, res.path.split("/").slice(0, -1).join("/"))}>..</Link>
               </div>
             )}
             {virtual ? (
@@ -484,7 +486,11 @@ function BlobView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
   const [view, setView] = useState<"preview" | "code">("preview");
   const [wrap, setWrap] = usePref("code.wrap", false);
   const [copied, copyText] = useCopy(1500);
+  const [pathCopied, copyPath] = useCopy(1500);
+  const [linkCopied, copyLink] = useCopy(1500);
   const raw = refLink(ctx.web, "raw", res.ref, res.path);
+  // a link that keeps showing this, whatever the branch becomes: this commit, and the lines picked
+  const permalink = () => `${location.origin}${refLink(ctx.web, "blob", res.commit, res.path)}${/^#L\d/.test(location.hash) ? location.hash : ""}`;
   const copy = () => copyText(() => fetch(raw, { credentials: "same-origin" }).then((r) => r.text()));
   const lastCommit = last.data?.[0];
   return (
@@ -492,10 +498,13 @@ function BlobView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
       <div className="repo-toolbar">
         <RefPicker ctx={ctx} current={res.ref} path={res.path} kind="blob" />
         <PathCrumbs ctx={ctx} gitRef={res.ref} path={res.path} />
+        <button className="icon-btn" onClick={() => copyPath(res.path)} title="Copy the path" aria-label="Copy the path">
+          {pathCopied ? <Check size={14} /> : <Copy size={14} />}
+        </button>
         <BlockChip ctx={ctx} path={res.path} />
         <div className="spacer" />
-        <button className="btn hide-narrow" onClick={() => openPalette("files")} title="Find a file (t)">
-          <Search size={14} /> Go to file <kbd>t</kbd>
+        <button className="btn hide-narrow" onClick={() => openPalette("files")} title="Find a file (t)" aria-label="Go to file">
+          <Search size={14} /> <span className="repo-wide-only">Go to file</span> <kbd>t</kbd>
         </button>
       </div>
       {lastCommit && (
@@ -522,6 +531,10 @@ function BlobView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
                   />
                 ) : null}
                 <span className="blob-meta">
+                  {/* what is read, still said once the path above has scrolled away */}
+                  <strong className="blob-name ellipsis" title={res.path}>
+                    {blob.name}
+                  </strong>
                   {blob.lines.length > 0 && (
                     <span>
                       {blob.lines.length} line{blob.lines.length === 1 ? "" : "s"}
@@ -530,7 +543,7 @@ function BlobView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
                   <span>{bytes(blob.lfs ? blob.lfs.size : blob.size)}</span>
                   {blob.language && <span className="hide-narrow">{blob.language}</span>}
                 </span>
-                {blob.lfs && <Badge tone="accent">LFS</Badge>}
+                {blob.lfs && <Badge>LFS</Badge>}
                 <div className="spacer" />
                 {text && !preview && (
                   <button className={`icon-btn ${wrap ? "on" : ""}`} onClick={() => setWrap(!wrap)} aria-pressed={wrap} title="Wrap long lines" aria-label="Wrap long lines">
@@ -565,6 +578,9 @@ function BlobView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
                     {copied ? <Check size={16} /> : <Copy size={16} />}
                   </button>
                 )}
+                <button className="icon-btn" onClick={() => copyLink(permalink())} title="Copy a permanent link: this commit, and the lines picked" aria-label="Copy a permanent link">
+                  {linkCopied ? <Check size={16} /> : <Link2 size={16} />}
+                </button>
                 <a className="icon-btn" href={raw} download={blob.name} title="Download" aria-label="Download">
                   <Download size={16} />
                 </a>

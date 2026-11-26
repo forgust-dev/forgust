@@ -8,7 +8,11 @@ test("dependency updates: turn on, run now, turn off", async ({ page }) => {
   try {
     await page.goto(`${web}/-/settings/automation`);
     const section = page.locator("section.settings-section", { has: page.getByRole("heading", { name: "Dependency updates" }) });
-    await section.getByRole("checkbox", { name: /update dependencies/ }).check();
+    // a switch: its options show once it is on, and Save keeps them
+    const toggle = section.locator(".switch-row", { hasText: "update dependencies" }).getByRole("switch");
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-checked", "true");
+    await expect(section.getByRole("combobox", { name: "Runs" })).toBeVisible();
     await section.getByRole("button", { name: "Save", exact: true }).click();
     await expect(section.getByText("the first run starts within a minute")).toBeVisible();
     await expect(section.getByText(`@renovate-bot-${project.id}`)).toBeVisible();
@@ -21,16 +25,19 @@ test("dependency updates: turn on, run now, turn off", async ({ page }) => {
 
     // a private registry: the password is never shown again
     await page.goto(`${web}/-/settings/automation`);
-    await section.getByLabel("Host").fill("npm.example.com");
-    await section.getByLabel("Type").fill("npm");
-    await section.getByLabel("Password or token").fill("e2e-npm-token");
-    await section.getByRole("button", { name: "Add registry" }).click();
+    await section.getByRole("button", { name: "Add a registry" }).click();
+    const registry = page.getByRole("dialog", { name: "Add a registry" });
+    await registry.getByLabel("Host").fill("npm.example.com");
+    await registry.getByLabel("Type").fill("npm");
+    await registry.getByLabel("Password or token").fill("e2e-npm-token");
+    await registry.getByRole("button", { name: "Add registry" }).click();
     await expect(section.locator(".item", { hasText: "npm.example.com" })).toBeVisible();
     await expect(page.getByText("e2e-npm-token")).toHaveCount(0);
     await section.getByRole("button", { name: "Delete npm.example.com" }).click();
     await expect(section.locator(".item", { hasText: "npm.example.com" })).toHaveCount(0);
 
-    await section.getByRole("checkbox", { name: /update dependencies/ }).uncheck();
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-checked", "false");
     await section.getByRole("button", { name: "Save", exact: true }).click();
     await expect(section.getByText("Dependency updates are off.")).toBeVisible();
   } finally {

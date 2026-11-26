@@ -1,11 +1,13 @@
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { GitBranch, GitMerge, GitPullRequestClosed, Layers, X } from "lucide-react";
+import { GitBranch, Layers, X, ArrowDownToLine, GitMerge } from "lucide-react";
 import { api, qs, timeAgo, type S } from "../../api/client";
 import { usePref } from "../../shell/theme";
 import { useBranches } from "./Code";
 import { useAct } from "../../shell/toast";
 import type { Ctx } from "./Project";
+import { StateMark, mrLook } from "../../components/states";
+import { StateBadge } from "../../components/ui";
 
 /** Open merge requests of the project (shared with the list's cache key). */
 export function useOpenMrs(ctx: Ctx, enabled = true) {
@@ -72,15 +74,25 @@ export function StackMap({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
         {layers.map((e) => (
           <li key={e.iid} className={e.iid === m.iid ? "current" : undefined} aria-current={e.iid === m.iid ? "true" : undefined}>
             <span className="stack-n faint">{e.n}</span>
-            <span className={`row-icon ${e.state === "merged" ? "ic-accent" : e.state === "closed" ? "ic-danger" : e.draft ? "faint" : "ic-ok"}`} aria-label={e.state} role="img">
-              {e.state === "closed" ? <GitPullRequestClosed size={14} /> : <GitMerge size={14} />}
-            </span>
+            <StateMark look={mrLook(e.state, e.draft)} size={14} className="row-icon" />
             <Link to={`${ctx.web}/-/merge_requests/${e.iid}`} className="grow ellipsis">
               <span className="faint">!{e.iid}</span> {e.title}
             </Link>
-            {e.needs_rebase && <span className="badge warn">needs rebase</span>}
-            {e.iid === s.next_to_merge && <span className="badge ok">merges next</span>}
-            {e.state === "merged" && <span className="badge accent">merged</span>}
+            {e.needs_rebase && (
+              <StateBadge tone="warn" icon={GitBranch}>
+                Needs rebase
+              </StateBadge>
+            )}
+            {e.iid === s.next_to_merge && (
+              <StateBadge tone="ok" icon={ArrowDownToLine}>
+                Merges next
+              </StateBadge>
+            )}
+            {e.state === "merged" && (
+              <StateBadge tone="merged" icon={GitMerge}>
+                Merged
+              </StateBadge>
+            )}
           </li>
         ))}
       </ol>
@@ -140,7 +152,7 @@ export function RecentBranchBanner({ ctx }: { ctx: Ctx }) {
   return (
     <>
       {recent.map((b) => (
-        <div className="banner" key={b.name}>
+        <div className="banner info" key={b.name}>
           <GitBranch size={16} />
           <span className="grow">
             <strong>{b.name}</strong> <span className="muted">had recent changes {timeAgo(b.commit!.committed_at)}</span>

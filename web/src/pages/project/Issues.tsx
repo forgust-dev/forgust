@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, CircleDot, GitMerge, GitPullRequestClosed, GitPullRequestArrow, MessageSquare, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { CheckCircle2, GitMerge, GitPullRequestClosed, GitPullRequestArrow, MessageSquare, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { api, qs, timeAgo, type S } from "../../api/client";
-import { AuthorLink, Avatar, ConfidentialMark, Empty, ErrorBox, Field, FieldGroup, FilterTabs, ImportedMark, InternalMark, InternalToggle, ListHead, Q, SearchField, authorOf, Pager, useDebounced } from "../../components/ui";
+import { AuthorLink, Avatar, Badge, ConfidentialMark, Empty, ErrorBox, Field, FieldGroup, FilterTabs, ImportedMark, InternalMark, InternalToggle, ListHead, Q, SearchField, authorOf, Pager, useDebounced } from "../../components/ui";
 import { Select, Switch } from "../../components/controls";
 import { TemplatePicker } from "../../components/templates";
 import { MarkdownEditor } from "../../components/MarkdownEditor";
@@ -18,19 +18,13 @@ import type { Ctx } from "./Project";
 import { DueDateFact, MilestoneFact, day, overdue, useMilestones } from "./Milestones";
 import { ReactionBar } from "../../components/Reactions";
 import { Markdown } from "../../components/Markdown";
+import { StateMark, StateOf, issueLook } from "../../components/states";
+import { FormDialog, useJustAdded } from "../../components/FormDialog";
 
 type State = "opened" | "closed" | "all";
 
 function IssueIcon({ state }: { state: string }) {
-  return state === "opened" ? (
-    <span className="row-icon ic-ok" title="Open" aria-label="Open" role="img">
-      <CircleDot size={16} />
-    </span>
-  ) : (
-    <span className="row-icon ic-accent" title="Closed" aria-label="Closed" role="img">
-      <CheckCircle2 size={16} />
-    </span>
-  );
+  return <StateMark look={issueLook(state)} className="row-icon" />;
 }
 
 const PER_PAGE = 50;
@@ -268,7 +262,7 @@ export function IssuePage({ ctx, iid }: { ctx: Ctx; iid: number }) {
         <div className="stack">
           <header className="mr-head">
             <div className="mr-status">
-              <span className={`mr-state ${i.state}`}>{i.state === "opened" ? "Open" : "Closed"}</span>
+              <StateOf look={issueLook(i.state)} />
               {i.confidential && <ConfidentialMark />}
               <span>#{i.iid}</span>
               <span aria-hidden="true">·</span>
@@ -341,7 +335,7 @@ export function IssuePage({ ctx, iid }: { ctx: Ctx; iid: number }) {
                           <MrStateMark state={m.state} />
                           <span className="ellipsis">{m.title}</span>
                           <span className="faint nowrap">!{m.iid}</span>
-                          {m.closes && <span className="related-closes">closes</span>}
+                          {m.closes && <Badge>closes</Badge>}
                         </Link>
                       ))}
                     </div>
@@ -499,7 +493,7 @@ function IssueActivity({ ctx, i, notes, labels, refresh }: { ctx: Ctx; i: S["Iss
                 {i.state === "opened" ? (body.trim() ? "Close with comment" : "Close issue") : body.trim() ? "Reopen with comment" : "Reopen issue"}
               </button>
             )}
-            <button className="btn dark" disabled={!body.trim()}>
+            <button className="btn primary" disabled={!body.trim()}>
               Comment
             </button>
           </div>
@@ -536,7 +530,7 @@ function IssueComment({ ctx, i, n, refresh, toast }: { ctx: Ctx; i: S["IssueDeta
         )}
         {(own || ctx.p.can_admin) && (
           <button
-            className="link-btn small"
+            className="link-btn small danger"
             aria-label="Delete comment"
             onClick={async () => {
               if (!(await confirm({ title: "Delete this comment?", action: "Delete comment", danger: true }))) return;
@@ -544,7 +538,7 @@ function IssueComment({ ctx, i, n, refresh, toast }: { ctx: Ctx; i: S["IssueDeta
               refresh();
             }}
           >
-            <Trash2 size={12} />
+            Delete
           </button>
         )}
       </div>
@@ -592,21 +586,38 @@ export function LabelsPage({ ctx }: { ctx: Ctx }) {
   const labels = useLabels(ctx.p.id);
   const [search, setSearch] = useState("");
   const [editing, setEditing] = useState<number | "new" | null>(null);
+  const fresh = useJustAdded();
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["labels", ctx.p.id] });
     qc.invalidateQueries({ queryKey: ["issues", ctx.p.id] });
     qc.invalidateQueries({ queryKey: ["issue", ctx.p.id] });
   };
+  const target = typeof editing === "number" ? labels.data?.find((l) => l.id === editing) : undefined;
+  const close = () => setEditing(null);
   return (
     <div className="stack list-page">
       <ListHead title="Labels" sub="Sort issues and merge requests by topic, priority or team.">
-        {ctx.p.can_push && editing !== "new" && (
+        {ctx.p.can_push && (
           <button className="btn primary" onClick={() => setEditing("new")}>
-            <Plus size={15} /> New label
+            <Plus size={15} /> Add a label
           </button>
         )}
       </ListHead>
-      {editing === "new" && <LabelForm ctx={ctx} done={() => (setEditing(null), refresh())} />}
+      <FormDialog open={editing != null} onClose={close} title={editing === "new" ? "Add a label" : "Edit the label"}>
+        {(editing === "new" || target) && (
+          <LabelForm
+            key={String(editing)}
+            ctx={ctx}
+            label={target}
+            onCancel={close}
+            onSaved={(name) => {
+              fresh.mark(name);
+              close();
+              refresh();
+            }}
+          />
+        )}
+      </FormDialog>
       <div className="list-toolbar plain">
         <SearchField value={search} onChange={setSearch} placeholder="Filter labels" />
       </div>
@@ -616,13 +627,8 @@ export function LabelsPage({ ctx }: { ctx: Ctx }) {
           if (list.length === 0) return <Empty>{search ? "No label matches." : ctx.p.can_push ? "No labels yet. Create one to sort issues and merge requests." : "No labels yet."}</Empty>;
           return (
             <div className="list rows">
-              {list.map((l) =>
-                editing === l.id ? (
-                  <div className="item" key={l.id}>
-                    <LabelForm ctx={ctx} label={l} done={() => (setEditing(null), refresh())} />
-                  </div>
-                ) : (
-                  <div className="item label-row" key={l.id}>
+              {list.map((l) => (
+                  <div className={"item label-row" + fresh.fresh(l.name)} key={l.id}>
                     <div className="label-row-name">
                       <LabelChip label={l} />
                     </div>
@@ -666,8 +672,7 @@ export function LabelsPage({ ctx }: { ctx: Ctx }) {
                       </>
                     )}
                   </div>
-                ),
-              )}
+              ))}
             </div>
           );
         }}
@@ -678,7 +683,8 @@ export function LabelsPage({ ctx }: { ctx: Ctx }) {
 
 const SWATCHES = ["#6366f1", "#0ea5e9", "#14b8a6", "#22c55e", "#eab308", "#f97316", "#ef4444", "#ec4899", "#a855f7", "#64748b"];
 
-function LabelForm({ ctx, label, done }: { ctx: Ctx; label?: S["LabelWithCounts"]; done: () => void }) {
+/** A label to add or change, in its window: its chip shows as it is typed. */
+function LabelForm({ ctx, label, onSaved, onCancel }: { ctx: Ctx; label?: S["LabelWithCounts"]; onSaved: (name: string) => void; onCancel: () => void }) {
   const [name, setName] = useState(label?.name ?? "");
   const [color, setColor] = useState(label?.color ?? SWATCHES[Math.floor(Math.random() * SWATCHES.length)]);
   const [description, setDescription] = useState(label?.description ?? "");
@@ -688,17 +694,16 @@ function LabelForm({ ctx, label, done }: { ctx: Ctx; label?: S["LabelWithCounts"
     try {
       if (label) await api.put(`/projects/${ctx.p.id}/labels/${label.id}`, { name, color, description });
       else await api.post(`/projects/${ctx.p.id}/labels`, { name, color, description });
-      done();
+      onSaved(name.trim());
     } catch (err) {
       setError(err);
     }
   };
   return (
-    <form className="label-form" onSubmit={submit}>
+    <form className="stack" onSubmit={submit}>
       <ErrorBox error={error} />
-      <div className="label-form-fields">
         <Field label="Name">
-          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="bug" />
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="bug" />
         </Field>
         <Field label="Description">
           <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Something does not work" />
@@ -711,10 +716,9 @@ function LabelForm({ ctx, label, done }: { ctx: Ctx; label?: S["LabelWithCounts"
             <input className="swatch-hex" value={color} onChange={(e) => setColor(e.target.value)} aria-label="Hex color" />
           </div>
         </FieldGroup>
-      </div>
-      <div className="row">
+      <div className="modal-actions">
         <span className="grow">{name.trim() && <LabelChip label={{ name: name.trim(), color: /^#[0-9a-f]{6}$/i.test(color) ? color : "var(--text-faint)", description }} />}</span>
-        <button type="button" className="btn" onClick={done}>
+        <button type="button" className="btn" onClick={onCancel}>
           Cancel
         </button>
         <button className="btn primary" disabled={!name.trim()}>

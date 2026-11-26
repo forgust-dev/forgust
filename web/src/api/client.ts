@@ -73,6 +73,11 @@ export const encPath = (p: string) => p.split("/").map(encodeURIComponent).join(
 export const refLink = (web: string, kind: string, ref: string, path?: string) =>
   `${web}/-/${kind}/${encPath(ref)}${path ? `/${encPath(path)}` : ""}`;
 
+/** A project's files at `ref` (and `path`): the project's own address for the default branch's root,
+ *  the Files page every way there leads to. */
+export const filesLink = (web: string, ref: string, defaultBranch: string | null | undefined, path?: string) =>
+  !path && ref === (defaultBranch ?? "main") ? web : refLink(web, "tree", ref, path);
+
 export function qs(params: Record<string, string | number | boolean | undefined | null>): string {
   const u = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {

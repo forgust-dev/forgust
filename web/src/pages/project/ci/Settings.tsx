@@ -1,10 +1,13 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff, KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api, timeAgo, type S } from "../../../api/client";
-import { Section, Empty, ErrorBox, Field, Q, ListHead } from "../../../components/ui";
+import { Section, ErrorBox, Field, Q, ListHead } from "../../../components/ui";
 import { RunnersPanel } from "./Runners";
+import { EmptyRow, ListSection, SaveRow, SettingSwitch, useSaved } from "../../../components/settings";
+import { FormActions, FormDialog, useJustAdded } from "../../../components/FormDialog";
+import { saveCiSettings, useCiSettings } from "../ciSettings";
 import { Select } from "../../../components/controls";
 import { useToast } from "../../../shell/toast";
 import { useConfirm } from "../../../shell/dialog";
@@ -25,6 +28,11 @@ export function VariablesPanel({ base }: { base: string }) {
   const [editing, setEditing] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [shown, setShown] = useState<Record<string, boolean>>({});
+  const fresh = useJustAdded();
+  const close = () => {
+    setForm(null);
+    setError(null);
+  };
   const save = async (e: FormEvent) => {
     e.preventDefault();
     if (!form) return;
@@ -34,7 +42,8 @@ export function VariablesPanel({ base }: { base: string }) {
       const body = { ...form, value: editing && form.masked && !form.value ? undefined : form.value };
       await api.post(`${base}/variables`, body);
       toast.ok(`Saved ${form.key}`);
-      setForm(null);
+      fresh.mark(form.key);
+      close();
       qc.invalidateQueries({ queryKey: ["variables", base] });
     } catch (err) {
       setError(err);
@@ -52,6 +61,7 @@ export function VariablesPanel({ base }: { base: string }) {
   };
   return (
     <Section
+      id="variables"
       title="Variables"
       description="Values given to jobs as environment variables."
       actions={
@@ -62,7 +72,7 @@ export function VariablesPanel({ base }: { base: string }) {
             setForm({ ...EMPTY });
           }}
         >
-          <Plus size={14} /> Add variable
+          <Plus size={14} /> Add a variable
         </button>
       }
     >
@@ -71,8 +81,9 @@ export function VariablesPanel({ base }: { base: string }) {
           Values are encrypted at rest. <strong>Protected</strong> variables only reach pipelines of protected branches;{" "}
           <strong>masked</strong> ones are hidden in job logs and cannot be read back here.
         </p>
+        <FormDialog open={form != null} onClose={close} title={editing ? "Edit the variable" : "Add a variable"}>
         {form && (
-          <form className="card card-body stack" onSubmit={save}>
+          <form className="stack" onSubmit={save}>
             <ErrorBox error={error} />
             <div className="grid2">
               <Field label="Key">
@@ -109,22 +120,18 @@ export function VariablesPanel({ base }: { base: string }) {
                 </span>
               </label>
             </div>
-            <div className="row">
-              <button className="btn primary">Save</button>
-              <button type="button" className="btn" onClick={() => setForm(null)}>
-                Cancel
-              </button>
-            </div>
+            <FormActions label={editing ? "Save" : "Add variable"} onCancel={close} />
           </form>
         )}
+        </FormDialog>
         <Q q={q}>
           {(list) =>
             list.length === 0 ? (
-              <Empty>No variables yet.</Empty>
+              <EmptyRow>No variables yet.</EmptyRow>
             ) : (
               <div className="list">
                 {list.map((v) => (
-                  <div className="item" key={v.key}>
+                  <div className={"item" + fresh.fresh(v.key)} key={v.key}>
                     <KeyRound size={15} className="faint" />
                     <div className="grow" style={{ minWidth: 0 }}>
                       <code>{v.key}</code>{" "}
@@ -166,78 +173,74 @@ export function VariablesPanel({ base }: { base: string }) {
 
 // ---------------------------------------------------------------- runners
 
-function General({ ctx }: { ctx: Ctx }) {
+/** Where the configuration lives, how long a job may run, how deep it clones, older pipelines. */
+function Pipelines({ ctx }: { ctx: Ctx }) {
+  const q = useCiSettings(ctx.p.id);
+  return (
+    <Section id="pipelines" title="Pipelines" description="Where the pipeline configuration lives, how long a job may run, how deep it clones, and what happens to older pipelines.">
+      <Q q={q}>{(s) => <PipelinesForm ctx={ctx} initial={s} />}</Q>
+    </Section>
+  );
+}
+
+function PipelinesForm({ ctx, initial }: { ctx: Ctx; initial: S["ProjectCiSettings"] }) {
   const qc = useQueryClient();
-  const toast = useToast();
-  const q = useQuery({ queryKey: ["ci-settings", ctx.p.id], queryFn: () => api.get<S["ProjectCiSettings"]>(`/projects/${ctx.p.id}/ci/settings`) });
-  const [s, setS] = useState<S["ProjectCiSettings"] | null>(null);
-  useEffect(() => {
-    if (q.data) setS(q.data);
-  }, [q.data]);
+  const form = useSaved({
+    ci_config_path: initial.ci_config_path,
+    default_timeout_secs: initial.default_timeout_secs,
+    default_git_depth: initial.default_git_depth,
+    auto_cancel_redundant: initial.auto_cancel_redundant,
+  });
+  const s = form.value;
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
-  if (!s) return <Q q={q}>{() => null}</Q>;
   const save = async (e: FormEvent) => {
     e.preventDefault();
+    setBusy(true);
     setError(null);
     try {
-      await api.put(`/projects/${ctx.p.id}/ci/settings`, s);
-      toast.ok("CI/CD settings saved");
-      qc.invalidateQueries({ queryKey: ["ci-settings", ctx.p.id] });
+      await saveCiSettings(qc, ctx.p.id, s);
+      form.done();
     } catch (err) {
       setError(err);
+    } finally {
+      setBusy(false);
     }
   };
   return (
-    <Section title="General pipelines" description="Where the pipeline configuration lives, job timeouts and clone depth, and when merge requests may merge.">
-      <form className="stack" onSubmit={save}>
-        <ErrorBox error={error} />
-        <div className="grid2">
-          <Field label="CI/CD configuration file">
-            <input value={s.ci_config_path} onChange={(e) => setS({ ...s, ci_config_path: e.target.value })} />
-          </Field>
-          <Field label="Job timeout (minutes)">
-            <input type="number" min={10} value={Math.round(s.default_timeout_secs / 60)} onChange={(e) => setS({ ...s, default_timeout_secs: Number(e.target.value) * 60 })} />
-          </Field>
-          <Field label="Git shallow clone depth" hint="0 fetches everything">
-            <input type="number" min={0} max={1000} value={s.default_git_depth} onChange={(e) => setS({ ...s, default_git_depth: Number(e.target.value) })} />
-          </Field>
-        </div>
-        <label className="check">
-          <input type="checkbox" checked={s.only_merge_if_pipeline_succeeds} onChange={(e) => setS({ ...s, only_merge_if_pipeline_succeeds: e.target.checked, merge_trains_enabled: e.target.checked && s.merge_trains_enabled })} /> Merge requests can
-          only be merged when the pipeline succeeds
-        </label>
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={s.merge_trains_enabled}
-            disabled={!s.only_merge_if_pipeline_succeeds}
-            onChange={(e) => setS({ ...s, merge_trains_enabled: e.target.checked })}
-          />{" "}
-          Merge through merge trains: each merge request is tested on top of the ones queued ahead of it, then they merge in order
-        </label>
-        <label className="check">
-          <input type="checkbox" checked={s.block_new_security_findings} onChange={(e) => setS({ ...s, block_new_security_findings: e.target.checked })} />
-          <span>Merge requests whose pipeline finds new critical or high security findings can only be merged once those are fixed or dismissed</span>
-        </label>
-        <label className="check">
-          <input type="checkbox" checked={s.auto_cancel_redundant} onChange={(e) => setS({ ...s, auto_cancel_redundant: e.target.checked })} />
-          <span>
-            Cancel older pipelines of a branch when a pipeline for a newer commit starts (jobs marked <code>interruptible</code>, and jobs not started yet)
-          </span>
-        </label>
-        <label className="check">
-          <input type="checkbox" checked={s.instance_runners_enabled} onChange={(e) => setS({ ...s, instance_runners_enabled: e.target.checked })} /> Use the instance's shared
-          runners
-        </label>
-        <label className="check">
-          <input type="checkbox" checked={s.job_token_scope_enabled} onChange={(e) => setS({ ...s, job_token_scope_enabled: e.target.checked })} /> Only projects on the job
-          token allowlist below can use their job tokens to access this project
-        </label>
-        <div>
-          <button className="btn primary">Save</button>
-        </div>
-      </form>
-    </Section>
+    <form className="stack" onSubmit={save}>
+      <ErrorBox error={error} />
+      <div className="grid2">
+        <Field label="CI/CD configuration file">
+          <input value={s.ci_config_path} onChange={(e) => form.set({ ...s, ci_config_path: e.target.value })} />
+        </Field>
+        <Field label="Job timeout (minutes)">
+          <input type="number" min={10} value={Math.round(s.default_timeout_secs / 60)} onChange={(e) => form.set({ ...s, default_timeout_secs: Number(e.target.value) * 60 })} />
+        </Field>
+        <Field label="Git shallow clone depth" hint="0 fetches everything">
+          <input type="number" min={0} max={1000} value={s.default_git_depth} onChange={(e) => form.set({ ...s, default_git_depth: Number(e.target.value) })} />
+        </Field>
+      </div>
+      <label className="check">
+        <input type="checkbox" checked={s.auto_cancel_redundant} onChange={(e) => form.set({ ...s, auto_cancel_redundant: e.target.checked })} />
+        <span>
+          Cancel older pipelines of a branch when a pipeline for a newer commit starts (jobs marked <code>interruptible</code>, and jobs not started yet)
+        </span>
+      </label>
+      <SaveRow dirty={form.dirty} busy={busy} saved={form.saved} />
+    </form>
+  );
+}
+
+/** The instance's runners for this project: one switch, beside the runners it adds. */
+function SharedRunners({ ctx }: { ctx: Ctx }) {
+  const qc = useQueryClient();
+  const q = useCiSettings(ctx.p.id);
+  if (!q.data) return null;
+  return (
+    <SettingSwitch checked={q.data.instance_runners_enabled} onSave={(on) => saveCiSettings(qc, ctx.p.id, { instance_runners_enabled: on })}>
+      Use the instance&apos;s shared runners
+    </SettingSwitch>
   );
 }
 
@@ -246,11 +249,18 @@ function JobTokenAllowlist({ ctx }: { ctx: Ctx }) {
   const toast = useToast();
   const q = useQuery({ queryKey: ["allowlist", ctx.p.id], queryFn: () => api.get<S["AllowedProject"][]>(`/projects/${ctx.p.id}/job_token_allowlist`) });
   const [path, setPath] = useState("");
+  const [adding, setAdding] = useState(false);
+  const fresh = useJustAdded();
+  const close = () => {
+    setAdding(false);
+    setPath("");
+  };
   const add = async (e: FormEvent) => {
     e.preventDefault();
     try {
       await api.post(`/projects/${ctx.p.id}/job_token_allowlist`, { project: path });
-      setPath("");
+      fresh.mark(path.trim());
+      close();
       qc.invalidateQueries({ queryKey: ["allowlist", ctx.p.id] });
     } catch (err) {
       toast.error(err);
@@ -264,26 +274,41 @@ function JobTokenAllowlist({ ctx }: { ctx: Ctx }) {
       toast.error(err);
     }
   };
+  const ci = useCiSettings(ctx.p.id);
   return (
-    <Section title="Job token access" description="Other projects whose CI job tokens may reach this one.">
-      <div className="stack">
+    <ListSection
+      id="job-token-access"
+      title="Job token access"
+      description="Other projects whose CI job tokens may reach this one."
+      add="Add a project"
+      adding={adding}
+      onClose={close}
+      onAdd={() => setAdding(true)}
+      form={
+        <form className="stack" aria-label="Allow a project" onSubmit={add}>
+          <Field label="Project path">
+            <input placeholder="group/project" value={path} onChange={(e) => setPath(e.target.value)} />
+          </Field>
+          <FormActions label="Add project" disabled={!path.trim()} onCancel={close} />
+        </form>
+      }
+    >
+        {ci.data && (
+          <SettingSwitch checked={ci.data.job_token_scope_enabled} onSave={(on) => saveCiSettings(qc, ctx.p.id, { job_token_scope_enabled: on })}>
+            Only the projects listed here can use their job tokens to access this project
+          </SettingSwitch>
+        )}
         <p className="muted small" style={{ margin: 0 }}>
           Jobs of these projects can read this one with <code>CI_JOB_TOKEN</code> (clone, artifacts), within what their pipeline's user can see.
         </p>
-        <form className="row" onSubmit={add}>
-          <input className="grow" placeholder="group/project" value={path} onChange={(e) => setPath(e.target.value)} aria-label="Project path" />
-          <button className="btn" disabled={!path.trim()}>
-            Add project
-          </button>
-        </form>
         <Q q={q}>
           {(list) =>
             list.length === 0 ? (
-              <span className="faint small">Only this project's own jobs.</span>
+              <EmptyRow>No other project: only this project's own jobs can use its job token.</EmptyRow>
             ) : (
               <div className="list">
                 {list.map((a) => (
-                  <div className="item" key={a.project_id}>
+                  <div className={"item" + fresh.fresh(a.full_path)} key={a.project_id}>
                     <span className="grow">{a.full_path}</span>
                     <button className="icon-btn" aria-label={`Remove ${a.full_path}`} onClick={() => remove(a.project_id)}>
                       <Trash2 size={15} />
@@ -294,8 +319,7 @@ function JobTokenAllowlist({ ctx }: { ctx: Ctx }) {
             )
           }
         </Q>
-      </div>
-    </Section>
+    </ListSection>
   );
 }
 
@@ -303,12 +327,14 @@ export function CiSettings({ ctx }: { ctx: Ctx }) {
   return (
     <div className="stack settings-page">
       <ListHead title="CI/CD settings" sub="Pipelines, runners, variables, environments and Pages of this project." />
-      <General ctx={ctx} />
+      <Pipelines ctx={ctx} />
       <RunnersPanel
         list={`/projects/${ctx.p.id}/runners`}
         create={`/projects/${ctx.p.id}/runners`}
         note="Project runners, plus the runners of its groups and the instance's shared runners. A new runner here serves this project only."
-      />
+      >
+        <SharedRunners ctx={ctx} />
+      </RunnersPanel>
       <VariablesPanel base={`/projects/${ctx.p.id}`} />
       <ProtectedEnvironments ctx={ctx} />
       <Section id="pages" title="Pages" description="A static site built by CI: a job named pages (or with pages: true) publishes the public/ folder of its artifacts.">
@@ -327,13 +353,20 @@ function ProtectedEnvironments({ ctx }: { ctx: Ctx }) {
   const q = useQuery({ queryKey: key, queryFn: () => api.get<S["ProtectedEnvironment"][]>(`/projects/${ctx.p.id}/protected_environments`) });
   const [name, setName] = useState("");
   const [level, setLevel] = useState("maintainer");
+  const [adding, setAdding] = useState(false);
+  const fresh = useJustAdded();
   const [error, setError] = useState<unknown>(null);
+  const close = () => {
+    setAdding(false);
+    setName("");
+    setError(null);
+  };
   const add = async (e: FormEvent) => {
     e.preventDefault();
     try {
       await api.post(`/projects/${ctx.p.id}/protected_environments`, { name, deploy_access_level: level });
-      setName("");
-      setError(null);
+      fresh.mark(name.trim());
+      close();
       qc.invalidateQueries({ queryKey: key });
     } catch (err) {
       setError(err);
@@ -347,10 +380,20 @@ function ProtectedEnvironments({ ctx }: { ctx: Ctx }) {
       toast.error(err);
     }
   };
-  const levelName = (l: number) => (l >= 50 ? "Owners" : l >= 40 ? "Maintainers" : "Developers");
+  const levelName = (l: number) => (l >= 50 ? "Owners" : l >= 40 ? "Maintainers" : "Developers and Maintainers");
   return (
-    <Section title="Protected environments" description="Only these roles may deploy to (or stop) matching environments; others' jobs fail.">
-      <form className="row wrap" style={{ gap: 10 }} onSubmit={add}>
+    <ListSection
+      id="protected-environments"
+      title="Protected environments"
+      description="Only these roles may deploy to (or stop) matching environments; others' jobs fail."
+      add="Protect an environment"
+      adding={adding}
+      onClose={close}
+      onAdd={() => setAdding(true)}
+      form={
+      <form className="stack" aria-label="Protect an environment" onSubmit={add}>
+        <ErrorBox error={error} />
+        <div className="grid2">
         <Field label="Environment or pattern">
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="production or review/*" />
         </Field>
@@ -365,21 +408,21 @@ function ProtectedEnvironments({ ctx }: { ctx: Ctx }) {
             ]}
           />
         </Field>
-        <div style={{ alignSelf: "end" }}>
-          <button className="btn primary" disabled={!name.trim()}>
-            Protect
-          </button>
         </div>
+        <FormActions label="Protect" disabled={!name.trim()} onCancel={close} />
       </form>
-      <ErrorBox error={error} />
+      }
+    >
       <Q q={q}>
         {(list) => (
-          <div className="list" style={{ marginTop: 10 }}>
+          <div className="list">
             {list.length === 0 && <div className="item muted">No protected environments.</div>}
             {list.map((pe) => (
-              <div className="item" key={pe.id}>
-                <code className="grow">{pe.name}</code>
-                <span className="small muted">{levelName(pe.deploy_access_level)}</span>
+              <div className={"item" + fresh.fresh(pe.name)} key={pe.id}>
+                <div className="grow" style={{ minWidth: 0 }}>
+                  <code>{pe.name}</code>
+                  <div className="small muted">Only {levelName(pe.deploy_access_level)} can deploy to it or stop it</div>
+                </div>
                 <button className="btn small danger" onClick={() => del(pe.id)}>
                   Unprotect
                 </button>
@@ -388,7 +431,7 @@ function ProtectedEnvironments({ ctx }: { ctx: Ctx }) {
           </div>
         )}
       </Q>
-    </Section>
+    </ListSection>
   );
 }
 

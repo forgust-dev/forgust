@@ -3,7 +3,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
-use sqlx::{PgConnection, PgExecutor};
+use sqlx::{PgConnection, PgExecutor, Row};
 
 use crate::Result;
 
@@ -1905,4 +1905,19 @@ pub async fn put_instance_key(e: impl PgExecutor<'_>, name: &str, value_enc: &st
 pub async fn mark_started(e: impl PgExecutor<'_>, build_id: i64) -> Result<()> {
     sqlx::query!("UPDATE ci_builds SET started_at = coalesce(started_at, now()) WHERE id = $1", build_id).execute(e).await?;
     Ok(())
+}
+
+/// The latest pipeline of each of these branches: (branch, iid, status). Checked at run time.
+/// One look into `ci_pipelines_ref_idx` per branch, not every pipeline of each.
+pub async fn latest_per_branch(e: impl PgExecutor<'_>, project_id: i64, branches: &[String]) -> Result<Vec<(String, i64, String)>> {
+    let rows = sqlx::query(
+        "SELECT b.ref, p.iid, p.status FROM unnest($2::text[]) AS b(ref)
+          CROSS JOIN LATERAL (SELECT iid, status FROM ci_pipelines
+            WHERE project_id = $1 AND ref = b.ref AND NOT tag ORDER BY id DESC LIMIT 1) p",
+    )
+    .bind(project_id)
+    .bind(branches)
+    .fetch_all(e)
+    .await?;
+    rows.into_iter().map(|r| Ok((r.try_get("ref")?, r.try_get("iid")?, r.try_get("status")?))).collect()
 }

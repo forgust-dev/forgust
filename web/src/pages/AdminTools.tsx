@@ -606,7 +606,7 @@ function BannerEdit({ initial, onSaved }: { initial: S["Banner"]; onSaved: () =>
         </Field>
       </div>
       <div className="row" style={{ gap: 8 }}>
-        <button className="btn primary" disabled={save.isPending}>
+        <button className="btn primary" aria-busy={save.isPending} disabled={save.isPending}>
           Save
         </button>
         {initial.text && (
@@ -776,7 +776,7 @@ export function AdminBackups() {
             </span>
           </div>
           <div className="row" style={{ gap: 8 }}>
-            <button className="btn primary" disabled={b.running} onClick={() => act(() => api.post("/admin/backups"), "Backup started")}>
+            <button className="btn primary" aria-busy={b.running} disabled={b.running} onClick={() => act(() => api.post("/admin/backups"), "Backup started")}>
               {b.running ? "Backing up…" : "Back up now"}
             </button>
             <span className="small muted">

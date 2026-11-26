@@ -64,7 +64,7 @@ export function OAuthAuthorize() {
             </p>
             <ErrorBox error={error} />
             <div className="row" style={{ gap: 8 }}>
-              <button className="btn primary" disabled={busy} onClick={() => answer(true)}>
+              <button className="btn primary" aria-busy={busy} disabled={busy} onClick={() => answer(true)}>
                 Allow
               </button>
               <button className="btn" disabled={busy} onClick={() => answer(false)}>

@@ -32,10 +32,10 @@ import {
   Users,
   Workflow,
 } from "lucide-react";
-import { refLink, type S } from "../api/client";
+import { refLink, type S, filesLink } from "../api/client";
 import type { PrefetchTarget } from "../prefetch";
 import type { Nav } from "./nav";
-import { SETTINGS_PAGES, type SettingsSlug } from "../pages/project/settingsPages";
+import { SETTINGS_PAGES, SETTINGS_SECTIONS, type SettingsSlug } from "../pages/project/settingsPages";
 import { ADMIN_PAGES, type AdminPath } from "../pages/adminPages";
 import { PROFILE_PAGES, type ProfilePath } from "../pages/profilePages";
 
@@ -59,7 +59,8 @@ export type Item = {
 const SETTINGS_WORDS: Partial<Record<SettingsSlug, string>> = {
   "": "rename archive delete visibility picture",
   repository: "protected branches tags push rules deploy keys tokens locked lfs",
-  merge_requests: "approvals",
+  merge_requests: "approvals merge checks pipeline must succeed merge trains",
+  ci_cd: "runners variables environments pages job token",
   automation: "security scanning dependency updates renovate ai review",
   integrations: "webhooks access tokens",
 };
@@ -94,7 +95,7 @@ export function projectItems(p: S["ProjectDetail"], ref: string, mrCount?: numbe
       icon: <Code2 size={16} />,
       match: code,
       children: [
-        { to: web, label: "Files", match: files, words: "repository tree" },
+        { to: filesLink(web, ref, p.default_branch), label: "Files", match: files, words: "repository tree" },
         { to: `${web}/-/smart_view`, label: "Smart View", match: sec("smart_view"), words: "map blocks architecture dependencies people owners experts" },
         { to: refLink(web, "commits", ref), label: "Commits", match: sec("commits?"), words: "history" },
         { to: `${web}/-/branches`, label: "Branches", match: sec("branches") },
@@ -170,6 +171,14 @@ export function projectPages(p: S["ProjectDetail"], ref: string): { top: Item[];
     // "Pipelines" stays itself next to "Pipelines › Schedules"
     if (!kids.length || it.children!.some((c) => c.label === it.label)) all.push(it);
     for (const c of kids) all.push({ ...c, label: `${it.label} › ${c.label}`, icon: it.icon });
+  }
+  // each section of the settings, straight to it ("Settings › Deploy keys")
+  if (p.can_admin) {
+    const web = `/${p.full_path}`;
+    for (const sec of SETTINGS_SECTIONS) {
+      if (sec.own && !p.can_own) continue;
+      all.push({ to: `${web}/-/settings${sec.slug ? `/${sec.slug}` : ""}#${sec.id}`, label: `Settings › ${sec.label}`, icon: <Settings size={16} />, words: sec.words });
+    }
   }
   return { top, all };
 }

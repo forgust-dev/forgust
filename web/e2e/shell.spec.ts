@@ -101,6 +101,15 @@ test("pages and numbers in the palette", async ({ page }) => {
   await expect(dialog.getByRole("group", { name: "Pages" }).getByRole("option").first()).toContainText("Your settings › SSH keys");
   await page.keyboard.press("Enter");
   await at(page, "/profile/keys");
+  // a section of the project's settings, scrolled to
+  await page.goto(P);
+  await expect(page.locator(".page-head h1")).toBeVisible();
+  await page.keyboard.press("Control+k");
+  await dialog.locator("input").fill("deploy key");
+  await expect(dialog.getByRole("option").first()).toHaveText("Settings › Deploy keys");
+  await page.keyboard.press("Enter");
+  await at(page, `${P}/-/settings/repository#deploy-keys`);
+  await expect(page.locator("#deploy-keys")).toBeInViewport();
   // a merge request by its number, from elsewhere: its title once found
   await page.keyboard.press("Control+k");
   await dialog.locator("input").fill(`${SEED.group}/${SEED.project}!1`);

@@ -46,10 +46,11 @@ export function StatusIcon({ status, size = 16, allowFailure }: { status: string
 }
 
 export function StatusBadge({ status, to }: { status: string; to?: string }) {
+  const label = statusLabel(status);
   const inner = (
     <>
-      <StatusIcon status={status} size={14} />
-      {statusLabel(status)}
+      <StatusIcon status={status} size={13} />
+      {label[0].toUpperCase() + label.slice(1)}
     </>
   );
   return to ? (

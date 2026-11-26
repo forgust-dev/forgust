@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeftRight, ArrowRight, Download, GitBranch, GitMerge, Package, Plus, Tag, Trash2 } from "lucide-react";
-import { api, qs, timeAgo, type S, encPath, refLink } from "../../api/client";
+import { ArrowLeftRight, ArrowRight, Download, GitBranch, GitMerge, Package, Plus, Tag, Trash2, Shield, Star } from "lucide-react";
+import { api, qs, timeAgo, type S, encPath, filesLink } from "../../api/client";
+import { StatusIcon, statusLabel } from "./ci/Status";
 import { Empty, ErrorBox, Field, ListHead, Q, SearchField, useDebounced } from "../../components/ui";
 import { useToast } from "../../shell/toast";
 import { PagedDiff } from "./Diff";
@@ -10,27 +11,32 @@ import { CommitList } from "./History";
 import type { Ctx } from "./Project";
 import { useBranches, useTags } from "./Code";
 import { useConfirm } from "../../shell/dialog";
+import { FormActions, FormDialog, useJustAdded } from "../../components/FormDialog";
 
 /** Subject and age of a ref's tip, for list rows. */
 function Tip({ ctx, c }: { ctx: Ctx; c?: S["CommitSummary"] | null }) {
-  if (!c) return null;
+  if (!c) return <span className="ref-updated" />;
   return (
-    <div className="row-meta">
-      <Link to={`${ctx.web}/-/commit/${c.id}`} className="sha">
+    <>
+      <span className="ref-updated ellipsis hide-narrow" title={c.subject}>
+        updated {timeAgo(c.committed_at)} by {c.author_name}
+      </span>
+      <Link to={`${ctx.web}/-/commit/${c.id}`} className="sha hide-narrow" title={c.subject}>
         {c.id.slice(0, 8)}
       </Link>
-      <Link to={`${ctx.web}/-/commit/${c.id}`} className="ellipsis tip-subject" title={c.subject}>
-        {c.subject}
-      </Link>
-      <span className="nowrap">
-        {c.author_name} · {timeAgo(c.committed_at)}
-      </span>
-    </div>
+    </>
   );
 }
 
+/** How far a branch is from the default one, in words: "2 ahead · 3 behind", "up to date". */
+function distance(b: S["BranchDto"]) {
+  if (b.ahead == null || b.behind == null) return "";
+  if (b.ahead === 0 && b.behind === 0) return "up to date";
+  return [b.ahead > 0 && `${b.ahead} ahead`, b.behind > 0 && `${b.behind} behind`].filter(Boolean).join(" · ");
+}
+
 /** Create a branch from a branch, tag or commit. */
-function NewBranch({ ctx, done }: { ctx: Ctx; done: () => void }) {
+function NewBranch({ ctx, onCreated, onCancel }: { ctx: Ctx; onCreated: (name: string) => void; onCancel: () => void }) {
   const [name, setName] = useState("");
   const [from, setFrom] = useState(ctx.p.default_branch ?? "main");
   const [error, setError] = useState<unknown>(null);
@@ -38,7 +44,7 @@ function NewBranch({ ctx, done }: { ctx: Ctx; done: () => void }) {
   const toast = useToast();
   return (
     <form
-      className="card stack new-branch"
+      className="stack"
       onSubmit={async (e) => {
         e.preventDefault();
         setError(null);
@@ -46,27 +52,20 @@ function NewBranch({ ctx, done }: { ctx: Ctx; done: () => void }) {
           await api.post(`${ctx.base}/branches`, { branch: name.trim(), ref: from.trim() });
           toast.ok(`Branch ${name.trim()} created`);
           qc.invalidateQueries({ queryKey: ["branches", ctx.p.id] });
-          done();
+          onCreated(name.trim());
         } catch (err) {
           setError(err);
         }
       }}
     >
       <ErrorBox error={error} />
-      <div className="row wrap" style={{ gap: 10, alignItems: "flex-end" }}>
-        <Field label="Branch name">
-          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="feature/my-change" spellCheck={false} />
-        </Field>
-        <Field label="From" hint="A branch, tag or commit">
-          <input value={from} onChange={(e) => setFrom(e.target.value)} spellCheck={false} />
-        </Field>
-        <button className="btn primary" disabled={!name.trim() || !from.trim()}>
-          Create branch
-        </button>
-        <button type="button" className="btn" onClick={done}>
-          Cancel
-        </button>
-      </div>
+      <Field label="Branch name">
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="feature/my-change" spellCheck={false} />
+      </Field>
+      <Field label="From" hint="A branch, tag or commit">
+        <input value={from} onChange={(e) => setFrom(e.target.value)} spellCheck={false} />
+      </Field>
+      <FormActions label="Create branch" disabled={!name.trim() || !from.trim()} onCancel={onCancel} />
     </form>
   );
 }
@@ -74,11 +73,15 @@ function NewBranch({ ctx, done }: { ctx: Ctx; done: () => void }) {
 export function Branches({ ctx }: { ctx: Ctx }) {
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
+  const fresh = useJustAdded();
   const qc = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
   const term = useDebounced(search, 250);
-  const q = useQuery({ queryKey: ["branches", ctx.p.id, term], queryFn: () => api.get<S["BranchDto"][]>(`${ctx.base}/branches${qs({ search: term, per_page: 100 })}`) });
+  const q = useQuery({
+    queryKey: ["branches", ctx.p.id, term, "details"],
+    queryFn: () => api.get<S["BranchDto"][]>(`${ctx.base}/branches${qs({ search: term, per_page: 100, details: true })}`),
+  });
   const remove = async (name: string) => {
     const ok = await confirm({
       title: `Delete the branch ${name}?`,
@@ -98,13 +101,24 @@ export function Branches({ ctx }: { ctx: Ctx }) {
   return (
     <div className="stack list-page">
       <ListHead title="Branches">
-        {ctx.p.can_write_repository && !creating && (
+        {ctx.p.can_write_repository && (
           <button className="btn primary" onClick={() => setCreating(true)}>
-            <Plus size={14} /> New branch
+            <Plus size={14} /> Create a branch
           </button>
         )}
       </ListHead>
-      {creating && <NewBranch ctx={ctx} done={() => setCreating(false)} />}
+      <FormDialog open={creating} onClose={() => setCreating(false)} title="Create a branch">
+        {creating && (
+          <NewBranch
+            ctx={ctx}
+            onCancel={() => setCreating(false)}
+            onCreated={(name) => {
+              fresh.mark(name);
+              setCreating(false);
+            }}
+          />
+        )}
+      </FormDialog>
       <div className="list-toolbar plain">
         <SearchField value={search} onChange={setSearch} placeholder="Filter branches" />
       </div>
@@ -115,35 +129,66 @@ export function Branches({ ctx }: { ctx: Ctx }) {
           ) : (
             <div className="list rows">
               {list.map((b) => (
-                <div className="item ref-row" key={b.name}>
+                <div className={"item ref-row" + fresh.fresh(b.name)} key={b.name}>
                   <span className="row-icon faint">
                     <GitBranch size={16} />
                   </span>
-                  <div className="grow" style={{ minWidth: 0 }}>
-                    <div className="row-title">
-                      <Link to={refLink(ctx.web, "tree", b.name)} className="ref-name ellipsis">
-                        {b.name}
-                      </Link>
-                      {b.default && <span className="pill accent">default</span>}
-                      {b.protected && <span className="pill warn">protected</span>}
-                    </div>
-                    <Tip ctx={ctx} c={b.commit} />
+                  <div className="ref-main">
+                    <Link to={filesLink(ctx.web, b.name, ctx.p.default_branch)} className="ref-name ellipsis">
+                      {b.name}
+                    </Link>
+                    {b.default && (
+                      <span className="pill">
+                        <Star size={11} aria-hidden /> default
+                      </span>
+                    )}
+                    {b.protected && (
+                      <span className="pill">
+                        <Shield size={11} aria-hidden /> protected
+                      </span>
+                    )}
                   </div>
-                  {!b.default && ctx.p.default_branch && (
-                    <Link className="btn small hide-narrow" to={`${ctx.web}/-/compare/${ctx.p.default_branch}...${b.name}`} title={`Compare with ${ctx.p.default_branch}`}>
-                      <ArrowLeftRight size={13} /> Compare
-                    </Link>
-                  )}
-                  {!b.default && ctx.p.can_push && (
-                    <Link className="btn small" to={`${ctx.web}/-/merge_requests/new?source=${encodeURIComponent(b.name)}`}>
-                      <GitMerge size={13} /> Merge request
-                    </Link>
-                  )}
-                  {!b.default && ctx.p.can_write_repository && (
-                    <button className="icon-btn" title={`Delete ${b.name}`} aria-label={`Delete branch ${b.name}`} onClick={() => remove(b.name)}>
-                      <Trash2 size={15} />
-                    </button>
-                  )}
+                  <span className="ref-cells">
+                  <Tip ctx={ctx} c={b.commit} />
+                  <span className="ref-distance" title={b.default ? undefined : `Compared with ${ctx.p.default_branch}`}>
+                    {distance(b)}
+                  </span>
+                  <span className="ref-ci">
+                    {b.pipeline && (
+                      <Link to={`${ctx.web}/-/pipelines/${b.pipeline.iid}`} title={`Pipeline #${b.pipeline.iid}: ${statusLabel(b.pipeline.status)}`} aria-label={`Pipeline #${b.pipeline.iid}: ${statusLabel(b.pipeline.status)}`}>
+                        <StatusIcon status={b.pipeline.status} />
+                      </Link>
+                    )}
+                  </span>
+                  <span className="ref-mr">
+                    {b.merge_request ? (
+                      <Link className="ref-mr-link" to={`${ctx.web}/-/merge_requests/${b.merge_request.iid}`} title={b.merge_request.title}>
+                        <GitMerge size={13} aria-hidden /> !{b.merge_request.iid}
+                      </Link>
+                    ) : (
+                      !b.default &&
+                      ctx.p.can_push && (
+                        <Link className="btn small" to={`${ctx.web}/-/merge_requests/new?source=${encodeURIComponent(b.name)}`}>
+                          <GitMerge size={13} /> Merge request
+                        </Link>
+                      )
+                    )}
+                  </span>
+                  <span className="ref-slot hide-narrow">
+                    {!b.default && ctx.p.default_branch && (
+                      <Link className="icon-btn" to={`${ctx.web}/-/compare/${ctx.p.default_branch}...${b.name}`} title={`Compare with ${ctx.p.default_branch}`} aria-label={`Compare ${b.name} with ${ctx.p.default_branch}`}>
+                        <ArrowLeftRight size={15} />
+                      </Link>
+                    )}
+                  </span>
+                  <span className="ref-slot">
+                    {!b.default && ctx.p.can_write_repository && (
+                      <button className="icon-btn" title={`Delete ${b.name}`} aria-label={`Delete branch ${b.name}`} onClick={() => remove(b.name)}>
+                        <Trash2 size={15} />
+                      </button>
+                    )}
+                  </span>
+                  </span>
                 </div>
               ))}
             </div>
@@ -155,7 +200,7 @@ export function Branches({ ctx }: { ctx: Ctx }) {
 }
 
 /** Create a tag, annotated when it has a message. */
-function NewTag({ ctx, done }: { ctx: Ctx; done: () => void }) {
+function NewTag({ ctx, onCreated, onCancel }: { ctx: Ctx; onCreated: (name: string) => void; onCancel: () => void }) {
   const [name, setName] = useState("");
   const [from, setFrom] = useState(ctx.p.default_branch ?? "main");
   const [message, setMessage] = useState("");
@@ -164,7 +209,7 @@ function NewTag({ ctx, done }: { ctx: Ctx; done: () => void }) {
   const toast = useToast();
   return (
     <form
-      className="card stack new-branch"
+      className="stack"
       onSubmit={async (e) => {
         e.preventDefault();
         setError(null);
@@ -172,32 +217,23 @@ function NewTag({ ctx, done }: { ctx: Ctx; done: () => void }) {
           await api.post(`${ctx.base}/tags`, { tag_name: name.trim(), ref: from.trim(), message: message.trim() || undefined });
           toast.ok(`Tag ${name.trim()} created`);
           qc.invalidateQueries({ queryKey: ["tags", ctx.p.id] });
-          done();
+          onCreated(name.trim());
         } catch (err) {
           setError(err);
         }
       }}
     >
       <ErrorBox error={error} />
-      <div className="row wrap" style={{ gap: 10, alignItems: "flex-end" }}>
-        <Field label="Tag name">
-          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="v1.0.0" spellCheck={false} />
-        </Field>
-        <Field label="From" hint="A branch, tag or commit">
-          <input value={from} onChange={(e) => setFrom(e.target.value)} spellCheck={false} />
-        </Field>
-      </div>
+      <Field label="Tag name">
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="v1.0.0" spellCheck={false} />
+      </Field>
+      <Field label="From" hint="A branch, tag or commit">
+        <input value={from} onChange={(e) => setFrom(e.target.value)} spellCheck={false} />
+      </Field>
       <Field label="Message" hint="Optional: makes an annotated tag">
         <textarea rows={2} value={message} onChange={(e) => setMessage(e.target.value)} />
       </Field>
-      <div className="row" style={{ gap: 10 }}>
-        <button className="btn primary" disabled={!name.trim() || !from.trim()}>
-          Create tag
-        </button>
-        <button type="button" className="btn" onClick={done}>
-          Cancel
-        </button>
-      </div>
+      <FormActions label="Create tag" disabled={!name.trim() || !from.trim()} onCancel={onCancel} />
     </form>
   );
 }
@@ -205,6 +241,7 @@ function NewTag({ ctx, done }: { ctx: Ctx; done: () => void }) {
 export function Tags({ ctx }: { ctx: Ctx }) {
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
+  const fresh = useJustAdded();
   const qc = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
@@ -229,13 +266,24 @@ export function Tags({ ctx }: { ctx: Ctx }) {
   return (
     <div className="stack list-page">
       <ListHead title="Tags">
-        {ctx.p.can_write_repository && !creating && (
+        {ctx.p.can_write_repository && (
           <button className="btn primary" onClick={() => setCreating(true)}>
-            <Plus size={14} /> New tag
+            <Plus size={14} /> Create a tag
           </button>
         )}
       </ListHead>
-      {creating && <NewTag ctx={ctx} done={() => setCreating(false)} />}
+      <FormDialog open={creating} onClose={() => setCreating(false)} title="Create a tag">
+        {creating && (
+          <NewTag
+            ctx={ctx}
+            onCancel={() => setCreating(false)}
+            onCreated={(name) => {
+              fresh.mark(name);
+              setCreating(false);
+            }}
+          />
+        )}
+      </FormDialog>
       <div className="list-toolbar plain">
         <SearchField value={search} onChange={setSearch} placeholder="Filter tags" />
       </div>
@@ -247,30 +295,35 @@ export function Tags({ ctx }: { ctx: Ctx }) {
           ) : (
             <div className="list rows">
               {list.map((t) => (
-                <div className="item ref-row" key={t.name}>
+                <div className={"item ref-row" + fresh.fresh(t.name)} key={t.name}>
                   <span className="row-icon faint">
                     <Tag size={16} />
                   </span>
-                  <div className="grow" style={{ minWidth: 0 }}>
-                    <div className="row-title">
-                      <Link to={refLink(ctx.web, "tree", t.name)} className="ref-name ellipsis">
-                        {t.name}
-                      </Link>
-                      {t.annotated && <span className="pill">annotated</span>}
-                      {t.protected && <span className="pill warn">protected</span>}
-                      {t.release && (
-                        <Link className="pill accent" to={`${ctx.web}/-/releases/${encodeURIComponent(t.name)}`} title="This tag's release">
-                          <Package size={11} /> {t.release}
-                        </Link>
-                      )}
-                    </div>
-                    <Tip ctx={ctx} c={t.commit} />
-                  </div>
-                  {!t.release && ctx.p.can_push && (
-                    <Link className="btn small" to={`${ctx.web}/-/releases/new?tag=${encodeURIComponent(t.name)}`} aria-label="Create release" title="Create a release on this tag">
-                      <Package size={13} /> <span className="hide-narrow">Create release</span>
+                  <div className="ref-main">
+                    <Link to={filesLink(ctx.web, t.name, ctx.p.default_branch)} className="ref-name ellipsis">
+                      {t.name}
                     </Link>
-                  )}
+                    {t.annotated && <span className="pill">annotated</span>}
+                    {t.protected && (
+                      <span className="pill">
+                        <Shield size={11} aria-hidden /> protected
+                      </span>
+                    )}
+                    {t.release && (
+                      <Link className="pill" to={`${ctx.web}/-/releases/${encodeURIComponent(t.name)}`} title="This tag's release">
+                        <Package size={11} /> {t.release}
+                      </Link>
+                    )}
+                  </div>
+                  <span className="ref-cells">
+                  <Tip ctx={ctx} c={t.commit} />
+                  <span className="ref-release">
+                    {!t.release && ctx.p.can_push && (
+                      <Link className="btn small" to={`${ctx.web}/-/releases/new?tag=${encodeURIComponent(t.name)}`} aria-label="Create release" title="Create a release on this tag">
+                        <Package size={13} /> <span className="hide-narrow">Create release</span>
+                      </Link>
+                    )}
+                  </span>
                   <div className="btn-group">
                     <a className="btn small" href={`/api/v1${ctx.base}/archive${qs({ ref: t.name, format: "zip" })}`} title="Download a zip of this tag">
                       <Download size={13} /> zip
@@ -279,11 +332,14 @@ export function Tags({ ctx }: { ctx: Ctx }) {
                       tar.gz
                     </a>
                   </div>
-                  {ctx.p.can_write_repository && (t.protected ? ctx.p.can_admin : ctx.p.can_push) && (
-                    <button className="icon-btn" title={`Delete ${t.name}`} aria-label={`Delete tag ${t.name}`} onClick={() => remove(t)}>
-                      <Trash2 size={15} />
-                    </button>
-                  )}
+                  <span className="ref-slot">
+                    {ctx.p.can_write_repository && (t.protected ? ctx.p.can_admin : ctx.p.can_push) && (
+                      <button className="icon-btn" title={`Delete ${t.name}`} aria-label={`Delete tag ${t.name}`} onClick={() => remove(t)}>
+                        <Trash2 size={15} />
+                      </button>
+                    )}
+                  </span>
+                  </span>
                 </div>
               ))}
             </div>

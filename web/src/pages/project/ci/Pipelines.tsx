@@ -1,7 +1,7 @@
 import { useLayoutEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, Clock3, CornerDownRight, GitBranch, Play, RotateCcw, Server, ServerOff, Square, Tag, Timer, Plus, X } from "lucide-react";
+import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
+import { CalendarClock, Clock3, CornerDownRight, GitBranch, Play, RotateCcw, Server, ServerOff, Square, Tag, Timer, Plus, X, Shield } from "lucide-react";
 import { api, qs, refLink, timeAgo, type S } from "../../../api/client";
 import { Empty, ErrorBox, Field, FieldGroup, FilterTabs, ListHead, Q, SearchField } from "../../../components/ui";
 import { Select } from "../../../components/controls";
@@ -290,10 +290,10 @@ export function RunPipeline({ ctx }: { ctx: Ctx }) {
         <VariableRows rows={rows} setRows={setRows} />
       </FieldGroup>
       <div className="row">
-        <button className="btn primary" disabled={busy}>
+        <button className="btn primary large" aria-busy={busy} disabled={busy}>
           <Play size={15} /> Run pipeline
         </button>
-        <Link className="btn" to={`${ctx.web}/-/pipelines`}>
+        <Link className="btn large" to={`${ctx.web}/-/pipelines`}>
           Cancel
         </Link>
       </div>
@@ -388,15 +388,13 @@ function GraphEdges({ graph, jobs, focus }: { graph: HTMLDivElement | null; jobs
   );
 }
 
-const pipelineKey = (pid: number, iid: number) => ["pipeline", pid, iid];
+/** A pipeline and its jobs: what its pages read, and what a job's page waits for. */
+export const pipelineQuery = (pid: number, iid: number) =>
+  queryOptions({ queryKey: ["pipeline", pid, iid], queryFn: () => api.get<S["PipelineDetail"]>(`/projects/${pid}/pipelines/${iid}`) });
 
 export function usePipeline(ctx: Ctx, iid: number | undefined) {
   useCiLive(ctx.p.id);
-  return useQuery({
-    queryKey: pipelineKey(ctx.p.id, iid ?? 0),
-    queryFn: () => api.get<S["PipelineDetail"]>(`/projects/${ctx.p.id}/pipelines/${iid}`),
-    enabled: iid != null,
-  });
+  return useQuery({ ...pipelineQuery(ctx.p.id, iid ?? 0), enabled: iid != null });
 }
 
 /** Title, actions, facts and the Graph / Jobs tabs, shared by both pipeline views. */
@@ -439,12 +437,19 @@ export function PipelineHeader({ ctx, p, tab }: { ctx: Ctx; p: S["PipelineDetail
           </div>
           <div>
             <dt>Ref</dt>
-            <dd className="mono">
-              {p.tag ? <Tag size={12} /> : <GitBranch size={12} />} <Link to={refLink(ctx.web, "tree", p.ref)}>{p.ref}</Link>{" "}
-              <Link to={`${ctx.web}/-/commit/${p.sha}`} className="muted">
-                @{p.sha.slice(0, 8)}
+            <dd className="row wrap" style={{ gap: 6 }}>
+              <Link className="ref-chip small" to={refLink(ctx.web, "tree", p.ref)}>
+                {p.tag ? <Tag size={11} /> : <GitBranch size={11} />}
+                {p.ref}
               </Link>
-              {p.protected && <span className="badge">protected</span>}
+              <Link to={`${ctx.web}/-/commit/${p.sha}`} className="sha">
+                {p.sha.slice(0, 8)}
+              </Link>
+              {p.protected && (
+                <span className="badge">
+                  <Shield size={11} aria-hidden /> protected
+                </span>
+              )}
             </dd>
           </div>
           <div>

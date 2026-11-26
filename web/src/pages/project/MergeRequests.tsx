@@ -6,10 +6,11 @@ import { useSession } from "../../session";
 import { AuthorLink, Avatar, Badge, Empty, ErrorBox, Field, FilterTabs, ImportedMark, InternalMark, InternalToggle, ListHead, Q, SearchField, UserLink, authorOf, noteAuthor, useDebounced } from "../../components/ui";
 import { MarkdownEditor } from "../../components/MarkdownEditor";
 import { TemplatePicker } from "../../components/templates";
+import { StateMark, StateOf, mrLook } from "../../components/states";
 import { EditLabelsButton, LabelList, LabelPicker, MilestoneChip, SystemText, useLabels } from "../../components/labels";
 import { EditPeopleButton, PeopleAvatars, PeopleList, PeoplePicker, ReviewerList } from "../../components/people";
 import { Popover, Segmented, Select, Switch } from "../../components/controls";
-import { ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight, Circle, CircleAlert, Clock3, FileDiff, Dot, GitBranch, GitCommitHorizontal, GitMerge, GitPullRequestClosed, MessageSquare, Milestone as MilestoneIcon, FileWarning, Tag, PanelRightClose, PanelRightOpen, Pencil, RotateCcw, X, XCircle } from "lucide-react";
+import { ArrowRight, Check, CheckCircle2, ChevronDown, ChevronRight, Circle, CircleAlert, Clock3, FileDiff, Dot, GitBranch, GitCommitHorizontal, GitMerge, MessageSquare, Milestone as MilestoneIcon, FileWarning, Tag, PanelRightClose, PanelRightOpen, Pencil, RotateCcw, X, XCircle } from "lucide-react";
 import { fetchers, keys, usePrefetch } from "../../prefetch";
 import { StatusIcon, duration, isActive, statusLabel } from "./ci/Status";
 import { isSystemPipeline, usePipeline } from "./ci/Pipelines";
@@ -136,13 +137,7 @@ export function MergeRequestList({ ctx }: { ctx: Ctx }) {
 }
 
 function MrStateIcon({ state, draft }: { state: string; draft: boolean }) {
-  const label = draft && state === "opened" ? "Draft" : state === "opened" ? "Open" : state === "merged" ? "Merged" : "Closed";
-  const cls = state === "opened" ? (draft ? "faint" : "ic-ok") : state === "merged" ? "ic-accent" : "ic-danger";
-  return (
-    <span className={`row-icon ${cls}`} title={label} aria-label={label} role="img">
-      {state === "closed" ? <GitPullRequestClosed size={16} /> : <GitMerge size={16} />}
-    </span>
-  );
+  return <StateMark look={mrLook(state, draft)} className="row-icon" />;
 }
 
 function MrLink({ ctx, m }: { ctx: Ctx; m: S["MergeRequest"] }) {
@@ -244,7 +239,7 @@ export function NewMergeRequest({ ctx }: { ctx: Ctx }) {
           </label>
         </div>
         <div>
-          <button className="btn primary" disabled={!source || !target || source === target || !title}>
+          <button className="btn primary large" disabled={!source || !target || source === target || !title}>
             Create merge request
           </button>
         </div>
@@ -283,7 +278,6 @@ function ChangesPreview({ ctx, from, to }: { ctx: Ctx; from: string; to: string 
 
 type Tab = "overview" | "commits" | "diffs";
 
-const STATE_LABEL: Record<string, string> = { opened: "Open", merged: "Merged", closed: "Closed" };
 
 export function MergeRequestPage({ ctx, iid, tab }: { ctx: Ctx; iid: number; tab: Tab }) {
   useLiveUpdates(ctx.p.id);
@@ -302,7 +296,7 @@ export function MergeRequestPage({ ctx, iid, tab }: { ctx: Ctx; iid: number; tab
           <div className="stack" style={{ gap: 0 }}>
             <header className="mr-head">
               <div className="mr-status">
-                <span className={`mr-state ${m.draft && m.state === "opened" ? "draft" : m.state}`}>{m.draft && m.state === "opened" ? "Draft" : (STATE_LABEL[m.state] ?? m.state)}</span>
+                <StateOf look={mrLook(m.state, m.draft)} />
                 <span>!{m.iid}</span>
                 <span aria-hidden="true">·</span>
                 <span>
@@ -342,7 +336,7 @@ export function MergeRequestPage({ ctx, iid, tab }: { ctx: Ctx; iid: number; tab
                   {v ? `${v.commits_count} commit${v.commits_count === 1 ? "" : "s"}` : ""}
                   <ArrowRight size={15} />
                 </span>
-                <Link className="ref-chip target" to={refLink(ctx.web, "tree", m.target_branch)}>
+                <Link className="ref-chip" to={refLink(ctx.web, "tree", m.target_branch)}>
                   <GitBranch size={13} />
                   {m.target_branch}
                 </Link>
@@ -495,7 +489,7 @@ function MrAside({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
                   Revoke
                 </button>
               ) : (
-                <button className="btn small accent" onClick={() => act(() => api.post(`${path}/approve`), "Approved")}>
+                <button className="btn small primary" onClick={() => act(() => api.post(`${path}/approve`), "Approved")}>
                   Approve
                 </button>
               ))}
@@ -923,6 +917,7 @@ function Readiness({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
                       <>
                         <button
                           className="btn primary block"
+                          aria-busy={busy}
                           disabled={busy || why != null}
                           onClick={() => run(
                               () =>
@@ -968,14 +963,14 @@ function Readiness({ ctx, m }: { ctx: Ctx; m: S["MrDetail"] }) {
                       }, "Set to auto-merge");
                     if (s.can_merge && !waiting) {
                       return (
-                        <button className="btn primary block" disabled={busy || ffBlocked} onClick={merge}>
+                        <button className="btn primary block" aria-busy={busy} disabled={busy || ffBlocked} onClick={merge}>
                           {busy ? "Working…" : `Merge into ${m.target_branch}`}
                         </button>
                       );
                     }
                     return (
                       <>
-                        <button className="btn primary block" disabled={busy || ffBlocked || s.conflicts.length > 0 || m.draft} onClick={auto} title="Merges as you once every check passes; new commits or a failed pipeline cancel it">
+                        <button className="btn primary block" aria-busy={busy} disabled={busy || ffBlocked || s.conflicts.length > 0 || m.draft} onClick={auto} title="Merges as you once every check passes; new commits or a failed pipeline cancel it">
                           <Clock3 size={15} /> {busy ? "Working…" : "Set to auto-merge"}
                         </button>
                         {s.can_merge && (
@@ -1127,7 +1122,7 @@ function Thread({ ctx, m, root, replies, boxed }: { ctx: Ctx; m: S["MrDetail"]; 
                 <ImportedMark x={n} />
                 {user?.id === n.author_id && (
                   <button
-                    className="link-btn small"
+                    className="link-btn small danger"
                     onClick={async () => {
                       if (!(await confirm({ title: "Delete this comment?", action: "Delete comment", danger: true }))) return;
                       await api.del(`${path}/notes/${n.id}`).catch(setError);
@@ -1211,7 +1206,7 @@ function threadsOf(notes: S["NoteDto"][]) {
 
 /** Icon and wording for a system note. */
 export function systemEvent(body: string): { icon: ReactNode; tone: string } {
-  if (body.startsWith("merged")) return { icon: <GitMerge size={12} />, tone: "accent" };
+  if (body.startsWith("merged")) return { icon: <GitMerge size={12} />, tone: "merged" };
   if (body === "approved") return { icon: <Check size={12} />, tone: "ok-solid" };
   if (body.startsWith("added version")) return { icon: <GitCommitHorizontal size={12} />, tone: "" };
   if (body === "closed") return { icon: <X size={12} />, tone: "bad" };
@@ -1238,6 +1233,8 @@ function Activity({ ctx, m, notes }: { ctx: Ctx; m: S["MrDetail"]; notes: S["Not
       await api.post(`/projects/${ctx.p.id}/merge_requests/${m.iid}/notes`, { body, internal });
       setBody("");
       setInternal(false);
+      // History hides comments: back to everything, so the new one shows
+      if (filter === "history") setFilter("all");
       qc.invalidateQueries({ queryKey: ["mr", ctx.p.id, m.iid] });
     } catch (err) {
       setError(err);
@@ -1310,7 +1307,7 @@ function Activity({ ctx, m, notes }: { ctx: Ctx; m: S["MrDetail"]; notes: S["Not
         <MarkdownEditor projectId={ctx.p.id} rows={3} placeholder={internal ? "Leave an internal comment" : "Leave a comment"} value={body} onChange={setBody} label="Comment" />
         <div className="row wrap" style={{ justifyContent: "flex-end" }}>
           {m.can_comment_internal && <InternalToggle grow checked={internal} onChange={setInternal} />}
-          <button className="btn dark" disabled={!body.trim()}>
+          <button className="btn primary" disabled={!body.trim()}>
             Comment
           </button>
         </div>

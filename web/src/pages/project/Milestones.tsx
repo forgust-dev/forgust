@@ -3,13 +3,15 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, CalendarDays, CheckCircle2, CircleDot, GitMerge, Milestone as MilestoneIcon, Pencil, Plus, Trash2 } from "lucide-react";
 import { api, plural, qs, type S } from "../../api/client";
-import { ConfidentialMark, Empty, ErrorBox, Field, FilterTabs, ListHead, Q } from "../../components/ui";
+import { ConfidentialMark, Empty, ErrorBox, Field, FilterTabs, ListHead, Q, StateBadge } from "../../components/ui";
 import { DecideCard, Ring, type DecideRow } from "../../components/decide";
 import { Select } from "../../components/controls";
 import { MarkdownEditor } from "../../components/MarkdownEditor";
+import { DateField } from "../../components/DateField";
 import { useToast } from "../../shell/toast";
 import { useConfirm } from "../../shell/dialog";
 import type { Ctx } from "./Project";
+import { StateMark, mrLook } from "../../components/states";
 
 type M = S["Milestone"];
 
@@ -188,7 +190,11 @@ export function MilestonesPage({ ctx }: { ctx: Ctx }) {
                       <Link to={`${ctx.web}/-/milestones/${m.id}`} className="ellipsis">
                         {m.title}
                       </Link>
-                      {m.state === "closed" && <span className="pill">closed</span>}
+                      {m.state === "closed" && (
+                        <StateBadge tone="neutral" icon={CheckCircle2}>
+                          Closed
+                        </StateBadge>
+                      )}
                     </div>
                     <div className="row-meta">
                       <Dates m={m} />
@@ -323,7 +329,12 @@ export function MilestonePage({ ctx, id }: { ctx: Ctx; id: number }) {
           <ListHead
             title={
               <span className="row" style={{ gap: 8 }}>
-                <MilestoneIcon size={18} /> {m.title} {m.state === "closed" && <span className="pill">closed</span>}
+                <MilestoneIcon size={18} /> {m.title}{" "}
+                {m.state === "closed" && (
+                  <StateBadge tone="neutral" icon={CheckCircle2}>
+                    Closed
+                  </StateBadge>
+                )}
               </span>
             }
             sub={<Dates m={m} />}
@@ -382,7 +393,7 @@ export function MilestonePage({ ctx, id }: { ctx: Ctx; id: number }) {
                     <div className="list rows">
                       {list.map((r) => (
                         <div className="item" key={r.id}>
-                          <GitMerge size={15} className={r.state === "merged" ? "ic-accent" : r.state === "opened" ? "ic-ok" : "faint"} />
+                          <StateMark look={mrLook(r.state)} size={15} />
                           <Link to={`${ctx.web}/-/merge_requests/${r.iid}`} className="grow ellipsis">
                             {r.title}
                           </Link>
@@ -438,20 +449,20 @@ function Form({ ctx, m }: { ctx: Ctx; m?: M }) {
         </Field>
         <div className="row wrap" style={{ gap: 12 }}>
           <Field label="Start date" hint="Optional">
-            <input type="date" value={start} onChange={(e) => setStart(e.target.value)} />
+            <DateField value={start} onChange={setStart} />
           </Field>
           <Field label="Due date" hint="Optional">
-            <input type="date" value={due} onChange={(e) => setDue(e.target.value)} />
+            <DateField value={due} onChange={setDue} />
           </Field>
         </div>
         <Field label="Description">
           <MarkdownEditor projectId={ctx.p.id} rows={5} value={description} onChange={setDescription} label="Description" />
         </Field>
         <div className="row">
-          <button className="btn primary" disabled={!title.trim()}>
+          <button className="btn primary large" disabled={!title.trim()}>
             {m ? "Save changes" : "Create milestone"}
           </button>
-          <button type="button" className="btn" onClick={() => nav(-1)}>
+          <button type="button" className="btn large" onClick={() => nav(-1)}>
             Cancel
           </button>
         </div>
@@ -490,7 +501,7 @@ export function DueDateFact({ value, open, canEdit, onChange }: { value?: string
       <span className="fact-label">Due date</span>
       <div className="fact-value column">
         {canEdit ? (
-          <input type="date" aria-label="Due date" value={value ?? ""} onChange={(e) => onChange(e.target.value)} />
+          <DateField label="Due date" value={value ?? ""} onChange={onChange} />
         ) : value ? (
           <span className={open && overdue(value) ? "error-text" : undefined}>
             <CalendarDays size={13} /> {day(value)}

@@ -1326,6 +1326,53 @@ impl Storage for LocalStorage {
         Ok(String::from_utf8_lossy(&out.stdout).lines().map(str::to_string).collect())
     }
 
+    async fn ahead_behind(&self, repo: i64, base: &str, names: &[String]) -> Result<Vec<(String, u64, u64)>> {
+        self.ensure(repo).await?;
+        // a name git takes but a revision may not be (`-wip`) is left without a distance, so one
+        // branch does not take the others' away
+        let names: Vec<&String> = names.iter().filter(|n| validate_rev(n)).collect();
+        if !validate_rev(base) {
+            return Ok(vec![]);
+        }
+        // the base branch as a commit, not a tag of its name; nothing of its name goes into the
+        // format below
+        let Some(sha) = self.resolve(repo, &format!("refs/heads/{base}")).await? else { return Ok(vec![]) };
+        if names.is_empty() {
+            return Ok(vec![]);
+        }
+        // these branches in one walk (git 2.41 and later); a pattern also matches below a slash,
+        // so only the names asked for are kept
+        let mut c = self.git(repo);
+        c.arg("for-each-ref").arg(format!("--format=%(refname:lstrip=2)%00%(ahead-behind:{sha})")).arg("--");
+        c.args(names.iter().map(|n| format!("refs/heads/{n}")));
+        if let Ok(out) = cli::run(c, 16 << 20, LONG).await {
+            let mut v = Vec::new();
+            for line in String::from_utf8_lossy(&out.stdout).lines() {
+                let Some((name, counts)) = line.split_once('\0') else { continue };
+                let mut n = counts.split(' ').filter_map(|x| x.parse::<u64>().ok());
+                if let (Some(ahead), Some(behind)) = (n.next(), n.next())
+                    && names.iter().any(|x| *x == name)
+                {
+                    v.push((name.to_string(), ahead, behind));
+                }
+            }
+            return Ok(v);
+        }
+        // an older git: branch by branch ("behind<TAB>ahead")
+        let mut v = Vec::new();
+        for name in names {
+            let mut c = self.git(repo);
+            c.args(["rev-list", "--left-right", "--count"]).arg(format!("{sha}...refs/heads/{name}")).arg("--");
+            let Ok(out) = cli::run(c, 1 << 16, SHORT).await else { continue };
+            let text = String::from_utf8_lossy(&out.stdout);
+            let mut n = text.split_whitespace().filter_map(|x| x.parse::<u64>().ok());
+            if let (Some(behind), Some(ahead)) = (n.next(), n.next()) {
+                v.push((name.to_string(), ahead, behind));
+            }
+        }
+        Ok(v)
+    }
+
     async fn fetch(&self, repo: i64, url: &str, refspecs: &[String], config: &[(String, String)]) -> Result<()> {
         if refspecs.iter().any(|r| r.starts_with('-') || r.contains("..")) {
             return Err(StorageError::Invalid("bad refspec".into()));

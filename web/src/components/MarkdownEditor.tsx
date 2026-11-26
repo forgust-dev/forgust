@@ -1,10 +1,11 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
-import { CircleDot, GitMerge, Paperclip } from "lucide-react";
+import { Paperclip } from "lucide-react";
 import { api, qs, type S } from "../api/client";
 import { Avatar, useDebounced } from "./ui";
 import { Markdown } from "./Markdown";
+import { StateMark, issueLook, mrLook } from "./states";
 
 type Trigger = { char: "@" | "#" | "!"; start: number; query: string };
 type Item = {
@@ -149,6 +150,8 @@ export function MarkdownEditor({
   label?: string;
 }) {
   const [tab, setTab] = useState<"write" | "preview">("write");
+  // the box's height while writing (resized or not): the preview keeps it, writing again gets it back
+  const [height, setHeight] = useState<number | null>(null);
   const ta = useRef<HTMLTextAreaElement>(null);
   const [trigger, setTrigger] = useState<Trigger | null>(null);
   const [active, setActive] = useState(0);
@@ -261,7 +264,10 @@ export function MarkdownEditor({
           role="tab"
           aria-selected={tab === "preview"}
           className={tab === "preview" ? "active" : ""}
-          onClick={() => setTab("preview")}
+          onClick={() => {
+            if (ta.current) setHeight(ta.current.offsetHeight);
+            setTab("preview");
+          }}
         >
           Preview
         </button>
@@ -296,6 +302,7 @@ export function MarkdownEditor({
             aria-label={label ?? "Markdown"}
             autoFocus={autoFocus}
             rows={rows}
+            style={height ? { height } : undefined}
             value={value}
             placeholder={placeholder}
             aria-autocomplete="list"
@@ -390,21 +397,9 @@ export function MarkdownEditor({
                     {it.kind === "user" ? (
                       <Avatar name={it.label} username={it.sub.slice(1)} />
                     ) : it.kind === "issue" ? (
-                      <CircleDot
-                        size={14}
-                        className={it.state === "closed" ? "faint" : "ic-ok"}
-                      />
+                      <StateMark look={issueLook(it.state ?? "opened")} size={14} />
                     ) : (
-                      <GitMerge
-                        size={14}
-                        className={
-                          it.state === "merged"
-                            ? "ic-accent"
-                            : it.state === "closed"
-                              ? "ic-danger"
-                              : "ic-ok"
-                        }
-                      />
+                      <StateMark look={mrLook(it.state ?? "opened")} size={14} />
                     )}
                     <span className="grow ellipsis">{it.label}</span>
                     <span className="faint mono small">{it.sub}</span>
@@ -415,7 +410,7 @@ export function MarkdownEditor({
             )}
         </div>
       ) : (
-        <div className="md-preview markdown" style={{ minHeight: rows * 22 }}>
+        <div className="md-preview markdown" style={{ minHeight: height ?? rows * 22 }}>
           {!value.trim() ? (
             <span className="faint">Nothing to preview.</span>
           ) : preview.isLoading ? (

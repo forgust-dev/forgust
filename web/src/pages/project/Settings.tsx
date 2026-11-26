@@ -1,19 +1,24 @@
-import { lazy, useEffect, useState, type ChangeEvent, type ComponentType } from "react";
+import { lazy, useEffect, useState, type ChangeEvent, type ComponentType, type FormEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, timeAgo, type S, bytes } from "../../api/client";
-import { Badge, Section, ErrorBox, Field, Q, VisibilitySelect, ListHead, NotFound, Tile, QuotaBar, useFormRun } from "../../components/ui";
+import { Badge, Section, ErrorBox, Field, FieldGroup, Q, VisibilitySelect, ListHead, NotFound, PasswordInput, Tile, QuotaBar, useFormRun } from "../../components/ui";
 import { AvatarUpload } from "../../components/AvatarUpload";
-import { Segmented, Select } from "../../components/controls";
+import { Segmented, Select, Switch } from "../../components/controls";
 import { AccessTokens, DeployTokens } from "../../components/Tokens";
 import { ApprovalRules, Webhooks } from "../../components/Webhooks";
 import type { Ctx } from "./Project";
 import { HostRules } from "../../components/HostRules";
 import { useBranches } from "./Code";
-import { fetchers } from "../../prefetch";
+import { fetchers, useGroups } from "../../prefetch";
+import { useSession } from "../../session";
 import { StatusBadge } from "./ci/Status";
-import { useConfirm } from "../../shell/dialog";
+import { useConfirm, usePrompt } from "../../shell/dialog";
 import { settingsPage, type SettingsSlug } from "./settingsPages";
+import { useTopOnSwitch } from "../../shell/scroll";
+import { EmptyRow, ListSection, SaveRow, SettingSwitch, useSaved, whoCan } from "../../components/settings";
+import { FormActions, useJustAdded } from "../../components/FormDialog";
+import { saveCiSettings, useCiSettings } from "./ciSettings";
 const CiSettings = lazy(() => import("./ci/Settings").then((m) => ({ default: m.CiSettings })));
 
 /** Who may push or merge to a protected branch, or create a protected tag. */
@@ -35,6 +40,8 @@ const PAGES: Record<SettingsSlug, ComponentType<{ ctx: Ctx }>> = {
 
 /** A settings page of a project: `settings` (general) or `settings/<page>`. */
 export function ProjectSettings({ ctx, page }: { ctx: Ctx; page: string }) {
+  useTopOnSwitch(page);
+  useHashSection();
   const found = settingsPage(page);
   if (!found) return <NotFound />;
   const Page = PAGES[found.slug];
@@ -44,18 +51,42 @@ export function ProjectSettings({ ctx, page }: { ctx: Ctx; page: string }) {
 /** Sections that had an anchor here before they moved to a page of their own. */
 const MOVED: Record<string, SettingsSlug> = { "#pages": "ci_cd", "#security-scanning": "automation", "#smart-view": "automation" };
 
-/** Brings the section of the address's anchor (`#id`) to the top once it is `ready`, and keeps it
- *  there while the sections above it load and grow, until the page settles or someone scrolls. */
-function useAnchor(id: string, ready: boolean) {
+/**
+ * Brings the section the address names (`#id`) into view once it is there: the page may show it
+ * later (a page loaded on demand, its data). It keeps it in place while the sections above it
+ * load and grow, until the page settles or someone scrolls. Also when the anchor changes on the
+ * page: the Ctrl+K palette leads to any section.
+ */
+function useHashSection() {
+  const { hash } = useLocation();
   useEffect(() => {
-    const el = document.getElementById(id);
-    if (!ready || window.location.hash !== `#${id}` || !el) return;
-    const place = () => el.scrollIntoView({ block: "start" });
-    place();
+    let id: string;
+    try {
+      id = decodeURIComponent(hash.slice(1));
+    } catch {
+      // a malformed escape (`#%`) names no section
+      return;
+    }
+    if (!id) return;
+    const main = document.querySelector("main") ?? document.body;
+    let el = document.getElementById(id);
+    const place = () => el?.scrollIntoView({ block: "start" });
     const grows = new ResizeObserver(place);
-    grows.observe(el.parentElement ?? document.body);
-    const stop = () => grows.disconnect();
-    const settled = window.setTimeout(stop, 1500);
+    const appears = new MutationObserver(() => {
+      if (el || !(el = document.getElementById(id))) return;
+      appears.disconnect();
+      place();
+      grows.observe(main);
+    });
+    if (el) {
+      place();
+      grows.observe(main);
+    } else appears.observe(main, { childList: true, subtree: true });
+    const stop = () => {
+      grows.disconnect();
+      appears.disconnect();
+    };
+    const settled = window.setTimeout(stop, 3000);
     const away = ["wheel", "touchstart", "keydown"] as const;
     for (const ev of away) window.addEventListener(ev, stop, { once: true, passive: true });
     return () => {
@@ -63,7 +94,7 @@ function useAnchor(id: string, ready: boolean) {
       window.clearTimeout(settled);
       for (const ev of away) window.removeEventListener(ev, stop);
     };
-  }, [id, ready]);
+  }, [hash]);
 }
 
 function RepositorySettings({ ctx }: { ctx: Ctx }) {
@@ -71,31 +102,17 @@ function RepositorySettings({ ctx }: { ctx: Ctx }) {
   return (
     <div className="stack settings-page">
       <ListHead title="Repository settings" sub="Protected branches and tags, push rules, locked files, and keys and tokens to clone the repository." />
-      <Section title="Protected branches" description="Who can push and force-push to matching branches.">
-        <ProtectedBranches ctx={ctx} />
-      </Section>
-      <Section title="Protected tags" description="Who can create matching tags. Nobody can move or delete them by pushing; Maintainers can delete them here.">
-        <ProtectedTags ctx={ctx} />
-      </Section>
-      <Section title="Push rules" description="Checks every push (and every commit made in the browser) must pass.">
+      <ProtectedBranches ctx={ctx} />
+      <ProtectedTags ctx={ctx} />
+      <Section id="push-rules" title="Push rules" description="Checks every push (and every commit made in the browser) must pass.">
         <PushRules ctx={ctx} />
       </Section>
-      <Section title="Locked files" description="Files locked with git lfs lock: on the default branch, only their owner can change them.">
+      <Section id="locked-files" title="Locked files" description="Files locked with git lfs lock: on the default branch, only their owner can change them.">
         <LockedFiles ctx={ctx} />
       </Section>
-      <Section title="Deploy keys" description="SSH keys that reach this repository only, read-only unless allowed to write.">
-        <DeployKeys ctx={ctx} />
-      </Section>
-      <Section title="Deploy tokens" description="Credentials to clone the repository without a user account.">
-        <DeployTokens base={`/projects/${p.id}`} />
-      </Section>
-      <Section
-        id="mirroring"
-        title="Mirroring"
-        description="Keep this repository in step with another one, on any forge: pull its branches and tags from there (this repository is then read-only), or push them there after every change. Only the repository is mirrored: not issues, merge requests or LFS files."
-      >
-        <Mirrors ctx={ctx} />
-      </Section>
+      <DeployKeys ctx={ctx} />
+      <DeployTokens base={`/projects/${p.id}`} title="Deploy tokens" description="Credentials to clone the repository without a user account." />
+      <Mirrors ctx={ctx} />
     </div>
   );
 }
@@ -105,10 +122,68 @@ function MergeRequestSettings({ ctx }: { ctx: Ctx }) {
   return (
     <div className="stack settings-page">
       <ListHead title="Merge request settings" sub="What a merge request needs before it can be merged." />
-      <Section title="Merge request approvals" description="How many approvals a merge request needs, and from whom, before it can be merged.">
-        <ApprovalRules projectId={p.id} />
+      <Section id="merge-checks" title="Merge checks" description="What a merge request needs, besides approvals, before it can be merged.">
+        <MergeChecks ctx={ctx} />
       </Section>
+      <ApprovalRules projectId={p.id} />
     </div>
+  );
+}
+
+/** The pipeline, merge trains and security findings a merge request must get past (CI settings, saved in part). */
+function MergeChecks({ ctx }: { ctx: Ctx }) {
+  const q = useCiSettings(ctx.p.id);
+  return <Q q={q}>{(s) => <MergeChecksForm ctx={ctx} initial={s} />}</Q>;
+}
+
+function MergeChecksForm({ ctx, initial }: { ctx: Ctx; initial: S["ProjectCiSettings"] }) {
+  const qc = useQueryClient();
+  const form = useSaved({
+    only_merge_if_pipeline_succeeds: initial.only_merge_if_pipeline_succeeds,
+    merge_trains_enabled: initial.merge_trains_enabled,
+    block_new_security_findings: initial.block_new_security_findings,
+  });
+  const s = form.value;
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await saveCiSettings(qc, ctx.p.id, s);
+      form.done();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <form className="stack" onSubmit={save}>
+      <ErrorBox error={error} />
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={s.only_merge_if_pipeline_succeeds}
+          // merge trains test each merge request's pipeline: without this rule, they go too
+          onChange={(e) => form.set({ ...s, only_merge_if_pipeline_succeeds: e.target.checked, merge_trains_enabled: e.target.checked && s.merge_trains_enabled })}
+        />{" "}
+        Merge requests can only be merged when the pipeline succeeds
+      </label>
+      <label className="check">
+        <input type="checkbox" checked={s.merge_trains_enabled} disabled={!s.only_merge_if_pipeline_succeeds} onChange={(e) => form.set({ ...s, merge_trains_enabled: e.target.checked })} />{" "}
+        <span>
+          Merge through merge trains: each merge request is tested on top of the ones queued ahead of it, then they merge in order
+          {!s.only_merge_if_pipeline_succeeds && <span className="muted"> (needs the rule above)</span>}
+        </span>
+      </label>
+      <label className="check">
+        <input type="checkbox" checked={s.block_new_security_findings} onChange={(e) => form.set({ ...s, block_new_security_findings: e.target.checked })} />
+        <span>Merge requests whose pipeline finds new critical or high security findings can only be merged once those are fixed or dismissed</span>
+      </label>
+      <SaveRow dirty={form.dirty} busy={busy} saved={form.saved} />
+    </form>
   );
 }
 
@@ -124,11 +199,11 @@ function AutomationSettings({ ctx }: { ctx: Ctx }) {
         <SecurityScanning ctx={ctx} />
       </Section>
       <Section
+        id="dependency-updates"
         title="Dependency updates"
         description="Renovate opens merge requests that update this project's dependencies, as a bot member of the project. No token or pipeline to set up."
       >
         <DependencyUpdates ctx={ctx} />
-        <HostRules base={`/projects/${ctx.p.id}/renovate/host_rules`} empty="None. This instance's container registry needs none." />
       </Section>
       <Section
         id="ai-review"
@@ -153,7 +228,6 @@ function SmartViewSetting({ ctx }: { ctx: Ctx }) {
   const key = ["smart-view-settings", ctx.p.id];
   const q = useQuery({ queryKey: key, queryFn: () => api.get<S["SmartViewSettings"]>(`/projects/${ctx.p.id}/smart_view`) });
   // the Smart View's page links here when it is off
-  useAnchor("smart-view", !!q.data);
   const done = () => {
     qc.invalidateQueries({ queryKey: key });
     qc.invalidateQueries({ queryKey: ["map", ctx.p.id] });
@@ -162,42 +236,24 @@ function SmartViewSetting({ ctx }: { ctx: Ctx }) {
 }
 
 function SmartViewSettingForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S["SmartViewSettings"]; onSaved: () => void }) {
-  const [enabled, setEnabled] = useState(initial.enabled);
-  const [error, setError] = useState<unknown>(null);
-  const [msg, setMsg] = useState<string | null>(null);
-  const save = useMutation({
-    mutationFn: () => api.put(`/projects/${ctx.p.id}/smart_view`, { enabled }),
-    onSuccess: () => {
-      setError(null);
-      setMsg(enabled ? "The Smart View is on: the default branch is being mapped." : "The Smart View is off: its maps were removed.");
-      onSaved();
-    },
-    onError: setError,
-  });
   if (!initial.available && !initial.enabled) return <div className="muted small">This instance does not offer the Smart View.</div>;
   return (
-    <form
-      className="stack"
-      onSubmit={(e) => {
-        e.preventDefault();
-        save.mutate();
-      }}
-    >
-      <ErrorBox error={error} />
-      {msg && <div className="alert ok">{msg}</div>}
-      <label className="check">
-        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Map this project for the Smart View
-      </label>
+    <div className="stack">
+      <SettingSwitch
+        checked={initial.enabled}
+        onSave={async (on) => {
+          await api.put(`/projects/${ctx.p.id}/smart_view`, { enabled: on });
+          onSaved();
+        }}
+        confirmOff={{ title: "Turn the Smart View off?", body: "Its maps of this project are removed; turning it on again maps the default branch anew.", action: "Turn it off" }}
+      >
+        Map this project for the Smart View
+      </SettingSwitch>
       <p className="small muted" style={{ margin: 0 }}>
         The job runs as a bot of the project that can only read it, and nothing leaves the instance. Only the latest map of the default branch and of each open
         merge request is kept. An <code>assay.toml</code> at the top of the repository corrects what is found.
       </p>
-      <div>
-        <button className="btn primary" disabled={save.isPending || enabled === initial.enabled}>
-          Save
-        </button>
-      </div>
-    </form>
+    </div>
   );
 }
 
@@ -209,32 +265,18 @@ function AiReview({ ctx }: { ctx: Ctx }) {
 }
 
 function AiReviewForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S["AiReviewSettings"]; onSaved: () => void }) {
-  const [enabled, setEnabled] = useState(initial.enabled);
-  const [error, setError] = useState<unknown>(null);
-  const [msg, setMsg] = useState<string | null>(null);
-  const save = useMutation({
-    mutationFn: () => api.put(`/projects/${ctx.p.id}/ai_review`, { enabled }),
-    onSuccess: () => {
-      setError(null);
-      setMsg(enabled ? "AI review is on: merge requests show a Request AI review button." : "AI review is off.");
-      onSaved();
-    },
-    onError: setError,
-  });
   if (!initial.available && !initial.enabled) return <div className="muted small">This instance does not offer AI review.</div>;
   return (
-    <form
-      className="stack"
-      onSubmit={(e) => {
-        e.preventDefault();
-        save.mutate();
-      }}
-    >
-      <ErrorBox error={error} />
-      {msg && <div className="alert ok">{msg}</div>}
-      <label className="check">
-        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Offer AI review on merge requests
-      </label>
+    <div className="stack">
+      <SettingSwitch
+        checked={initial.enabled}
+        onSave={async (on) => {
+          await api.put(`/projects/${ctx.p.id}/ai_review`, { enabled: on });
+          onSaved();
+        }}
+      >
+        Offer AI review on merge requests
+      </SettingSwitch>
       <p className="small muted" style={{ margin: 0 }}>
         A review sends the merge request&apos;s changes, title and description to{" "}
         {initial.endpoint ? <strong>{initial.endpoint}</strong> : "the instance's model endpoint"}
@@ -246,12 +288,7 @@ function AiReviewForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S["AiRevie
         )}
         . A <code>.forgust/review.md</code> on the target branch adds the project&apos;s own guidelines.
       </p>
-      <div>
-        <button className="btn primary" disabled={save.isPending || enabled === initial.enabled}>
-          Save
-        </button>
-      </div>
-    </form>
+    </div>
   );
 }
 
@@ -260,12 +297,8 @@ function IntegrationSettings({ ctx }: { ctx: Ctx }) {
   return (
     <div className="stack settings-page">
       <ListHead title="Integration settings" sub="Webhooks and access tokens for scripts and other services." />
-      <Section title="Webhooks" description="Call a URL when something happens in this project.">
-        <Webhooks base={`/projects/${p.id}`} />
-      </Section>
-      <Section title="Access tokens" description="Tokens for scripts and integrations, acting as a bot member of this project.">
-        <AccessTokens base={`/projects/${p.id}`} />
-      </Section>
+      <Webhooks base={`/projects/${p.id}`} title="Webhooks" description="Call a URL when something happens in this project." />
+      <AccessTokens base={`/projects/${p.id}`} title="Access tokens" description="Tokens for scripts and integrations, acting as a bot member of this project." />
     </div>
   );
 }
@@ -274,12 +307,51 @@ function GeneralSettings({ ctx }: { ctx: Ctx }) {
   const p = ctx.p;
   const qc = useQueryClient();
   const nav = useNavigate();
-  const [name, setName] = useState(p.name);
-  const [description, setDescription] = useState(p.description);
-  const [visibility, setVisibility] = useState(p.visibility);
-  const [defaultBranch, setDefaultBranch] = useState(p.default_branch ?? "");
+  const general = useSaved({ name: p.name, description: p.description, visibility: p.visibility, default_branch: p.default_branch ?? "" });
+  const g = general.value;
+  const [savingGeneral, setSavingGeneral] = useState(false);
+  const [generalError, setGeneralError] = useState<unknown>(null);
+  const saveGeneral = async (e: FormEvent) => {
+    e.preventDefault();
+    setSavingGeneral(true);
+    setGeneralError(null);
+    try {
+      await api.put(`/projects/${p.id}`, { name: g.name, description: g.description, visibility: g.visibility, default_branch: g.default_branch || null });
+      general.done();
+      qc.invalidateQueries({ queryKey: ["project", p.id] });
+    } catch (err) {
+      setGeneralError(err);
+    } finally {
+      setSavingGeneral(false);
+    }
+  };
   const [path, setPath] = useState(p.path);
   const [target, setTarget] = useState("");
+  // a subgroup, or a place the list does not hold: by its path, as before the list
+  const [typed, setTyped] = useState("");
+  const { user } = useSession();
+  const groups = useGroups(p.can_own);
+  const places = [
+    ...(user?.namespace_id ? [{ value: String(user.namespace_id), label: `${user.username} (personal)` }] : []),
+    ...(groups.data ?? []).map((g) => ({ value: String(g.id), label: g.full_path })),
+  ]
+    .filter((o) => o.value !== String(p.namespace_id))
+    .concat([{ value: "path", label: "Another group, by its path…" }]);
+  const prompt = usePrompt();
+  const remove = async () => {
+    const typed = await prompt({
+      title: `Delete ${p.full_path}?`,
+      body: "Its repository, issues, merge requests, pipelines and everything else go with it. This cannot be undone.",
+      action: "Delete project",
+      danger: true,
+      input: { label: `Type ${p.full_path} to confirm`, match: p.full_path, mono: true },
+    });
+    if (typed === null) return;
+    await run(async () => {
+      await api.del(`/projects/${p.id}`);
+      nav("/");
+    }, "Deleted.")();
+  };
   const branches = useBranches(ctx);
   const { run, msg, error } = useFormRun(() => qc.invalidateQueries({ queryKey: ["project", p.id] }));
   // old links to a section that moved: follow it
@@ -301,7 +373,7 @@ function GeneralSettings({ ctx }: { ctx: Ctx }) {
       {msg && <div className="alert ok">{msg}</div>}
       {!archived && (
         <>
-          <Section title="Picture" description="The project's picture in lists, its page and the sidebar.">
+          <Section id="picture" title="Picture" description="The project's picture in lists, its page and the sidebar.">
             <AvatarUpload
               preview={<Tile name={p.name} src={p.avatar_url} big />}
               path={`/projects/${p.id}/avatar`}
@@ -310,27 +382,26 @@ function GeneralSettings({ ctx }: { ctx: Ctx }) {
               what="in lists and on the project's page"
             />
           </Section>
-          <Section title="General" description="Name, description, who can see the project, and the branch it opens on.">
-            <form className="stack" onSubmit={run(() => api.put(`/projects/${p.id}`, { name, description, visibility, default_branch: defaultBranch || null }), "Saved.")}>
+          <Section id="general" title="General" description="Name, description, who can see the project, and the branch it opens on.">
+            <form className="stack" onSubmit={saveGeneral}>
+              <ErrorBox error={generalError} />
               <Field label="Name">
-                <input value={name} onChange={(e) => setName(e.target.value)} />
+                <input value={g.name} onChange={(e) => general.set({ ...g, name: e.target.value })} />
               </Field>
               <Field label="Description">
-                <input value={description} onChange={(e) => setDescription(e.target.value)} />
+                <input value={g.description} onChange={(e) => general.set({ ...g, description: e.target.value })} />
               </Field>
               <Field label="Visibility">
-                <VisibilitySelect value={visibility} onChange={setVisibility} />
+                <VisibilitySelect value={g.visibility} onChange={(v) => general.set({ ...g, visibility: v })} />
               </Field>
               <Field label="Default branch">
                 <Select
-                  value={defaultBranch}
-                  onChange={setDefaultBranch}
-                  options={(branches.data ?? [{ name: defaultBranch } as S["BranchDto"]]).map((b) => ({ value: b.name, label: b.name }))}
+                  value={g.default_branch}
+                  onChange={(v) => general.set({ ...g, default_branch: v })}
+                  options={(branches.data ?? [{ name: g.default_branch } as S["BranchDto"]]).map((b) => ({ value: b.name, label: b.name }))}
                 />
               </Field>
-              <div>
-                <button className="btn primary">Save</button>
-              </div>
+              <SaveRow dirty={general.dirty} busy={savingGeneral} saved={general.saved} />
             </form>
           </Section>
         </>
@@ -342,44 +413,65 @@ function GeneralSettings({ ctx }: { ctx: Ctx }) {
         </Section>
       )}
       {p.can_own && (
-        <Section title="Advanced" description="Change the path, move the project to another group, or delete it." danger>
+        <Section id="path" title="Path and place" description="Where the project lives: its address, and the group or namespace it belongs to.">
           <div className="stack">
-            {p.redirects.length > 0 && (
-              <p className="muted small" style={{ margin: 0 }}>
-                Old paths still redirecting here: {p.redirects.join(", ")}
-              </p>
-            )}
             <form
-              className="row wrap"
+              className="stack"
               onSubmit={run(async () => {
                 const np = await api.post<S["ProjectDto"]>(`/projects/${p.id}/path`, { path });
                 nav(`/${np.full_path}/-/settings`, { replace: true });
               }, "Path changed. Old URLs and remotes keep working.")}
             >
-              <Field label="Change path">
+              <Field
+                label="Change path"
+                hint={
+                  p.redirects.length > 0
+                    ? `Old addresses and clone remotes keep working: they lead here. Leading here already: ${p.redirects.join(", ")}`
+                    : "Old addresses and clone remotes keep working: they lead here."
+                }
+              >
                 <input value={path} onChange={(e) => setPath(e.target.value)} />
               </Field>
-              <button className="btn" style={{ alignSelf: "flex-end" }}>
-                Rename
-              </button>
+              <div>
+                <button className="btn" disabled={!path.trim() || path === p.path}>
+                  Rename
+                </button>
+              </div>
             </form>
             <form
-              className="row wrap"
+              className="stack"
               onSubmit={run(async () => {
-                const ns = await fetchers.pathResolve(target);
-                const np = await api.post<S["ProjectDto"]>(`/projects/${p.id}/transfer`, { namespace_id: ns.id });
+                const id = target === "path" ? (await fetchers.pathResolve(typed.trim())).id : Number(target);
+                const np = await api.post<S["ProjectDto"]>(`/projects/${p.id}/transfer`, { namespace_id: id });
                 nav(`/${np.full_path}/-/settings`, { replace: true });
               }, "Project moved.")}
             >
-              <Field label="Move to another group" hint="Target group or user path">
-                <input placeholder="acme/platform" value={target} onChange={(e) => setTarget(e.target.value)} />
+              <Field label="Move to another group" hint="An organization, a subgroup, or your personal namespace">
+                <Select value={target} onChange={setTarget} placeholder="Choose where" options={places} />
               </Field>
-              <button className="btn" style={{ alignSelf: "flex-end" }}>
-                Move
-              </button>
+              {target === "path" && (
+                <Field label="Group path" hint="Its path, as in its address: acme/platform">
+                  <input className="mono" placeholder="acme/platform" value={typed} onChange={(e) => setTyped(e.target.value)} />
+                </Field>
+              )}
+              <div>
+                <button className="btn" disabled={!target || (target === "path" && !typed.trim())}>
+                  Move
+                </button>
+              </div>
             </form>
+          </div>
+        </Section>
+      )}
+      {p.can_own && (
+        <Section id="danger-zone" title="Danger zone" description="What touches the whole project at once." danger>
+          <div className="danger-rows">
             {archived ? (
-              <div className="row wrap" style={{ gap: 8, alignItems: "center" }}>
+              <div className="danger-row">
+                <div className="grow">
+                  <strong>Unarchive this project</strong>
+                  <p className="small muted">Writable again for its members, as before it was archived.</p>
+                </div>
                 <button
                   className="btn"
                   onClick={run(async () => {
@@ -390,10 +482,13 @@ function GeneralSettings({ ctx }: { ctx: Ctx }) {
                 >
                   Unarchive project
                 </button>
-                <span className="small muted">Writable again for its members, as before it was archived.</span>
               </div>
             ) : (
-              <div className="row wrap" style={{ gap: 8, alignItems: "center" }}>
+              <div className="danger-row">
+                <div className="grow">
+                  <strong>Archive this project</strong>
+                  <p className="small muted">Read-only for everyone (code, issues, merge requests, CI, settings), kept and readable until it is unarchived.</p>
+                </div>
                 <button
                   className="btn"
                   onClick={run(
@@ -411,26 +506,14 @@ function GeneralSettings({ ctx }: { ctx: Ctx }) {
                 >
                   Archive project
                 </button>
-                <span className="small muted">Read-only, kept and readable; unarchive it from its page or here.</span>
               </div>
             )}
-            <div>
-              <button
-                className="btn danger"
-                onClick={run(
-                  async () => {
-                    await api.del(`/projects/${p.id}`);
-                    nav("/");
-                  },
-                  "Deleted.",
-                  {
-                    title: `Delete ${p.full_path}?`,
-                    body: "Its repository, issues, merge requests, pipelines and everything else go with it. This cannot be undone.",
-                    action: "Delete project",
-                    danger: true,
-                  },
-                )}
-              >
+            <div className="danger-row">
+              <div className="grow">
+                <strong>Delete this project</strong>
+                <p className="small muted">Its repository, issues, merge requests, pipelines and everything else go with it, for good.</p>
+              </div>
+              <button className="btn danger" onClick={remove}>
                 Delete project
               </button>
             </div>
@@ -445,34 +528,52 @@ function ProtectedBranches({ ctx }: { ctx: Ctx }) {
   const qc = useQueryClient();
   const key = ["protected", ctx.p.id];
   const list = useQuery({ queryKey: key, queryFn: () => api.get<S["ProtectedBranchDto"][]>(`/projects/${ctx.p.id}/protected_branches`) });
-  const [form, setForm] = useState({
+  const blank = {
     name: "",
     push_access_level: "maintainer",
     merge_access_level: "maintainer",
     allow_force_push: false,
     allow_deploy_keys: false,
     code_owner_approval_required: false,
-  });
+  };
+  const [form, setForm] = useState(blank);
+  const [adding, setAdding] = useState(false);
+  const fresh = useJustAdded();
   const [error, setError] = useState<unknown>(null);
+  const close = () => {
+    setAdding(false);
+    setForm(blank);
+    setError(null);
+  };
   const add = useMutation({
     mutationFn: () => api.post(`/projects/${ctx.p.id}/protected_branches`, form),
     onSuccess: () => {
-      setForm({ ...form, name: "" });
+      fresh.mark(form.name);
+      close();
       qc.invalidateQueries({ queryKey: key });
     },
     onError: setError,
   });
   const del = useMutation({ mutationFn: (id: number) => api.del(`/projects/${ctx.p.id}/protected_branches/${id}`), onSuccess: () => qc.invalidateQueries({ queryKey: key }) });
   return (
-    <div className="stack">
-      <ErrorBox error={error} />
+    <ListSection
+      id="protected-branches"
+      title="Protected branches"
+      description="Who can push and force-push to matching branches."
+      add="Protect a branch"
+      adding={adding}
+      onClose={close}
+      onAdd={() => setAdding(true)}
+      form={
       <form
         className="stack"
+        aria-label="Protect a branch"
         onSubmit={(e) => {
           e.preventDefault();
           add.mutate();
         }}
       >
+        <ErrorBox error={error} />
         <div className="grid2">
           <Field label="Branch or pattern" hint="e.g. main or release/*">
             <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
@@ -498,32 +599,44 @@ function ProtectedBranches({ ctx }: { ctx: Ctx }) {
             />
             Require approval from code owners
           </label>
-          <div className="spacer" />
-          <button className="btn primary" disabled={!form.name}>
-            Protect
-          </button>
         </div>
+        <FormActions label="Protect" disabled={!form.name} busy={add.isPending} onCancel={close} />
       </form>
+      }
+    >
       <Q q={list}>
-        {(rules) => (
-          <div className="list">
-            {rules.length === 0 && <div className="item muted">No protected branches.</div>}
-            {rules.map((r) => (
-              <div className="item" key={r.id}>
-                <code className="grow">{r.name}</code>
-                <Badge>push: {r.push_access_level.replace("_", " ")}</Badge>
-                {r.allow_force_push && <Badge tone="warn">force push</Badge>}
-                {r.allow_deploy_keys && <Badge>deploy keys</Badge>}
-                {r.code_owner_approval_required && <Badge tone="accent">code owners approve</Badge>}
-                <button className="btn small danger" onClick={() => del.mutate(r.id)}>
-                  Unprotect
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
+        {(rules) =>
+          rules.length === 0 ? (
+            <EmptyRow>No protected branches.</EmptyRow>
+          ) : (
+            <div className="list" aria-label="Protected branches">
+              {rules.map((r) => (
+                <div className={"item" + fresh.fresh(r.name)} key={r.id}>
+                  <div className="grow" style={{ minWidth: 0 }}>
+                    <code>{r.name}</code>
+                    <div className="small muted">
+                      {[
+                        r.merge_access_level === r.push_access_level
+                          ? `${whoCan(r.push_access_level)} can push and merge`
+                          : `${whoCan(r.push_access_level)} can push, ${whoCan(r.merge_access_level)} can merge`,
+                        r.allow_force_push ? "force push allowed" : "no force push",
+                        r.allow_deploy_keys && "deploy keys can push",
+                        r.code_owner_approval_required && "code owners must approve",
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </div>
+                  </div>
+                  <button className="btn small danger" onClick={() => del.mutate(r.id)} aria-label={`Unprotect ${r.name}`}>
+                    Unprotect
+                  </button>
+                </div>
+              ))}
+            </div>
+          )
+        }
       </Q>
-    </div>
+    </ListSection>
   );
 }
 
@@ -535,26 +648,26 @@ function PushRules({ ctx }: { ctx: Ctx }) {
 }
 
 function PushRulesForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S["PushRules"]; onSaved: () => void }) {
-  const [r, setR] = useState(initial);
+  const rules = useSaved(initial);
+  const r = rules.value;
+  const setR = rules.set;
   const [error, setError] = useState<unknown>(null);
-  const [saved, setSaved] = useState(false);
   const save = useMutation({
     mutationFn: () => api.put(`/projects/${ctx.p.id}/push_rule`, r),
     onSuccess: () => {
       setError(null);
-      setSaved(true);
+      rules.done();
       onSaved();
     },
-    onError: (e) => {
-      setSaved(false);
-      setError(e);
-    },
+    onError: setError,
   });
   const text = (k: "commit_message_regex" | "commit_message_negative_regex" | "author_email_regex" | "branch_name_regex") => ({
     value: r[k],
     onChange: (e: ChangeEvent<HTMLInputElement>) => setR({ ...r, [k]: e.target.value }),
     className: "mono",
   });
+  // the patterns are folded unless one is set
+  const patterns = !!(initial.commit_message_regex || initial.commit_message_negative_regex || initial.author_email_regex || initial.branch_name_regex);
   return (
     <form
       className="stack"
@@ -564,38 +677,37 @@ function PushRulesForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S["PushRu
       }}
     >
       <ErrorBox error={error} />
-      <div className="grid2">
-        <Field label="Commit messages must match" hint="A regular expression, e.g. ^(feat|fix|docs): ">
-          <input {...text("commit_message_regex")} />
-        </Field>
-        <Field label="Commit messages must not match" hint="e.g. (?i)wip|fixup!">
-          <input {...text("commit_message_negative_regex")} />
-        </Field>
-        <Field label="Author emails must match" hint="e.g. @example\.com$">
-          <input {...text("author_email_regex")} />
-        </Field>
-        <Field label="New branch names must match" hint="e.g. ^(main|feature/.+|fix/.+)$">
-          <input {...text("branch_name_regex")} />
-        </Field>
+      <label className="check">
+        <input type="checkbox" checked={r.prevent_secrets} onChange={(e) => setR({ ...r, prevent_secrets: e.target.checked })} />
+        Refuse files that look like secrets (private keys, credentials)
+      </label>
+      <label className="check">
+        <input type="checkbox" checked={r.reject_unsigned_commits} onChange={(e) => setR({ ...r, reject_unsigned_commits: e.target.checked })} />
+        Accept only verified signed commits
+      </label>
+      <div style={{ maxWidth: 260 }}>
         <Field label="Largest file, in MB" hint="0: no limit (Git LFS files do not count)">
           <input type="number" min={0} value={r.max_file_size_mb} onChange={(e) => setR({ ...r, max_file_size_mb: Math.max(0, Number(e.target.value) || 0) })} />
         </Field>
       </div>
-      <div className="row wrap" style={{ gap: 20 }}>
-        <label className="check">
-          <input type="checkbox" checked={r.prevent_secrets} onChange={(e) => setR({ ...r, prevent_secrets: e.target.checked })} />
-          Refuse files that look like secrets (private keys, credentials)
-        </label>
-        <label className="check">
-          <input type="checkbox" checked={r.reject_unsigned_commits} onChange={(e) => setR({ ...r, reject_unsigned_commits: e.target.checked })} />
-          Accept only verified signed commits
-        </label>
-        <div className="spacer" />
-        {saved && <span className="small muted">Saved.</span>}
-        <button className="btn primary" disabled={save.isPending}>
-          Save push rules
-        </button>
-      </div>
+      <details className="more-rules" open={patterns}>
+        <summary>Advanced rules: patterns for commit messages, author emails and branch names</summary>
+        <div className="grid2">
+          <Field label="Commit messages must match" hint="A regular expression, e.g. ^(feat|fix|docs): ">
+            <input {...text("commit_message_regex")} />
+          </Field>
+          <Field label="Commit messages must not match" hint="e.g. (?i)wip|fixup!">
+            <input {...text("commit_message_negative_regex")} />
+          </Field>
+          <Field label="Author emails must match" hint="e.g. @example\.com$">
+            <input {...text("author_email_regex")} />
+          </Field>
+          <Field label="New branch names must match" hint="e.g. ^(main|feature/.+|fix/.+)$">
+            <input {...text("branch_name_regex")} />
+          </Field>
+        </div>
+      </details>
+      <SaveRow dirty={rules.dirty} busy={save.isPending} saved={rules.saved} label="Save push rules" />
     </form>
   );
 }
@@ -607,6 +719,11 @@ const INTERVALS: [number, string][] = [
   [24, "Every day"],
   [168, "Every week"],
 ];
+/** The intervals, and the one a project already has if it is none of them. */
+const intervals = (hours: number) => [
+  ...INTERVALS.map(([h, label]) => ({ value: String(h), label })),
+  ...(INTERVALS.some(([h]) => h === hours) ? [] : [{ value: String(hours), label: `Every ${hours} hours` }]),
+];
 
 function DependencyUpdates({ ctx }: { ctx: Ctx }) {
   const qc = useQueryClient();
@@ -616,9 +733,11 @@ function DependencyUpdates({ ctx }: { ctx: Ctx }) {
 }
 
 function DependencyUpdatesForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S["RenovateStatus"]; onSaved: () => void }) {
-  const [enabled, setEnabled] = useState(initial.enabled);
-  const [hours, setHours] = useState(initial.interval_hours);
-  const [onboarding, setOnboarding] = useState(initial.onboarding);
+  const form = useSaved({ enabled: initial.enabled, interval_hours: initial.interval_hours, onboarding: initial.onboarding });
+  const { enabled, interval_hours: hours, onboarding } = form.value;
+  const setEnabled = (v: boolean) => form.set({ ...form.value, enabled: v });
+  const setHours = (v: number) => form.set({ ...form.value, interval_hours: v });
+  const setOnboarding = (v: boolean) => form.set({ ...form.value, onboarding: v });
   const [error, setError] = useState<unknown>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const done = (m: string) => {
@@ -628,7 +747,10 @@ function DependencyUpdatesForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S
   };
   const save = useMutation({
     mutationFn: () => api.put(`/projects/${ctx.p.id}/renovate`, { enabled, interval_hours: hours, onboarding }),
-    onSuccess: () => done(enabled ? "Dependency updates are on: the first run starts within a minute." : "Dependency updates are off."),
+    onSuccess: () => {
+      form.done();
+      done(enabled ? "Dependency updates are on: the first run starts within a minute." : "Dependency updates are off.");
+    },
     onError: setError,
   });
   const runNow = useMutation({
@@ -639,6 +761,7 @@ function DependencyUpdatesForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S
   if (!initial.available) return <div className="muted small">This instance does not offer dependency updates.</div>;
   const last = initial.last_run;
   return (
+    <>
     <form
       className="stack"
       onSubmit={(e) => {
@@ -648,27 +771,27 @@ function DependencyUpdatesForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S
     >
       <ErrorBox error={error} />
       {msg && <div className="alert ok">{msg}</div>}
-      <label className="check">
-        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Open merge requests that update dependencies
-      </label>
-      <div className="grid2">
-        <Field label="Runs">
-          <select value={hours} onChange={(e) => setHours(Number(e.target.value))} disabled={!enabled}>
-            {INTERVALS.map(([h, label]) => (
-              <option key={h} value={h}>
-                {label}
-              </option>
-            ))}
-            {!INTERVALS.some(([h]) => h === hours) && <option value={hours}>Every {hours} hours</option>}
-          </select>
-        </Field>
-        <Field label="Configuration">
-          <select value={onboarding ? "onboarding" : "defaults"} onChange={(e) => setOnboarding(e.target.value === "onboarding")} disabled={!enabled}>
-            <option value="onboarding">First, a merge request that adds renovate.json</option>
-            <option value="defaults">Renovate's defaults, no config file needed</option>
-          </select>
-        </Field>
-      </div>
+      <Switch checked={enabled} onChange={setEnabled}>
+        Open merge requests that update dependencies
+      </Switch>
+      {/* its options, once it is on (kept and sent as they are while it is off) */}
+      {enabled && (
+        <div className="grid2">
+          <Field label="Runs">
+            <Select value={String(hours)} onChange={(v) => setHours(Number(v))} options={intervals(hours)} />
+          </Field>
+          <Field label="Configuration">
+            <Select
+              value={onboarding ? "onboarding" : "defaults"}
+              onChange={(v) => setOnboarding(v === "onboarding")}
+              options={[
+                { value: "onboarding", label: "First, a merge request that adds renovate.json" },
+                { value: "defaults", label: "Renovate's defaults, no config file needed" },
+              ]}
+            />
+          </Field>
+        </div>
+      )}
       {initial.enabled && (
         <div className="list" aria-label="Dependency updates status">
           <div className="item">
@@ -694,12 +817,10 @@ function DependencyUpdatesForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S
           </div>
         </div>
       )}
-      <div>
-        <button className="btn primary" disabled={save.isPending}>
-          Save
-        </button>
-      </div>
+      <SaveRow dirty={form.dirty} busy={save.isPending} saved={form.saved} />
     </form>
+    {enabled && <HostRules base={`/projects/${ctx.p.id}/renovate/host_rules`} empty="None. This instance's container registry needs none." />}
+    </>
   );
 }
 
@@ -719,10 +840,13 @@ function SecurityScanning({ ctx }: { ctx: Ctx }) {
 }
 
 function SecurityScanningForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S["ScanningStatus"]; onSaved: () => void }) {
-  const [enabled, setEnabled] = useState(initial.enabled);
-  const [scanners, setScanners] = useState<string[]>(initial.scanners);
-  const [hours, setHours] = useState(initial.interval_hours);
-  const [sbom, setSbom] = useState(initial.sbom_on_tags);
+  // sorted, here and as they are ticked, so ticking one off and on again changes nothing
+  const form = useSaved({ enabled: initial.enabled, scanners: [...initial.scanners].sort(), interval_hours: initial.interval_hours, sbom_on_tags: initial.sbom_on_tags });
+  const { enabled, scanners, interval_hours: hours, sbom_on_tags: sbom } = form.value;
+  const setEnabled = (v: boolean) => form.set({ ...form.value, enabled: v });
+  const setScanners = (v: string[]) => form.set({ ...form.value, scanners: [...v].sort() });
+  const setHours = (v: number) => form.set({ ...form.value, interval_hours: v });
+  const setSbom = (v: boolean) => form.set({ ...form.value, sbom_on_tags: v });
   const [error, setError] = useState<unknown>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const done = (m: string) => {
@@ -732,7 +856,10 @@ function SecurityScanningForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S[
   };
   const save = useMutation({
     mutationFn: () => api.put(`/projects/${ctx.p.id}/security/scanning`, { enabled, scanners, interval_hours: hours, sbom_on_tags: sbom }),
-    onSuccess: () => done(enabled ? "Security scanning is on: the first scan starts within a minute, as you." : "Security scanning is off; findings stay."),
+    onSuccess: () => {
+      form.done();
+      done(enabled ? "Security scanning is on: the first scan starts within a minute, as you." : "Security scanning is off; findings stay.");
+    },
     onError: setError,
   });
   const runNow = useMutation({
@@ -751,40 +878,31 @@ function SecurityScanningForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S[
     >
       <ErrorBox error={error} />
       {msg && <div className="alert ok">{msg}</div>}
-      <label className="check">
-        <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Scan the default branch and merge requests
-      </label>
-      <div className="stack" style={{ gap: 6 }}>
-        {initial.available.map((sc) => (
-          <label key={sc} className="check">
-            <input
-              type="checkbox"
-              disabled={!enabled}
-              checked={scanners.includes(sc)}
-              onChange={(e) => setScanners(e.target.checked ? [...scanners, sc] : scanners.filter((x) => x !== sc))}
-            />{" "}
-            {SCANNER_LABEL[sc] ?? sc}
+      <Switch checked={enabled} onChange={setEnabled}>
+        Scan the default branch and merge requests
+      </Switch>
+      {/* its scanners and schedule, once it is on (kept and sent as they are while it is off) */}
+      {enabled && (
+        <>
+          <FieldGroup label="Scanners" hint="The ones this instance runs.">
+            <div className="stack" style={{ gap: 6 }}>
+              {initial.available.map((sc) => (
+                <label key={sc} className="check">
+                  <input type="checkbox" checked={scanners.includes(sc)} onChange={(e) => setScanners(e.target.checked ? [...scanners, sc] : scanners.filter((x) => x !== sc))} />{" "}
+                  {SCANNER_LABEL[sc] ?? sc}
+                </label>
+              ))}
+            </div>
+          </FieldGroup>
+          <Field label="Default branch scans" hint="Also after pushes to the default branch (at most every 10 minutes) and on each new commit of a merge request. Scans run without the project's CI/CD variables.">
+            <Select value={String(hours)} onChange={(v) => setHours(Number(v))} options={intervals(hours)} />
+          </Field>
+          <label className="check">
+            <input type="checkbox" checked={sbom} onChange={(e) => setSbom(e.target.checked)} /> Make an SBOM (CycloneDX and SPDX) of each new tag, attached to its release
+            (for those who can read the code)
           </label>
-        ))}
-      </div>
-      <Field label="Default branch scans">
-        <select value={hours} onChange={(e) => setHours(Number(e.target.value))} disabled={!enabled}>
-          {INTERVALS.map(([h, label]) => (
-            <option key={h} value={h}>
-              {label}
-            </option>
-          ))}
-          {!INTERVALS.some(([h]) => h === hours) && <option value={hours}>Every {hours} hours</option>}
-        </select>
-      </Field>
-      <p className="small muted" style={{ margin: 0 }}>
-        Also after pushes to the default branch (at most every 10 minutes) and on each new commit of a merge request. Scans run without the project's CI/CD
-        variables.
-      </p>
-      <label className="check">
-        <input type="checkbox" disabled={!enabled} checked={sbom} onChange={(e) => setSbom(e.target.checked)} /> Make an SBOM (CycloneDX and SPDX) of each new tag,
-        attached to its release (for those who can read the code)
-      </label>
+        </>
+      )}
       {initial.enabled && (
         <div className="list" aria-label="Security scanning status">
           <div className="item">
@@ -809,11 +927,7 @@ function SecurityScanningForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S[
           </div>
         </div>
       )}
-      <div>
-        <button className="btn primary" disabled={save.isPending}>
-          Save
-        </button>
-      </div>
+      <SaveRow dirty={form.dirty} busy={save.isPending} saved={form.saved} />
     </form>
   );
 }
@@ -853,41 +967,72 @@ function LockedFiles({ ctx }: { ctx: Ctx }) {
   );
 }
 
+/** What a project keeps, the largest first: a bar per kind, of the whole, in one grey (no kind
+ *  is a state); the kinds that hold nothing in one line. Its quotas above, if any. */
 function StorageUse({ ctx }: { ctx: Ctx }) {
   const q = useQuery({ queryKey: ["storage", ctx.p.id], queryFn: () => api.get<S["ProjectStorageUse"]>(`/projects/${ctx.p.id}/storage`) });
   // the storage banner links here: once the numbers are in, show them
-  useAnchor("storage", !!q.data);
   return (
     <Q q={q}>
-      {(u) => (
-        <div className="stack">
-          {u.quota && <QuotaBar label="This project's quota" used={u.quota.used} quota={u.quota.quota} />}
-          {u.namespace && <QuotaBar label={`Quota of ${u.namespace.name}, shared by all its projects`} used={u.namespace.used} quota={u.namespace.quota} />}
-          <dl className="storage-use">
-            <dt>Repository</dt>
-            <dd>{bytes(u.repository_bytes)}</dd>
-            <dt>Uploads</dt>
-            <dd>
-              {bytes(u.uploads_bytes)} <span className="muted">({u.uploads_count} files)</span>
-            </dd>
-            <dt>CI artifacts and logs</dt>
-            <dd>{bytes(u.artifacts_bytes)}</dd>
-            <dt>Git LFS</dt>
-            <dd>{bytes(u.lfs_bytes)}</dd>
-            <dt>Container images</dt>
-            <dd>{bytes(u.registry_bytes)}</dd>
-            <dt>Total</dt>
-            <dd>
-              <strong>{bytes(u.total_bytes)}</strong>
-            </dd>
-          </dl>
-          {(u.quota || u.namespace) && (
-            <p className="small muted" style={{ margin: 0 }}>
-              Once a quota is full, new pushes, commits, merges, LFS files, CI artifacts, images and uploads are refused; reading, deleting and CI jobs carry on. Administrators set quotas.
-            </p>
-          )}
-        </div>
-      )}
+      {(u) => {
+        const total = u.total_bytes;
+        const kinds = [
+          { name: "Repository", few: "the repository", bytes: Math.max(0, u.repository_bytes) },
+          { name: "Uploads", few: "uploads", bytes: u.uploads_bytes, note: u.uploads_count > 0 ? `${u.uploads_count} file${u.uploads_count === 1 ? "" : "s"}` : undefined },
+          { name: "CI artifacts and logs", few: "CI artifacts and logs", bytes: u.artifacts_bytes },
+          { name: "Git LFS", few: "Git LFS", bytes: u.lfs_bytes },
+          { name: "Container images", few: "container images", bytes: u.registry_bytes },
+        ];
+        const held = kinds.filter((k) => k.bytes > 0).sort((a, b) => b.bytes - a.bytes);
+        const empty = kinds.filter((k) => k.bytes <= 0).map((k) => k.few);
+        return (
+          <div className="stack">
+            {u.quota && <QuotaBar label="This project's quota" used={u.quota.used} quota={u.quota.quota} />}
+            {u.namespace && <QuotaBar label={`Quota of ${u.namespace.name}, shared by all its projects`} used={u.namespace.used} quota={u.namespace.quota} />}
+            {total <= 0 || held.length === 0 ? (
+              <p className="muted" style={{ margin: 0 }}>
+                Nothing stored yet.
+              </p>
+            ) : (
+              <>
+                <p style={{ margin: 0 }}>
+                  <strong>{bytes(total)}</strong> <span className="muted">stored</span>
+                </p>
+                <div className="storage-kinds" role="list">
+                  {held.map((k) => {
+                    const share = k.bytes / total;
+                    const pct = share < 0.01 ? "<1 %" : `${Math.round(share * 100)} %`;
+                    return (
+                      <div className="storage-kind" role="listitem" key={k.name}>
+                        <span className="storage-name">{k.name}</span>
+                        <span className="storage-bar" role="meter" aria-label={k.name} aria-valuemin={0} aria-valuemax={total} aria-valuenow={k.bytes} aria-valuetext={`${bytes(k.bytes)}, ${pct} of ${bytes(total)}`}>
+                          {/* a kind that holds something stays visible, however small */}
+                          <span style={{ width: `max(2px, ${(share * 100).toFixed(2)}%)` }} />
+                        </span>
+                        <span className="storage-size">
+                          {bytes(k.bytes)}
+                          {k.note && <span className="muted"> · {k.note}</span>}
+                        </span>
+                        <span className="storage-pct muted">{pct}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                {empty.length > 0 && (
+                  <p className="small muted" style={{ margin: 0 }}>
+                    Nothing in {empty.length === 1 ? empty[0] : `${empty.slice(0, -1).join(", ")} or ${empty[empty.length - 1]}`}.
+                  </p>
+                )}
+              </>
+            )}
+            {(u.quota || u.namespace) && (
+              <p className="small muted" style={{ margin: 0 }}>
+                Once a quota is full, new pushes, commits, merges, LFS files, CI artifacts, images and uploads are refused; reading, deleting and CI jobs carry on. Administrators set quotas.
+              </p>
+            )}
+          </div>
+        );
+      }}
     </Q>
   );
 }
@@ -896,27 +1041,45 @@ function ProtectedTags({ ctx }: { ctx: Ctx }) {
   const qc = useQueryClient();
   const key = ["protected-tags", ctx.p.id];
   const list = useQuery({ queryKey: key, queryFn: () => api.get<S["ProtectedTagDto"][]>(`/projects/${ctx.p.id}/protected_tags`) });
-  const [form, setForm] = useState({ name: "", create_access_level: "maintainer" });
+  const blank = { name: "", create_access_level: "maintainer" };
+  const [form, setForm] = useState(blank);
+  const [adding, setAdding] = useState(false);
+  const fresh = useJustAdded();
   const [error, setError] = useState<unknown>(null);
+  const close = () => {
+    setAdding(false);
+    setForm(blank);
+    setError(null);
+  };
   const add = useMutation({
     mutationFn: () => api.post(`/projects/${ctx.p.id}/protected_tags`, form),
     onSuccess: () => {
-      setForm({ ...form, name: "" });
+      fresh.mark(form.name);
+      close();
       qc.invalidateQueries({ queryKey: key });
     },
     onError: setError,
   });
   const del = useMutation({ mutationFn: (id: number) => api.del(`/projects/${ctx.p.id}/protected_tags/${id}`), onSuccess: () => qc.invalidateQueries({ queryKey: key }) });
   return (
-    <div className="stack">
-      <ErrorBox error={error} />
+    <ListSection
+      id="protected-tags"
+      title="Protected tags"
+      description="Who can create matching tags. Nobody can move or delete them by pushing; Maintainers can delete them here."
+      add="Protect a tag"
+      adding={adding}
+      onClose={close}
+      onAdd={() => setAdding(true)}
+      form={
       <form
         className="stack"
+        aria-label="Protect a tag"
         onSubmit={(e) => {
           e.preventDefault();
           add.mutate();
         }}
       >
+        <ErrorBox error={error} />
         <div className="grid2">
           <Field label="Tag or pattern" hint="e.g. v1.0 or v*">
             <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
@@ -925,21 +1088,20 @@ function ProtectedTags({ ctx }: { ctx: Ctx }) {
             <Select value={form.create_access_level} onChange={(v) => setForm({ ...form, create_access_level: v })} options={PROTECT_LEVELS} />
           </Field>
         </div>
-        <div className="row">
-          <div className="spacer" />
-          <button className="btn primary" disabled={!form.name}>
-            Protect tags
-          </button>
-        </div>
+        <FormActions label="Protect tags" disabled={!form.name} busy={add.isPending} onCancel={close} />
       </form>
+      }
+    >
       <Q q={list}>
         {(rules) => (
           <div className="list" aria-label="Protected tags">
             {rules.length === 0 && <div className="item muted">No protected tags.</div>}
             {rules.map((r) => (
-              <div className="item" key={r.id}>
-                <code className="grow">{r.name}</code>
-                <Badge>create: {r.create_access_level.replace("_", " ")}</Badge>
+              <div className={"item" + fresh.fresh(r.name)} key={r.id}>
+                <div className="grow" style={{ minWidth: 0 }}>
+                  <code>{r.name}</code>
+                  <div className="small muted">{whoCan(r.create_access_level)} can create matching tags</div>
+                </div>
                 <button className="btn small danger" onClick={() => del.mutate(r.id)} aria-label={`Unprotect ${r.name}`}>
                   Unprotect
                 </button>
@@ -948,7 +1110,7 @@ function ProtectedTags({ ctx }: { ctx: Ctx }) {
           </div>
         )}
       </Q>
-    </div>
+    </ListSection>
   );
 }
 
@@ -956,56 +1118,75 @@ function DeployKeys({ ctx }: { ctx: Ctx }) {
   const qc = useQueryClient();
   const key = ["deploy-keys", ctx.p.id];
   const list = useQuery({ queryKey: key, queryFn: () => api.get<S["DeployKey"][]>(`/projects/${ctx.p.id}/deploy_keys`) });
-  const [form, setForm] = useState({ title: "", key: "", can_push: false });
+  const blank = { title: "", key: "", can_push: false };
+  const [form, setForm] = useState(blank);
+  const [adding, setAdding] = useState(false);
+  const fresh = useJustAdded();
   const [error, setError] = useState<unknown>(null);
+  const close = () => {
+    setAdding(false);
+    setForm(blank);
+    setError(null);
+  };
   const add = useMutation({
     mutationFn: () => api.post(`/projects/${ctx.p.id}/deploy_keys`, form),
     onSuccess: () => {
-      setForm({ title: "", key: "", can_push: false });
+      fresh.mark(form.title);
+      close();
       qc.invalidateQueries({ queryKey: key });
     },
     onError: setError,
   });
   const del = useMutation({ mutationFn: (id: number) => api.del(`/projects/${ctx.p.id}/deploy_keys/${id}`), onSuccess: () => qc.invalidateQueries({ queryKey: key }) });
   return (
-    <div className="stack">
-      <ErrorBox error={error} />
+    <ListSection
+      id="deploy-keys"
+      title="Deploy keys"
+      description="SSH keys that reach this repository only, read-only unless allowed to write."
+      add="Add a deploy key"
+      adding={adding}
+      onClose={close}
+      onAdd={() => setAdding(true)}
+      form={
       <form
         className="stack"
+        aria-label="New deploy key"
         onSubmit={(e) => {
           e.preventDefault();
           add.mutate();
         }}
       >
+        <ErrorBox error={error} />
         <Field label="Title">
           <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
         </Field>
         <Field label="Public key">
           <textarea placeholder="ssh-ed25519 AAAA…" value={form.key} onChange={(e) => setForm({ ...form, key: e.target.value })} />
         </Field>
-        <div className="row">
-          <label className="check grow">
-            <input type="checkbox" checked={form.can_push} onChange={(e) => setForm({ ...form, can_push: e.target.checked })} />
-            Grant write access
-          </label>
-          <button className="btn primary" disabled={!form.key}>
-            Add key
-          </button>
-        </div>
+        <label className="check">
+          <input type="checkbox" checked={form.can_push} onChange={(e) => setForm({ ...form, can_push: e.target.checked })} />
+          Grant write access
+        </label>
+        <FormActions label="Add key" disabled={!form.key} busy={add.isPending} onCancel={close} />
       </form>
+      }
+    >
       <Q q={list}>
         {(keys) =>
           keys.length === 0 ? (
-            <p className="muted">No deploy keys.</p>
+            <EmptyRow>No deploy keys.</EmptyRow>
           ) : (
             <div className="list">
               {keys.map((k) => (
-                <div className="item" key={k.id}>
-                  <div className="grow">
+                <div className={"item" + fresh.fresh(k.title)} key={k.id}>
+                  <div className="grow" style={{ minWidth: 0 }}>
                     <strong>{k.title}</strong>
-                    <div className="small faint mono">{k.fingerprint}</div>
+                    <div className="small muted">
+                      {k.can_push ? "Can read and push" : "Can read"} · added {timeAgo(k.created_at)} · <span className="mono" style={{ overflowWrap: "anywhere" }}>
+                        {k.fingerprint}
+                      </span>
+                    </div>
                   </div>
-                  <Badge>{k.can_push ? "read-write" : "read-only"}</Badge>
                   <button className="btn small danger" onClick={() => del.mutate(k.id)}>
                     Remove
                   </button>
@@ -1015,7 +1196,7 @@ function DeployKeys({ ctx }: { ctx: Ctx }) {
           )
         }
       </Q>
-    </div>
+    </ListSection>
   );
 }
 
@@ -1042,7 +1223,14 @@ function Mirrors({ ctx }: { ctx: Ctx }) {
     refetchInterval: (q) => (Date.now() < pollUntil || q.state.data?.some((m) => m.enabled && !m.last_success_at && !m.last_error) ? 2000 : false),
   });
   const [form, setForm] = useState<MirrorForm>(NEW_MIRROR);
+  const [adding, setAdding] = useState(false);
+  const fresh = useJustAdded();
   const [error, setError] = useState<unknown>(null);
+  const close = () => {
+    setAdding(false);
+    setForm(NEW_MIRROR);
+    setError(null);
+  };
   const done = (list: S["MirrorDto"][]) => {
     setPollUntil(Date.now() + 30_000);
     qc.setQueryData(key, list);
@@ -1051,8 +1239,8 @@ function Mirrors({ ctx }: { ctx: Ctx }) {
   const add = useMutation({
     mutationFn: () => api.post<S["MirrorDto"][]>(base, { ...form, interval_minutes: Number(form.interval_minutes) }),
     onSuccess: (l) => {
-      setForm(NEW_MIRROR);
-      setError(null);
+      fresh.mark(form.url.trim());
+      close();
       done(l);
     },
     onError: setError,
@@ -1075,15 +1263,24 @@ function Mirrors({ ctx }: { ctx: Ctx }) {
     if (ok) add.mutate();
   };
   return (
-    <div className="stack">
-      <ErrorBox error={error} />
+    <ListSection
+      id="mirroring"
+      title="Mirroring"
+      description="Keep this repository in step with another one, on any forge: pull its branches and tags from there (this repository is then read-only), or push them there after every change. Only the repository is mirrored: not issues, merge requests or LFS files."
+      add="Add a mirror"
+      adding={adding}
+      onClose={close}
+      onAdd={() => setAdding(true)}
+      form={
       <form
         className="stack"
+        aria-label="New mirror"
         onSubmit={(e) => {
           e.preventDefault();
           submit();
         }}
       >
+        <ErrorBox error={error} />
         <Segmented
           label="Direction"
           value={form.direction}
@@ -1101,7 +1298,7 @@ function Mirrors({ ctx }: { ctx: Ctx }) {
             <input value={form.username} autoComplete="off" onChange={(e) => setForm({ ...form, username: e.target.value })} />
           </Field>
           <Field label="Token or password" hint={form.direction === "push" ? "With write access to the repository. Kept encrypted." : "Optional for a public repository. Kept encrypted."}>
-            <input type="password" autoComplete="off" value={form.token} onChange={(e) => setForm({ ...form, token: e.target.value })} />
+            <PasswordInput autoComplete="off" value={form.token} onChange={(e) => setForm({ ...form, token: e.target.value })} />
           </Field>
         </div>
         {form.direction === "pull" ? (
@@ -1118,21 +1315,20 @@ function Mirrors({ ctx }: { ctx: Ctx }) {
             Protected branches only <span className="faint small">· and nothing deleted there</span>
           </label>
         )}
-        <div className="form-actions">
-          <button className="btn primary" disabled={!form.url.trim() || add.isPending}>
-            Add mirror
-          </button>
-        </div>
+        <FormActions label="Add mirror" disabled={!form.url.trim()} busy={add.isPending} onCancel={close} />
       </form>
+      }
+    >
+      {!adding && <ErrorBox error={error} />}
       <Q q={list}>
         {(mirrors) =>
           mirrors.length === 0 ? (
-            <p className="muted">No mirrors.</p>
+            <EmptyRow>No mirrors.</EmptyRow>
           ) : (
             <div className="list">
               {mirrors.map((m) => (
-                <div className="item mirror-row" key={m.id}>
-                  <Badge tone={m.direction === "pull" ? "accent" : undefined}>{m.direction === "pull" ? "Pull" : "Push"}</Badge>
+                <div className={"item mirror-row" + fresh.fresh(m.url)} key={m.id}>
+                  <Badge>{m.direction === "pull" ? "Pull" : "Push"}</Badge>
                   <div className="grow" style={{ minWidth: 0 }}>
                     <div className="mono small ellipsis">{m.url}</div>
                     <div className="small">
@@ -1183,6 +1379,6 @@ function Mirrors({ ctx }: { ctx: Ctx }) {
           )
         }
       </Q>
-    </div>
+    </ListSection>
   );
 }

@@ -31,29 +31,35 @@ test("run a pipeline from the UI", async ({ page }) => {
   await page.getByLabel("Variable value").fill("1");
   await page.getByRole("button", { name: "Run pipeline" }).click();
   await at(page, new RegExp(`^${P}/-/pipelines/\\d+$`));
-  await expect(page.locator(".status-badge").first()).toContainText("pending");
+  await expect(page.locator(".status-badge").first()).toContainText("Pending");
   // cancel it again
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(page.locator(".status-badge").first()).toContainText("canceled");
+  await expect(page.locator(".status-badge").first()).toContainText("Canceled");
 });
 
 test("CI/CD settings: runner token, variables", async ({ page }) => {
   await page.goto(`${P}/-/settings/ci_cd`);
   await expect(page.getByText("e2e fake runner")).toBeVisible();
-  await page.getByRole("button", { name: "New runner" }).click();
-  await page.getByPlaceholder("e.g. docker on build-01").fill("from the UI");
-  await page.getByPlaceholder("docker, linux").fill("e2e");
-  await page.getByRole("button", { name: "Create runner" }).click();
-  await expect(page.getByText("Copy this token now", { exact: false })).toBeVisible();
-  await expect(page.locator("pre code")).toContainText("gitlab-runner register");
-  await expect(page.locator("pre code")).toContainText("glrt-");
+  await page.getByRole("button", { name: "Add a runner" }).click();
+  const runner = page.getByRole("dialog", { name: "Add a runner" });
+  await runner.getByPlaceholder("e.g. docker on build-01").fill("from the UI");
+  await runner.getByPlaceholder("docker, linux").fill("e2e");
+  await runner.getByRole("button", { name: "Create runner" }).click();
+  // its token, shown once, in the window until Done
+  const created = page.getByRole("dialog", { name: "Runner created" });
+  await expect(created.getByText("Copy this token now", { exact: false })).toBeVisible();
+  await expect(created.locator("pre code")).toContainText("gitlab-runner register");
+  await expect(created.locator("pre code")).toContainText("glrt-");
+  await created.getByRole("button", { name: "Done" }).click();
+  await expect(created).toHaveCount(0);
 
   const key = `E2E_${Date.now() % 100000}`;
-  await page.getByRole("button", { name: "Add variable" }).click();
-  await page.getByLabel("Key", { exact: true }).fill(key);
-  await page.getByLabel("Value", { exact: true }).fill("super-secret-value");
-  await page.getByRole("checkbox", { name: /Masked/ }).check();
-  await page.getByRole("button", { name: "Save", exact: true }).last().click();
+  await page.getByRole("button", { name: "Add a variable" }).click();
+  const variable = page.getByRole("dialog", { name: "Add a variable" });
+  await variable.getByLabel("Key", { exact: true }).fill(key);
+  await variable.getByLabel("Value", { exact: true }).fill("super-secret-value");
+  await variable.getByRole("checkbox", { name: /Masked/ }).check();
+  await variable.getByRole("button", { name: "Add variable" }).click();
   const item = page.locator(".item", { hasText: key });
   await expect(item).toContainText("masked");
   await expect(item).not.toContainText("super-secret-value");
@@ -70,15 +76,18 @@ test("commit list shows pipeline status", async ({ page }) => {
 test("schedules", async ({ page }) => {
   test.skip(isMobile(page), "the form is the same on mobile");
   await page.goto(`${P}/-/pipeline_schedules`);
-  await page.getByRole("button", { name: "New schedule" }).click();
+  await page.getByRole("button", { name: "Add a schedule" }).click();
   await page.getByPlaceholder("Nightly build").fill("Nightly e2e");
-  await page.getByRole("button", { name: "Every weekday (03:00)" }).click();
+  // when, asked as a sentence: every weekday, at the 03:00 a new schedule starts with
+  await page.getByRole("combobox", { name: "Repeat" }).click();
+  await page.getByRole("option", { name: /^Every weekday/ }).click();
+  await expect(page.getByText("Runs every weekday at 03:00")).toBeVisible();
   await page.getByRole("button", { name: "Save schedule" }).click();
-  // a card, in words and in cron
-  const card = page.getByRole("article", { name: "Schedule Nightly e2e" }).first();
-  await expect(card).toContainText("Every weekday at 03:00");
-  await expect(card).toContainText("0 3 * * 1-5");
-  await card.getByRole("button", { name: "Delete schedule" }).click();
+  // a row, in words; its cron line in the sentence's title
+  const row = page.getByRole("article", { name: "Schedule Nightly e2e" }).first();
+  await expect(row).toContainText("Every weekday at 03:00");
+  await expect(row.locator(".sched-sentence")).toHaveAttribute("title", "cron: 0 3 * * 1-5");
+  await row.getByRole("button", { name: "Delete schedule" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Delete schedule" }).click();
   await expect(page.getByRole("article", { name: "Schedule Nightly e2e" })).toHaveCount(0);
 });

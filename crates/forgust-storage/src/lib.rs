@@ -137,6 +137,9 @@ pub trait Storage: Send + Sync + 'static {
     async fn tree_with_changes(&self, repo: i64, base: &str, changes: &[FileChange]) -> Result<String>;
     /// Commits in `from..to`, oldest first.
     async fn rev_list(&self, repo: i64, from: &str, to: &str, merges_only: bool) -> Result<Vec<String>>;
+    /// For each of these branches (names without `refs/heads/`), the commits it has that `base`
+    /// has not (ahead) and those `base` has that it has not (behind): (name, ahead, behind).
+    async fn ahead_behind(&self, repo: i64, base: &str, names: &[String]) -> Result<Vec<(String, u64, u64)>>;
     /// Replay the commits of `upstream..tip` onto `onto`; returns the new tip.
     /// Uses `git replay`, falling back to one `merge-tree` per commit. Refuses
     /// ranges with merge commits.

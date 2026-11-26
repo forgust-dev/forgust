@@ -1,12 +1,12 @@
-import { Component, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
-import { Check, Copy, EyeOff, Loader2, Lock, Search } from "lucide-react";
+import { Component, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type InputHTMLAttributes, type ReactNode } from "react";
+import { Check, Copy, Eye, EyeOff, Loader2, Lock, Search, type LucideIcon } from "lucide-react";
 import { Link, NavLink } from "react-router-dom";
 import { ApiError, LEVELS, bytes } from "../api/client";
 import { Select } from "./controls";
 import { useConfirm, type Ask } from "../shell/dialog";
 
 /** How long a wait goes unmarked: a page that comes sooner never shows a loader. */
-const SPINNER_DELAY = 400;
+export const SPINNER_DELAY = 400;
 /** A loader that comes within this of the last one's leaving goes on with its wait. */
 const SAME_WAIT = 100;
 // One wait can pass through several loaders (the session, a page's code, then its data):
@@ -128,8 +128,41 @@ export class PageErrorBoundary extends Component<{ resetKey: string; children: R
   }
 }
 
-export function Badge({ children, tone }: { children: ReactNode; tone?: "accent" | "ok" | "warn" }) {
-  return <span className={`badge ${tone ?? ""}`}>{children}</span>;
+/** What a state means, one color each on every page (styles.css, "states"): fine, broke, waits,
+ *  runs, merged, or nothing to say. */
+export type Tone = "ok" | "danger" | "warn" | "info" | "merged" | "neutral";
+
+/** A thing's state, as the UI convention draws it: a pill tinted with its tone, its icon and its
+ *  word; a spinner (Loader2) turns. `className` adds what styles and tests key on (`mr-state opened`). */
+export function StateBadge({ tone, icon: Icon, children, className, title }: { tone: Tone; icon?: LucideIcon; children: ReactNode; className?: string; title?: string }) {
+  return (
+    <span className={`state tone-${tone}${className ? ` ${className}` : ""}`} title={title}>
+      {Icon && <Icon size={13} aria-hidden className={Icon === Loader2 ? "spin" : undefined} />}
+      {children}
+    </span>
+  );
+}
+
+/** A property of a thing (a role, its visibility, a kind), as the UI convention draws it: a fine
+ *  grey outline, never colored, so that it never reads as a state. */
+export function Badge({ children }: { children: ReactNode }) {
+  return <span className="badge">{children}</span>;
+}
+
+/**
+ * A password input with a button that shows what was typed, and hides it again. The button is
+ * named "Show" (pressed while shown): a name with "password" in it would answer for the field.
+ */
+export function PasswordInput(props: Omit<InputHTMLAttributes<HTMLInputElement>, "type">) {
+  const [shown, setShown] = useState(false);
+  return (
+    <span className="password-input">
+      <input {...props} type={shown ? "text" : "password"} />
+      <button type="button" className="icon-btn" aria-label="Show" aria-pressed={shown} title={shown ? "Hide the password" : "Show the password"} onClick={() => setShown(!shown)}>
+        {shown ? <EyeOff size={15} /> : <Eye size={15} />}
+      </button>
+    </span>
+  );
 }
 
 export function Field({ label, hint, children }: { label: string; hint?: ReactNode; children: ReactNode }) {
@@ -472,7 +505,7 @@ export function ImportedMark({ x }: { x: Authored }) {
 /** A confidential issue: seen only by Reporters and up, its author and its assignees. */
 export function ConfidentialMark() {
   return (
-    <span className="pill warn confidential-mark" title="Confidential: only Reporters and up, the author and assignees can see it">
+    <span className="pill confidential-mark" title="Confidential: only Reporters and up, the author and assignees can see it">
       <Lock size={11} aria-hidden /> Confidential
     </span>
   );
@@ -481,7 +514,7 @@ export function ConfidentialMark() {
 /** An internal comment: seen only by the project's Reporters and up. */
 export function InternalMark() {
   return (
-    <span className="pill warn internal-mark" title="Internal: only Reporters and up can see this comment">
+    <span className="pill internal-mark" title="Internal: only Reporters and up can see this comment">
       <EyeOff size={11} aria-hidden /> Internal
     </span>
   );

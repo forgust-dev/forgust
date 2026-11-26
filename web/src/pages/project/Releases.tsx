@@ -1,9 +1,9 @@
 import { useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BookOpen, ExternalLink, FileArchive, GitCommitHorizontal, Image, Package, Paperclip, Pencil, Plus, Tag, Trash2, Wrench } from "lucide-react";
+import { BookOpen, ExternalLink, FileArchive, GitCommitHorizontal, Image, Package, Paperclip, Pencil, Plus, Tag, Trash2, Wrench, Clock } from "lucide-react";
 import { api, bytes, enc, qs, refLink, timeAgo, type S } from "../../api/client";
-import { AuthorLink, Empty, ErrorBox, Field, ListHead, Q } from "../../components/ui";
+import { AuthorLink, Empty, ErrorBox, Field, ListHead, Q, StateBadge } from "../../components/ui";
 import { DecideCard, type DecideRow } from "../../components/decide";
 import { MarkdownEditor } from "../../components/MarkdownEditor";
 import { useToast } from "../../shell/toast";
@@ -45,7 +45,7 @@ function ReleaseCard({ ctx, r, single }: { ctx: Ctx; r: S["ReleaseDto"]; single?
         <div className="grow" style={{ minWidth: 0 }}>
           <h2 className="release-title">{single ? r.name : <Link to={page}>{r.name}</Link>}</h2>
           <div className="row wrap small muted" style={{ gap: 10 }}>
-            <Link className="pill" to={refLink(ctx.web, "tree", r.tag_name)} title="The tag">
+            <Link className="ref-chip small" to={refLink(ctx.web, "tree", r.tag_name)} title="The tag">
               <Tag size={11} /> {r.tag_name}
             </Link>
             {r.commit && (
@@ -53,7 +53,11 @@ function ReleaseCard({ ctx, r, single }: { ctx: Ctx; r: S["ReleaseDto"]; single?
                 {r.commit.short_id}
               </Link>
             )}
-            {r.upcoming_release ? <span className="pill warn">Upcoming</span> : null}
+            {r.upcoming_release ? (
+              <StateBadge tone="warn" icon={Clock}>
+                Upcoming
+              </StateBadge>
+            ) : null}
             <span title={date.toLocaleString()}>
               {r.upcoming_release ? "Releases" : "Released"} {timeAgo(r.released_at)}
               {r.author_username && (
@@ -200,7 +204,11 @@ function ReleaseRow({ ctx, r }: { ctx: Ctx; r: S["ReleaseDto"] }) {
           <Link to={`${ctx.web}/-/releases/${enc(r.tag_name)}`} className="ellipsis">
             {r.name}
           </Link>
-          {r.upcoming_release && <span className="pill warn">Upcoming</span>}
+          {r.upcoming_release && (
+            <StateBadge tone="warn" icon={Clock}>
+              Upcoming
+            </StateBadge>
+          )}
         </div>
         <div className="row-meta">
           <span>{r.tag_name}</span>
@@ -476,10 +484,10 @@ function Form({ ctx, r }: { ctx: Ctx; r?: S["ReleaseDto"] }) {
           />
         </fieldset>
         <div className="row">
-          <button className="btn primary" disabled={busy || uploading > 0 || !tag.trim() || !!taken || (!tagExists && !from.trim())}>
+          <button className="btn primary large" aria-busy={busy || uploading > 0} disabled={busy || uploading > 0 || !tag.trim() || !!taken || (!tagExists && !from.trim())}>
             {busy ? "Saving…" : r ? "Save changes" : "Create release"}
           </button>
-          <button type="button" className="btn" onClick={() => nav(-1)}>
+          <button type="button" className="btn large" onClick={() => nav(-1)}>
             Cancel
           </button>
         </div>

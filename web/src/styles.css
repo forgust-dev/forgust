@@ -1,4 +1,11 @@
 :root {
+  /* controls of one size line up: buttons, fields and menus (taller on touch screens, below) */
+  --control-h: 30px;
+  --control-h-sm: 26px;
+  /* the one main action of a page */
+  --control-h-lg: 34px;
+  /* a dot for a state or a series: 9 or 10 px fall on half pixels at 125 or 150 % */
+  --dot: 8px;
   /* surfaces (cards, fields, menus) are white; the page under them is warm paper */
   --bg: #ffffff;
   --bg-page: #f9f7f4;
@@ -10,7 +17,6 @@
   --text-muted: #554e46;
   --text-faint: #6a625a;
   --accent: #b84a00;
-  --accent-hover: #a64300;
   --accent-soft: #fdeee3;
   /* text on --accent-soft */
   --accent-ink: #9a3d00;
@@ -27,16 +33,11 @@
   --warn: #9a6200;
   --warn-soft: #fdf4dc;
   --warn-border: #e6d29a;
-  --sev-critical: #8a1414;
-  --sev-critical-bg: #f9dada;
-  --sev-high: #b3263f;
-  --sev-high-bg: #fde6ea;
-  --sev-medium: #9a4a00;
-  --sev-medium-bg: #fdebd6;
-  --sev-low: #6f5c00;
-  --sev-low-bg: #f6efcc;
-  --sev-info: #33568c;
-  --sev-info-bg: #e3ecf8;
+  --info: #1f63c7;
+  --info-soft: #e6eefb;
+  --merged: #7a3fc4;
+  --merged-soft: #f1e9fc;
+  --on-tone: #ffffff;
   --add-bg: #e9f7ef;
   --add-num: #c9ecd8;
   --del-bg: #fdeef0;
@@ -49,11 +50,13 @@
   --bg-side: #f3eee7;
   --chip-bg: #efe9e1;
   --side-active-bg: #ffffff;
+  --side-hover: #e8e2d9;
+  /* as strong as dark's row hover on its card (contrast 1.10): visible, and not the page's color */
+  --row-hover: #f7f3ee;
   --side-active-ring: #e6dfd5;
   --primary-bg: #1c1915;
   --primary-hover: #36302a;
   --primary-text: #ffffff;
-  --on-ink: #ffffff;
   --tile-bg: #1c1915;
   --tile-fg: #ff6500;
   --group-tile-bg: #e9e2d8;
@@ -67,18 +70,17 @@
   --emph-row: #2a2520;
   --emph-line: #3a342d;
   --emph-link: #ffb27d;
-  --emph-ok: #8fe0a9;
-  --emph-bad: #ff9b8f;
-  --emph-warn: #f2c25c;
-  --emph-btn-bg: #ff6500;
+  /* on the dark panel, a tone takes the dark theme's color: one green, one red… per theme */
+  --emph-ok: #5fcf98;
+  --emph-bad: #f0738a;
+  --emph-warn: #f2b04f;
+  --emph-info: #6aa7ff;
+  --emph-btn-bg: #f5f1ec;
   --emph-btn-text: #1c1915;
-  --chart-ok: #2f9e5a;
-  --chart-bad: #a8261d;
   --chart-other: #8b8378;
   --shadow: 0 1px 2px rgba(60, 40, 20, 0.05), 0 1px 3px rgba(60, 40, 20, 0.04);
   /* what floats over the page: menus, popovers, toasts */
   --shadow-pop: 0 12px 32px rgba(60, 40, 20, 0.14), 0 2px 6px rgba(60, 40, 20, 0.06);
-  --chart-warn: #b07800;
   /* motion: strong curves (the built-in ones are too weak to read) */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
@@ -101,7 +103,6 @@
     --text-muted: #9ca3af;
     --text-faint: #767e8c;
     --accent: #ff6500;
-    --accent-hover: #e65b00;
     --accent-soft: #391e0f;
     --accent-text: #0d0e12;
     --danger: #f0738a;
@@ -112,16 +113,11 @@
     --warn: #f2b04f;
     --warn-soft: #3a2c12;
     --warn-border: #5e4818;
-    --sev-critical: #ffb4b4;
-    --sev-critical-bg: #5c1a1d;
-    --sev-high: #f7889c;
-    --sev-high-bg: #3d1c25;
-    --sev-medium: #f4a95f;
-    --sev-medium-bg: #3d2814;
-    --sev-low: #e2cb6a;
-    --sev-low-bg: #332e12;
-    --sev-info: #93b6ec;
-    --sev-info-bg: #1d2a3e;
+    --info: #6aa7ff;
+    --info-soft: #172540;
+    --merged: #b48cf2;
+    --merged-soft: #2a1f3d;
+    --on-tone: #0d0e12;
     --add-bg: #17301f;
     --add-num: #1e4029;
     --del-bg: #3a1c22;
@@ -134,11 +130,12 @@
     --tab-mark: #ff6500;
     --chip-bg: #22252d;
     --side-active-bg: #22252d;
+    --side-hover: var(--bg-hover);
+    --row-hover: var(--bg-subtle);
     --side-active-ring: #30343d;
-    --primary-bg: #ff6500;
-    --primary-hover: #e65b00;
+    --primary-bg: #f5f5f6;
+    --primary-hover: #d9dbe0;
     --primary-text: #0d0e12;
-    --on-ink: #f5f5f6;
     --tile-bg: #22252d;
     --tile-fg: #ff6500;
     --group-tile-bg: #22252d;
@@ -154,12 +151,10 @@
     --emph-ok: #5fcf98;
     --emph-bad: #f0738a;
     --emph-warn: #f2b04f;
-    --emph-btn-bg: #ff6500;
+    --emph-info: #6aa7ff;
+    --emph-btn-bg: #f5f5f6;
     --emph-btn-text: #0d0e12;
-    --chart-ok: #5fcf98;
-    --chart-bad: #f0738a;
     --chart-other: #767e8c;
-    --chart-warn: #f2b04f;
     --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.5);
     color-scheme: dark;
   }
@@ -176,7 +171,6 @@
   --text-muted: #9ca3af;
   --text-faint: #767e8c;
   --accent: #ff6500;
-  --accent-hover: #e65b00;
   --accent-soft: #391e0f;
   --accent-text: #0d0e12;
   --danger: #f0738a;
@@ -187,16 +181,11 @@
   --warn: #f2b04f;
   --warn-soft: #3a2c12;
   --warn-border: #5e4818;
-  --sev-critical: #ffb4b4;
-  --sev-critical-bg: #5c1a1d;
-  --sev-high: #f7889c;
-  --sev-high-bg: #3d1c25;
-  --sev-medium: #f4a95f;
-  --sev-medium-bg: #3d2814;
-  --sev-low: #e2cb6a;
-  --sev-low-bg: #332e12;
-  --sev-info: #93b6ec;
-  --sev-info-bg: #1d2a3e;
+  --info: #6aa7ff;
+  --info-soft: #172540;
+  --merged: #b48cf2;
+  --merged-soft: #2a1f3d;
+  --on-tone: #0d0e12;
   --add-bg: #17301f;
   --add-num: #1e4029;
   --del-bg: #3a1c22;
@@ -209,11 +198,12 @@
   --tab-mark: #ff6500;
   --chip-bg: #22252d;
   --side-active-bg: #22252d;
+  --side-hover: var(--bg-hover);
+  --row-hover: var(--bg-subtle);
   --side-active-ring: #30343d;
-  --primary-bg: #ff6500;
-  --primary-hover: #e65b00;
+  --primary-bg: #f5f5f6;
+  --primary-hover: #d9dbe0;
   --primary-text: #0d0e12;
-  --on-ink: #f5f5f6;
   --tile-bg: #22252d;
   --tile-fg: #ff6500;
   --group-tile-bg: #22252d;
@@ -229,12 +219,10 @@
   --emph-ok: #5fcf98;
   --emph-bad: #f0738a;
   --emph-warn: #f2b04f;
-  --emph-btn-bg: #ff6500;
+  --emph-info: #6aa7ff;
+  --emph-btn-bg: #f5f5f6;
   --emph-btn-text: #0d0e12;
-  --chart-ok: #5fcf98;
-  --chart-bad: #f0738a;
   --chart-other: #767e8c;
-  --chart-warn: #f2b04f;
   --shadow-pop: 0 12px 32px rgba(0, 0, 0, 0.5);
   color-scheme: dark;
 }
@@ -347,13 +335,14 @@ h3 {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  height: 34px;
+  height: var(--control-h);
   padding: 0 12px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   background: var(--bg);
   color: var(--text);
   font: inherit;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
@@ -372,19 +361,10 @@ h3 {
   border-color: var(--primary-bg);
   color: var(--primary-text);
 }
-.btn.primary:hover {
+/* disabled, a main button stays itself, faded (.btn:disabled), and does not answer the mouse */
+.btn.primary:not(:disabled):hover {
   background: var(--primary-hover);
   border-color: var(--primary-hover);
-}
-/* the positive action of a review (approve, run): the brand's orange */
-.btn.accent {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-text);
-}
-.btn.accent:hover {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
 }
 .btn.danger {
   color: var(--danger);
@@ -394,9 +374,30 @@ h3 {
   background: var(--danger-soft);
 }
 .btn.small {
-  height: 28px;
+  height: var(--control-h-sm);
   padding: 0 8px;
   font-size: 12px;
+}
+/* the one main action of a page, a step taller: the buttons of its head, a creation page's
+   submit and its Cancel, Merge. Every other button, Save and a window's included, is the
+   usual size. */
+.btn.large,
+.list-head .btn:not(.small),
+.form-actions .btn:not(.small) {
+  height: var(--control-h-lg);
+  padding: 0 14px;
+  font-size: 14px;
+}
+/* on a touch screen, controls fit a finger */
+@media (pointer: coarse) {
+  :root {
+    --control-h: 36px;
+    --control-h-sm: 30px;
+    --control-h-lg: 36px;
+  }
+  .btn {
+    font-size: 14px;
+  }
 }
 .btn.ghost {
   border-color: transparent;
@@ -405,8 +406,8 @@ input,
 select,
 textarea {
   width: 100%;
-  height: 34px;
-  padding: 6px 10px;
+  height: var(--control-h);
+  padding: 4px 10px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   background: var(--bg);
@@ -416,6 +417,7 @@ textarea {
 textarea {
   height: auto;
   min-height: 80px;
+  padding: 6px 10px;
   font-family: var(--mono);
   font-size: 12px;
 }
@@ -456,7 +458,7 @@ input[type="radio"] {
   gap: 8px;
   width: 100%;
   min-width: 0;
-  height: 34px;
+  height: var(--control-h);
   padding: 0 10px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
@@ -488,9 +490,13 @@ input[type="radio"] {
   display: inline-flex;
   color: var(--text-muted);
 }
-/* the positioner places a popup and is its layer: above the top bar, under dialogs */
+/* the positioner places a popup and is its layer: above the top bar, under dialogs; but above
+   the window it was opened from (a form's select, date or search, controls.tsx) */
 .positioner {
   z-index: 60;
+}
+.positioner.over-window {
+  z-index: 152;
 }
 .select-menu,
 .dropdown {
@@ -633,6 +639,7 @@ a.dropdown-item:focus-visible {
 
 /* segmented control */
 .segmented {
+  position: relative;
   display: inline-grid;
   grid-auto-columns: minmax(0, 1fr);
   grid-auto-flow: column;
@@ -640,7 +647,27 @@ a.dropdown-item:focus-visible {
   border-radius: var(--radius);
   background: var(--chip-bg);
 }
+/* the chosen segment's pill, one per control: it slides to the segment chosen. Segmented sets
+   --n (segments) and --at (the chosen one); all are one width, so a step is the pill's width */
+.segmented::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc((100% - 4px) / var(--n, 1));
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  box-shadow: 0 1px 2px rgba(60, 40, 20, 0.1);
+  transform: translateX(calc(var(--at, 0) * 100%));
+  transition: transform 180ms var(--ease-out);
+}
+.segmented[data-none]::before {
+  display: none;
+}
 .segment {
+  position: relative; /* above the pill */
+  display: grid;
   padding: 4px 12px;
   border: 0;
   border-radius: var(--radius-sm);
@@ -655,10 +682,16 @@ a.dropdown-item:focus-visible {
   cursor: pointer;
 }
 .segment[data-checked] {
-  background: var(--bg);
   color: var(--text);
   font-weight: 600;
-  box-shadow: 0 1px 2px rgba(60, 40, 20, 0.1);
+}
+/* the label and its hidden bold copy share one cell, so the cell is as wide as the bold */
+.segment > span {
+  grid-area: 1 / 1;
+}
+.segment-width {
+  font-weight: 600;
+  visibility: hidden;
 }
 .segment[data-disabled] {
   color: var(--text-faint);
@@ -716,7 +749,12 @@ div.field {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  font-size: 13px;
   font-weight: 500;
+}
+/* labels at 13 px; what is typed or chosen at the page's 14 */
+:where(label, div).field :where(input:not([type="checkbox"]):not([type="radio"]), select, .select) {
+  font-size: 14px;
 }
 label.field .hint,
 div.field .hint {
@@ -728,6 +766,7 @@ label.check {
   display: flex;
   align-items: center;
   gap: 8px;
+  font-size: 13px;
 }
 /* a choice whose text may wrap: the box stays on the first line */
 label.check.top {
@@ -780,33 +819,85 @@ form.stack {
   border-top: 0;
 }
 .list > .item:hover {
-  background: var(--bg-subtle);
+  background: var(--row-hover);
 }
 
-.badge {
+/* ---- attributes, as the UI convention draws them: a property of the thing (its visibility, a
+   role, what protects it, a kind), a fine grey outline and maybe a small icon; never colored, so
+   that it never reads as a state (Badge, `.pill`) */
+.badge,
+.pill {
   display: inline-flex;
+  flex: none;
   align-items: center;
+  gap: 4px;
   height: 20px;
   padding: 0 7px;
+  border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
-  background: var(--bg-hover);
+  background: transparent;
   color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: lowercase;
+  font: 500 12px/1 var(--sans);
   white-space: nowrap;
 }
-.badge.accent {
-  background: var(--accent-soft);
-  color: var(--accent-ink);
+.badge svg,
+.pill svg {
+  flex: none;
 }
-.badge.ok {
-  background: var(--ok-soft);
-  color: var(--ok);
+a.badge:hover,
+a.pill:hover {
+  border-color: var(--text-faint);
+  color: var(--text);
+  text-decoration: none;
 }
-.badge.warn {
-  background: var(--warn-soft);
-  color: var(--warn);
+
+/* ---- references: a branch, a tag, a commit, a milestone; a grey chip in mono, the same on
+   every page, and clickable (`.ref-chip`, `.sha`, `.milestone-chip`) */
+.ref-chip,
+.sha,
+.milestone-chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  max-width: 100%;
+  padding: 0 7px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--chip-bg);
+  color: var(--text);
+  font: 500 12px/1 var(--mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ref-chip svg,
+.milestone-chip svg {
+  flex: none;
+  color: var(--text-muted);
+}
+a.ref-chip:hover,
+a.sha:hover,
+a.milestone-chip:hover {
+  background: var(--border-strong);
+  text-decoration: none;
+}
+/* ---- the UI convention's reference page (/-/ui) */
+.ui-kit-rows {
+  display: grid;
+  gap: 14px;
+}
+.ui-kit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.ui-kit-bell {
+  position: relative;
+  display: inline-flex;
+  padding: 6px;
 }
 
 .alert {
@@ -829,6 +920,11 @@ form.stack {
   border-color: var(--warn-border);
   background: var(--warn-soft);
   color: var(--warn);
+}
+/* an alert's icon sits in its first line, centered on the text */
+.alert > svg {
+  margin-right: 6px;
+  vertical-align: -0.2em;
 }
 
 .tabs {
@@ -983,12 +1079,18 @@ form.stack {
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 34px;
+  height: 30px;
   padding: 0 14px;
   border-top: 1px solid var(--border);
+  font-size: 13.5px;
+}
+@media (pointer: coarse) {
+  .tree-row {
+    height: 36px;
+  }
 }
 .tree-row:hover {
-  background: var(--bg-subtle);
+  background: var(--row-hover);
 }
 .tree-row .icon {
   width: 16px;
@@ -1203,16 +1305,16 @@ form.stack {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 14px;
+  padding: 7px 14px;
   border-top: 1px solid var(--border);
 }
-.sha {
-  font-family: var(--mono);
-  font-size: 12px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: var(--bg-hover);
-  color: var(--text);
+.commit-row .row-title {
+  font-size: 14px;
+}
+.list .item.commit-row,
+.list.rows > .item.commit-row {
+  padding-top: 7px;
+  padding-bottom: 7px;
 }
 
 /* ---------------------------------------------------------------- review */
@@ -1283,16 +1385,6 @@ form.stack {
 .thread.boxed:not(.resolved) .thread-head {
   background: var(--warn-soft);
   border-bottom-color: var(--warn-border);
-}
-.thread-state {
-  font-size: 12px;
-  font-weight: 600;
-}
-.thread-state.open {
-  color: var(--warn);
-}
-.thread-state.resolved {
-  color: var(--ok);
 }
 .thread.boxed .thread-notes {
   padding: 8px 12px 10px;
@@ -1506,8 +1598,8 @@ kbd {
   align-items: center;
   justify-content: center;
   flex: none;
-  width: 34px;
-  height: 34px;
+  width: var(--control-h);
+  height: var(--control-h);
   padding: 0;
   border: 0;
   border-radius: var(--radius);
@@ -1519,6 +1611,159 @@ kbd {
 .icon-btn:hover {
   background: var(--bg-hover);
   color: var(--text);
+}
+/* a password field and its Show button, inside it on the right */
+.password-input {
+  position: relative;
+  display: block;
+}
+.password-input input {
+  padding-right: 38px;
+}
+.password-input .icon-btn {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: calc(var(--control-h) - 6px);
+  height: calc(var(--control-h) - 6px);
+}
+/* a settings form's foot: Save, and "Saved" beside it after a save (components/settings.tsx) */
+.save-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.saved-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ok);
+  font-size: 13px;
+  font-weight: 600;
+}
+/* the danger zone of a settings page: one row per action, what it does beside it */
+.danger-rows {
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border));
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+}
+.danger-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 12px 14px;
+}
+.danger-row + .danger-row {
+  border-top: 1px solid var(--border);
+}
+.danger-row p {
+  margin: 2px 0 0;
+}
+/* more settings, folded until needed (the push rules' patterns) */
+.more-rules > summary {
+  width: fit-content;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.more-rules[open] > summary {
+  margin-bottom: 12px;
+}
+/* a date, typed or picked on a calendar (components/DateField.tsx) */
+.date-field {
+  position: relative;
+  display: block;
+  width: 172px;
+  max-width: 100%;
+}
+.date-field input {
+  padding-right: 38px;
+  font-variant-numeric: tabular-nums;
+}
+.date-field > .icon-btn {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: calc(var(--control-h) - 6px);
+  height: calc(var(--control-h) - 6px);
+}
+.calendar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.calendar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.calendar-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+.calendar-grid,
+.calendar-row {
+  display: grid;
+  gap: 2px;
+}
+.calendar-row {
+  grid-template-columns: repeat(7, 32px);
+}
+.calendar-wd {
+  padding: 2px 0 4px;
+  color: var(--text-faint);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: center;
+}
+.calendar-day {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+.calendar-day:hover {
+  background: var(--bg-hover);
+}
+.calendar-day.out {
+  color: var(--text-faint);
+}
+/* today, a ring; the chosen day, orange (what is selected) */
+.calendar-day.today {
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  font-weight: 600;
+}
+.calendar-day.on {
+  background: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+  box-shadow: none;
+}
+.calendar-day:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.calendar-foot {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+/* the top bar has the sidebar's color, which --bg-hover matches in light */
+.topbar .icon-btn:hover {
+  background: var(--side-hover);
 }
 /* a theme change: the page crossfades to the new colours (theme.tsx), and the
    button's new icon turns in (Shell.tsx), the button itself stays put */
@@ -1742,7 +1987,7 @@ kbd {
   flex: none;
 }
 .side-link:hover {
-  background: var(--bg-hover);
+  background: var(--side-hover);
   color: var(--text);
   text-decoration: none;
 }
@@ -1769,31 +2014,19 @@ kbd {
 .side-link.sub::before {
   content: "";
   position: absolute;
-  left: -11px;
+  left: -12px;
   top: 50%;
-  width: 6px;
-  height: 6px;
-  margin-top: -3px;
-  border-radius: 2px;
+  width: var(--dot);
+  height: var(--dot);
+  margin-top: calc(var(--dot) / -2);
+  border-radius: 50%;
 }
 .side-link.sub.active::before {
   background: var(--brand);
 }
 .side-link .count {
   min-width: 20px;
-  padding: 0 6px;
-  border-radius: var(--radius-sm);
-  background: var(--chip-bg);
-  color: var(--text-muted);
-  font-family: var(--sans);
-  font-size: 11.5px;
-  font-weight: 600;
-  line-height: 18px;
-  text-align: center;
-}
-.side-link.active .count {
-  background: var(--accent-soft);
-  color: var(--accent-ink);
+  text-align: right;
 }
 .side-link.back {
   margin-bottom: 6px;
@@ -2032,8 +2265,10 @@ kbd {
 .admin-head {
   margin-bottom: 22px;
 }
+/* the admin area's and your settings' titles, as every list page's (24 px) */
 .admin-head h1 {
   margin: 2px 0 0;
+  font-size: 24px;
 }
 /* the project card at the top of the sidebar: name, then where it lives */
 .side-context-text {
@@ -2353,6 +2588,42 @@ kbd {
   gap: 8px;
   margin-top: 20px;
 }
+/* a window that adds a row to a list or changes one (FormDialog): the confirmation's look,
+   wider; a long form scrolls under its title, its buttons stay in view at the bottom */
+.modal.form-modal {
+  top: 10vh;
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100dvh - 10vh - 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 20px 22px 0;
+}
+.form-modal .modal-title {
+  margin-bottom: 14px;
+}
+.form-modal .modal-actions {
+  position: sticky;
+  bottom: 0;
+  margin: 6px -22px 0;
+  padding: 14px 22px 18px;
+  background: var(--bg);
+}
+@media (max-width: 600px) {
+  .modal.form-modal {
+    top: 12px;
+    max-height: calc(100dvh - 24px);
+  }
+}
+/* the row just added to a list: highlighted as it comes, then back to itself in a second */
+@keyframes just-added {
+  0%,
+  30% {
+    background-color: var(--accent-soft);
+  }
+}
+.just-added {
+  animation: just-added 1400ms var(--ease-out);
+}
 /* what cannot be undone, confirmed: the one red button */
 .btn.danger.solid {
   border-color: var(--danger);
@@ -2410,7 +2681,7 @@ kbd {
   padding: 10px 8px 10px 12px;
 }
 .toast.info > svg:first-child {
-  color: var(--accent);
+  color: var(--info);
   margin-top: 2px;
 }
 .toast-body {
@@ -2441,33 +2712,39 @@ kbd {
   transition-timing-function: var(--ease-out);
   pointer-events: none;
 }
+/* a banner: the state of the whole page, in the tone of what it says (amber unless told: a
+   caution; info for what runs or what to know, neutral for a state, danger when it broke) */
 .banner {
+  --tone: var(--warn);
+  --tone-soft: var(--warn-soft);
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 8px 8px 8px 14px;
   margin-bottom: 16px;
-  border: 1px solid var(--warn-border);
+  border: 1px solid color-mix(in srgb, var(--tone) 32%, transparent);
   border-radius: var(--radius);
-  background: var(--warn-soft);
+  background: var(--tone-soft);
 }
 .banner > svg {
-  color: var(--warn);
+  color: var(--tone);
   flex: none;
 }
-.banner.danger {
-  border-color: var(--danger);
-  background: var(--danger-soft);
+.banner.info {
+  --tone: var(--info);
+  --tone-soft: var(--info-soft);
 }
-.banner.danger > svg {
-  color: var(--danger);
+.banner.neutral {
+  --tone: var(--text-muted);
+  --tone-soft: var(--bg-hover);
+}
+.banner.danger {
+  --tone: var(--danger);
+  --tone-soft: var(--danger-soft);
 }
 .site-banner.info {
-  border-color: var(--accent-soft);
-  background: var(--accent-soft);
-}
-.site-banner.info > svg {
-  color: var(--accent);
+  --tone: var(--info);
+  --tone-soft: var(--info-soft);
 }
 /* the bottom of the sidebar, for administrators: the version, and a newer one */
 .side-version {
@@ -2484,17 +2761,19 @@ kbd {
   align-items: center;
   gap: 4px;
 }
-.side-version .dot {
-  width: 6px;
-  height: 6px;
-}
 
 /* ---- repository overview (Repo v1) */
 
 .repo-head h1 {
-  font-size: 36px;
+  font-size: 24px;
   font-weight: 700;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.02em;
+}
+.repo-head .tile.big {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  font-size: 18px;
 }
 .repo-head {
   padding-bottom: 4px;
@@ -2504,20 +2783,8 @@ kbd {
   margin: 10px 0 0;
   max-width: 680px;
   color: var(--text-muted);
-  font-size: 15.5px;
+  font-size: 14px;
   line-height: 1.55;
-}
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 1px 9px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 500;
-  background: var(--bg);
 }
 .repo-layout {
   display: grid;
@@ -2593,7 +2860,12 @@ kbd {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+}
+/* the files, or a file's last commit, close under it: 8 px, as between its buttons, where the
+   page's stack puts 16 */
+.stack > .repo-toolbar + .file-table {
+  margin-top: -8px;
 }
 .ref-counts {
   display: inline-flex;
@@ -2605,16 +2877,28 @@ kbd {
   align-items: center;
   gap: 4px;
   color: var(--text-muted);
-  height: 34px;
-  padding: 0 11px;
-  border-radius: var(--radius-sm);
-  background: var(--chip-bg);
+  height: var(--control-h);
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+.ref-counts a:hover {
+  background: var(--bg-hover);
+  text-decoration: none;
 }
 .ref-counts strong {
   color: var(--text);
 }
 .repo-toolbar kbd {
   margin-left: 2px;
+}
+/* under 1,360 px "Go to file" and "New file" are their icons (and tooltips): the toolbar keeps
+   one line beside the About column */
+@media (max-width: 1360px) {
+  .repo-wide-only {
+    display: none;
+  }
 }
 .file-table {
   border-radius: var(--radius-lg);
@@ -2771,8 +3055,16 @@ kbd {
 .ic-ok {
   color: var(--ok);
 }
-.ic-accent {
-  color: var(--accent);
+.ic-merged {
+  color: var(--merged);
+}
+/* a state's icon alone (StateMark): in a dense list, its color says it */
+.state-mark {
+  display: inline-flex;
+  flex: none;
+}
+.ic-info {
+  color: var(--info);
 }
 .tree-row .icon {
   display: inline-flex;
@@ -2859,8 +3151,16 @@ kbd {
   box-shadow: none;
   outline: none;
 }
+/* the textarea's padding (input, select, textarea) and no margin above the first block: the
+   text stays where it was written */
 .md-preview {
-  padding: 10px 12px;
+  padding: 6px 10px;
+}
+.md-preview > * > :first-child {
+  margin-top: 0;
+}
+.md-preview > * > :last-child {
+  margin-bottom: 0;
 }
 
 /* ---- diffs: toolbar, file tree, split view, sticky header */
@@ -3110,41 +3410,62 @@ kbd {
   color: var(--text-muted);
   font: 13.5px/1.4 var(--sans);
 }
-.mr-state {
+/* ---- states, as the UI convention draws them: one color, one meaning, on every page. A state
+   is a pill tinted with its tone, its icon and its word (StateBadge; `.status-badge` for CI,
+   `.mr-state` for merge requests, issues, environments and commits); in a dense list, its icon
+   alone in the same color (`.ic-*`, `.st-*`). Green: it is fine. Red: it broke. Amber: it waits.
+   Blue: it runs. Violet: merged. Grey: closed, canceled, skipped, and every property. */
+.state,
+.mr-state,
+.status-badge,
+.thread-state,
+.instance-status {
+  --tone: var(--text-muted);
+  --tone-soft: var(--bg-hover);
   display: inline-flex;
+  flex: none;
   align-items: center;
-  gap: 6px;
-  font-weight: 600;
-  text-transform: none;
+  gap: 5px;
+  height: 22px;
+  padding: 0 9px 0 7px;
+  border-radius: 999px;
+  background: var(--tone-soft);
+  color: var(--tone);
+  font: 600 12px/1 var(--sans);
   letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
 }
-.mr-state::before {
-  content: "";
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: currentColor;
+.tone-ok,
+.mr-state.opened,
+.thread-state.resolved,
+.instance-status.ok {
+  --tone: var(--ok);
+  --tone-soft: var(--ok-soft);
 }
-.mr-state.opened {
-  color: var(--ok);
+.tone-danger,
+.instance-status.bad {
+  --tone: var(--danger);
+  --tone-soft: var(--danger-soft);
 }
+.tone-warn,
+.thread-state.open,
+.instance-status.warn {
+  --tone: var(--warn);
+  --tone-soft: var(--warn-soft);
+}
+.tone-info {
+  --tone: var(--info);
+  --tone-soft: var(--info-soft);
+}
+.tone-merged,
 .mr-state.merged {
-  color: var(--accent);
+  --tone: var(--merged);
+  --tone-soft: var(--merged-soft);
 }
-.mr-state.closed {
-  color: var(--danger);
-}
-.mr-state.draft {
-  color: var(--text-muted);
-}
-.mr-status .mr-state {
-  height: 24px;
-  padding: 0 9px;
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, currentColor 12%, var(--bg));
-  font-size: 12.5px;
-  letter-spacing: 0;
-  text-transform: none;
+.tone-neutral {
+  --tone: var(--text-muted);
+  --tone-soft: var(--bg-hover);
 }
 .mr-title {
   margin: 0;
@@ -3166,47 +3487,6 @@ kbd {
   align-items: center;
   gap: 10px;
   margin-top: 4px;
-}
-.ref-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 28px;
-  max-width: 100%;
-  padding: 0 10px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--bg);
-  color: var(--text);
-  font: 12.5px var(--mono);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.ref-chip:hover {
-  border-color: var(--text-faint);
-  text-decoration: none;
-}
-.ref-chip svg {
-  flex: none;
-  color: var(--text-muted);
-}
-.ref-chip.target {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-.ref-chip.target svg {
-  color: var(--accent);
-}
-/* where the merge request goes: in ink, like the project's tile */
-.mr-route .ref-chip.target {
-  border-color: var(--tile-bg);
-  background: var(--tile-bg);
-  color: var(--on-ink);
-}
-.mr-route .ref-chip.target svg {
-  color: var(--brand);
 }
 .mr-route-arrow {
   display: inline-flex;
@@ -3230,9 +3510,14 @@ kbd {
   gap: 6px;
   padding: 10px 0;
 }
-.tab-count {
-  font: 12px var(--mono);
-  color: var(--text-muted);
+/* ---- counters, as the UI convention draws them: a small grey number right after what it
+   counts (tabs, the sidebar, section titles); unread is the one counter in color */
+.tab-count,
+.section-count,
+.side-link .count {
+  color: var(--text-faint);
+  font: 500 12px/1 var(--sans);
+  font-variant-numeric: tabular-nums;
 }
 .diff-bar {
   display: inline-flex;
@@ -3245,10 +3530,10 @@ kbd {
   background: var(--border);
 }
 .diff-bar .add {
-  background: #2f9e62;
+  background: var(--ok);
 }
 .diff-bar .del {
-  background: #d6455d;
+  background: var(--danger);
 }
 .tabs .icon-btn {
   align-self: center;
@@ -3341,8 +3626,9 @@ kbd {
 .ready-ring .track {
   stroke: var(--emph-line);
 }
+/* what is done is fine: the green of the ticks beside it */
 .ready-ring .done {
-  stroke: var(--brand);
+  stroke: var(--emph-ok);
 }
 .ready-ring .done {
   transition: stroke-dashoffset 400ms var(--ease-out);
@@ -3404,7 +3690,7 @@ kbd {
 }
 .ready-card .st-running,
 .ready-card .st-canceling {
-  color: var(--emph-link);
+  color: var(--emph-info);
 }
 .ready-card code {
   background: var(--emph-row);
@@ -3452,13 +3738,13 @@ kbd {
   border-radius: 3px;
 }
 .quota-bar .ok {
-  background: var(--chart-ok);
+  background: var(--ok);
 }
 .quota-bar .warn {
-  background: var(--chart-warn);
+  background: var(--warn);
 }
 .quota-bar .bad {
-  background: var(--chart-bad);
+  background: var(--danger);
 }
 .checks,
 .blockers {
@@ -3517,15 +3803,6 @@ kbd {
   font-size: 14.5px;
   font-weight: 600;
 }
-.btn.dark {
-  background: var(--text);
-  border-color: var(--text);
-  color: var(--bg);
-  font-weight: 600;
-}
-.btn.dark:hover {
-  background: var(--text-muted);
-}
 .link-btn {
   padding: 0;
   border: 0;
@@ -3540,6 +3817,10 @@ kbd {
 .link-btn:disabled {
   color: var(--text-faint);
   cursor: default;
+}
+/* an action written as a word that destroys something (deleting a comment) */
+.link-btn.danger {
+  color: var(--danger);
 }
 .link-btn.small,
 .btn .small {
@@ -3576,8 +3857,10 @@ kbd {
   flex: 0 0 84px;
   padding-top: 3px;
 }
+/* the value takes the rest of the row and never more: what is too long shortens or wraps */
 .fact-value {
   display: flex;
+  flex: 1 1 0;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
@@ -3586,7 +3869,19 @@ kbd {
 .fact-value.column {
   flex-direction: column;
   align-items: flex-start;
-  gap: 2px;
+  gap: 6px;
+}
+.fact-value.column > * {
+  max-width: 100%;
+}
+.fact-value .label-chip {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+/* a merge request's title shortens; its number and "closes" stay whole */
+.related-mr > :not(.ellipsis) {
+  flex: none;
 }
 /* a button under lines of text (AI review, code owners): the row's 8px */
 .fact-value.column > .btn {
@@ -3610,15 +3905,6 @@ kbd {
 .related-mr:hover .ellipsis {
   text-decoration: underline;
 }
-.related-closes {
-  flex: none;
-  padding: 0 5px;
-  border-radius: 4px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-size: 11px;
-  font-weight: 600;
-}
 .mr-mark {
   flex: none;
 }
@@ -3626,10 +3912,10 @@ kbd {
   color: var(--ok);
 }
 .mr-mark.merged {
-  color: var(--accent);
+  color: var(--merged);
 }
 .mr-mark.closed {
-  color: var(--danger);
+  color: var(--text-faint);
 }
 
 /* activity log */
@@ -3689,11 +3975,11 @@ kbd {
 }
 .tl-icon.ok-solid {
   background: var(--ok);
-  color: #fff;
+  color: var(--on-tone);
 }
-.tl-icon.accent {
-  background: var(--accent);
-  color: var(--accent-text);
+.tl-icon.merged {
+  background: var(--merged);
+  color: var(--on-tone);
 }
 .tl-icon.bad {
   background: var(--danger-soft);
@@ -3759,7 +4045,7 @@ kbd {
 :root {
   --term-black: #2e3436;
   --term-red: #c4314b;
-  --term-green: #1f8a5a;
+  --term-green: #1f7a3d;
   --term-yellow: #a26500;
   --term-blue: #2f6fd0;
   --term-magenta: #9c3fb5;
@@ -3822,33 +4108,41 @@ kbd {
   display: inline-flex;
   flex: none;
   align-items: center;
+  color: var(--tone);
 }
+/* each CI status's tone: its icon, its dot or its badge takes it */
 .st-success {
-  color: var(--ok);
+  --tone: var(--ok);
+  --tone-soft: var(--ok-soft);
+  color: var(--tone);
 }
 .st-failed {
-  color: var(--danger);
+  --tone: var(--danger);
+  --tone-soft: var(--danger-soft);
+  color: var(--tone);
 }
-.st-warn {
-  color: var(--warn);
-}
-.st-running,
-.st-canceling {
-  color: var(--accent);
-}
+.st-warn,
 .st-pending,
 .st-preparing,
 .st-waiting_for_resource,
 .st-scheduled {
-  color: var(--warn);
+  --tone: var(--warn);
+  --tone-soft: var(--warn-soft);
+  color: var(--tone);
+}
+.st-running,
+.st-canceling {
+  --tone: var(--info);
+  --tone-soft: var(--info-soft);
+  color: var(--tone);
 }
 .st-canceled,
 .st-skipped,
-.st-created {
-  color: var(--text-faint);
-}
+.st-created,
 .st-manual {
-  color: var(--text-muted);
+  --tone: var(--text-muted);
+  --tone-soft: var(--bg-hover);
+  color: var(--tone);
 }
 .spin {
   animation: spin 1.1s linear infinite;
@@ -3863,21 +4157,9 @@ kbd {
     animation: none;
   }
 }
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 24px;
-  padding: 0 9px 0 7px;
-  border: 1px solid currentColor;
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-}
 a.status-badge:hover {
   text-decoration: none;
-  background: var(--bg-hover);
+  background: color-mix(in srgb, var(--tone) 18%, var(--bg));
 }
 .mini-pipeline {
   display: inline-flex;
@@ -3986,7 +4268,7 @@ a.status-badge:hover {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: var(--emph-link);
+  color: var(--emph-muted);
   font-size: 12.5px;
   font-weight: 600;
 }
@@ -4042,7 +4324,7 @@ a.status-badge:hover {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: var(--emph-link);
+  color: var(--emph-muted);
   font-size: 12.5px;
   font-weight: 600;
 }
@@ -4156,18 +4438,8 @@ a.status-badge:hover {
 .ready-ring.mini .track {
   stroke: var(--border);
 }
-.mr-ready {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 8px;
-  color: var(--text-muted);
-  font-size: 12.5px;
-  white-space: nowrap;
-}
-.mr-ready.ok {
-  color: var(--ok);
-  font-weight: 600;
+.ready-ring.mini .done {
+  stroke: var(--ok);
 }
 .decide-label {
   margin: 0;
@@ -4187,8 +4459,6 @@ a.status-badge:hover {
 }
 .section-count {
   margin-left: 3px;
-  color: var(--text-faint);
-  font: 500 12px var(--mono);
 }
 .section-actions {
   display: flex;
@@ -4353,22 +4623,6 @@ a.status-badge:hover {
     font-size: 13px;
   }
 }
-/* the instance card's health: its icon, toned */
-.instance-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-.instance-status.ok {
-  color: var(--ok);
-}
-.instance-status.warn {
-  color: var(--warn);
-}
-.instance-status.bad {
-  color: var(--danger);
-}
-
 /* the admin overview: CI in the middle, the instance's numbers beside it, as the
    project page's right column */
 .admin-overview {
@@ -4504,89 +4758,60 @@ a.status-badge:hover {
   color: var(--accent);
 }
 
-/* schedules: a card each, in time (how often, when next, how the latest runs went),
-   not rows like the pipelines' */
-.sched-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr));
-  gap: 14px;
+/* pipeline schedules, one row each, said in words (ci/Schedules.tsx) */
+.sched-list {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+  overflow: hidden;
 }
-.sched-card {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 16px 18px;
-}
-.sched-card.paused {
-  background: var(--bg-subtle);
-}
-.sched-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-.sched-icon {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius);
-  background: var(--accent-soft);
-  color: var(--accent-ink);
-}
-.sched-card.paused .sched-icon {
-  background: var(--bg-hover);
-  color: var(--text-faint);
-}
-.sched-title {
-  margin: 0;
-  font-size: 17px;
-  font-weight: 650;
-}
-.sched-when {
-  margin: 2px 0 0;
-  color: var(--text-muted);
-  font-size: 13.5px;
-}
-.sched-facts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 16px;
-  margin: 0;
-}
-.sched-facts dt {
-  color: var(--text-faint);
-  font-size: 12px;
-  font-weight: 600;
-}
-.sched-facts dd {
-  min-width: 0;
-  margin: 2px 0 0;
-  font-size: 13.5px;
-  overflow-wrap: anywhere;
-}
-.sched-facts dd.mono {
-  font-size: 12.5px;
-}
-.sched-runs {
+.sched-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
-  padding-top: 12px;
+  gap: 10px 16px;
+  padding: 14px 16px;
   border-top: 1px solid var(--border);
 }
-.sched-runs-label {
-  color: var(--text-faint);
-  font-size: 12px;
+.sched-row:first-child {
+  border-top: 0;
+}
+.sched-row.paused {
+  background: var(--bg-subtle);
+}
+.sched-main {
+  display: flex;
+  flex: 1 1 320px;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.sched-name-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.sched-name {
+  margin: 0;
+  font-size: 15px;
   font-weight: 600;
+}
+.sched-sentence,
+.sched-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin: 0;
+}
+.sched-meta {
+  color: var(--text-muted);
+  font-size: 13px;
 }
 .sched-dots {
   display: inline-flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  gap: 2px;
 }
 .sched-dots a {
   display: inline-flex;
@@ -4594,7 +4819,30 @@ a.status-badge:hover {
 .sched-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+}
+/* the form (in its window): when it runs, as a sentence of fields */
+.sched-when {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px;
+}
+.sched-when > .field {
+  flex: 0 1 auto;
+  min-width: 110px;
+}
+.sched-when > .field:first-child,
+.sched-when > .field:last-child {
+  min-width: 220px;
+}
+.sched-summary {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.sched-summary strong {
+  color: var(--text);
 }
 
 /* environments: the review apps' folders fold, their environments sit under them;
@@ -4615,7 +4863,7 @@ a.status-badge:hover {
   cursor: pointer;
 }
 .list > .list-group > .env-folder:hover {
-  background: var(--bg-subtle);
+  background: var(--row-hover);
 }
 .env-folder svg {
   flex: none;
@@ -4700,9 +4948,12 @@ a.status-badge:hover {
   height: 1px;
   background: var(--border-strong);
 }
+/* a dot is 8 px: a whole number of screen pixels at 125, 150 and 200 %, where 9 or 10 px fall
+   on half pixels and come out uneven */
 .dot {
-  width: 10px;
-  height: 10px;
+  flex: none;
+  width: var(--dot);
+  height: var(--dot);
   border-radius: 50%;
   background: currentColor;
 }
@@ -4945,7 +5196,7 @@ a.status-badge:hover {
   color: var(--text);
 }
 .job-list-item:hover {
-  background: var(--bg-hover);
+  background: var(--side-hover);
   text-decoration: none;
 }
 .job-list-item.active {
@@ -4969,12 +5220,6 @@ a.status-badge:hover {
   margin: 0;
   font-size: 17px;
   font-weight: 600;
-}
-.job-pane-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 12px;
 }
 .artifacts summary {
   cursor: pointer;
@@ -5101,7 +5346,119 @@ a.status-badge:hover {
 
 /* ---- file view */
 
+/* a folder, a file or its blame with the project's files beside them (pages/project/FileTree.tsx);
+   on a screen too narrow for both, the files go */
+.code-layout {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.code-layout.tree-hidden {
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 12px;
+}
+.code-layout.no-tree {
+  display: block;
+}
+.file-tree {
+  position: sticky;
+  top: calc(var(--topbar-h) + 16px);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - var(--topbar-h) - 32px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+}
+.file-tree.hidden-tree {
+  border: 0;
+  background: none;
+}
+.ft-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 4px 4px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+}
+.ft-items {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+}
+.ft-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 26px;
+  padding-left: calc(var(--depth, 0) * 14px);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 13px;
+  outline-offset: -2px;
+}
+.ft-row:hover {
+  background: var(--row-hover);
+}
+/* what is read: the current one, in the color of what is current */
+.ft-row[aria-current="page"] {
+  background: var(--accent-soft);
+}
+.ft-row[aria-current="page"] .ft-name {
+  font-weight: 600;
+}
+.ft-toggle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+.ft-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: inherit;
+}
+.ft-name:hover {
+  text-decoration: none;
+}
+.ft-name svg {
+  flex: none;
+}
+/* a file grey; a folder in its own color, as in the list (it opens) */
+.ft-name svg:not(.ic-folder) {
+  color: var(--text-faint);
+}
+.ft-note {
+  padding-left: calc(var(--depth, 0) * 14px + 20px);
+  color: var(--text-faint);
+  font-size: 12.5px;
+}
+@media (max-width: 1199px) {
+  .code-layout,
+  .code-layout.tree-hidden {
+    display: block;
+  }
+  .file-tree {
+    display: none;
+  }
+}
+/* a file's header stays in view while the file is read (on a phone it wraps: it scrolls away) */
 .blob-head {
+  position: sticky;
+  top: var(--topbar-h);
+  z-index: 4;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -5112,13 +5469,23 @@ a.status-badge:hover {
   background: var(--bg-subtle);
   border-radius: var(--radius) var(--radius) 0 0;
 }
+@media (max-width: 700px) {
+  .blob-head {
+    position: static;
+  }
+}
+.blob-name {
+  max-width: 280px;
+  color: var(--text);
+  font-weight: 600;
+}
 .blob-meta {
   display: inline-flex;
   flex-wrap: wrap;
   color: var(--text-muted);
   font-size: 12.5px;
 }
-.blob-meta > span + span::before {
+.blob-meta > * + span::before {
   content: "·";
   margin: 0 6px;
   color: var(--text-faint);
@@ -5185,7 +5552,7 @@ a.status-badge:hover {
 }
 .list-head h1 {
   margin: 0;
-  font-size: 30px;
+  font-size: 24px;
   font-weight: 700;
   line-height: 1.2;
   letter-spacing: -0.03em;
@@ -5261,7 +5628,7 @@ a.status-badge:hover {
   pointer-events: none;
 }
 .search-field input {
-  height: 32px;
+  height: var(--control-h);
   padding-left: 30px;
 }
 
@@ -5297,7 +5664,7 @@ a.row-title:hover,
   min-width: 0;
   margin-top: 3px;
   color: var(--text-muted);
-  font: 12px/1.5 var(--mono);
+  font: 12.5px/1.5 var(--sans);
 }
 .row-meta > * + *:not(.sha):not(.ref-chip)::before {
   content: "·";
@@ -5332,13 +5699,15 @@ a.row-title:hover,
   white-space: nowrap;
 }
 .draft-tag {
+  display: inline-flex;
   flex: none;
-  padding: 0 6px;
-  border: 1px solid var(--border-strong);
-  border-radius: 4px;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--bg-hover);
   color: var(--text-muted);
-  font: 600 10.5px/18px var(--mono);
-  text-transform: uppercase;
+  font: 600 11.5px/1 var(--sans);
 }
 .mr-row-route {
   display: inline-flex;
@@ -5348,11 +5717,9 @@ a.row-title:hover,
   max-width: 40%;
 }
 .ref-chip.small {
-  height: 22px;
-  padding: 0 7px;
-  gap: 4px;
+  height: 20px;
+  padding: 0 6px;
   font-size: 11.5px;
-  border-color: var(--border);
 }
 .mr-row-route .ref-chip.small {
   display: inline-block;
@@ -5429,9 +5796,6 @@ a.row-title:hover,
   justify-content: center;
   gap: 12px;
 }
-.mr-state.commit {
-  color: var(--text-muted);
-}
 .commit-body pre {
   margin: 4px 0 0;
   color: var(--text-muted);
@@ -5473,16 +5837,89 @@ a.row-title:hover,
   font-family: var(--mono);
   font-size: 13.5px;
 }
-.tip-subject {
-  max-width: 48ch;
+/* a branch or a tag on one line: its name and marks, when it last changed and by whom, its sha;
+   a branch also its distance from the default branch, its pipeline and its merge request */
+.ref-row {
+  gap: 12px;
 }
-.pill.accent {
-  border-color: var(--accent);
-  color: var(--accent);
+.ref-main {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
-.pill.warn {
-  border-color: var(--warn);
-  color: var(--warn);
+.ref-updated {
+  flex: 0 1 17em;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+.ref-distance {
+  flex: none;
+  width: 10em;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.ref-ci {
+  display: inline-flex;
+  flex: none;
+  justify-content: center;
+  width: 18px;
+}
+.ref-mr {
+  display: inline-flex;
+  flex: none;
+  width: 8.5em;
+}
+.ref-mr-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+}
+/* every cell is there in every row, empty or not, so the columns line up */
+.ref-cells {
+  display: contents;
+}
+.ref-slot {
+  display: inline-flex;
+  flex: none;
+  justify-content: center;
+  width: var(--control-h);
+}
+.ref-release {
+  display: inline-flex;
+  flex: none;
+  justify-content: flex-end;
+  width: 9.5em;
+}
+/* on a phone the name has the line; what follows wraps under it */
+@media (max-width: 700px) {
+  .ref-row {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+  .ref-main {
+    flex-basis: calc(100% - 40px);
+  }
+  .ref-cells {
+    display: flex;
+    flex-basis: 100%;
+    align-items: center;
+    gap: 10px;
+    padding-left: 28px;
+  }
+  .ref-release,
+  .ref-mr {
+    width: auto;
+  }
+  .ref-distance {
+    width: auto;
+    text-align: left;
+  }
 }
 .row-title .pill {
   flex: none;
@@ -5563,10 +6000,17 @@ a.row-title:hover,
 .settings-section {
   scroll-margin-top: 64px;
   display: grid;
-  grid-template-columns: minmax(0, 300px) minmax(0, 1fr);
-  gap: 16px 40px;
-  padding: 28px 0;
+  grid-template-columns: minmax(0, 260px) minmax(0, 1fr);
+  gap: 12px 32px;
+  padding: 20px 0;
   border-top: 1px solid var(--border);
+}
+/* a field is as wide as what it holds (a name, a path, a choice), not the whole column */
+.settings-body :is(label, div).field > :is(input:not([type="checkbox"]):not([type="radio"]), .select, .password-input) {
+  max-width: 440px;
+}
+.settings-body :is(label, div).field > input[type="number"] {
+  max-width: 160px;
 }
 .settings-page > .list-head + .settings-section,
 .settings-page > .error + .settings-section,
@@ -5599,7 +6043,7 @@ a.row-title:hover,
 @media (max-width: 900px) {
   .settings-section {
     grid-template-columns: minmax(0, 1fr);
-    padding: 22px 0;
+    padding: 18px 0;
   }
 }
 
@@ -5663,7 +6107,7 @@ a.row-title:hover,
 }
 .dash-controls .select {
   width: auto;
-  height: 32px;
+  height: var(--control-h);
   font-size: 13px;
 }
 .list-toolbar .dash-controls .search-field {
@@ -5998,6 +6442,11 @@ a.item.group-row:hover .row-title {
   width: 100%;
   height: 42px;
 }
+/* the Show button, inside a 42 px field */
+.auth-card .password-input .icon-btn {
+  width: 36px;
+  height: 36px;
+}
 .auth-pw {
   position: relative;
 }
@@ -6124,29 +6573,9 @@ a.label-chip:hover {
   white-space: nowrap;
 }
 .milestone-chip {
-  display: inline-flex;
-  align-items: center;
-  flex: none;
-  gap: 4px;
   max-width: 220px;
   height: 20px;
-  padding: 0 8px 0 6px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--bg);
-  color: var(--text-muted);
-  font-size: 11.5px;
-  font-weight: 500;
-  line-height: 18px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   vertical-align: middle;
-}
-a.milestone-chip:hover {
-  border-color: var(--text-faint);
-  color: var(--text);
-  text-decoration: none;
 }
 .label-dot {
   flex: none;
@@ -6247,27 +6676,6 @@ a.milestone-chip:hover {
   flex: none;
   font-size: 12.5px;
 }
-.label-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  width: 100%;
-  padding: 14px 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--bg-subtle);
-}
-.list .item .label-form {
-  padding: 4px 0;
-  border: 0;
-  background: none;
-}
-.label-form-fields {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
-  gap: 12px;
-  align-items: start;
-}
 .swatches {
   display: flex;
   flex-wrap: wrap;
@@ -6293,9 +6701,6 @@ a.milestone-chip:hover {
   font-size: 12px;
 }
 @media (max-width: 900px) {
-  .label-form-fields {
-    grid-template-columns: minmax(0, 1fr);
-  }
   .label-row-name {
     width: auto;
   }
@@ -6425,7 +6830,7 @@ a.milestone-chip:hover {
 .import-bar > span {
   display: block;
   height: 100%;
-  background: var(--accent);
+  background: var(--info);
 }
 .import-warnings ul {
   margin: 6px 0 0;
@@ -6589,9 +6994,6 @@ a.item.import-row:hover {
   content: " (merged)";
   font-weight: 400;
 }
-.accent-text {
-  color: var(--accent);
-}
 .todo-row .row-desc {
   max-width: 70ch;
 }
@@ -6608,6 +7010,11 @@ a.item.import-row:hover {
   border-radius: var(--radius-lg);
   background: var(--bg);
 }
+/* what whole-pixel squares leave of the width goes on both sides of all three: the caption
+   starts with the days' words, the legend ends with the last week (Contributions.tsx) */
+.contrib > * {
+  margin-inline: var(--inset, 0px);
+}
 .contrib-caption {
   margin-bottom: 10px;
   font-size: 13px;
@@ -6621,15 +7028,13 @@ a.item.import-row:hover {
   padding-bottom: 4px;
 }
 .contrib-grid {
-  /* 53 weeks share the card's width: cells grow up to 16px, then the grid
-     centers; below 8px a cell keeps its size and the card scrolls (the grid is
-     at least as wide as its cells at their smallest, not at their largest:
-     those made every card narrower than 1037px scroll) */
+  /* 53 weeks share the card's width, a square from 8 to 16 px; below 8 the card scrolls. The
+     square (--cell) and the gap (--gap) come from Contributions.tsx, in whole pixels of the
+     screen, the same for every row and column: the days' words do not size their rows */
   display: grid;
-  grid-template-columns: 30px repeat(53, minmax(8px, 16px));
-  grid-template-rows: 16px;
-  grid-auto-rows: auto;
-  gap: 3px;
+  grid-template-columns: 30px repeat(53, var(--cell, 11px));
+  grid-template-rows: 16px repeat(7, var(--cell, 11px));
+  gap: var(--gap, 3px);
   justify-content: center;
   min-width: min-content;
   width: 100%;
@@ -6649,11 +7054,6 @@ a.item.import-row:hover {
   background: var(--bg);
   font-size: 10.5px;
   color: var(--text-muted);
-}
-.contrib-grid .contrib-cell {
-  width: auto;
-  height: auto;
-  aspect-ratio: 1;
 }
 .contrib-cell {
   display: inline-block;
@@ -6686,32 +7086,29 @@ a.item.import-row:hover {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 3px;
+  /* its squares are the calendar's, as far apart */
+  gap: var(--gap, 3px);
   margin-top: 8px;
   font-size: 11px;
   color: var(--text-muted);
 }
-.contrib-legend .contrib-cell {
-  width: 11px;
-  height: 11px;
-}
 
-/* auto-merge set */
+/* auto-merge set, or a place on the merge train: it merges on its own (info) */
 .auto-merge-on {
   display: flex;
   align-items: flex-start;
   gap: 8px;
   margin-top: 14px;
   padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border: 1px solid color-mix(in srgb, var(--info) 35%, var(--border));
   border-radius: var(--radius);
-  background: var(--accent-soft);
+  background: var(--info-soft);
   font-size: 13px;
 }
 .auto-merge-on svg {
   flex: none;
   margin-top: 2px;
-  color: var(--accent);
+  color: var(--info);
 }
 
 /* links to people */
@@ -6999,9 +7396,6 @@ a.item.import-row:hover {
 .commit-target .check.disabled {
   opacity: 0.55;
 }
-.new-branch {
-  padding: 12px 14px;
-}
 
 /* ---------------------------------------------------------------- releases (M7) */
 .release {
@@ -7080,7 +7474,7 @@ a.item.import-row:hover {
 .ms-bar > span {
   display: block;
   height: 100%;
-  background: var(--ok, #16a34a);
+  background: var(--ok);
 }
 .ms-row .ms-progress {
   width: 220px;
@@ -7142,7 +7536,7 @@ a.item.import-row:hover {
 }
 .reaction-picker button:hover,
 .reaction-picker button:focus-visible {
-  background: var(--bg-subtle);
+  background: var(--row-hover);
 }
 
 /* ---------------------------------------------------------------- notifications (M7) */
@@ -7206,7 +7600,7 @@ a.item.import-row:hover {
   padding: 0 4px;
   border-radius: 8px;
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-text);
   font-size: 10.5px;
   font-weight: 600;
   line-height: 16px;
@@ -7326,17 +7720,48 @@ a.item.import-row:hover {
   font-size: 0.8rem;
   white-space: pre-wrap;
 }
-.storage-use {
+/* a project's storage, the largest kind first: its name, a bar of the whole, its size and share */
+.storage-kinds {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 640px;
+}
+.storage-kind {
   display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 6px 16px;
-  margin: 0;
+  grid-template-columns: 11em minmax(60px, 1fr) 8.5em 3.5em;
+  gap: 14px;
+  align-items: center;
 }
-.storage-use dt {
-  color: var(--text-muted);
+.storage-bar {
+  display: block;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--border);
+  overflow: hidden;
 }
-.storage-use dd {
-  margin: 0;
+/* the data's end rounded, its start on the bar's own */
+.storage-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+  background: var(--text-faint);
+}
+.storage-size,
+.storage-pct {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+@media (max-width: 600px) {
+  /* the name on its own line; the bars still line up */
+  .storage-kind {
+    grid-template-columns: minmax(0, 1fr) 8.5em 3.5em;
+    gap: 4px 10px;
+  }
+  .storage-name {
+    grid-column: 1 / -1;
+  }
 }
 
 /* container registry */
@@ -7576,18 +8001,19 @@ button.test-case-row:hover {
 }
 .pipe-legend i {
   display: inline-block;
-  width: 9px;
-  height: 9px;
+  flex: none; /* a flex item: without it, a narrow legend squeezes the dot into an oval */
+  width: var(--dot);
+  height: var(--dot);
   margin-left: 6px;
-  border-radius: 2px;
+  border-radius: 50%;
 }
 .pipe-legend i.ok,
 .pipe-bar .pipe-seg.ok {
-  background: var(--chart-ok);
+  background: var(--ok);
 }
 .pipe-legend i.bad,
 .pipe-bar .pipe-seg.bad {
-  background: var(--chart-bad);
+  background: var(--danger);
 }
 .pipe-legend i.other,
 .pipe-bar .pipe-seg.other {
@@ -7637,38 +8063,37 @@ button.test-case-row:hover {
 }
 
 /* ---------------------------------------------------------------- security findings */
+/* a severity is a state: red when it breaks (critical the loudest, solid), amber to watch, blue
+   to know, grey for what can wait */
 .sev {
-  display: inline-block;
+  --tone: var(--text-muted);
+  --tone-soft: var(--bg-hover);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-width: 64px;
-  padding: 1px 7px;
-  border: 1px solid color-mix(in srgb, currentColor 28%, transparent);
-  border-radius: 4px;
-  font-size: 11.5px;
-  font-weight: 600;
-  text-align: center;
-  color: var(--text-muted);
-  background: var(--bg-hover);
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--tone-soft);
+  color: var(--tone);
+  font: 600 11.5px/1 var(--sans);
 }
-/* tinted, per theme (the tokens): readable in both, critical the strongest */
 .sev-critical {
-  color: var(--sev-critical);
-  background: var(--sev-critical-bg);
+  background: var(--danger);
+  color: var(--on-tone);
 }
 .sev-high {
-  color: var(--sev-high);
-  background: var(--sev-high-bg);
+  --tone: var(--danger);
+  --tone-soft: var(--danger-soft);
 }
 .sev-medium {
-  color: var(--sev-medium);
-  background: var(--sev-medium-bg);
-}
-.sev-low {
-  color: var(--sev-low);
-  background: var(--sev-low-bg);
+  --tone: var(--warn);
+  --tone-soft: var(--warn-soft);
 }
 .sev-info {
-  color: var(--sev-info);
-  background: var(--sev-info-bg);
+  --tone: var(--info);
+  --tone-soft: var(--info-soft);
 }
 .sev-summary {
   display: flex;
@@ -7843,10 +8268,13 @@ button.test-case-row:hover {
     flex: 1;
   }
 }
+/* starts small, so the toolbar stays on one line, and grows into the room left
+   ("Search this folder…" whole when there is room) */
 .repo-code-search {
-  flex: 0 1 150px;
+  flex: 1 1 100px;
   width: auto;
   min-width: 110px;
+  max-width: 200px;
 }
 
 /* a select box with a filter (Combobox): the filter stays, the list scrolls */
@@ -7883,7 +8311,8 @@ button.test-case-row:hover {
   .side-sub,
   .side-sub.folded,
   .scrim,
-  .ready-ring .done {
+  .ready-ring .done,
+  .segmented::before {
     transition: none;
   }
   .select-menu,
@@ -8628,7 +9057,7 @@ button.test-case-row:hover {
 }
 .smart-mr > svg {
   flex: none;
-  color: var(--accent);
+  color: var(--text-muted);
 }
 .smart-mr .btn.on {
   border-color: var(--accent);

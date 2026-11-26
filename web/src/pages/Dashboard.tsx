@@ -38,7 +38,7 @@ export function ProjectRow({ p, level, aside }: { p: S["ProjectDto"]; level?: st
             {p.full_path.slice(slash + 1)}
           </Link>
           <Visibility v={p.visibility} />
-          {level && <span className="pill accent">{level}</span>}
+          {level && <span className="pill">{level}</span>}
         </div>
         {p.description && <div className="row-desc ellipsis">{p.description}</div>}
       </div>

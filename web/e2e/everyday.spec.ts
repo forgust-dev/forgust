@@ -61,7 +61,7 @@ test("the stack map shows both layers and what merges next", async ({ page }) =>
   await expect(map).toContainText("layer 2 of 2");
   await expect(map.locator("li")).toHaveCount(2);
   await expect(map.locator("li.current")).toContainText("Checkout page");
-  await expect(map.locator("li", { hasText: "Checkout with discounts" })).toContainText("merges next");
+  await expect(map.locator("li", { hasText: "Checkout with discounts" })).toContainText("Merges next");
   // the upper layer cannot merge before the one below
   await expect(page.getByText("merge !1 first")).toBeVisible();
   await map.locator("li", { hasText: "Checkout with discounts" }).getByRole("link").click();
@@ -363,9 +363,10 @@ test("edit a file in the browser onto a new branch, add and delete files, manage
     await expect(page.getByRole("link", { name: "added.md" })).toHaveCount(0);
     // the branches page: create and delete one
     await page.goto(`${P}/-/branches`);
-    await page.getByRole("button", { name: "New branch" }).click();
-    await page.getByLabel("Branch name").fill(`${branch}-b`);
-    await page.getByRole("button", { name: "Create branch" }).click();
+    await page.getByRole("button", { name: "Create a branch" }).click();
+    const branchWindow = page.getByRole("dialog", { name: "Create a branch" });
+    await branchWindow.getByLabel("Branch name").fill(`${branch}-b`);
+    await branchWindow.getByRole("button", { name: "Create branch" }).click();
     await expect(page.locator(".toast.ok").last()).toContainText("created");
     await page.getByRole("button", { name: `Delete branch ${branch}-b` }).click();
     await page.getByRole("alertdialog").getByRole("button", { name: "Delete branch" }).click();
@@ -383,10 +384,11 @@ test("tag, release with a file, download it, edit and delete", async ({ page }) 
   try {
     // a tag from the Tags page
     await page.goto(`${P}/-/tags`);
-    await page.getByRole("button", { name: "New tag" }).click();
-    await page.getByLabel("Tag name").fill(tag);
-    await page.getByLabel(/^Message/).fill("Annotated");
-    await page.getByRole("button", { name: "Create tag" }).click();
+    await page.getByRole("button", { name: "Create a tag" }).click();
+    const tagWindow = page.getByRole("dialog", { name: "Create a tag" });
+    await tagWindow.getByLabel("Tag name").fill(tag);
+    await tagWindow.getByLabel(/^Message/).fill("Annotated");
+    await tagWindow.getByRole("button", { name: "Create tag" }).click();
     await expect(page.locator(".toast.ok").last()).toContainText("created");
     // its release, with notes (and a file attached in them) and a release file
     await page.getByRole("link", { name: "Create release" }).first().click();
@@ -457,12 +459,14 @@ test("protect tags in settings; protected tags are marked", async ({ page }) => 
   const tag = pattern.replace("*", "1");
   try {
     await page.goto(`${P}/-/settings/repository`);
-    await page.getByLabel(/^Tag or pattern/).fill(pattern);
-    await page.getByRole("button", { name: "Protect tags" }).click();
+    await page.getByRole("button", { name: "Protect a tag" }).click();
+    const protect = page.getByRole("dialog", { name: "Protect a tag" });
+    await protect.getByLabel(/^Tag or pattern/).fill(pattern);
+    await protect.getByRole("button", { name: "Protect tags" }).click();
     await expect(page.locator('[aria-label="Protected tags"]')).toContainText(pattern);
     await page.request.post(`/api/v1/projects/${project.id}/repository/tags`, { headers: csrf, data: { tag_name: tag, ref: "main" } });
     await page.goto(`${P}/-/tags`);
-    await expect(page.locator(".ref-row", { hasText: tag }).locator(".pill.warn")).toHaveText("protected");
+    await expect(page.locator(".ref-row", { hasText: tag }).locator(".pill", { hasText: "protected" })).toHaveText("protected");
   } finally {
     await page.request.delete(`/api/v1/projects/${project.id}/repository/tags/${tag}`, { headers: csrf });
     const rules = await (await page.request.get(`/api/v1/projects/${project.id}/protected_tags`)).json();

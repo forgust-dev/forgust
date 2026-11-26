@@ -122,7 +122,7 @@ test("security key: a second factor after the password", async ({ page, browser 
     // the first second factor: recovery codes, this once
     await expect(me.getByText("Save your recovery codes")).toBeVisible();
     await me.getByRole("button", { name: "I saved them" }).click();
-    await expect(me.getByRole("heading", { name: /^Two-factor authentication/ })).toContainText("enabled");
+    await expect(me.getByRole("heading", { name: /^Two-factor authentication/ })).toContainText("Enabled");
 
     // the password, then the key
     await me.context().clearCookies();
@@ -136,7 +136,7 @@ test("security key: a second factor after the password", async ({ page, browser 
     await keys.getByLabel("Your password", { exact: true }).fill(pw);
     await keys.getByRole("button", { name: "Remove", exact: true }).click();
     await expect(keys.getByText("Virtual key removed.")).toBeVisible();
-    await expect(me.getByRole("heading", { name: /^Two-factor authentication/ })).toContainText("off");
+    await expect(me.getByRole("heading", { name: /^Two-factor authentication/ })).toContainText("Off");
   } finally {
     await done();
   }

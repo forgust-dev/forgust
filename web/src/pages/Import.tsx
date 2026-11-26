@@ -1,9 +1,9 @@
 import { useMemo, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ArrowRight, CheckCircle2, CircleDashed, CircleX, Download, ExternalLink, Loader2, Lock, Plus, RotateCcw, Square } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, CircleDashed, CircleX, Download, ExternalLink, Loader2, Lock, Plus, RotateCcw, Square, Archive } from "lucide-react";
 import { api, bytes, timeAgo, type S } from "../api/client";
-import { Empty, ErrorBox, Field, FieldGroup, ListHead, Q, SearchField, Section } from "../components/ui";
+import { Empty, ErrorBox, Field, FieldGroup, ListHead, Q, SearchField, Section, StateBadge } from "../components/ui";
 import { Choices, Segmented, Select } from "../components/controls";
 import { useSession } from "../session";
 import { useAct } from "../shell/toast";
@@ -169,7 +169,7 @@ export function ImportPage() {
               : "People are matched to accounts here by the email they show; the others keep their name as text."}
           </p>
           <div className="form-actions">
-            <button className="btn primary" disabled={busy || !url.trim() || (mode === "one" && !path.trim())}>
+            <button className="btn primary" aria-busy={busy} disabled={busy || !url.trim() || (mode === "one" && !path.trim())}>
               {busy ? <Loader2 size={15} className="spin" /> : null} {mode === "one" ? "Find the project" : "Connect"}
             </button>
           </div>
@@ -267,7 +267,7 @@ function PlanButton({ busy, disabled, back, onClick }: { busy: boolean; disabled
         <button className="btn" onClick={back}>
           Back
         </button>
-        <button className="btn primary" disabled={busy || disabled} onClick={onClick}>
+        <button className="btn primary" aria-busy={busy} disabled={busy || disabled} onClick={onClick}>
           {busy ? <Loader2 size={15} className="spin" /> : null} Plan the import
         </button>
       </div>
@@ -284,7 +284,11 @@ function ProjectLine({ p }: { p: S["SourceProject"] }) {
       <div className="row-title">
         <span className="ellipsis">{p.full_path}</span>
         <span className="pill">{p.visibility}</span>
-        {p.archived && <span className="pill">archived</span>}
+        {p.archived && (
+          <StateBadge tone="neutral" icon={Archive}>
+            Archived
+          </StateBadge>
+        )}
         {p.empty && <span className="pill">empty</span>}
       </div>
       {p.description && <div className="row-desc ellipsis">{p.description}</div>}
@@ -527,7 +531,7 @@ function StatusIcon({ status, size = 16 }: { status: string; size?: number }) {
   if (status === "failed") return <CircleX size={size} className="ic-danger" aria-label={status} />;
   if (status === "canceled" || status === "skipped") return <Square size={size} className="faint" aria-label={status} />;
   if (status === "pending") return <CircleDashed size={size} className="faint" aria-label={status} />;
-  return <Loader2 size={size} className="spin ic-accent" aria-label={status} />;
+  return <Loader2 size={size} className="spin ic-info" aria-label={status} />;
 }
 
 const STAGES: Record<string, string> = {

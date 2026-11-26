@@ -15,8 +15,8 @@ test("merge trains: turn on, join, leave", async ({ page }) => {
     });
     const mr = await api("post", `/projects/${project.id}/merge_requests`, { source_branch: "feature", title: "A feature" });
 
-    // the setting needs "pipelines must succeed"
-    await page.goto(`${web}/-/settings/ci_cd`);
+    // the setting needs "pipelines must succeed"; both are merge checks, in the merge request settings
+    await page.goto(`${web}/-/settings/merge_requests`);
     const trains = page.getByRole("checkbox", { name: /merge trains/ });
     await expect(trains).toBeDisabled();
     await page.getByRole("checkbox", { name: /only be merged when the pipeline succeeds/ }).check();
