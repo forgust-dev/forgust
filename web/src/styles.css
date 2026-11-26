@@ -5874,6 +5874,47 @@ a.row-title:hover,
   gap: 4px;
   font-size: 13px;
 }
+/* every cell is there in every row, empty or not, so the columns line up */
+.ref-cells {
+  display: contents;
+}
+.ref-slot {
+  display: inline-flex;
+  flex: none;
+  justify-content: center;
+  width: var(--control-h);
+}
+.ref-release {
+  display: inline-flex;
+  flex: none;
+  justify-content: flex-end;
+  width: 9.5em;
+}
+/* on a phone the name has the line; what follows wraps under it */
+@media (max-width: 700px) {
+  .ref-row {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+  .ref-main {
+    flex-basis: calc(100% - 40px);
+  }
+  .ref-cells {
+    display: flex;
+    flex-basis: 100%;
+    align-items: center;
+    gap: 10px;
+    padding-left: 28px;
+  }
+  .ref-release,
+  .ref-mr {
+    width: auto;
+  }
+  .ref-distance {
+    width: auto;
+    text-align: left;
+  }
+}
 .row-title .pill {
   flex: none;
   padding: 0 7px;

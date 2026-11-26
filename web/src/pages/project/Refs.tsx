@@ -148,8 +148,9 @@ export function Branches({ ctx }: { ctx: Ctx }) {
                       </span>
                     )}
                   </div>
+                  <span className="ref-cells">
                   <Tip ctx={ctx} c={b.commit} />
-                  <span className="ref-distance hide-narrow" title={b.default ? undefined : `Compared with ${ctx.p.default_branch}`}>
+                  <span className="ref-distance" title={b.default ? undefined : `Compared with ${ctx.p.default_branch}`}>
                     {distance(b)}
                   </span>
                   <span className="ref-ci">
@@ -173,16 +174,21 @@ export function Branches({ ctx }: { ctx: Ctx }) {
                       )
                     )}
                   </span>
-                  {!b.default && ctx.p.default_branch && (
-                    <Link className="icon-btn hide-narrow" to={`${ctx.web}/-/compare/${ctx.p.default_branch}...${b.name}`} title={`Compare with ${ctx.p.default_branch}`} aria-label={`Compare ${b.name} with ${ctx.p.default_branch}`}>
-                      <ArrowLeftRight size={15} />
-                    </Link>
-                  )}
-                  {!b.default && ctx.p.can_write_repository && (
-                    <button className="icon-btn" title={`Delete ${b.name}`} aria-label={`Delete branch ${b.name}`} onClick={() => remove(b.name)}>
-                      <Trash2 size={15} />
-                    </button>
-                  )}
+                  <span className="ref-slot hide-narrow">
+                    {!b.default && ctx.p.default_branch && (
+                      <Link className="icon-btn" to={`${ctx.web}/-/compare/${ctx.p.default_branch}...${b.name}`} title={`Compare with ${ctx.p.default_branch}`} aria-label={`Compare ${b.name} with ${ctx.p.default_branch}`}>
+                        <ArrowLeftRight size={15} />
+                      </Link>
+                    )}
+                  </span>
+                  <span className="ref-slot">
+                    {!b.default && ctx.p.can_write_repository && (
+                      <button className="icon-btn" title={`Delete ${b.name}`} aria-label={`Delete branch ${b.name}`} onClick={() => remove(b.name)}>
+                        <Trash2 size={15} />
+                      </button>
+                    )}
+                  </span>
+                  </span>
                 </div>
               ))}
             </div>
@@ -309,12 +315,15 @@ export function Tags({ ctx }: { ctx: Ctx }) {
                       </Link>
                     )}
                   </div>
+                  <span className="ref-cells">
                   <Tip ctx={ctx} c={t.commit} />
-                  {!t.release && ctx.p.can_push && (
-                    <Link className="btn small" to={`${ctx.web}/-/releases/new?tag=${encodeURIComponent(t.name)}`} aria-label="Create release" title="Create a release on this tag">
-                      <Package size={13} /> <span className="hide-narrow">Create release</span>
-                    </Link>
-                  )}
+                  <span className="ref-release">
+                    {!t.release && ctx.p.can_push && (
+                      <Link className="btn small" to={`${ctx.web}/-/releases/new?tag=${encodeURIComponent(t.name)}`} aria-label="Create release" title="Create a release on this tag">
+                        <Package size={13} /> <span className="hide-narrow">Create release</span>
+                      </Link>
+                    )}
+                  </span>
                   <div className="btn-group">
                     <a className="btn small" href={`/api/v1${ctx.base}/archive${qs({ ref: t.name, format: "zip" })}`} title="Download a zip of this tag">
                       <Download size={13} /> zip
@@ -323,11 +332,14 @@ export function Tags({ ctx }: { ctx: Ctx }) {
                       tar.gz
                     </a>
                   </div>
-                  {ctx.p.can_write_repository && (t.protected ? ctx.p.can_admin : ctx.p.can_push) && (
-                    <button className="icon-btn" title={`Delete ${t.name}`} aria-label={`Delete tag ${t.name}`} onClick={() => remove(t)}>
-                      <Trash2 size={15} />
-                    </button>
-                  )}
+                  <span className="ref-slot">
+                    {ctx.p.can_write_repository && (t.protected ? ctx.p.can_admin : ctx.p.can_push) && (
+                      <button className="icon-btn" title={`Delete ${t.name}`} aria-label={`Delete tag ${t.name}`} onClick={() => remove(t)}>
+                        <Trash2 size={15} />
+                      </button>
+                    )}
+                  </span>
+                  </span>
                 </div>
               ))}
             </div>

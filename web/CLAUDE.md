@@ -68,6 +68,8 @@ Buttons, fields and menus share one height, from tokens in `src/styles.css`: `--
 (30 px), `--control-h-sm` (26 px, `btn small`) and `--control-h-lg` (34 px). On a touch screen
 they are 36 px. Button text is 13 px, a field's label 13 px, what is typed 14 px. A control
 next to another takes its height from the same token, so they line up; never write a height.
+A page's title (`ListHead`) is 24 px. A row's line of details (`.row-meta`) is in the page's
+letters at 12.5 px; a sha, a branch or a path in it keep code's, by their own class.
 
 The one main action of a page is a step taller (`btn large`): the buttons of its head
 (`.list-head`, on its own), a creation page's submit and its Cancel (`.form-actions`, on its
@@ -138,6 +140,19 @@ row `fresh(key)`).
 
 What is added inside a form being filled stays in it: a variable of a pipeline to run, a link
 of a release, a project to import. So do comments and reactions.
+
+## Code
+
+- A ref's root is the Files page, however it is reached: the project's head, the files and
+  README, and beside them what is known of that ref. Link to it with `filesLink`: the project's
+  own address for the default branch, `/-/tree/<ref>` for another. The sidebar's Files keeps the
+  ref being read.
+- A folder, a file and its blame have the project's files beside them (`CodeLayout`,
+  `pages/project/FileTree.tsx`), kept mounted from one to the next. Its keys work only while
+  focus is in it: the page's own `j`, `k` and arrows stay theirs.
+- A file's header stays under the top bar while it is read, with the file's name.
+- A branch or a tag is one line. What only the Branches page shows (distance, pipeline, merge
+  request) comes with `?details=true`, not with the list every branch picker shares.
 
 ## Numbers
 
