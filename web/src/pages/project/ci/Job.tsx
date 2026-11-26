@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { keepPreviousData, queryOptions, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDownToLine, ChevronDown, ChevronRight, Download, FileText, Play, RotateCcw, Square, FolderOpen } from "lucide-react";
@@ -28,19 +28,24 @@ const logStartQuery = (pid: number, jobId: number) =>
  */
 function useJobReady(pid: number, jobId: number) {
   const qc = useQueryClient();
+  // once per visit (each navigation has its own key): what it waits for has its own cache
+  const visit = useLocation().key;
   useSuspenseQuery({
-    queryKey: ["job-ready", pid, jobId],
+    queryKey: ["job-ready", pid, jobId, visit],
     queryFn: async () => {
       const ready = (async () => {
-        const [job] = await Promise.all([qc.ensureQueryData(jobQuery(pid, jobId)), qc.ensureQueryData(logStartQuery(pid, jobId)).catch(() => null)]);
-        await qc.ensureQueryData(pipelineQuery(pid, job.pipeline_iid));
+        // the job and its pipeline as they are now (a job that ran on since it was last seen),
+        // and its log's start: kept when it is the whole log, read again when it may have grown
+        const kept = qc.getQueryData(logStartQuery(pid, jobId).queryKey);
+        const start = kept?.complete && !kept.more ? kept : qc.fetchQuery({ ...logStartQuery(pid, jobId), staleTime: 0 }).catch(() => null);
+        const [job] = await Promise.all([qc.fetchQuery(jobQuery(pid, jobId)), start]);
+        await qc.fetchQuery(pipelineQuery(pid, job.pipeline_iid));
       })().catch(() => {
         // the page says what went wrong, as it did without waiting
       });
       await Promise.race([ready, new Promise((done) => window.setTimeout(done, SPINNER_DELAY))]);
       return true;
     },
-    // waited for once per visit: what it waited for has its own cache
     staleTime: Infinity,
     gcTime: 0,
   });
