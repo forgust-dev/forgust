@@ -2269,8 +2269,10 @@ kbd {
 .admin-head {
   margin-bottom: 22px;
 }
+/* the admin area's and your settings' titles, as every list page's (24 px) */
 .admin-head h1 {
   margin: 2px 0 0;
+  font-size: 24px;
 }
 /* the project card at the top of the sidebar: name, then where it lives */
 .side-context-text {
