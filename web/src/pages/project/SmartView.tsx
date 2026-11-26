@@ -1530,8 +1530,8 @@ function ChapterLink({ ctx, c, short }: { ctx: Ctx; c: Chapter; short?: boolean 
     );
   }
   return (
-    <Link to={`${ctx.web}/-/commit/${c.commit}`} title={tip}>
-      {short ? <code>{c.commit.slice(0, 7)}</code> : c.title}
+    <Link to={`${ctx.web}/-/commit/${c.commit}`} className={short ? "sha" : undefined} title={tip}>
+      {short ? c.commit.slice(0, 7) : c.title}
     </Link>
   );
 }

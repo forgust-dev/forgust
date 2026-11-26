@@ -9252,11 +9252,6 @@ button.test-case-row:hover {
   color: var(--text-muted);
   white-space: nowrap;
 }
-.smart-history-range {
-  flex: 1;
-  min-width: 0;
-  accent-color: var(--accent);
-}
 .smart-history-chapter {
   padding: 10px 14px;
   border: 1px solid var(--border);
