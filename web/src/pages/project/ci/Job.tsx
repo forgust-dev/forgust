@@ -38,8 +38,9 @@ function useJobReady(pid: number, jobId: number) {
         // and its log's start: kept when it is the whole log, read again when it may have grown
         const kept = qc.getQueryData(logStartQuery(pid, jobId).queryKey);
         const start = kept?.complete && !kept.more ? kept : qc.fetchQuery({ ...logStartQuery(pid, jobId), staleTime: 0 }).catch(() => null);
-        const [job] = await Promise.all([qc.fetchQuery(jobQuery(pid, jobId)), start]);
-        await qc.fetchQuery(pipelineQuery(pid, job.pipeline_iid));
+        // the pipeline as soon as the job names it, not after the log
+        const job = qc.fetchQuery(jobQuery(pid, jobId)).then((j) => qc.fetchQuery(pipelineQuery(pid, j.pipeline_iid)));
+        await Promise.all([job, start]);
       })().catch(() => {
         // the page says what went wrong, as it did without waiting
       });
