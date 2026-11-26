@@ -2866,6 +2866,11 @@ kbd {
   align-items: center;
   gap: 8px;
 }
+/* the files, or a file's last commit, close under it: 8 px, as between its buttons, where the
+   page's stack puts 16 */
+.stack > .repo-toolbar + .file-table {
+  margin-top: -8px;
+}
 .ref-counts {
   display: inline-flex;
   gap: 8px;
