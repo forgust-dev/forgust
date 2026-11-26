@@ -9,6 +9,7 @@ import { fetchers, keys } from "../../prefetch";
 import { Badge, CopyField, NotFound, Q, Spinner, Tile, StateBadge } from "../../components/ui";
 import { KeepNav, useSetNav } from "../../shell/nav";
 import { Blame, Blob, Tree, useResolved } from "./Code";
+import { CodeLayout } from "./FileTree";
 import { Commit, Commits } from "./History";
 import { Branches, Compare, Tags } from "./Refs";
 import { MilestoneForm, MilestonePage, MilestonesPage } from "./Milestones";
@@ -147,9 +148,14 @@ export function ProjectPage({ id, fullPath, rest }: { id: number; fullPath: stri
                 // a section still loading: a spinner here, the header and sidebar stay
                 <Suspense fallback={<Spinner page />}>
                   {section === "" && <FilesRoot ctx={ctx} refAndPath={ref} gitRef={ref} />}
-                  {section === "tree" && <TreeRoute ctx={ctx} refAndPath={tail} />}
-                  {section === "blob" && <Blob ctx={ctx} refAndPath={tail} />}
-                  {section === "blame" && <Blame ctx={ctx} refAndPath={tail} />}
+                  {/* one layout for a folder, a file and its blame: the files beside them stay as you go */}
+                  {(section === "tree" || section === "blob" || section === "blame") && (
+                    <CodeLayout ctx={ctx} kind={section === "tree" ? "tree" : "blob"} refAndPath={tail}>
+                      {section === "tree" && <TreeRoute ctx={ctx} refAndPath={tail} />}
+                      {section === "blob" && <Blob ctx={ctx} refAndPath={tail} />}
+                      {section === "blame" && <Blame ctx={ctx} refAndPath={tail} />}
+                    </CodeLayout>
+                  )}
                   {section === "smart_view" && <SmartView ctx={ctx} />}
                   {(section === "edit" || section === "new" || section === "delete") && (p.can_write_repository ? <EditFile ctx={ctx} refAndPath={tail} mode={section} /> : <NotFound />)}
                   {section === "commits" && <Commits ctx={ctx} refAndPath={tail || ref} />}

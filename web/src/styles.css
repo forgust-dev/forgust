@@ -5340,6 +5340,114 @@ a.status-badge:hover {
 
 /* ---- file view */
 
+/* a folder, a file or its blame with the project's files beside them (pages/project/FileTree.tsx);
+   on a screen too narrow for both, the files go */
+.code-layout {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.code-layout.tree-hidden {
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 12px;
+}
+.code-layout.no-tree {
+  display: block;
+}
+.file-tree {
+  position: sticky;
+  top: calc(var(--topbar-h) + 16px);
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - var(--topbar-h) - 32px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+}
+.file-tree.hidden-tree {
+  border: 0;
+  background: none;
+}
+.ft-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 4px 4px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 600;
+}
+.ft-items {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+}
+.ft-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 26px;
+  padding-left: calc(var(--depth, 0) * 14px);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 13px;
+  outline-offset: -2px;
+}
+.ft-row:hover {
+  background: var(--row-hover);
+}
+/* what is read: the current one, in the color of what is current */
+.ft-row[aria-current="page"] {
+  background: var(--accent-soft);
+}
+.ft-row[aria-current="page"] .ft-name {
+  font-weight: 600;
+}
+.ft-toggle {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+.ft-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: inherit;
+}
+.ft-name:hover {
+  text-decoration: none;
+}
+.ft-name svg {
+  flex: none;
+}
+/* a file grey; a folder in its own color, as in the list (it opens) */
+.ft-name svg:not(.ic-folder) {
+  color: var(--text-faint);
+}
+.ft-note {
+  padding-left: calc(var(--depth, 0) * 14px + 20px);
+  color: var(--text-faint);
+  font-size: 12.5px;
+}
+@media (max-width: 1199px) {
+  .code-layout,
+  .code-layout.tree-hidden {
+    display: block;
+  }
+  .file-tree {
+    display: none;
+  }
+}
 /* a file's header stays in view while the file is read (on a phone it wraps: it scrolls away) */
 .blob-head {
   position: sticky;
