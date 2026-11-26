@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode, Ref } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   AlertTriangle,
@@ -517,6 +517,8 @@ function MapView({ ctx, gitRef, map, lay, found, words }: { ctx: Ctx; gitRef: st
     queryKey: ["map-history", ctx.p.id, map.commit],
     queryFn: () => api.get<S["MapHistory"]>(`${ctx.base}/map/history`),
     staleTime: 60_000,
+    // a new map come in: the history shown (and played) stays until the new one is read
+    placeholderData: keepPreviousData,
   });
   const read = history.data;
   const told = useMemo(() => (read?.chapters.length ? stories(read) : null), [read]);
@@ -1027,7 +1029,9 @@ function Flow({ lay, byId, jobs, waitsOn, chosen, joined, lit, fit: shown, selec
       });
     });
     return () => cancelAnimationFrame(frame);
-  }, [fitKey, panelOpen, flow, corner, follow, width, height]);
+    // the frame's size counts only for a history's step: a chain or a merge request's blocks are
+    // fitted once, and a resize leaves the view where it was moved to
+  }, [fitKey, panelOpen, flow, corner, follow, follow && width, follow && height]);
 
   return (
     <div className="smart-frame" style={{ height }}>
@@ -1664,15 +1668,22 @@ function useLastVisit(projectId: number, h: S["MapHistory"] | undefined) {
     if (visit || !h?.chapters.length) return;
     const key = `forgust.smart-view.seen.${projectId}`;
     let last: string | null = null;
+    let lastAt = NaN;
     try {
       last = localStorage.getItem(key);
+      lastAt = Number(localStorage.getItem(`${key}.at`) ?? NaN);
     } catch {
       // no storage here: a first visit each time
     }
     const seen = last ? h.chapters.findIndex((c) => c.commit === last) : -1;
-    setVisit({ first: !last, unseen: seen >= 0 ? h.chapters.slice(seen + 1) : [] });
+    // the latest seen is no longer told (a revert took it out, or the branch was rewritten): what
+    // came after it, by when it came
+    const unseen = seen >= 0 ? h.chapters.slice(seen + 1) : last && Number.isFinite(lastAt) ? h.chapters.filter((c) => Date.parse(c.at) > lastAt) : [];
+    setVisit({ first: !last, unseen });
     try {
-      localStorage.setItem(key, h.chapters[h.chapters.length - 1].commit);
+      const latest = h.chapters[h.chapters.length - 1];
+      localStorage.setItem(key, latest.commit);
+      localStorage.setItem(`${key}.at`, String(Date.parse(latest.at)));
     } catch {
       // not kept: said again next time
     }
@@ -1771,26 +1782,38 @@ function HistoryView({ ctx, map, history, at, setAt, autoplay, room, measure, pi
     return out;
   }, [marks]);
   const [playing, setPlaying] = useState(autoplay);
+  // played again from its end: the first chapter is on its way (the address changes in a
+  // transition, after `playing`), and the end seen meanwhile does not stop it
+  const restart = useRef(false);
   // a step after another while it plays, then it stops at the latest
   useEffect(() => {
     if (!playing) return;
     const next = chapters[index + 1];
     if (!next) {
-      setPlaying(false);
+      if (!restart.current) setPlaying(false);
       return;
     }
+    restart.current = false;
     const t = window.setTimeout(() => setAt(next.commit), PLAY_STEP);
     return () => window.clearTimeout(t);
   }, [playing, index, chapters, setAt]);
   // a step chosen stops the playing
   const go = (i: number) => {
+    restart.current = false;
     setPlaying(false);
     if (chapters[i]) setAt(chapters[i].commit);
   };
   const play = () => {
-    if (playing) return setPlaying(false);
+    if (playing) {
+      restart.current = false;
+      return setPlaying(false);
+    }
     // from the start when it is at its end
-    if (index === chapters.length - 1) setAt(chapters[0].commit);
+    if (index === chapters.length - 1) {
+      if (chapters.length < 2) return;
+      restart.current = true;
+      setAt(chapters[0].commit);
+    }
     setPlaying(true);
   };
   const tags = useQuery({
