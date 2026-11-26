@@ -131,7 +131,7 @@ function FileTreePanel({ where, path, folder, shown, setShown }: { where: Where;
 
 function Entries({ where, dir, depth, open, toggle, current, focus }: { where: Where; dir: string; depth: number; open: Set<string>; toggle: (p: string) => void; current: string; focus: string }) {
   const { ctx, commit } = where;
-  const q = useQuery({ queryKey: keys.tree(ctx.p.id, commit, dir), queryFn: () => fetchers.tree(ctx.p.id, commit, dir), staleTime: 60_000 });
+  const q = useQuery({ queryKey: keys.tree(ctx.p.id, commit, dir), queryFn: () => fetchers.tree(ctx.p.id, commit, dir), staleTime: Infinity });
   const depthStyle = { "--depth": depth } as CSSProperties;
   if (q.isLoading)
     return (
