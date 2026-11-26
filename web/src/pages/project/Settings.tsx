@@ -60,7 +60,13 @@ const MOVED: Record<string, SettingsSlug> = { "#pages": "ci_cd", "#security-scan
 function useHashSection() {
   const { hash } = useLocation();
   useEffect(() => {
-    const id = decodeURIComponent(hash.slice(1));
+    let id: string;
+    try {
+      id = decodeURIComponent(hash.slice(1));
+    } catch {
+      // a malformed escape (`#%`) names no section
+      return;
+    }
     if (!id) return;
     const main = document.querySelector("main") ?? document.body;
     let el = document.getElementById(id);
