@@ -120,7 +120,7 @@ function Calendar({ value, onPick }: { value: Ymd | null; onPick: (d: Ymd) => vo
 /**
  * A date: typed (YYYY-MM-DD) or picked on a calendar. `value` and `onChange` speak the API's
  * "YYYY-MM-DD", "" for none. A typed date counts once it is whole; an emptied field clears the
- * date when you leave it, so retyping a date does not clear it on the way.
+ * date when you leave it or press Enter, so retyping a date does not clear it on the way.
  */
 export function DateField({ value, onChange, label }: { value: string; onChange: (v: string) => void; label?: string }) {
   const [text, setText] = useState(value);
@@ -137,6 +137,18 @@ export function DateField({ value, onChange, label }: { value: string; onChange:
       if (value) onChange("");
     } else if (!parse(text)) setText(value);
   };
+  // Enter sends the form with what the field shows: an emptied date first cleared, the form
+  // sent once that is rendered; a date that is not one yet sends nothing
+  const enter = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "Enter") return;
+    if (text.trim() === "") {
+      if (!value) return;
+      e.preventDefault();
+      onChange("");
+      const form = e.currentTarget.form;
+      window.setTimeout(() => form?.requestSubmit());
+    } else if (!parse(text)) e.preventDefault();
+  };
   const pick = (v: string) => {
     onChange(v);
     setOpen(false);
@@ -152,6 +164,7 @@ export function DateField({ value, onChange, label }: { value: string; onChange:
         value={text}
         onChange={(e) => type(e.target.value)}
         onBlur={leave}
+        onKeyDown={enter}
       />
       <Popover
         open={open}
