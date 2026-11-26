@@ -32,7 +32,7 @@ import {
   Users,
   Workflow,
 } from "lucide-react";
-import { refLink, type S } from "../api/client";
+import { refLink, type S, filesLink } from "../api/client";
 import type { PrefetchTarget } from "../prefetch";
 import type { Nav } from "./nav";
 import { SETTINGS_PAGES, SETTINGS_SECTIONS, type SettingsSlug } from "../pages/project/settingsPages";
@@ -95,7 +95,7 @@ export function projectItems(p: S["ProjectDetail"], ref: string, mrCount?: numbe
       icon: <Code2 size={16} />,
       match: code,
       children: [
-        { to: web, label: "Files", match: files, words: "repository tree" },
+        { to: filesLink(web, ref, p.default_branch), label: "Files", match: files, words: "repository tree" },
         { to: `${web}/-/smart_view`, label: "Smart View", match: sec("smart_view"), words: "map blocks architecture dependencies people owners experts" },
         { to: refLink(web, "commits", ref), label: "Commits", match: sec("commits?"), words: "history" },
         { to: `${web}/-/branches`, label: "Branches", match: sec("branches") },

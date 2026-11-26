@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { api, bytes, qs, refLink, timeAgo, type S } from "../../api/client";
+import { api, bytes, qs, refLink, timeAgo, type S, filesLink } from "../../api/client";
 import { Avatar, Badge, CopyField, GitPerson, Q, useCopy } from "../../components/ui";
 import { Popover, Segmented, Select } from "../../components/controls";
 import { type Ctx } from "./Project";
@@ -45,7 +45,7 @@ export function RefPicker({ ctx, current, path, kind }: { ctx: Ctx; current: str
       style={{ width: "auto", maxWidth: 260, fontFamily: "var(--mono)", fontSize: 13, fontWeight: 600 }}
       value={current}
       label="Branch or tag"
-      onChange={(v) => nav(`${ctx.web}/-/${kind}/${v}${path ? `/${path}` : ""}`)}
+      onChange={(v) => nav(kind === "tree" ? filesLink(ctx.web, v, ctx.p.default_branch, path) : `${ctx.web}/-/${kind}/${v}${path ? `/${path}` : ""}`)}
       options={options}
     />
   );
@@ -157,13 +157,13 @@ export function PathCrumbs({ ctx, gitRef, path }: { ctx: Ctx; gitRef: string; pa
   const parts = path ? path.split("/") : [];
   return (
     <div className="crumbs" style={{ margin: 0 }}>
-      <Link to={refLink(ctx.web, "tree", gitRef)}>
+      <Link to={filesLink(ctx.web, gitRef, ctx.p.default_branch)}>
         <strong>{ctx.p.path}</strong>
       </Link>
       {parts.map((part, i) => (
         <span key={i} className="row" style={{ gap: 4 }}>
           <span className="sep">/</span>
-          {i === parts.length - 1 ? <strong>{part}</strong> : <Link to={refLink(ctx.web, "tree", gitRef, parts.slice(0, i + 1).join("/"))}>{part}</Link>}
+          {i === parts.length - 1 ? <strong>{part}</strong> : <Link to={filesLink(ctx.web, gitRef, ctx.p.default_branch, parts.slice(0, i + 1).join("/"))}>{part}</Link>}
         </span>
       ))}
     </div>
@@ -337,7 +337,7 @@ function TreeView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
                 <span className="icon">
                   <CornerLeftUp size={16} />
                 </span>
-                <Link to={refLink(ctx.web, "tree", res.ref, res.path.split("/").slice(0, -1).join("/"))}>..</Link>
+                <Link to={filesLink(ctx.web, res.ref, ctx.p.default_branch, res.path.split("/").slice(0, -1).join("/"))}>..</Link>
               </div>
             )}
             {virtual ? (

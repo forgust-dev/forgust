@@ -3,12 +3,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Archive, ArrowRight, BookOpen, Building2, CalendarDays, GitBranch, GitCommitHorizontal, Globe, Handshake, HardDrive, History as HistoryIcon, Lock, RefreshCw, Scale, ShieldCheck, UserCheck, Users as UsersIcon } from "lucide-react";
-import { api, bytes, qs, timeAgo, type S, encPath, refLink } from "../../api/client";
+import { api, bytes, qs, timeAgo, type S, encPath, filesLink, refLink } from "../../api/client";
 import { StatusBadge } from "./ci/Status";
 import { fetchers, keys } from "../../prefetch";
 import { Badge, CopyField, NotFound, Q, Spinner, Tile, StateBadge } from "../../components/ui";
 import { KeepNav, useSetNav } from "../../shell/nav";
-import { Blame, Blob, Tree } from "./Code";
+import { Blame, Blob, Tree, useResolved } from "./Code";
 import { Commit, Commits } from "./History";
 import { Branches, Compare, Tags } from "./Refs";
 import { MilestoneForm, MilestonePage, MilestonesPage } from "./Milestones";
@@ -52,8 +52,8 @@ const SmartView = lazy(() => import("./SmartView").then((m) => ({ default: m.Sma
 export type Ctx = { p: S["ProjectDetail"]; base: string; web: string; setRef?: (r: string) => void };
 
 const SECTIONS: Record<string, string> = {
-  tree: "Repository",
-  blob: "Repository",
+  tree: "Files",
+  blob: "Files",
   blame: "Blame",
   smart_view: "Smart View",
   commits: "Commits",
@@ -88,7 +88,7 @@ function ProjectNav({ p, rest, gitRef }: { p: S["ProjectDetail"]; rest: string; 
   const web = `/${p.full_path}`;
   // the audit log is shown under Security
   if (section === "audit") crumbs.push({ label: "Security", to: `${web}/-/security` });
-  if (Object.hasOwn(SECTIONS, section)) crumbs.push({ label: SECTIONS[section], to: section === "commit" ? refLink(web, "commits", gitRef ?? p.default_branch ?? "main") : section === "tree" || section === "blob" ? web : section === "jobs" ? `${web}/-/pipelines` : `${web}/-/${section}` });
+  if (Object.hasOwn(SECTIONS, section)) crumbs.push({ label: SECTIONS[section], to: section === "commit" ? refLink(web, "commits", gitRef ?? p.default_branch ?? "main") : section === "tree" || section === "blob" ? filesLink(web, gitRef ?? p.default_branch ?? "main", p.default_branch) : section === "jobs" ? `${web}/-/pipelines` : `${web}/-/${section}` });
   if (section === "merge_requests" && more[0]) crumbs.push({ label: more[0] === "new" ? "New" : `!${more[0]}` });
   if (section === "issues" && more[0]) crumbs.push({ label: more[0] === "new" ? "New" : `#${more[0]}` });
   if (section === "commit" && more[0]) crumbs.push({ label: more[0].slice(0, 8) });
@@ -136,6 +136,7 @@ export function ProjectPage({ id, fullPath, rest }: { id: number; fullPath: stri
             <>
               <ProjectNav p={p} rest={rest} gitRef={gitRef} />
               {section === "" && <ProjectHeader p={p} />}
+              {section === "tree" && <TreeRootHeader ctx={ctx} refAndPath={tail} />}
               <ArchivedBanner p={p} />
               <StorageBanner p={p} />
               {!p.can_read_code && !["members", "issues", "labels", "milestones"].includes(section) ? (
@@ -145,16 +146,8 @@ export function ProjectPage({ id, fullPath, rest }: { id: number; fullPath: stri
               ) : (
                 // a section still loading: a spinner here, the header and sidebar stay
                 <Suspense fallback={<Spinner page />}>
-                  {section === "" && (
-                    <div className="repo-layout">
-                      <div className="repo-main">
-                        <RecentBranchBanner ctx={ctx} />
-                        <Tree ctx={ctx} refAndPath={ref} />
-                      </div>
-                      <RepoAbout ctx={ctx} />
-                    </div>
-                  )}
-                  {section === "tree" && <Tree ctx={ctx} refAndPath={tail} />}
+                  {section === "" && <FilesRoot ctx={ctx} refAndPath={ref} gitRef={ref} />}
+                  {section === "tree" && <TreeRoute ctx={ctx} refAndPath={tail} />}
                   {section === "blob" && <Blob ctx={ctx} refAndPath={tail} />}
                   {section === "blame" && <Blame ctx={ctx} refAndPath={tail} />}
                   {section === "smart_view" && <SmartView ctx={ctx} />}
@@ -380,9 +373,41 @@ function licenseName(text: string): string | null {
   return known.find(([re]) => re.test(t))?.[1] ?? null;
 }
 
-function RepoAbout({ ctx }: { ctx: Ctx }) {
+/**
+ * The Files page: a branch's (or tag's, or commit's) root, the same whichever way it is reached
+ * (the project's address, the sidebar, the path above a folder, "..", the branch picker): the
+ * project's head, its files and README, and beside them what is known of that ref.
+ */
+function FilesRoot({ ctx, refAndPath, gitRef }: { ctx: Ctx; refAndPath: string; gitRef: string }) {
+  return (
+    <div className="repo-layout">
+      <div className="repo-main">
+        <RecentBranchBanner ctx={ctx} />
+        <Tree ctx={ctx} refAndPath={refAndPath} />
+      </div>
+      <RepoAbout ctx={ctx} gitRef={gitRef} />
+    </div>
+  );
+}
+
+/** `/-/tree/<ref>/<path>`: a folder, or at a ref's root the Files page. */
+function TreeRoute({ ctx, refAndPath }: { ctx: Ctx; refAndPath: string }) {
+  const r = useResolved(ctx, refAndPath);
+  return <Q q={r}>{(res) => (res.path === "" ? <FilesRoot ctx={ctx} refAndPath={refAndPath} gitRef={res.ref} /> : <Tree ctx={ctx} refAndPath={refAndPath} />)}</Q>;
+}
+
+/** The project's head above a ref's root, as on its home; guessed from the address until the ref
+ *  is resolved (a branch named with a slash shows it once known). */
+function TreeRootHeader({ ctx, refAndPath }: { ctx: Ctx; refAndPath: string }) {
+  const r = useResolved(ctx, refAndPath);
+  const root = r.data ? r.data.path === "" : !refAndPath.includes("/");
+  return root ? <ProjectHeader p={ctx.p} /> : null;
+}
+
+function RepoAbout({ ctx, gitRef }: { ctx: Ctx; gitRef?: string }) {
   const { p } = ctx;
-  const ref = p.default_branch ?? "main";
+  // what is known of the ref being read: its pipeline, its languages, its files
+  const ref = gitRef ?? p.default_branch ?? "main";
   const pipeline = useQuery({
     queryKey: ["pipelines", p.id, "latest", ref],
     queryFn: () => api.get<S["PipelineSummary"][]>(`/projects/${p.id}/pipelines${qs({ ref, per_page: 1 })}`),
