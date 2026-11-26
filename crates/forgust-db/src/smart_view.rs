@@ -423,7 +423,7 @@ pub async fn chapters(e: impl PgExecutor<'_>, project_id: i64) -> Result<Vec<Cha
              FROM smart_view_chapters c
              LEFT JOIN LATERAL (
                   SELECT m.iid, m.title, m.description,
-                         (SELECT count(*) FROM notes n WHERE n.merge_request_id = m.id AND NOT n.system) AS comments
+                         (SELECT count(*) FROM notes n WHERE n.merge_request_id = m.id AND NOT n.system AND NOT n.internal) AS comments
                     FROM merge_requests m
                    WHERE m.project_id = c.project_id AND m.state = 'merged' AND m.merge_commit_sha IN (c.sha, c.merge_sha)
                    -- the merge request of the commit itself first: a squash merged into a release branch

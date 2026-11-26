@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT c.sha, c.merge_sha, c.author_name, c.author_email, c.at, c.title, c.changes,\n                  mr.iid AS \"mr_iid?\", mr.title AS \"mr_title?\", mr.description AS \"mr_description?\", mr.comments AS \"mr_comments?\"\n             FROM smart_view_chapters c\n             LEFT JOIN LATERAL (\n                  SELECT m.iid, m.title, m.description,\n                         (SELECT count(*) FROM notes n WHERE n.merge_request_id = m.id AND NOT n.system) AS comments\n                    FROM merge_requests m\n                   WHERE m.project_id = c.project_id AND m.state = 'merged' AND m.merge_commit_sha IN (c.sha, c.merge_sha)\n                   -- the merge request of the commit itself first: a squash merged into a release branch\n                   ORDER BY m.merge_commit_sha = c.sha DESC, m.id DESC\n                   LIMIT 1\n             ) mr ON true\n            WHERE c.project_id = $1\n            ORDER BY c.id",
+  "query": "SELECT c.sha, c.merge_sha, c.author_name, c.author_email, c.at, c.title, c.changes,\n                  mr.iid AS \"mr_iid?\", mr.title AS \"mr_title?\", mr.description AS \"mr_description?\", mr.comments AS \"mr_comments?\"\n             FROM smart_view_chapters c\n             LEFT JOIN LATERAL (\n                  SELECT m.iid, m.title, m.description,\n                         (SELECT count(*) FROM notes n WHERE n.merge_request_id = m.id AND NOT n.system AND NOT n.internal) AS comments\n                    FROM merge_requests m\n                   WHERE m.project_id = c.project_id AND m.state = 'merged' AND m.merge_commit_sha IN (c.sha, c.merge_sha)\n                   -- the merge request of the commit itself first: a squash merged into a release branch\n                   ORDER BY m.merge_commit_sha = c.sha DESC, m.id DESC\n                   LIMIT 1\n             ) mr ON true\n            WHERE c.project_id = $1\n            ORDER BY c.id",
   "describe": {
     "columns": [
       {
@@ -139,5 +139,5 @@
       null
     ]
   },
-  "hash": "5f914527b8ed3f62bc443eaa40313353a9796255d253be4ea5e3efcd86fba992"
+  "hash": "09d40186cb73d896d0d3e3252ef4818c81885756416726b241f4b5d2b8d8648d"
 }

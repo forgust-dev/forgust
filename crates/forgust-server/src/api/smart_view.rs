@@ -729,7 +729,17 @@ fn fold_reverts<T>(chapters: Vec<(T, forgust_assay::Changes)>, title: impl Fn(&T
 /// heading nor a template's comment, on one line, cut on a word past 240 characters.
 fn excerpt(text: &str) -> Option<String> {
     const MAX: usize = 240;
-    let first = text.split("\n\n").map(str::trim).find(|p| !p.is_empty() && !p.starts_with('#') && !p.starts_with("<!--"))?;
+    // a description written on GitHub (imported) ends its lines with `\r\n`
+    let text = text.replace("\r\n", "\n");
+    // a template's comments say nothing, even those over several paragraphs
+    let mut plain = String::with_capacity(text.len());
+    let mut rest = text.as_str();
+    while let Some(i) = rest.find("<!--") {
+        plain.push_str(&rest[..i]);
+        rest = rest[i..].find("-->").map_or("", |j| &rest[i + j + 3..]);
+    }
+    plain.push_str(rest);
+    let first = plain.split("\n\n").map(str::trim).find(|p| !p.is_empty() && !p.starts_with('#'))?;
     let line = first.split_whitespace().collect::<Vec<_>>().join(" ");
     if line.chars().count() <= MAX {
         return Some(line);
@@ -1159,6 +1169,8 @@ mod tests {
         assert_eq!(excerpt(""), None);
         assert_eq!(excerpt("## Why\n\nReads the stock\nfrom the table.\n\nMore."), Some("Reads the stock from the table.".into()));
         assert_eq!(excerpt("<!-- the template -->\n\nA fix."), Some("A fix.".into()));
+        assert_eq!(excerpt("## Summary\r\n\r\nReads the stock.\r\n\r\nMore."), Some("Reads the stock.".into()), "GitHub's line ends");
+        assert_eq!(excerpt("<!-- Say why.\n\nAnd how. -->\n\nA fix."), Some("A fix.".into()), "a comment over paragraphs");
         let long = excerpt(&"word ".repeat(80)).unwrap();
         assert!(long.ends_with("word…") && long.chars().count() <= 241, "{long}");
     }
