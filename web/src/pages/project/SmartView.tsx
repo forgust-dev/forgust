@@ -1551,11 +1551,11 @@ function ToShare({
                 </span>
               </span>
               {fix && me && who?.username !== me && (
-                <button type="button" className="btn small" title="Name yourself among the people to ask about it" onClick={() => fix({ kind: "referent", block: b.id, title: title(b), who: `@${me}` })}>
+                <button type="button" className="btn small ghost" title="Name yourself among the people to ask about it" onClick={() => fix({ kind: "referent", block: b.id, title: title(b), who: `@${me}` })}>
                   I know it
                 </button>
               )}
-              <Link className="btn small" to={issue(b, who)}>
+              <Link className="btn small ghost" to={issue(b, who)}>
                 Open an issue
               </Link>
             </li>
