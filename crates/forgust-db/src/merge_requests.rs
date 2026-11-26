@@ -2,7 +2,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
-use sqlx::{PgConnection, PgExecutor};
+use sqlx::{PgConnection, PgExecutor, Row};
 
 use crate::Result;
 
@@ -1061,4 +1061,18 @@ pub async fn count_by_state(e: impl PgExecutor<'_>, project_id: i64, search: &st
     .fetch_one(e)
     .await?;
     Ok((r.opened, r.merged, r.closed))
+}
+
+/// The open merge request (the newest) from each of these branches: (branch, iid, title). Checked
+/// at run time.
+pub async fn open_per_source_branch(e: impl PgExecutor<'_>, project_id: i64, branches: &[String]) -> Result<Vec<(String, i64, String)>> {
+    let rows = sqlx::query(
+        "SELECT DISTINCT ON (source_branch) source_branch, iid, title FROM merge_requests
+          WHERE project_id = $1 AND state = 'opened' AND source_branch = ANY($2) ORDER BY source_branch, iid DESC",
+    )
+    .bind(project_id)
+    .bind(branches)
+    .fetch_all(e)
+    .await?;
+    rows.into_iter().map(|r| Ok((r.try_get("source_branch")?, r.try_get("iid")?, r.try_get("title")?))).collect()
 }

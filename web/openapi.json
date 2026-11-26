@@ -6727,6 +6727,24 @@
           "protected"
         ],
         "properties": {
+          "ahead": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "With `details`: commits on this branch that the default branch has not.",
+            "minimum": 0
+          },
+          "behind": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "description": "With `details`: commits on the default branch that this branch has not.",
+            "minimum": 0
+          },
           "commit": {
             "oneOf": [
               {
@@ -6740,11 +6758,65 @@
           "default": {
             "type": "boolean"
           },
+          "merge_request": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BranchMergeRequest",
+                "description": "With `details`: the open merge request from this branch (the newest)."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "name": {
             "type": "string"
           },
+          "pipeline": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BranchPipeline",
+                "description": "With `details`: the latest pipeline on this branch."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "protected": {
             "type": "boolean"
+          }
+        }
+      },
+      "BranchMergeRequest": {
+        "type": "object",
+        "required": [
+          "iid",
+          "title"
+        ],
+        "properties": {
+          "iid": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "title": {
+            "type": "string"
+          }
+        }
+      },
+      "BranchPipeline": {
+        "type": "object",
+        "required": [
+          "iid",
+          "status"
+        ],
+        "properties": {
+          "iid": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "type": "string"
           }
         }
       },

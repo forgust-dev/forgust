@@ -5831,8 +5831,48 @@ a.row-title:hover,
   font-family: var(--mono);
   font-size: 13.5px;
 }
-.tip-subject {
-  max-width: 48ch;
+/* a branch or a tag on one line: its name and marks, when it last changed and by whom, its sha;
+   a branch also its distance from the default branch, its pipeline and its merge request */
+.ref-row {
+  gap: 12px;
+}
+.ref-main {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.ref-updated {
+  flex: 0 1 17em;
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+.ref-distance {
+  flex: none;
+  width: 10em;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.ref-ci {
+  display: inline-flex;
+  flex: none;
+  justify-content: center;
+  width: 18px;
+}
+.ref-mr {
+  display: inline-flex;
+  flex: none;
+  width: 8.5em;
+}
+.ref-mr-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
 }
 .row-title .pill {
   flex: none;

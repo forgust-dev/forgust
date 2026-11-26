@@ -174,3 +174,17 @@ async fn tree_with_changes_edits_without_a_working_copy() {
     assert!(st.tree_with_changes(1, &c, &[FileChange { path: "new".into(), content: Some(b"x".to_vec()) }]).await.is_err());
     assert!(st.tree_with_changes(1, &c, &[FileChange { path: "../x".into(), content: Some(b"x".to_vec()) }]).await.is_err());
 }
+
+#[tokio::test]
+async fn ahead_behind_counts_every_branch_against_the_default() {
+    let (_root, _work, st) = setup().await;
+    let names = |l: &[&str]| l.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+    let mut v = st.ahead_behind(1, "main", &names(&["topic", "clash", "main"])).await.unwrap();
+    v.sort();
+    // topic: its 20 commits, without main's 2; clash: its one, without main's 2
+    assert_eq!(v, vec![("clash".to_string(), 1, 2), ("main".to_string(), 0, 0), ("topic".to_string(), 20, 2)]);
+    // only the branches asked for
+    assert_eq!(st.ahead_behind(1, "main", &names(&["topic"])).await.unwrap(), vec![("topic".to_string(), 20, 2)]);
+    // a base that does not exist: nothing to compare with
+    assert!(st.ahead_behind(1, "no-such-branch", &names(&["topic"])).await.unwrap().is_empty());
+}

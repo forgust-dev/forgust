@@ -649,6 +649,30 @@ pub struct BranchDto {
     pub commit: Option<forgust_storage::CommitSummary>,
     pub default: bool,
     pub protected: bool,
+    /// With `details`: commits on this branch that the default branch has not.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ahead: Option<u64>,
+    /// With `details`: commits on the default branch that this branch has not.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub behind: Option<u64>,
+    /// With `details`: the latest pipeline on this branch.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pipeline: Option<BranchPipeline>,
+    /// With `details`: the open merge request from this branch (the newest).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub merge_request: Option<BranchMergeRequest>,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct BranchPipeline {
+    pub iid: i64,
+    pub status: String,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct BranchMergeRequest {
+    pub iid: i64,
+    pub title: String,
 }
 
 #[derive(Deserialize)]
@@ -659,6 +683,10 @@ pub struct RefsQuery {
     page: usize,
     #[serde(default = "per")]
     per_page: usize,
+    /// Branches only: each one's distance from the default branch, latest pipeline and open
+    /// merge request (the Branches page; the branch pickers do without).
+    #[serde(default)]
+    details: bool,
 }
 
 fn page_refs(refs: Vec<RefInfo>, prefix: &str, q: &RefsQuery) -> (Vec<RefInfo>, usize) {
@@ -688,9 +716,44 @@ pub async fn branches(
         .map(|r| {
             let name = r.name.trim_start_matches("refs/heads/").to_string();
             let protected = rules.iter().any(|rule| rule.matches(&name));
-            BranchDto { default: Some(&name) == p.default_branch.as_ref(), protected, name, commit: r.commit }
+            BranchDto {
+                default: Some(&name) == p.default_branch.as_ref(),
+                protected,
+                name,
+                commit: r.commit,
+                ahead: None,
+                behind: None,
+                pipeline: None,
+                merge_request: None,
+            }
         })
         .collect();
+    let mut out = out;
+    if q.details {
+        let names: Vec<String> = out.iter().map(|b| b.name.clone()).collect();
+        // the distance of the branches on this page only (100 at most), the default one aside
+        let others: Vec<String> = out.iter().filter(|b| !b.default).map(|b| b.name.clone()).collect();
+        let counts = match &p.default_branch {
+            Some(base) => state.storage.ahead_behind(p.id, base, &others).await?,
+            None => vec![],
+        };
+        let pipelines = forgust_db::ci::latest_per_branch(&state.db, p.id, &names).await?;
+        let mrs = forgust_db::merge_requests::open_per_source_branch(&state.db, p.id, &names).await?;
+        for b in out.iter_mut() {
+            if !b.default
+                && let Some((_, ahead, behind)) = counts.iter().find(|(n, _, _)| *n == b.name)
+            {
+                b.ahead = Some(*ahead);
+                b.behind = Some(*behind);
+            }
+            b.pipeline = pipelines
+                .iter()
+                .find(|(n, _, _)| *n == b.name)
+                .map(|(_, iid, status)| BranchPipeline { iid: *iid, status: status.clone() });
+            b.merge_request =
+                mrs.iter().find(|(n, _, _)| *n == b.name).map(|(_, iid, title)| BranchMergeRequest { iid: *iid, title: title.clone() });
+        }
+    }
     let mut resp = axum::Json(out).into_response();
     resp.headers_mut().insert("x-total", HeaderValue::from(total));
     Ok(resp)

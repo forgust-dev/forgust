@@ -3420,10 +3420,32 @@ export interface components {
             started_at: string;
         };
         BranchDto: {
+            /**
+             * Format: int64
+             * @description With `details`: commits on this branch that the default branch has not.
+             */
+            ahead?: number | null;
+            /**
+             * Format: int64
+             * @description With `details`: commits on the default branch that this branch has not.
+             */
+            behind?: number | null;
             commit?: components["schemas"]["CommitSummary"] | null;
             default: boolean;
+            merge_request?: components["schemas"]["BranchMergeRequest"] | null;
             name: string;
+            pipeline?: components["schemas"]["BranchPipeline"] | null;
             protected: boolean;
+        };
+        BranchMergeRequest: {
+            /** Format: int64 */
+            iid: number;
+            title: string;
+        };
+        BranchPipeline: {
+            /** Format: int64 */
+            iid: number;
+            status: string;
         };
         Breadcrumb: {
             full_path: string;

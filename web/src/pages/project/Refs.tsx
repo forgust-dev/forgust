@@ -2,7 +2,8 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeftRight, ArrowRight, Download, GitBranch, GitMerge, Package, Plus, Tag, Trash2, Shield, Star } from "lucide-react";
-import { api, qs, timeAgo, type S, encPath, refLink } from "../../api/client";
+import { api, qs, timeAgo, type S, encPath, filesLink } from "../../api/client";
+import { StatusIcon, statusLabel } from "./ci/Status";
 import { Empty, ErrorBox, Field, ListHead, Q, SearchField, useDebounced } from "../../components/ui";
 import { useToast } from "../../shell/toast";
 import { PagedDiff } from "./Diff";
@@ -14,20 +15,24 @@ import { FormActions, FormDialog, useJustAdded } from "../../components/FormDial
 
 /** Subject and age of a ref's tip, for list rows. */
 function Tip({ ctx, c }: { ctx: Ctx; c?: S["CommitSummary"] | null }) {
-  if (!c) return null;
+  if (!c) return <span className="ref-updated" />;
   return (
-    <div className="row-meta">
-      <Link to={`${ctx.web}/-/commit/${c.id}`} className="sha">
+    <>
+      <span className="ref-updated ellipsis hide-narrow" title={c.subject}>
+        updated {timeAgo(c.committed_at)} by {c.author_name}
+      </span>
+      <Link to={`${ctx.web}/-/commit/${c.id}`} className="sha hide-narrow" title={c.subject}>
         {c.id.slice(0, 8)}
       </Link>
-      <Link to={`${ctx.web}/-/commit/${c.id}`} className="ellipsis tip-subject" title={c.subject}>
-        {c.subject}
-      </Link>
-      <span className="nowrap">
-        {c.author_name} · {timeAgo(c.committed_at)}
-      </span>
-    </div>
+    </>
   );
+}
+
+/** How far a branch is from the default one, in words: "2 ahead · 3 behind", "up to date". */
+function distance(b: S["BranchDto"]) {
+  if (b.ahead == null || b.behind == null) return "";
+  if (b.ahead === 0 && b.behind === 0) return "up to date";
+  return [b.ahead > 0 && `${b.ahead} ahead`, b.behind > 0 && `${b.behind} behind`].filter(Boolean).join(" · ");
 }
 
 /** Create a branch from a branch, tag or commit. */
@@ -73,7 +78,10 @@ export function Branches({ ctx }: { ctx: Ctx }) {
   const toast = useToast();
   const confirm = useConfirm();
   const term = useDebounced(search, 250);
-  const q = useQuery({ queryKey: ["branches", ctx.p.id, term], queryFn: () => api.get<S["BranchDto"][]>(`${ctx.base}/branches${qs({ search: term, per_page: 100 })}`) });
+  const q = useQuery({
+    queryKey: ["branches", ctx.p.id, term, "details"],
+    queryFn: () => api.get<S["BranchDto"][]>(`${ctx.base}/branches${qs({ search: term, per_page: 100, details: true })}`),
+  });
   const remove = async (name: string) => {
     const ok = await confirm({
       title: `Delete the branch ${name}?`,
@@ -125,32 +133,49 @@ export function Branches({ ctx }: { ctx: Ctx }) {
                   <span className="row-icon faint">
                     <GitBranch size={16} />
                   </span>
-                  <div className="grow" style={{ minWidth: 0 }}>
-                    <div className="row-title">
-                      <Link to={refLink(ctx.web, "tree", b.name)} className="ref-name ellipsis">
-                        {b.name}
-                      </Link>
-                      {b.default && (
-                        <span className="pill">
-                          <Star size={11} aria-hidden /> default
-                        </span>
-                      )}
-                      {b.protected && (
-                        <span className="pill">
-                          <Shield size={11} aria-hidden /> protected
-                        </span>
-                      )}
-                    </div>
-                    <Tip ctx={ctx} c={b.commit} />
-                  </div>
-                  {!b.default && ctx.p.default_branch && (
-                    <Link className="btn small hide-narrow" to={`${ctx.web}/-/compare/${ctx.p.default_branch}...${b.name}`} title={`Compare with ${ctx.p.default_branch}`}>
-                      <ArrowLeftRight size={13} /> Compare
+                  <div className="ref-main">
+                    <Link to={filesLink(ctx.web, b.name, ctx.p.default_branch)} className="ref-name ellipsis">
+                      {b.name}
                     </Link>
-                  )}
-                  {!b.default && ctx.p.can_push && (
-                    <Link className="btn small" to={`${ctx.web}/-/merge_requests/new?source=${encodeURIComponent(b.name)}`}>
-                      <GitMerge size={13} /> Merge request
+                    {b.default && (
+                      <span className="pill">
+                        <Star size={11} aria-hidden /> default
+                      </span>
+                    )}
+                    {b.protected && (
+                      <span className="pill">
+                        <Shield size={11} aria-hidden /> protected
+                      </span>
+                    )}
+                  </div>
+                  <Tip ctx={ctx} c={b.commit} />
+                  <span className="ref-distance hide-narrow" title={b.default ? undefined : `Compared with ${ctx.p.default_branch}`}>
+                    {distance(b)}
+                  </span>
+                  <span className="ref-ci">
+                    {b.pipeline && (
+                      <Link to={`${ctx.web}/-/pipelines/${b.pipeline.iid}`} title={`Pipeline #${b.pipeline.iid}: ${statusLabel(b.pipeline.status)}`} aria-label={`Pipeline #${b.pipeline.iid}: ${statusLabel(b.pipeline.status)}`}>
+                        <StatusIcon status={b.pipeline.status} />
+                      </Link>
+                    )}
+                  </span>
+                  <span className="ref-mr">
+                    {b.merge_request ? (
+                      <Link className="ref-mr-link" to={`${ctx.web}/-/merge_requests/${b.merge_request.iid}`} title={b.merge_request.title}>
+                        <GitMerge size={13} aria-hidden /> !{b.merge_request.iid}
+                      </Link>
+                    ) : (
+                      !b.default &&
+                      ctx.p.can_push && (
+                        <Link className="btn small" to={`${ctx.web}/-/merge_requests/new?source=${encodeURIComponent(b.name)}`}>
+                          <GitMerge size={13} /> Merge request
+                        </Link>
+                      )
+                    )}
+                  </span>
+                  {!b.default && ctx.p.default_branch && (
+                    <Link className="icon-btn hide-narrow" to={`${ctx.web}/-/compare/${ctx.p.default_branch}...${b.name}`} title={`Compare with ${ctx.p.default_branch}`} aria-label={`Compare ${b.name} with ${ctx.p.default_branch}`}>
+                      <ArrowLeftRight size={15} />
                     </Link>
                   )}
                   {!b.default && ctx.p.can_write_repository && (
@@ -268,25 +293,23 @@ export function Tags({ ctx }: { ctx: Ctx }) {
                   <span className="row-icon faint">
                     <Tag size={16} />
                   </span>
-                  <div className="grow" style={{ minWidth: 0 }}>
-                    <div className="row-title">
-                      <Link to={refLink(ctx.web, "tree", t.name)} className="ref-name ellipsis">
-                        {t.name}
+                  <div className="ref-main">
+                    <Link to={filesLink(ctx.web, t.name, ctx.p.default_branch)} className="ref-name ellipsis">
+                      {t.name}
+                    </Link>
+                    {t.annotated && <span className="pill">annotated</span>}
+                    {t.protected && (
+                      <span className="pill">
+                        <Shield size={11} aria-hidden /> protected
+                      </span>
+                    )}
+                    {t.release && (
+                      <Link className="pill" to={`${ctx.web}/-/releases/${encodeURIComponent(t.name)}`} title="This tag's release">
+                        <Package size={11} /> {t.release}
                       </Link>
-                      {t.annotated && <span className="pill">annotated</span>}
-                      {t.protected && (
-                        <span className="pill">
-                          <Shield size={11} aria-hidden /> protected
-                        </span>
-                      )}
-                      {t.release && (
-                        <Link className="pill" to={`${ctx.web}/-/releases/${encodeURIComponent(t.name)}`} title="This tag's release">
-                          <Package size={11} /> {t.release}
-                        </Link>
-                      )}
-                    </div>
-                    <Tip ctx={ctx} c={t.commit} />
+                    )}
                   </div>
+                  <Tip ctx={ctx} c={t.commit} />
                   {!t.release && ctx.p.can_push && (
                     <Link className="btn small" to={`${ctx.web}/-/releases/new?tag=${encodeURIComponent(t.name)}`} aria-label="Create release" title="Create a release on this tag">
                       <Package size={13} /> <span className="hide-narrow">Create release</span>
