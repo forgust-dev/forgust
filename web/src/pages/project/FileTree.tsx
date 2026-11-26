@@ -44,10 +44,11 @@ function FileTreePanel({ where, path, folder, shown, setShown }: { where: Where;
   const opening = (p: string) => (folder ? [...above(p), p] : above(p));
   const [open, setOpen] = useState<Set<string>>(() => new Set(opening(path)));
   const [focus, setFocus] = useState(path);
-  const last = useRef({ commit: where.commit, path });
+  // another ref, not a new commit of the same one (a push while reading)
+  const last = useRef(where.gitRef);
   useEffect(() => {
-    const changedRef = last.current.commit !== where.commit;
-    last.current = { commit: where.commit, path };
+    const changedRef = last.current !== where.gitRef;
+    last.current = where.gitRef;
     setOpen((prev) => new Set([...(changedRef ? [] : prev), ...opening(path)]));
     setFocus(path);
     // what is read, in view in the panel (the panel scrolls, not the page)
@@ -56,7 +57,7 @@ function FileTreePanel({ where, path, folder, shown, setShown }: { where: Where;
       const cur = box?.querySelector<HTMLElement>('[aria-current="page"]');
       if (box && cur && (cur.offsetTop < box.scrollTop || cur.offsetTop > box.scrollTop + box.clientHeight - 30)) box.scrollTop = cur.offsetTop - box.clientHeight / 3;
     });
-  }, [where.commit, path]);
+  }, [where.gitRef, path]);
   const toggle = (p: string) =>
     setOpen((prev) => {
       const next = new Set(prev);
