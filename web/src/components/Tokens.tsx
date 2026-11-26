@@ -38,9 +38,7 @@ export function AccessTokens({ base, title, description }: { base: string; title
   const [adding, setAdding] = useState(false);
   const fresh = useJustAdded();
   // the new token is shown once: in the window, in place of its form, until Done
-  const { list, add: create, remove: revoke, error, setError } = useCrudList<S["AccessTokenDto"], S["NewToken"]>(["access-tokens", base], `${base}/access_tokens`, (t) => {
-    setCreated(t);
-  });
+  const { list, add: create, remove: revoke, error, setError } = useCrudList<S["AccessTokenDto"], S["NewToken"]>(["access-tokens", base], `${base}/access_tokens`, setCreated);
   const close = () => {
     // the row came in behind the window: highlighted once it is in view
     if (created) fresh.mark(created.username ?? "");
@@ -140,9 +138,7 @@ export function DeployTokens({ base, title, description }: { base: string; title
   const [adding, setAdding] = useState(false);
   const fresh = useJustAdded();
   // the new token is shown once: in the window, in place of its form, until Done
-  const { list, add: create, remove: revoke, error, setError } = useCrudList<S["DeployToken"], S["NewToken"]>(["deploy-tokens", base], `${base}/deploy_tokens`, (t) => {
-    setCreated(t);
-  });
+  const { list, add: create, remove: revoke, error, setError } = useCrudList<S["DeployToken"], S["NewToken"]>(["deploy-tokens", base], `${base}/deploy_tokens`, setCreated);
   const close = () => {
     // the row came in behind the window: highlighted once it is in view
     if (created) fresh.mark(created.id);
