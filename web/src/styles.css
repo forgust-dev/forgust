@@ -7045,12 +7045,15 @@ a.item.import-row:hover {
   color: var(--text-muted);
   white-space: nowrap;
 }
+/* its word adds nothing to its row's height (taller than a square, it pushed Mon, Wed and Fri
+   away from the next row): every row is a square's height, the word centered on it */
 .contrib-weekday {
   position: sticky;
   left: 0;
   z-index: 1;
   display: flex;
   align-items: center;
+  contain: size;
   background: var(--bg);
   font-size: 10.5px;
   color: var(--text-muted);
