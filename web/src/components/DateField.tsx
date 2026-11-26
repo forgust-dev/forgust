@@ -138,15 +138,16 @@ export function DateField({ value, onChange, label }: { value: string; onChange:
     } else if (!parse(text)) setText(value);
   };
   // Enter sends the form with what the field shows: an emptied date first cleared, the form
-  // sent once that is rendered; a date that is not one yet sends nothing
+  // sent once that is rendered, by its button (a disabled one sends nothing, as Enter would);
+  // a date that is not one yet sends nothing
   const enter = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== "Enter") return;
     if (text.trim() === "") {
       if (!value) return;
       e.preventDefault();
       onChange("");
-      const form = e.currentTarget.form;
-      window.setTimeout(() => form?.requestSubmit());
+      const submit = e.currentTarget.form?.querySelector<HTMLElement>('button:not([type]), button[type="submit"], input[type="submit"]');
+      window.setTimeout(() => submit?.click());
     } else if (!parse(text)) e.preventDefault();
   };
   const pick = (v: string) => {
