@@ -4,6 +4,8 @@
   --control-h-sm: 26px;
   /* the one main action of a page */
   --control-h-lg: 34px;
+  /* a dot for a state or a series: 9 or 10 px fall on half pixels at 125 or 150 % */
+  --dot: 8px;
   /* surfaces (cards, fields, menus) are white; the page under them is warm paper */
   --bg: #ffffff;
   --bg-page: #f9f7f4;
@@ -2020,9 +2022,9 @@ kbd {
   position: absolute;
   left: -12px;
   top: 50%;
-  width: 8px;
-  height: 8px;
-  margin-top: -4px;
+  width: var(--dot);
+  height: var(--dot);
+  margin-top: calc(var(--dot) / -2);
   border-radius: 50%;
 }
 .side-link.sub.active::before {
@@ -4960,8 +4962,8 @@ a.status-badge:hover {
    on half pixels and come out uneven */
 .dot {
   flex: none;
-  width: 8px;
-  height: 8px;
+  width: var(--dot);
+  height: var(--dot);
   border-radius: 50%;
   background: currentColor;
 }
@@ -8010,8 +8012,8 @@ button.test-case-row:hover {
 .pipe-legend i {
   display: inline-block;
   flex: none; /* a flex item: without it, a narrow legend squeezes the dot into an oval */
-  width: 8px;
-  height: 8px;
+  width: var(--dot);
+  height: var(--dot);
   margin-left: 6px;
   border-radius: 50%;
 }
