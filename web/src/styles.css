@@ -9165,16 +9165,17 @@ button.test-case-row:hover {
     box-shadow: var(--shadow-pop);
   }
 }
-/* the blocks only one person knows, to share */
-.smart-share-toggle {
+/* a count in the bar that opens a view of it: the blocks one person knows, the history */
+.smart-bar-toggle {
   font: inherit;
   color: inherit;
   text-decoration: underline dotted;
   text-underline-offset: 3px;
 }
-.smart-share-toggle.on {
+.smart-bar-toggle.on {
   color: var(--accent);
 }
+/* the blocks only one person knows, to share */
 .smart-share {
   margin-bottom: 12px;
   padding: 12px 14px;

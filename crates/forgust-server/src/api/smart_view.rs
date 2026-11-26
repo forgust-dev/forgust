@@ -100,7 +100,7 @@ pub struct MapBlock {
     pub configured: bool,
 }
 
-#[derive(Serialize, Deserialize, ToSchema, Clone, Copy)]
+#[derive(Serialize, Deserialize, ToSchema, Clone, Copy, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum MapKind {
     Rust,
@@ -120,7 +120,7 @@ pub enum MapKind {
     Other,
 }
 
-#[derive(Serialize, Deserialize, ToSchema, Clone, Copy)]
+#[derive(Serialize, Deserialize, ToSchema, Clone, Copy, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum MapRole {
     Web,
@@ -187,7 +187,7 @@ pub struct MapLink {
     pub via: String,
 }
 
-#[derive(Serialize, Deserialize, ToSchema, Clone, Copy)]
+#[derive(Serialize, Deserialize, ToSchema, Clone, Copy, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum MapLinkKind {
     Uses,
@@ -382,14 +382,12 @@ fn map_changes(base: &RepoMap, head: &RepoMap, changed: &[String]) -> MapChanges
     // a block is the merge request's when it changes one of its manifests, or assay.toml says it
     let its_block = |b: &MapBlock| b.manifests.iter().any(|m| touched(&m.path)) || ((b.configured || b.manifests.is_empty()) && config);
     let its_link = |via: &str| touched(via);
-    let key = |l: &MapLink| (l.from.clone(), l.to.clone(), serde_json::to_string(&l.kind).unwrap_or_default());
+    let key = |l: &MapLink| (l.from.clone(), l.to.clone(), l.kind);
     let mut out = MapChanges::default();
     for b in &head.blocks {
         match base.blocks.iter().find(|x| x.id == b.id) {
             None if its_block(b) => out.blocks_added.push(b.clone()),
-            Some(before)
-                if its_block(b) && (kind_name(before.kind) != kind_name(b.kind) || role_name(before.role) != role_name(b.role)) =>
-            {
+            Some(before) if its_block(b) && (before.kind != b.kind || before.role != b.role) => {
                 out.blocks_changed.push(BlockChange { block: b.clone(), kind_before: before.kind, role_before: before.role })
             }
             _ => {}
@@ -401,14 +399,6 @@ fn map_changes(base: &RepoMap, head: &RepoMap, changed: &[String]) -> MapChanges
     out.links_added = head.links.iter().filter(|l| !base_links.contains(&key(l)) && its_link(&l.via)).cloned().collect();
     out.links_removed = base.links.iter().filter(|l| !head_links.contains(&key(l)) && its_link(&l.via)).cloned().collect();
     out
-}
-
-fn kind_name(k: MapKind) -> String {
-    serde_json::to_string(&k).unwrap_or_default()
-}
-
-fn role_name(r: Option<MapRole>) -> String {
-    serde_json::to_string(&r).unwrap_or_default()
 }
 
 #[derive(Serialize, ToSchema)]

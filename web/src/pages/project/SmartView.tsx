@@ -59,7 +59,7 @@ import { Avatar, Empty, ListHead, Q, UserLink } from "../../components/ui";
 import { Select } from "../../components/controls";
 import { useSession } from "../../session";
 import type { AssayEdit } from "./assayToml";
-import { blockTitle } from "./blocks";
+import { LINK_VERB, blockTitle } from "./blocks";
 import { StatusIcon, duration, statusLabel } from "./ci/Status";
 import { LOGOS, type Brand, type Logo } from "./logos";
 import type { Ctx } from "./Project";
@@ -120,7 +120,6 @@ function kindName(b: Block): string {
   }
   return KIND[b.kind][0];
 }
-const VERB: Record<S["MapLinkKind"], string> = { uses: "uses", builds: "builds", runs: "runs", depends_on: "depends on", connects: "connects to", calls: "calls" };
 const ROLE: Record<S["MapRole"], string> = {
   web: "web",
   api: "API",
@@ -580,7 +579,7 @@ function MapView({ ctx, gitRef, map, lay, found, words }: { ctx: Ctx; gitRef: st
           {alone > 0 && (
             <>
               {" · "}
-              <button type="button" className={`smart-go smart-share-toggle${share ? " on" : ""}`} aria-pressed={share} title={SOLO} onClick={() => setParam("share", share ? null : "1")}>
+              <button type="button" className={`smart-go smart-bar-toggle${share ? " on" : ""}`} aria-pressed={share} title={SOLO} onClick={() => setParam("share", share ? null : "1")}>
                 {plural(alone, "block")} known by one person
               </button>
             </>
@@ -904,7 +903,7 @@ function LinkEdgeView({ id, sourceX, sourceY, targetX, targetY, sourcePosition, 
       {said && e.kind !== "part" && (
         <EdgeLabelRenderer>
           <div className="smart-link-label" style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}>
-            {VERB[e.kind]}
+            {LINK_VERB[e.kind]}
           </div>
         </EdgeLabelRenderer>
       )}
@@ -919,7 +918,7 @@ const EDGE_TYPES = { link: LinkEdgeView };
 function tip(e: Edge, byId: Map<string, Block>) {
   const name = (id: string) => (byId.has(id) ? title(byId.get(id)!) : id);
   if (e.kind === "part") return `${name(e.to)} is part of ${name(e.from)}`;
-  return `${name(e.from)} ${VERB[e.kind]} ${name(e.to)}${e.via ? ` · ${e.via}` : ""}${e.inferred ? " (a guess)" : ""}`;
+  return `${name(e.from)} ${LINK_VERB[e.kind]} ${name(e.to)}${e.via ? ` · ${e.via}` : ""}${e.inferred ? " (a guess)" : ""}`;
 }
 
 /** A block's logo, its name on hover, or the icon of what it is, in its kind's colour (`mark`). */
@@ -1039,7 +1038,7 @@ function Details({ ctx, gitRef, map, lay, b, jobs, pipeline, waits, chain, setCh
       )}
     </li>
   );
-  const verb = (e: Edge) => (e.kind === "part" ? undefined : VERB[e.kind]);
+  const verb = (e: Edge) => (e.kind === "part" ? undefined : LINK_VERB[e.kind]);
   const needs = lay.edges.filter((e) => e.from === b.id && e.kind !== "part");
   const holds = lay.edges.filter((e) => e.from === b.id && e.kind === "part");
   const neededBy = lay.edges.filter((e) => e.to === b.id && e.kind !== "part");
@@ -1510,10 +1509,15 @@ function ToShare({
   fix?: (edit: AssayEdit) => void;
   onClose: () => void;
 }) {
-  const rows = map.blocks
-    .filter((b) => solo(b) && !b.owners.some((o) => o.toLowerCase() !== `@${b.people[0]?.username ?? ""}`.toLowerCase()))
-    .map((b) => ({ b, reach: dependents(lay.edges, [b.id]).size, who: b.people[0] }))
-    .sort((x, y) => y.reach - x.reach || title(x.b).localeCompare(title(y.b)));
+  // a walk of the links per block: once per map, not on each render of the page
+  const rows = useMemo(
+    () =>
+      map.blocks
+        .filter((b) => solo(b) && !b.owners.some((o) => o.toLowerCase() !== `@${b.people[0]?.username ?? ""}`.toLowerCase()))
+        .map((b) => ({ b, reach: dependents(lay.edges, [b.id]).size, who: b.people[0] }))
+        .sort((x, y) => y.reach - x.reach || title(x.b).localeCompare(title(y.b))),
+    [map.blocks, lay.edges],
+  );
   const issue = (b: Block, who?: Block["people"][number]) =>
     `${ctx.web}/-/issues/new${qs({
       title: `Share what we know of ${title(b)}`,
