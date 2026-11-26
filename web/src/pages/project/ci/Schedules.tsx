@@ -388,7 +388,7 @@ export function Schedules({ ctx }: { ctx: Ctx }) {
       </ListHead>
       <FormDialog open={form != null} onClose={close} title={form?.id ? "Edit the schedule" : "Add a schedule"}>
         {form && (
-        <form className="stack sched-form" onSubmit={save}>
+        <form className="stack" onSubmit={save}>
           <ErrorBox error={error} />
           <Field label="Name" hint="Optional: without one, the schedule is called by when it runs">
             <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Nightly build" />

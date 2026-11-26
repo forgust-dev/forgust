@@ -32,7 +32,7 @@ export function CodeLayout({ ctx, kind, refAndPath, children }: { ctx: Ctx; kind
   return (
     <div className={`code-layout${panel ? (shown ? "" : " tree-hidden") : " no-tree"}`}>
       {panel ? <FileTreePanel where={{ ctx, gitRef: res.ref, commit: res.commit }} path={res.path} folder={kind === "tree"} shown={shown} setShown={setShown} /> : null}
-      <div className="code-main">{children}</div>
+      <div>{children}</div>
     </div>
   );
 }

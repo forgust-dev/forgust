@@ -376,7 +376,7 @@ export function JobPage({ ctx, jobId }: { ctx: Ctx; jobId: number }) {
                     <FileText size={13} /> Raw
                   </a>
                 </div>
-                <dl className="facts-bar job-facts">
+                <dl className="facts-bar">
                   <div>
                     <dt>Status</dt>
                     <dd>

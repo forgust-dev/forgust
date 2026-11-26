@@ -184,7 +184,7 @@ export function Segmented<T extends string>({ value, onChange, options, label }:
           <span className="segment-width" aria-hidden="true">
             {o.label}
           </span>
-          <span className="segment-label">{o.label}</span>
+          <span>{o.label}</span>
         </Radio.Root>
       ))}
     </RadioGroup>

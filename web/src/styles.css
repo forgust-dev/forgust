@@ -17,7 +17,6 @@
   --text-muted: #554e46;
   --text-faint: #6a625a;
   --accent: #b84a00;
-  --accent-hover: #a64300;
   --accent-soft: #fdeee3;
   /* text on --accent-soft */
   --accent-ink: #9a3d00;
@@ -58,7 +57,6 @@
   --primary-bg: #1c1915;
   --primary-hover: #36302a;
   --primary-text: #ffffff;
-  --on-ink: #ffffff;
   --tile-bg: #1c1915;
   --tile-fg: #ff6500;
   --group-tile-bg: #e9e2d8;
@@ -105,7 +103,6 @@
     --text-muted: #9ca3af;
     --text-faint: #767e8c;
     --accent: #ff6500;
-    --accent-hover: #e65b00;
     --accent-soft: #391e0f;
     --accent-text: #0d0e12;
     --danger: #f0738a;
@@ -139,7 +136,6 @@
     --primary-bg: #f5f5f6;
     --primary-hover: #d9dbe0;
     --primary-text: #0d0e12;
-    --on-ink: #f5f5f6;
     --tile-bg: #22252d;
     --tile-fg: #ff6500;
     --group-tile-bg: #22252d;
@@ -175,7 +171,6 @@
   --text-muted: #9ca3af;
   --text-faint: #767e8c;
   --accent: #ff6500;
-  --accent-hover: #e65b00;
   --accent-soft: #391e0f;
   --accent-text: #0d0e12;
   --danger: #f0738a;
@@ -209,7 +204,6 @@
   --primary-bg: #f5f5f6;
   --primary-hover: #d9dbe0;
   --primary-text: #0d0e12;
-  --on-ink: #f5f5f6;
   --tile-bg: #22252d;
   --tile-fg: #ff6500;
   --group-tile-bg: #22252d;
@@ -4629,8 +4623,6 @@ a.status-badge:hover {
     font-size: 13px;
   }
 }
-/* the instance card's health: its icon, toned */
-
 /* the admin overview: CI in the middle, the instance's numbers beside it, as the
    project page's right column */
 .admin-overview {
@@ -4766,8 +4758,6 @@ a.status-badge:hover {
   color: var(--accent);
 }
 
-/* schedules: a card each, in time (how often, when next, how the latest runs went),
-   not rows like the pipelines' */
 /* pipeline schedules, one row each, said in words (ci/Schedules.tsx) */
 .sched-list {
   border: 1px solid var(--border);

@@ -161,7 +161,7 @@ export function Commit({ ctx, sha }: { ctx: Ctx; sha: string }) {
           <div className="stack">
             <header className="mr-head commit-head">
               <div className="mr-status">
-                <StateBadge tone="neutral" icon={GitCommitHorizontal} className="mr-state commit">
+                <StateBadge tone="neutral" icon={GitCommitHorizontal} className="mr-state">
                   Commit
                 </StateBadge>
                 <span>{commit.id.slice(0, 8)}</span>

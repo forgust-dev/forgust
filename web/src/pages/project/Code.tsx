@@ -53,7 +53,7 @@ export function RefPicker({ ctx, current, path, kind }: { ctx: Ctx; current: str
 
 /** A project's branches and tags (the first 100), shared by every page that offers them. */
 export const useBranches = (ctx: Ctx, enabled = true) =>
-  // the key of the Branches page with no search: one request for both
+  // every picker shares this list; the Branches page asks for its details on its own key
   useQuery({ queryKey: ["branches", ctx.p.id, ""], queryFn: () => api.get<S["BranchDto"][]>(`${ctx.base}/branches${qs({ per_page: 100 })}`), enabled });
 export const useTags = (ctx: Ctx, enabled = true) => useQuery({ queryKey: ["tags", ctx.p.id], queryFn: () => api.get<S["TagDto"][]>(`${ctx.base}/tags${qs({ per_page: 100 })}`), enabled });
 const atLeast = (n: number) => (n >= 100 ? "100+" : String(n));
