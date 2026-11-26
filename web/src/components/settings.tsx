@@ -98,11 +98,7 @@ export function SaveRow({ dirty, busy, saved, label = "Save", children }: { dirt
       <button className="btn primary" aria-busy={busy} disabled={busy || !dirty}>
         {label}
       </button>
-      {saved && (
-        <span className="saved-mark" role="status">
-          <Check size={14} /> Saved
-        </span>
-      )}
+      {saved && <SavedMark />}
       {children}
     </div>
   );
@@ -155,11 +151,7 @@ export function SettingSwitch({
         <Switch checked={on} onChange={flip} disabled={disabled || busy}>
           {children}
         </Switch>
-        {saved && (
-          <span className="saved-mark" role="status">
-            <Check size={14} /> Saved
-          </span>
-        )}
+        {saved && <SavedMark />}
       </div>
     </div>
   );
@@ -232,5 +224,14 @@ export function EmptyRow({ children }: { children: ReactNode }) {
     <div className="list">
       <div className="item muted">{children}</div>
     </div>
+  );
+}
+
+/** "Saved", beside what was just saved. */
+function SavedMark() {
+  return (
+    <span className="saved-mark" role="status">
+      <Check size={14} /> Saved
+    </span>
   );
 }
