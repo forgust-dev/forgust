@@ -1419,12 +1419,12 @@ function MapChangesFact({ ctx, m, c }: { ctx: Ctx; m: S["MrDetail"]; c: S["MapCh
   for (const b of c.blocks_added) lines.push(<div key={`a${b.id}`} className="small">Adds the block {at(b.id)}</div>);
   for (const b of c.blocks_removed) lines.push(<div key={`r${b.id}`} className="small">Removes the block <b>{b.id}</b></div>);
   for (const ch of c.blocks_changed) {
-    const was = ch.role_before ?? ch.kind_before;
-    const is = ch.block.role ?? ch.block.kind;
-    lines.push(<div key={`c${ch.block.id}`} className="small">{at(ch.block.id)} becomes {is === was ? ch.block.kind : is}, from {was}</div>);
+    // its kind when that changes, else its role: one compared with the same, never with the other
+    const [is, was] = ch.block.kind !== ch.kind_before ? [ch.block.kind, ch.kind_before] : [ch.block.role ?? "no role", ch.role_before ?? "no role"];
+    lines.push(<div key={`c${ch.block.id}`} className="small">{at(ch.block.id)} becomes {is}, from {was}</div>);
   }
-  for (const l of c.links_added) lines.push(<div key={`la${l.from}${l.to}${l.kind}`} className="small" title={`Read in ${l.via}`}>{at(l.from)} now {LINK_VERB[l.kind]} {at(l.to)}</div>);
-  for (const l of c.links_removed) lines.push(<div key={`lr${l.from}${l.to}${l.kind}`} className="small" title={`Read in ${l.via}`}>{at(l.from)} no longer {LINK_VERB[l.kind]} {at(l.to)}</div>);
+  for (const l of c.links_added) lines.push(<div key={`la ${l.from} ${l.kind} ${l.to}`} className="small" title={`Read in ${l.via}`}>{at(l.from)} now {LINK_VERB[l.kind]} {at(l.to)}</div>);
+  for (const l of c.links_removed) lines.push(<div key={`lr ${l.from} ${l.kind} ${l.to}`} className="small" title={`Read in ${l.via}`}>{at(l.from)} no longer {LINK_VERB[l.kind]} {at(l.to)}</div>);
   if (!lines.length) return null;
   const shown = lines.slice(0, 8);
   return (

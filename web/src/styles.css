@@ -9189,7 +9189,7 @@ button.test-case-row:hover {
   gap: 8px;
 }
 .smart-share-head > svg {
-  color: var(--accent);
+  color: var(--text-muted);
 }
 .smart-share h2 {
   margin: 0;
