@@ -2862,7 +2862,7 @@ kbd {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 .ref-counts {
   display: inline-flex;
@@ -2889,6 +2889,13 @@ kbd {
 }
 .repo-toolbar kbd {
   margin-left: 2px;
+}
+/* under 1,360 px "Go to file" and "New file" are their icons (and tooltips): the toolbar keeps
+   one line beside the About column */
+@media (max-width: 1360px) {
+  .repo-wide-only {
+    display: none;
+  }
 }
 .file-table {
   border-radius: var(--radius-lg);
@@ -8267,10 +8274,13 @@ button.test-case-row:hover {
     flex: 1;
   }
 }
+/* starts small, so the toolbar stays on one line, and grows into the room left
+   ("Search this folder…" whole when there is room) */
 .repo-code-search {
-  flex: 0 1 190px;
+  flex: 1 1 100px;
   width: auto;
-  min-width: 165px;
+  min-width: 110px;
+  max-width: 200px;
 }
 
 /* a select box with a filter (Combobox): the filter stays, the list scrolls */

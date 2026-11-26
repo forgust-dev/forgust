@@ -317,13 +317,13 @@ function TreeView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
         {res.path ? <PathCrumbs ctx={ctx} gitRef={res.ref} path={res.path} /> : <RefCounts ctx={ctx} />}
         {res.path && <BlockChip ctx={ctx} path={res.path} />}
         <div className="spacer" />
-        <button className="btn" onClick={() => openPalette("files")} title="Find a file (t)">
-          <Search size={14} /> Go to file <kbd>t</kbd>
+        <button className="btn" onClick={() => openPalette("files")} title="Find a file (t)" aria-label="Go to file">
+          <Search size={14} /> <span className="repo-wide-only">Go to file</span> <kbd>t</kbd>
         </button>
         <CodeSearchBox ctx={ctx} path={res.path} />
         {ctx.p.can_write_repository && (
           <Link className="btn" to={`${ctx.web}/-/new/${res.ref}${res.path ? `/${res.path}` : ""}`} title="Create a file here" aria-label="New file">
-            <FilePlus2 size={14} /> <span className="hide-narrow">New file</span>
+            <FilePlus2 size={14} /> <span className="hide-narrow repo-wide-only">New file</span>
           </Link>
         )}
         <CloneMenu ctx={ctx} gitRef={res.ref} />
@@ -501,8 +501,8 @@ function BlobView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
         </button>
         <BlockChip ctx={ctx} path={res.path} />
         <div className="spacer" />
-        <button className="btn hide-narrow" onClick={() => openPalette("files")} title="Find a file (t)">
-          <Search size={14} /> Go to file <kbd>t</kbd>
+        <button className="btn hide-narrow" onClick={() => openPalette("files")} title="Find a file (t)" aria-label="Go to file">
+          <Search size={14} /> <span className="repo-wide-only">Go to file</span> <kbd>t</kbd>
         </button>
       </div>
       {lastCommit && (
