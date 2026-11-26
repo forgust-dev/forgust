@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, bytes, enc, qs, timeAgo, type S } from "../api/client";
 import { useProviders } from "../prefetch";
 import { useSession } from "../session";
-import { Avatar, Badge, Card, ErrorBox, Field, FilterTabs, NotFound, Q, SearchField, UserLink, useDebounced, useFormRun, StateBadge } from "../components/ui";
+import { Avatar, Badge, Card, ErrorBox, Field, FilterTabs, NotFound, PasswordInput, Q, SearchField, UserLink, useDebounced, useFormRun, StateBadge } from "../components/ui";
 import { adminPage } from "./adminPages";
 import { useTopOnSwitch } from "../shell/scroll";
 import { Combobox, Menu, Select, type MenuItem } from "../components/controls";
@@ -168,7 +168,7 @@ function Users() {
               <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
             </Field>
             <Field label="Initial password" hint="Leave empty for SSO-only accounts">
-              <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+              <PasswordInput autoComplete="new-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
             </Field>
             <label className="check" style={{ alignSelf: "flex-end", paddingBottom: 8 }}>
               <input type="checkbox" checked={form.is_admin} onChange={(e) => setForm({ ...form, is_admin: e.target.checked })} />

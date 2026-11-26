@@ -6,7 +6,7 @@ import { useSession } from "../session";
 import { useAct } from "../shell/toast";
 import { ResendLink } from "./ResendLink";
 import { useCrudList } from "./Tokens";
-import { ErrorBox, Field, Q, StateBadge } from "./ui";
+import { ErrorBox, Field, PasswordInput, Q, StateBadge } from "./ui";
 import { EmptyRow, ListSection } from "./settings";
 import { FormActions, useJustAdded } from "./FormDialog";
 
@@ -101,8 +101,7 @@ export function OtherEmails() {
               label="Current password"
               hint="Asked when the address is confirmed as you add it (single sign-on accounts: leave empty within 10 minutes of signing in)"
             >
-              <input
-                type="password"
+              <PasswordInput
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
