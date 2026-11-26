@@ -9,10 +9,10 @@ const FIRST = 'input:not([type="hidden"]):not([disabled]), textarea:not([disable
 /**
  * A window that adds a row to a list or changes one: its title, then its form (the fields, then
  * FormActions). Once the row is added, `result` replaces the form when there is something to
- * copy from it (a token shown once), with Done. Esc, Cancel, Done and a click outside all close
- * it through `onClose`; a click outside does nothing once something was typed, or while a
- * result is shown. The confirmation's look and entry, wider; its buttons stay in view while a
- * long form scrolls.
+ * copy from it (a token shown once), with Done. Esc, Cancel and a click outside close it
+ * through `onClose`; a click outside does nothing once something was typed. A result, which
+ * cannot be shown again, closes only with Done. The confirmation's look and entry, wider; its
+ * buttons stay in view while a long form scrolls.
  */
 export function FormDialog({ open, onClose, title, result, children }: { open: boolean; onClose: () => void; title: ReactNode; result?: ReactNode; children: ReactNode }) {
   const popup = useRef<HTMLDivElement>(null);
@@ -30,7 +30,15 @@ export function FormDialog({ open, onClose, title, result, children }: { open: b
     if (open && result) done.current?.focus();
   }, [open, result]);
   return (
-    <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()} disablePointerDismissal={typed || !!view.result}>
+    <Dialog.Root
+      open={open}
+      onOpenChange={(o, details) => {
+        if (o) return;
+        if (shown.current.result && details.reason === "escape-key") return details.cancel();
+        onClose();
+      }}
+      disablePointerDismissal={typed || !!view.result}
+    >
       <Dialog.Portal>
         <Dialog.Backdrop className="modal-backdrop" />
         <Dialog.Popup ref={popup} className="modal form-modal" initialFocus={() => popup.current?.querySelector<HTMLElement>(FIRST) ?? true} onInput={() => setTyped(true)}>

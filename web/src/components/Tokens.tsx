@@ -40,9 +40,10 @@ export function AccessTokens({ base, title, description }: { base: string; title
   // the new token is shown once: in the window, in place of its form, until Done
   const { list, add: create, remove: revoke, error, setError } = useCrudList<S["AccessTokenDto"], S["NewToken"]>(["access-tokens", base], `${base}/access_tokens`, (t) => {
     setCreated(t);
-    fresh.mark(name);
   });
   const close = () => {
+    // the row came in behind the window: highlighted once it is in view
+    if (created) fresh.mark(name);
     setAdding(false);
     setCreated(null);
     setName("");
@@ -141,9 +142,10 @@ export function DeployTokens({ base, title, description }: { base: string; title
   // the new token is shown once: in the window, in place of its form, until Done
   const { list, add: create, remove: revoke, error, setError } = useCrudList<S["DeployToken"], S["NewToken"]>(["deploy-tokens", base], `${base}/deploy_tokens`, (t) => {
     setCreated(t);
-    fresh.mark(name);
   });
   const close = () => {
+    // the row came in behind the window: highlighted once it is in view
+    if (created) fresh.mark(name);
     setAdding(false);
     setCreated(null);
     setName("");

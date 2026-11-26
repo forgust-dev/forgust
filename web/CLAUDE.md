@@ -71,8 +71,8 @@ next to another takes its height from the same token, so they line up; never wri
 
 The one main action of a page is a step taller (`btn large`): the buttons of its head
 (`.list-head`, on its own), a creation page's submit and its Cancel (`.form-actions`, on its
-own, or `large`), Merge. Everything else is the usual size: Save in a section, a window's
-buttons.
+own, or `large`). Merge has its own full-width button in its box (`.btn.block`). Everything else
+is the usual size: Save in a section, a window's buttons.
 
 ## Buttons
 
@@ -129,8 +129,8 @@ label", "Protect a branch", "Create a token". The window:
   does. It starts on its first field; Enter sends it.
 - closes with Cancel, Esc or a click outside, except that a click outside does nothing once
   something was typed.
-- shows a secret shown once (a token, a runner's) in place of its form, as `result`, until
-  Done; it is never left on the page.
+- shows a secret shown once (a token, a runner's) in place of its form, as `result`; only Done
+  closes it then, and the secret is never left on the page.
 - shows the popups of its fields above it (`InWindow`, read by `controls.tsx`).
 
 The row added comes in highlighted, then fades back (`useJustAdded`: `mark` its key, give each

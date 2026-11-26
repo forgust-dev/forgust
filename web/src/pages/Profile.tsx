@@ -323,9 +323,10 @@ function Tokens() {
   // the new token is shown once: in the window, in place of its form, until Done
   const { list, add: create, remove: revoke, error, setError } = useCrudList<S["AccessToken"], S["NewToken"]>(["pats"], "/user/tokens", (t) => {
     setCreated(t);
-    fresh.mark(name);
   });
   const close = () => {
+    // the row came in behind the window: highlighted once it is in view
+    if (created) fresh.mark(name);
     setAdding(false);
     setCreated(null);
     setName("");

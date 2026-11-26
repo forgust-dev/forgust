@@ -35,7 +35,11 @@ export function RunnersPanel({ list, create, title = "Runners", note, children }
   const [token, setToken] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
   const fresh = useJustAdded();
+  const [added, setAdded] = useState<number | null>(null);
   const close = () => {
+    // the row came in behind the window: highlighted once it is in view
+    if (added != null) fresh.mark(added);
+    setAdded(null);
     setForm(null);
     setToken(null);
     setError(null);
@@ -50,7 +54,7 @@ export function RunnersPanel({ list, create, title = "Runners", note, children }
       // its token is shown once: in the window, in place of the form, until Done
       setToken(r.token);
       setForm(null);
-      fresh.mark(r.id);
+      setAdded(r.id);
       qc.invalidateQueries({ queryKey: ["runners", list] });
     } catch (err) {
       setError(err);

@@ -757,7 +757,7 @@ div.field {
   font-weight: 500;
 }
 /* labels at 13 px; what is typed or chosen at the page's 14 */
-:is(label, div).field :is(input:not([type="checkbox"]):not([type="radio"]), select, .select) {
+:where(label, div).field :where(input:not([type="checkbox"]):not([type="radio"]), select, .select) {
   font-size: 14px;
 }
 label.field .hint,
@@ -2607,9 +2607,6 @@ kbd {
   0%,
   30% {
     background-color: var(--accent-soft);
-  }
-  100% {
-    background-color: transparent;
   }
 }
 .just-added {
