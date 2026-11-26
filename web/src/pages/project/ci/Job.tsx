@@ -317,11 +317,12 @@ export function JobPage({ ctx, jobId }: { ctx: Ctx; jobId: number }) {
     qc.invalidateQueries({ queryKey: ["job", ctx.p.id] });
     qc.invalidateQueries({ queryKey: ["pipeline", ctx.p.id] });
   });
-  const act = async (what: "retry" | "play" | "cancel" | "unschedule") => {
-    if (what === "play" && q.data && !(await confirmRun(q.data))) return;
+  // the job on screen, which is the one left while the next one comes (keepPreviousData)
+  const act = async (j: S["JobDto"], what: "retry" | "play" | "cancel" | "unschedule") => {
+    if (what === "play" && !(await confirmRun(j))) return;
     let retried: number | null = null;
     const done = what === "retry" ? "Retrying" : what === "play" ? "Started" : what === "unschedule" ? "Unscheduled: it waits for someone to run it" : "Canceling";
-    if (await run(async () => (retried = (await api.post<S["JobDto"]>(`/projects/${ctx.p.id}/jobs/${jobId}/${what}`)).id), done) && what === "retry" && retried != null) {
+    if (await run(async () => (retried = (await api.post<S["JobDto"]>(`/projects/${ctx.p.id}/jobs/${j.id}/${what}`)).id), done) && what === "retry" && retried != null) {
       nav(`${ctx.web}/-/jobs/${retried}`);
     }
   };
@@ -329,6 +330,8 @@ export function JobPage({ ctx, jobId }: { ctx: Ctx; jobId: number }) {
     <Q q={q}>
       {(j) => {
         const live = isActive(j.status);
+        // the log under the job's own header: another job's, while this one's start comes, says it loads
+        const log = trace.job === j.id ? trace : { job: j.id, text: "", complete: false, loaded: false };
         return (
           <div className="stack" style={{ gap: 18 }}>
             {pipeline.data && <PipelineHeader ctx={ctx} p={pipeline.data} tab="jobs" />}
@@ -339,22 +342,22 @@ export function JobPage({ ctx, jobId }: { ctx: Ctx; jobId: number }) {
                   <StatusIcon status={j.status} allowFailure={j.allow_failure} size={18} />
                   <h2 className="grow">{j.name}</h2>
                   {j.can_run && (j.status === "manual" || j.status === "scheduled") && (
-                    <button className="btn primary small" onClick={() => act("play")}>
+                    <button className="btn primary small" onClick={() => act(j, "play")}>
                       <Play size={14} /> {j.status === "scheduled" ? "Run now" : "Run"}
                     </button>
                   )}
                   {j.can_run && j.status === "scheduled" && (
-                    <button className="btn small" onClick={() => act("unschedule")}>
+                    <button className="btn small" onClick={() => act(j, "unschedule")}>
                       Unschedule
                     </button>
                   )}
                   {j.can_run && live && (
-                    <button className="btn small" onClick={() => act("cancel")}>
+                    <button className="btn small" onClick={() => act(j, "cancel")}>
                       <Square size={13} /> Cancel
                     </button>
                   )}
                   {j.can_run && !j.retried && RETRYABLE.includes(j.status) && (
-                    <button className="btn small" onClick={() => act("retry")}>
+                    <button className="btn small" onClick={() => act(j, "retry")}>
                       <RotateCcw size={13} /> Retry
                     </button>
                   )}
@@ -476,7 +479,7 @@ export function JobPage({ ctx, jobId }: { ctx: Ctx; jobId: number }) {
                     </div>
                   </details>
                 )}
-                <LogView key={trace.job} text={trace.text} live={live && !trace.complete} loading={!trace.loaded} />
+                <LogView key={log.job} text={log.text} live={live && !log.complete} loading={!log.loaded} />
               </section>
             </div>
           </div>
