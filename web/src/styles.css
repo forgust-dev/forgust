@@ -5340,7 +5340,11 @@ a.status-badge:hover {
 
 /* ---- file view */
 
+/* a file's header stays in view while the file is read (on a phone it wraps: it scrolls away) */
 .blob-head {
+  position: sticky;
+  top: var(--topbar-h);
+  z-index: 4;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -5351,13 +5355,23 @@ a.status-badge:hover {
   background: var(--bg-subtle);
   border-radius: var(--radius) var(--radius) 0 0;
 }
+@media (max-width: 700px) {
+  .blob-head {
+    position: static;
+  }
+}
+.blob-name {
+  max-width: 280px;
+  color: var(--text);
+  font-weight: 600;
+}
 .blob-meta {
   display: inline-flex;
   flex-wrap: wrap;
   color: var(--text-muted);
   font-size: 12.5px;
 }
-.blob-meta > span + span::before {
+.blob-meta > * + span::before {
   content: "·";
   margin: 0 6px;
   color: var(--text-faint);

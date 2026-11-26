@@ -484,7 +484,11 @@ function BlobView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
   const [view, setView] = useState<"preview" | "code">("preview");
   const [wrap, setWrap] = usePref("code.wrap", false);
   const [copied, copyText] = useCopy(1500);
+  const [pathCopied, copyPath] = useCopy(1500);
+  const [linkCopied, copyLink] = useCopy(1500);
   const raw = refLink(ctx.web, "raw", res.ref, res.path);
+  // a link that keeps showing this, whatever the branch becomes: this commit, and the lines picked
+  const permalink = () => `${location.origin}${refLink(ctx.web, "blob", res.commit, res.path)}${/^#L\d/.test(location.hash) ? location.hash : ""}`;
   const copy = () => copyText(() => fetch(raw, { credentials: "same-origin" }).then((r) => r.text()));
   const lastCommit = last.data?.[0];
   return (
@@ -492,6 +496,9 @@ function BlobView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
       <div className="repo-toolbar">
         <RefPicker ctx={ctx} current={res.ref} path={res.path} kind="blob" />
         <PathCrumbs ctx={ctx} gitRef={res.ref} path={res.path} />
+        <button className="icon-btn" onClick={() => copyPath(res.path)} title="Copy the path" aria-label="Copy the path">
+          {pathCopied ? <Check size={14} /> : <Copy size={14} />}
+        </button>
         <BlockChip ctx={ctx} path={res.path} />
         <div className="spacer" />
         <button className="btn hide-narrow" onClick={() => openPalette("files")} title="Find a file (t)">
@@ -522,6 +529,10 @@ function BlobView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
                   />
                 ) : null}
                 <span className="blob-meta">
+                  {/* what is read, still said once the path above has scrolled away */}
+                  <strong className="blob-name ellipsis" title={res.path}>
+                    {blob.name}
+                  </strong>
                   {blob.lines.length > 0 && (
                     <span>
                       {blob.lines.length} line{blob.lines.length === 1 ? "" : "s"}
@@ -565,6 +576,9 @@ function BlobView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
                     {copied ? <Check size={16} /> : <Copy size={16} />}
                   </button>
                 )}
+                <button className="icon-btn" onClick={() => copyLink(permalink())} title="Copy a permanent link: this commit, and the lines picked" aria-label="Copy a permanent link">
+                  {linkCopied ? <Check size={16} /> : <Link2 size={16} />}
+                </button>
                 <a className="icon-btn" href={raw} download={blob.name} title="Download" aria-label="Download">
                   <Download size={16} />
                 </a>
