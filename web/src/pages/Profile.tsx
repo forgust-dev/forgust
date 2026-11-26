@@ -326,7 +326,7 @@ function Tokens() {
   });
   const close = () => {
     // the row came in behind the window: highlighted once it is in view
-    if (created) fresh.mark(name);
+    if (created) fresh.mark(created.id);
     setAdding(false);
     setCreated(null);
     setName("");
@@ -383,7 +383,7 @@ function Tokens() {
               ) : (
                 <div className="list">
                   {tokens.map((t) => (
-                    <div className={"item" + fresh.fresh(t.name)} key={t.id}>
+                    <div className={"item" + fresh.fresh(t.id)} key={t.id}>
                       <div className="grow">
                         <strong>{t.name}</strong>
                         <div className="small muted">

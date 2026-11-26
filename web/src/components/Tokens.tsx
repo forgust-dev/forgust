@@ -43,7 +43,7 @@ export function AccessTokens({ base, title, description }: { base: string; title
   });
   const close = () => {
     // the row came in behind the window: highlighted once it is in view
-    if (created) fresh.mark(name);
+    if (created) fresh.mark(created.username ?? "");
     setAdding(false);
     setCreated(null);
     setName("");
@@ -94,7 +94,7 @@ export function AccessTokens({ base, title, description }: { base: string; title
           ) : (
             <div className="list">
               {tokens.map((t) => (
-                <div className={"item" + fresh.fresh(t.name)} key={t.bot_user_id + t.name}>
+                <div className={"item" + fresh.fresh(t.bot_username)} key={t.bot_user_id + t.name}>
                   <div className="grow">
                     <strong>{t.name}</strong> <span className="faint small">@{t.bot_username}</span>
                     <div className="small muted">{t.scopes.join(", ")}</div>
@@ -145,7 +145,7 @@ export function DeployTokens({ base, title, description }: { base: string; title
   });
   const close = () => {
     // the row came in behind the window: highlighted once it is in view
-    if (created) fresh.mark(name);
+    if (created) fresh.mark(created.id);
     setAdding(false);
     setCreated(null);
     setName("");
@@ -191,7 +191,7 @@ export function DeployTokens({ base, title, description }: { base: string; title
           ) : (
             <div className="list">
               {tokens.map((t) => (
-                <div className={"item" + fresh.fresh(t.name)} key={t.id}>
+                <div className={"item" + fresh.fresh(t.id)} key={t.id}>
                   <div className="grow">
                     <strong>{t.name}</strong> <code className="small">{t.username}</code>
                     <div className="small muted">
