@@ -6,7 +6,7 @@ import { Select } from "./controls";
 import { useConfirm, type Ask } from "../shell/dialog";
 
 /** How long a wait goes unmarked: a page that comes sooner never shows a loader. */
-const SPINNER_DELAY = 400;
+export const SPINNER_DELAY = 400;
 /** A loader that comes within this of the last one's leaving goes on with its wait. */
 const SAME_WAIT = 100;
 // One wait can pass through several loaders (the session, a page's code, then its data):

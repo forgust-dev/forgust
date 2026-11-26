@@ -1,6 +1,6 @@
 import { useLayoutEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, Clock3, CornerDownRight, GitBranch, Play, RotateCcw, Server, ServerOff, Square, Tag, Timer, Plus, X, Shield } from "lucide-react";
 import { api, qs, refLink, timeAgo, type S } from "../../../api/client";
 import { Empty, ErrorBox, Field, FieldGroup, FilterTabs, ListHead, Q, SearchField } from "../../../components/ui";
@@ -388,15 +388,13 @@ function GraphEdges({ graph, jobs, focus }: { graph: HTMLDivElement | null; jobs
   );
 }
 
-const pipelineKey = (pid: number, iid: number) => ["pipeline", pid, iid];
+/** A pipeline and its jobs: what its pages read, and what a job's page waits for. */
+export const pipelineQuery = (pid: number, iid: number) =>
+  queryOptions({ queryKey: ["pipeline", pid, iid], queryFn: () => api.get<S["PipelineDetail"]>(`/projects/${pid}/pipelines/${iid}`) });
 
 export function usePipeline(ctx: Ctx, iid: number | undefined) {
   useCiLive(ctx.p.id);
-  return useQuery({
-    queryKey: pipelineKey(ctx.p.id, iid ?? 0),
-    queryFn: () => api.get<S["PipelineDetail"]>(`/projects/${ctx.p.id}/pipelines/${iid}`),
-    enabled: iid != null,
-  });
+  return useQuery({ ...pipelineQuery(ctx.p.id, iid ?? 0), enabled: iid != null });
 }
 
 /** Title, actions, facts and the Graph / Jobs tabs, shared by both pipeline views. */

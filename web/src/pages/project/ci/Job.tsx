@@ -1,30 +1,73 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, queryOptions, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDownToLine, ChevronDown, ChevronRight, Download, FileText, Play, RotateCcw, Square, FolderOpen } from "lucide-react";
 import { api, bytes, timeAgo, timeUntil, type S } from "../../../api/client";
-import { Q } from "../../../components/ui";
+import { Q, SPINNER_DELAY } from "../../../components/ui";
 import { useProjectEvents } from "../../../shell/live";
 import { useAct } from "../../../shell/toast";
 import { usePref } from "../../../shell/theme";
 import type { Ctx } from "../Project";
 import { LogParser, sectionDuration, type LogLine, type Span } from "./log";
 import { RETRYABLE, StatusBadge, StatusIcon, duration, isActive } from "./Status";
-import { PipelineHeader, pipelineHref, useConfirmRun, usePipeline } from "./Pipelines";
+import { PipelineHeader, pipelineHref, pipelineQuery, useConfirmRun, usePipeline } from "./Pipelines";
+
+const jobQuery = (pid: number, jobId: number) => queryOptions({ queryKey: ["job", pid, jobId], queryFn: () => api.get<S["JobDetail"]>(`/projects/${pid}/jobs/${jobId}`) });
+
+/** The start of a job's log, read before its page shows; kept a minute for coming back to it. */
+const logStartQuery = (pid: number, jobId: number) =>
+  queryOptions({ queryKey: ["job-log", pid, jobId], queryFn: () => api.get<S["TraceChunk"]>(`/projects/${pid}/jobs/${jobId}/trace?offset=0`), staleTime: Infinity, gcTime: 60_000 });
 
 /**
- * The job log, fetched incrementally while the job runs. Opening another job keeps this one's log
- * on screen until the other's first bytes arrive, so the pane never goes blank in between.
+ * The page being left (a pipeline, another job) stays on screen until this job, the start of its
+ * log and its pipeline are here, and the job's page comes whole, at once: it used to go blank for
+ * a frame, then say "This job has no log." until its log came. A navigation is a transition, which
+ * waits for what suspends. It waits as long as a loader waits before it shows, no longer: past
+ * that, the page comes with its own loader.
+ */
+function useJobReady(pid: number, jobId: number) {
+  const qc = useQueryClient();
+  useSuspenseQuery({
+    queryKey: ["job-ready", pid, jobId],
+    queryFn: async () => {
+      const ready = (async () => {
+        const [job] = await Promise.all([qc.ensureQueryData(jobQuery(pid, jobId)), qc.ensureQueryData(logStartQuery(pid, jobId)).catch(() => null)]);
+        await qc.ensureQueryData(pipelineQuery(pid, job.pipeline_iid));
+      })().catch(() => {
+        // the page says what went wrong, as it did without waiting
+      });
+      await Promise.race([ready, new Promise((done) => window.setTimeout(done, SPINNER_DELAY))]);
+      return true;
+    },
+    // waited for once per visit: what it waited for has its own cache
+    staleTime: Infinity,
+    gcTime: 0,
+  });
+}
+
+/**
+ * The job log: its start, which its page waited for (logStartQuery), then what follows, fetched
+ * while the job runs. Another job keeps this one's log on screen until the other's start is here,
+ * so the pane never goes blank in between; and a log says it is empty only once it knows.
  */
 function useTrace(pid: number, jobId: number, status: string | undefined) {
-  const [log, setLog] = useState({ job: jobId, text: "", complete: false });
+  // the same query its page waited for: no second request when the start comes after the page
+  const startQ = useQuery(logStartQuery(pid, jobId));
+  const start = startQ.data;
+  const begin = (s: S["TraceChunk"]) => ({ job: jobId, text: s.content, complete: s.complete, loaded: true });
+  const [log, setLog] = useState(() => (start ? begin(start) : { job: jobId, text: "", complete: false, loaded: false }));
+  // another job whose start is here: shown from this very render, not the frame after
+  const shown = log.job !== jobId && start ? begin(start) : log;
   const job = useRef(jobId);
+  // the job whose log is read on from its start (until its start is here, nothing to read on from)
+  const reading = useRef<number | null>(null);
   const offset = useRef(0);
   const busy = useRef(false);
   const want = useRef(false);
 
   const pull = async () => {
+    if (reading.current !== job.current) return;
     if (busy.current) {
       want.current = true;
       return;
@@ -34,19 +77,20 @@ function useTrace(pid: number, jobId: number, status: string | undefined) {
       for (;;) {
         want.current = false;
         const id = job.current;
+        // another job was opened, its start not here yet: reading goes on from it once it is
+        if (reading.current !== id) break;
         const c = await api.get<S["TraceChunk"]>(`/projects/${pid}/jobs/${id}/trace?offset=${offset.current}`);
         // another job was opened meanwhile: start over, for it
         if (job.current !== id) continue;
         if (c.offset !== offset.current) break;
         // sizes are in bytes; keep our own byte offset from the server's answer
         if (c.content) offset.current = c.size;
-        // a job's first answer replaces the last job's log; the next ones add to it
-        setLog((l) => (l.job === id ? { job: id, text: l.text + (c.content ?? ""), complete: c.complete } : { job: id, text: c.content ?? "", complete: c.complete }));
+        setLog((l) => (l.job === id ? { job: id, text: l.text + (c.content ?? ""), complete: c.complete, loaded: true } : { job: id, text: c.content ?? "", complete: c.complete, loaded: true }));
         if (!want.current && !c.more) break;
       }
     } catch {
       // the next event or poll retries; meanwhile no other job's log stands in for this one
-      setLog((l) => (l.job === job.current ? l : { job: job.current, text: "", complete: false }));
+      setLog((l) => (l.job === job.current ? { ...l, loaded: true } : { job: job.current, text: "", complete: false, loaded: true }));
     } finally {
       busy.current = false;
     }
@@ -54,10 +98,21 @@ function useTrace(pid: number, jobId: number, status: string | undefined) {
 
   useEffect(() => {
     job.current = jobId;
-    offset.current = 0;
-    pull();
+    if (reading.current === jobId) return;
+    if (start) {
+      // its start is here: what follows it
+      reading.current = jobId;
+      offset.current = start.content ? start.size : 0;
+      setLog((l) => (l.job === jobId && l.loaded ? l : begin(start)));
+      if (start.more || !start.complete) pull();
+    } else if (startQ.isError) {
+      // no start to be had: the whole log, from its first byte
+      reading.current = jobId;
+      offset.current = 0;
+      pull();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pid, jobId]);
+  }, [pid, jobId, start, startQ.isError]);
   useProjectEvents(pid, (ev) => {
     if (ev.job_id !== jobId) return;
     // new bytes, or the job ended (its last bytes may have come with that)
@@ -65,12 +120,12 @@ function useTrace(pid: number, jobId: number, status: string | undefined) {
   });
   // fallback poll while running (events are hints)
   useEffect(() => {
-    if (log.complete || (status && !isActive(status))) return;
+    if (shown.complete || (status && !isActive(status))) return;
     const t = window.setInterval(pull, 5000);
     return () => window.clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [log.complete, status, jobId]);
-  return log;
+  }, [shown.complete, status, jobId]);
+  return shown;
 }
 
 function SpanView({ s }: { s: Span }) {
@@ -92,7 +147,7 @@ function SpanView({ s }: { s: Span }) {
   );
 }
 
-export function LogView({ text, live }: { text: string; live: boolean }) {
+export function LogView({ text, live, loading = false }: { text: string; live: boolean; loading?: boolean }) {
   // the text only grows: parse just what is new
   const parser = useRef<{ p: LogParser; fed: number }>({ p: new LogParser(), fed: 0 });
   const parsed = useMemo(() => {
@@ -190,7 +245,7 @@ export function LogView({ text, live }: { text: string; live: boolean }) {
         {visible.length === 0 ? (
           <div className="log-line faint">
             <span className="log-n" />
-            {live ? "Waiting for the runner…" : "This job has no log."}
+            {loading ? "Loading the log…" : live ? "Waiting for the runner…" : "This job has no log."}
           </div>
         ) : virtual ? (
           <div style={{ height: v.getTotalSize(), position: "relative" }}>
@@ -234,11 +289,12 @@ function JobList({ ctx, p, current }: { ctx: Ctx; p: S["PipelineDetail"]; curren
 }
 
 export function JobPage({ ctx, jobId }: { ctx: Ctx; jobId: number }) {
+  useJobReady(ctx.p.id, jobId);
   const qc = useQueryClient();
   const confirmRun = useConfirmRun();
   const nav = useNavigate();
-  // another job keeps this one on screen until it arrives: no spinner flashing in between
-  const q = useQuery({ queryKey: ["job", ctx.p.id, jobId], queryFn: () => api.get<S["JobDetail"]>(`/projects/${ctx.p.id}/jobs/${jobId}`), placeholderData: keepPreviousData });
+  // a job that came after the wait: the last one stays on screen until it arrives
+  const q = useQuery({ ...jobQuery(ctx.p.id, jobId), placeholderData: keepPreviousData });
   // status changes: through usePipeline's live updates (the "job" queries too)
   const pipeline = usePipeline(ctx, q.data?.pipeline_iid);
   const trace = useTrace(ctx.p.id, jobId, q.data?.status);
@@ -415,7 +471,7 @@ export function JobPage({ ctx, jobId }: { ctx: Ctx; jobId: number }) {
                     </div>
                   </details>
                 )}
-                <LogView key={trace.job} text={trace.text} live={live && !trace.complete} />
+                <LogView key={trace.job} text={trace.text} live={live && !trace.complete} loading={!trace.loaded} />
               </section>
             </div>
           </div>
