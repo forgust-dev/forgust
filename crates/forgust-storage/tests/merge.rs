@@ -188,3 +188,15 @@ async fn ahead_behind_counts_every_branch_against_the_default() {
     // a base that does not exist: nothing to compare with
     assert!(st.ahead_behind(1, "no-such-branch", &names(&["topic"])).await.unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn ahead_behind_skips_odd_names_and_counts_against_the_branch() {
+    let (_root, work, st) = setup().await;
+    let w = work.path();
+    let bare = st.repo_path(1);
+    // a tag named as the base branch, on an older commit, and a branch no revision can name
+    git(w, &["tag", "main", "main~2"]);
+    git(w, &["push", "-q", bare.to_str().unwrap(), "refs/tags/main", "topic:refs/heads/-wip"]);
+    let names = ["-wip", "topic"].map(String::from);
+    assert_eq!(st.ahead_behind(1, "main", &names).await.unwrap(), vec![("topic".to_string(), 20, 2)]);
+}

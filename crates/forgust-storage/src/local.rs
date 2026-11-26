@@ -1328,11 +1328,15 @@ impl Storage for LocalStorage {
 
     async fn ahead_behind(&self, repo: i64, base: &str, names: &[String]) -> Result<Vec<(String, u64, u64)>> {
         self.ensure(repo).await?;
-        if !validate_rev(base) || names.iter().any(|n| !validate_rev(n)) {
-            return Err(StorageError::Invalid("bad revision".into()));
+        // a name git takes but a revision may not be (`-wip`) is left without a distance, so one
+        // branch does not take the others' away
+        let names: Vec<&String> = names.iter().filter(|n| validate_rev(n)).collect();
+        if !validate_rev(base) {
+            return Ok(vec![]);
         }
-        // the base as a commit: nothing of its name goes into the format below
-        let Some(sha) = self.resolve(repo, base).await? else { return Ok(vec![]) };
+        // the base branch as a commit, not a tag of its name; nothing of its name goes into the
+        // format below
+        let Some(sha) = self.resolve(repo, &format!("refs/heads/{base}")).await? else { return Ok(vec![]) };
         if names.is_empty() {
             return Ok(vec![]);
         }
@@ -1347,7 +1351,7 @@ impl Storage for LocalStorage {
                 let Some((name, counts)) = line.split_once('\0') else { continue };
                 let mut n = counts.split(' ').filter_map(|x| x.parse::<u64>().ok());
                 if let (Some(ahead), Some(behind)) = (n.next(), n.next())
-                    && names.iter().any(|x| x == name)
+                    && names.iter().any(|x| *x == name)
                 {
                     v.push((name.to_string(), ahead, behind));
                 }
@@ -1363,7 +1367,7 @@ impl Storage for LocalStorage {
             let text = String::from_utf8_lossy(&out.stdout);
             let mut n = text.split_whitespace().filter_map(|x| x.parse::<u64>().ok());
             if let (Some(behind), Some(ahead)) = (n.next(), n.next()) {
-                v.push((name.clone(), ahead, behind));
+                v.push((name.to_string(), ahead, behind));
             }
         }
         Ok(v)
