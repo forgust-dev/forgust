@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { TableOfContents } from "lucide-react";
 import { useToast } from "../shell/toast";
 import { Menu } from "./controls";
@@ -9,17 +10,29 @@ import { Menu } from "./controls";
  * and a link to a section (`#install`) finds it, as on GitHub (its ids read `user-content-…`). */
 export function Markdown({ html, className }: { html: string; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
-  const toast = useToast();
-  const toastRef = useRef(toast);
-  toastRef.current = toast;
+  const { ok } = useToast();
+  const goToSection = useGoToSection();
+  const { key } = useLocation();
+  const keyRef = useRef(key);
+  keyRef.current = key;
+  // a section gone to on this page is no arrival: nothing brings the reader back to it
+  useEffect(() => {
+    if (!jumped) return;
+    jumped = false;
+    arrived = key;
+  }, [key]);
   useEffect(() => {
     const root = ref.current;
     if (!root) return;
     copyButtons(root);
     themePictures(root);
     watchTheme();
-    const stop = revealHash(root);
     void enhance(root);
+    // once for each arrival on a page, by the first text that holds the section: not again
+    // when a text changes (edited, fetched anew) under a reader who has moved on
+    if (arrived === keyRef.current) return;
+    const stop = revealHash(root);
+    if (stop) arrived = keyRef.current;
     return stop;
   }, [html]);
   useEffect(() => {
@@ -40,15 +53,17 @@ export function Markdown({ html, className }: { html: string; className?: string
       if (a.classList.contains("anchor") && navigator.clipboard) {
         const name = a.parentElement?.textContent?.trim();
         navigator.clipboard.writeText(location.href).then(
-          () => toastRef.current.ok(name ? `Link to “${name}” copied` : "Link copied"),
+          () => ok(name ? `Link to “${name}” copied` : "Link copied"),
           () => {},
         );
       }
     };
-    // an address typed or followed to a section of this text
+    // an address typed or followed to a section of this text (of the first, when several
+    // texts of a page have one of that name)
     const onHash = () => {
-      const el = sectionOf(root, location.hash.slice(1));
-      if (el) el.scrollIntoView();
+      const frag = location.hash.slice(1);
+      const el = sectionOf(root, frag);
+      if (el && el === sectionOf(document, frag)) el.scrollIntoView();
     };
     root.addEventListener("click", onClick);
     window.addEventListener("hashchange", onHash);
@@ -56,7 +71,7 @@ export function Markdown({ html, className }: { html: string; className?: string
       root.removeEventListener("click", onClick);
       window.removeEventListener("hashchange", onHash);
     };
-  }, []);
+  }, [goToSection, ok]);
   return <div ref={ref} className={className} dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
@@ -85,11 +100,26 @@ function decoded(frag: string) {
   }
 }
 
-/** Show a section of a text: its address in the bar (replacing the page's: the router keeps the
- * history), the section at the top of the window. */
-export function goToSection(el: Element, frag: string) {
-  history.replaceState(history.state, "", `#${frag}`);
-  el.scrollIntoView();
+/** The page (the router's `key`) whose section was last brought into view, and whether the
+ * reader just went to one there by a link of the text or its outline. */
+let arrived = "";
+let jumped = false;
+
+/** Show a section of a text: its address in the bar (replacing the page's, through the router:
+ * what reads the address, a file's `#L5`, follows), the section at the top of the window. */
+function useGoToSection() {
+  const navigate = useNavigate();
+  const loc = useLocation();
+  const at = useRef(loc);
+  at.current = loc;
+  return useCallback(
+    (el: Element, frag: string) => {
+      jumped = true;
+      navigate({ search: at.current.search, hash: `#${frag}` }, { replace: true, preventScrollReset: true, state: at.current.state });
+      el.scrollIntoView();
+    },
+    [navigate],
+  );
 }
 
 /** A page opened at a section (`…/shop#install`): that section, once the text is there, kept at
@@ -189,6 +219,7 @@ export function Outline({ html }: { html: string }) {
       text: h.textContent?.trim() ?? "",
     })).filter((h) => h.text);
   }, [html]);
+  const goToSection = useGoToSection();
   if (heads.length < 3) return null;
   const top = Math.min(...heads.map((h) => h.level));
   return (
@@ -200,7 +231,7 @@ export function Outline({ html }: { html: string }) {
       }
       items={heads.map((h) => ({
         label: (
-          <span className="outline-item" style={{ paddingLeft: (h.level - top) * 14 }}>
+          <span className="outline-item ellipsis" style={{ paddingLeft: (h.level - top) * 14 }}>
             {h.text}
           </span>
         ),

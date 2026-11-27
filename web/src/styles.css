@@ -1390,9 +1390,6 @@ a.milestone-chip:hover {
 .outline-item {
   min-width: 0;
   max-width: 320px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* ---------------------------------------------------------------- diffs */
@@ -2832,13 +2829,17 @@ kbd {
   color: var(--danger);
 }
 /* a notice: title, text and a link, until dismissed */
-.toast.info {
+.toast.info,
+.toast.detailed {
   align-items: flex-start;
   padding: 10px 8px 10px 12px;
 }
+.toast.info > svg:first-child,
+.toast.detailed > svg:first-child {
+  margin-top: 2px;
+}
 .toast.info > svg:first-child {
   color: var(--info);
-  margin-top: 2px;
 }
 .toast-body {
   display: flex;
@@ -2853,15 +2854,8 @@ kbd {
 .toast-body > .btn {
   margin-top: 6px;
 }
-/* a done toast that says what the change means: its line, then that, and maybe Undo */
-.toast.detailed {
-  align-items: flex-start;
-  padding: 10px 8px 10px 12px;
-}
-.toast.detailed > svg:first-child {
-  margin-top: 2px;
-}
-/* Undo and the cross, centred on the title's line */
+/* a done toast that says what the change means (its line, then that, and maybe Undo) has an
+   announcement's shape; Undo and the cross, centred on the title's line */
 .toast.detailed > .toast-actions {
   margin-top: -6px;
 }

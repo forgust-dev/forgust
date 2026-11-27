@@ -125,12 +125,16 @@ impl Highlighter {
     /// A fenced block's code (```rust), highlighted as the file views are; none when its
     /// language is not known (or none given), and it stays plain.
     pub fn highlight_block(&self, lang: &str, code: &str) -> Option<String> {
-        let syntax = self.syntax_for_lang(lang)?;
-        if code.lines().count() > MAX_HIGHLIGHT_LINES {
+        self.classed_html(self.syntax_for_lang(lang)?, code)
+    }
+
+    /// `text` in `syntax`'s classed spans; none when it is too long, or does not parse.
+    fn classed_html(&self, syntax: &SyntaxReference, text: &str) -> Option<String> {
+        if text.lines().count() > MAX_HIGHLIGHT_LINES {
             return None;
         }
         let mut generator = ClassedHTMLGenerator::new_with_class_style(syntax, &self.syntaxes, CLASS_STYLE);
-        for line in syntect::util::LinesWithEndings::from(code) {
+        for line in syntect::util::LinesWithEndings::from(text) {
             generator.parse_html_for_line_which_includes_newline(line).ok()?;
         }
         Some(generator.finalize())
@@ -140,16 +144,8 @@ impl Highlighter {
     pub fn highlight_lines(&self, path: &str, text: &str) -> Vec<String> {
         let first = text.lines().next().unwrap_or("");
         let syntax = self.syntax_for(path, first);
-        if text.lines().count() > MAX_HIGHLIGHT_LINES || syntax.name == "Plain Text" {
-            return text.lines().map(escape_html).collect();
-        }
-        let mut generator = ClassedHTMLGenerator::new_with_class_style(syntax, &self.syntaxes, CLASS_STYLE);
-        for line in syntect::util::LinesWithEndings::from(text) {
-            if generator.parse_html_for_line_which_includes_newline(line).is_err() {
-                return text.lines().map(escape_html).collect();
-            }
-        }
-        split_html_lines(&generator.finalize())
+        let html = if syntax.name == "Plain Text" { None } else { self.classed_html(syntax, text) };
+        html.map_or_else(|| text.lines().map(escape_html).collect(), |h| split_html_lines(&h))
     }
 }
 
@@ -263,6 +259,12 @@ impl ImageProxy {
         let raw = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(encoded).ok()?;
         let url = String::from_utf8(raw).ok()?;
         self.secrets.verify(&Self::msg(&url), sig).then_some(url)
+    }
+
+    /// The proxy path of an image's address as written (`//host/x.png` is https); none for
+    /// one that does not go through it.
+    fn proxied(&self, url: &str) -> Option<String> {
+        self.wants(url).then(|| if url.starts_with("//") { self.path(&format!("https:{url}")) } else { self.path(url) })
     }
 
     fn wants(&self, src: &str) -> bool {
@@ -414,19 +416,19 @@ pub fn markdown_with(source: &str, project_url: &str, git_ref: &str, dir: &str, 
             if el == "img"
                 && attr == "src"
                 && let Some(px) = &proxy
-                && px.wants(value)
-            {
                 // the theme it is for stays at the end of its address
-                let (url, only) = THEME_ONLY.iter().find_map(|t| value.strip_suffix(t).map(|u| (u, *t))).unwrap_or((value, ""));
-                let abs = if url.starts_with("//") { format!("https:{url}") } else { url.to_string() };
-                return Some(format!("{}{only}", px.path(&abs)).into());
+                && let (url, only) = THEME_ONLY.iter().find_map(|t| value.strip_suffix(t).map(|u| (u, *t))).unwrap_or((value, ""))
+                && let Some(path) = px.proxied(url)
+            {
+                return Some(format!("{path}{only}").into());
             }
             if el == "source" && attr == "srcset" {
                 return srcset(value, &sources, proxy.as_ref()).map(Into::into);
             }
-            // only the media of a theme (`(prefers-color-scheme: dark)`), and image types
+            // only the media of a theme (`(prefers-color-scheme: dark)`); a source for any other
+            // (a width, print) never applies, rather than always: the `<img>` shows instead
             if el == "source" && attr == "media" {
-                return color_scheme(value).map(|s| format!("(prefers-color-scheme: {s})").into());
+                return Some(color_scheme(value).map_or("not all".into(), |s| format!("(prefers-color-scheme: {s})").into()));
             }
             if el == "source" && attr == "type" {
                 return value.starts_with("image/").then(|| value.into());
@@ -471,14 +473,26 @@ pub fn markdown_with(source: &str, project_url: &str, git_ref: &str, dir: &str, 
 fn srcset(value: &str, rewrite: &LinkRewriter, images: Option<&ImageProxy>) -> Option<String> {
     use ammonia::UrlRelativeEvaluate;
     let mut out = Vec::new();
-    for candidate in value.split(',').map(str::trim).filter(|c| !c.is_empty()) {
-        let (url, size) = candidate.split_once(char::is_whitespace).map_or((candidate, ""), |(u, s)| (u, s.trim()));
+    let mut rest = value;
+    loop {
+        rest = rest.trim_start_matches(|c: char| c.is_whitespace() || c == ',');
+        if rest.is_empty() {
+            break;
+        }
+        // an address runs to the next space, its own commas included (`badge/a,b.svg 1x`); a
+        // comma ends the image only at the end of its address, or after its size
+        let (url, after) = rest.split_at(rest.find(char::is_whitespace).unwrap_or(rest.len()));
+        let (url, size) = if url.ends_with(',') {
+            rest = after;
+            (url.trim_end_matches(','), "")
+        } else {
+            let (size, next) = after.split_once(',').unwrap_or((after, ""));
+            rest = next;
+            (url, size.trim())
+        };
         let lower = url.to_ascii_lowercase();
         let resolved = if lower.starts_with("http://") || lower.starts_with("https://") || lower.starts_with("//") {
-            match images.filter(|px| px.wants(url)) {
-                Some(px) => px.path(&if url.starts_with("//") { format!("https:{url}") } else { url.to_string() }),
-                None => url.to_string(),
-            }
+            images.and_then(|px| px.proxied(url)).unwrap_or_else(|| url.to_string())
         } else if url.contains(':') || url.is_empty() {
             // `javascript:`, `data:`: no image of the repository's
             return None;
@@ -904,6 +918,34 @@ mod tests {
         assert!(html.contains(r#"<a name="user-content-install" rel="noopener noreferrer"></a>"#), "{html}");
         assert!(
             html.contains(r##"<h2 id="user-content-install">Install<a href="#install" aria-label="Link to heading 'Install'" class="anchor" rel="noopener noreferrer"></a></h2>"##),
+            "{html}"
+        );
+    }
+
+    #[test]
+    fn a_picture_source_for_another_media_never_applies() {
+        let html = markdown(
+            "<picture><source media=\"(min-width: 800px)\" srcset=\"wide.png\"><img src=\"narrow.png\"></picture>",
+            "/acme/api",
+            "main",
+            "",
+        );
+        // without its media it would always win over the `<img>`
+        assert!(html.contains(r#"<source media="not all" srcset="/acme/api/-/raw/main/wide.png">"#), "{html}");
+    }
+
+    #[test]
+    fn a_srcset_address_keeps_its_commas() {
+        let html = markdown(
+            "<picture><source srcset=\"https://img.example/badge/a,b.svg 1x, img/c.png 2x,img/d.png\"><img src=\"x.png\"></picture>",
+            "/acme/api",
+            "main",
+            "",
+        );
+        assert!(
+            html.contains(
+                r#"srcset="https://img.example/badge/a,b.svg 1x, /acme/api/-/raw/main/img/c.png 2x, /acme/api/-/raw/main/img/d.png""#
+            ),
             "{html}"
         );
     }

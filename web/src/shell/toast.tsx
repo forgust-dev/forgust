@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { Bell, CheckCircle2, CircleAlert, Info, X } from "lucide-react";
@@ -81,8 +81,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     setAnnouncements((all) => all.map((x) => (x.key === key ? { ...x, leaving: true } : x)));
     setTimeout(() => setAnnouncements((all) => all.filter((x) => !(x.key === key && x.leaving))), LEAVE_MS);
   }, []);
+  // the same for as long as the page lives: a toast shown does not render again what can show one
+  const value = useMemo(() => ({ ok, error, notice, announce, withdraw }), [ok, error, notice, announce, withdraw]);
   return (
-    <Ctx.Provider value={{ ok, error, notice, announce, withdraw }}>
+    <Ctx.Provider value={value}>
       {children}
       {createPortal(
         <div className="toasts" role="status" aria-live="polite">
@@ -100,6 +102,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               </div>
               <button
                 className="icon-btn"
+                title="Dismiss"
                 aria-label="Dismiss"
                 onClick={() => {
                   withdraw(a.key);
@@ -150,7 +153,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                     Undo
                   </button>
                 )}
-                <button className="icon-btn" aria-label="Dismiss" onClick={() => dismiss(t.id)}>
+                <button className="icon-btn" title="Dismiss" aria-label="Dismiss" onClick={() => dismiss(t.id)}>
                   <X size={14} />
                 </button>
               </div>
