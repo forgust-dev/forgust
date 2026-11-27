@@ -125,9 +125,10 @@ function ReleaseRoute({ ctx, more }: { ctx: Ctx; more: string[] }) {
 export function ProjectPage({ id, fullPath, rest }: { id: number; fullPath: string; rest: string }) {
   const q = useQuery({ queryKey: keys.project(id), queryFn: () => fetchers.project(id) });
   const [gitRef, setRef] = useState<string | undefined>();
+  const top = rest.split("/")[0];
   // the Smart View's graph takes the room a wide screen has; the web IDE, the whole window
   return (
-    <div className={{ smart_view: "page wide", ide: "page page-ide" }[rest.split("/")[0]] ?? "page"}>
+    <div className={top === "smart_view" ? "page wide" : top === "ide" ? "page page-ide" : "page"}>
       {q.isLoading && <KeepNav />}
       <Q q={q}>
         {(p) => {

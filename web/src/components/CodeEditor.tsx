@@ -18,6 +18,7 @@ import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
 import { languages } from "@codemirror/language-data";
 import { tagHighlighter, tags as t } from "@lezer/highlight";
+import { nameOf } from "../api/client";
 
 /** Marks the text put in from outside (`value`): it is not something typed, to report back. */
 const given = Annotation.define<boolean>();
@@ -140,6 +141,9 @@ export function CodeEditor({ value, onChange, path, label, autoFocus, original, 
   changed.current = onChange;
 
   useEffect(() => {
+    // a file whose every line ends in CRLF keeps them (any other mix comes out as LF). The
+    // editor itself splits on any line break, so a paste of LF lines still makes lines.
+    const lineBreak = reported.current.includes("\r\n") && !/(^|[^\r])\n/.test(reported.current) ? "\r\n" : "\n";
     const v = new EditorView({
       parent: host.current!,
       state: EditorState.create({
@@ -148,14 +152,12 @@ export function CodeEditor({ value, onChange, path, label, autoFocus, original, 
           // before every other keymap: in its normal mode Vim takes the keys first
           modal.current.of([]),
           setup,
-          // a file whose every line ends in CRLF keeps them (any other mix comes out as LF)
-          reported.current.includes("\r\n") && !/(^|[^\r])\n/.test(reported.current) ? EditorState.lineSeparator.of("\r\n") : [],
           perFile.current.of([]),
           compared.current.of([]),
           EditorView.contentAttributes.of({ "aria-label": label }),
           EditorView.updateListener.of((u) => {
             if (!u.docChanged || u.transactions.some((tr) => tr.annotation(given))) return;
-            reported.current = u.state.doc.sliceString(0, undefined, u.state.lineBreak);
+            reported.current = u.state.doc.sliceString(0, undefined, lineBreak);
             changed.current(reported.current);
           }),
         ],
@@ -185,7 +187,7 @@ export function CodeEditor({ value, onChange, path, label, autoFocus, original, 
       if (current && view.current === v) v.dispatch({ effects: perFile.current.reconfigure([indentUnit.of(indentFor(path, v.state.doc.toString())), language]) });
     };
     set([]);
-    LanguageDescription.matchFilename(languages, path.split("/").pop() ?? "")
+    LanguageDescription.matchFilename(languages, nameOf(path))
       ?.load()
       .then(set, () => {});
     return () => {

@@ -7365,15 +7365,19 @@ a.item.import-row:hover {
 .editor-form {
   max-width: 1100px;
 }
+/* the editor fills what holds it; the file editor's page gives it a frame */
 .code-editor {
+  height: 100%;
+  overflow: hidden;
+}
+.editor-form .code-editor {
   min-height: 420px;
   height: 60vh;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
-  overflow: hidden;
   resize: vertical;
 }
-.code-editor:focus-within {
+.editor-form .code-editor:focus-within {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -7475,37 +7479,32 @@ a.item.import-row:hover {
 .ide-side-tabs {
   display: flex;
 }
-.ide-side-tabs [role="tab"] {
+/* the side panel's tabs and the open files' share their look */
+.ide-side-tabs [role="tab"],
+.ide-tab > [role="tab"] {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 0 12px;
   border: 0;
-  border-bottom: 2px solid transparent;
   background: none;
   color: var(--text-muted);
   font: inherit;
   font-size: 13px;
-  font-weight: 600;
   cursor: pointer;
+}
+.ide-side-tabs [role="tab"]:focus-visible,
+.ide-tab > [role="tab"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.ide-side-tabs [role="tab"] {
+  padding: 0 12px;
+  border-bottom: 2px solid transparent;
+  font-weight: 600;
 }
 .ide-side-tabs [role="tab"][aria-selected="true"] {
   border-bottom-color: var(--tab-mark);
   color: var(--text);
-}
-.ide-side-tabs [role="tab"]:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-.ide-count {
-  min-width: 18px;
-  padding: 0 5px;
-  border-radius: 9px;
-  background: var(--accent);
-  color: var(--accent-text);
-  font-size: 11px;
-  line-height: 18px;
-  text-align: center;
 }
 .ide-changes {
   display: flex;
@@ -7548,23 +7547,19 @@ a.item.import-row:hover {
   padding: 12px;
   border-top: 1px solid var(--border);
 }
-.ide-commit .alert {
-  display: flex;
+/* the "has new commits" banner, and the new branch's name, in the narrow panel */
+.ide-commit .banner {
   flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
+  gap: 6px 10px;
+  margin: 0;
 }
-.ide-commit .commit-target input:not([type]) {
+.ide-commit .commit-target :is(input[type="text"], input:not([type])) {
   max-width: none;
   margin-left: 0;
 }
-.ide-diff-toggle {
+.ide-toggle {
   align-self: center;
   margin: 0 4px;
-}
-.ide-diff-toggle[aria-pressed="true"] {
-  background: var(--accent-soft);
-  color: var(--accent-ink);
 }
 .ide-side-body {
   display: flex;
@@ -7620,31 +7615,16 @@ a.item.import-row:hover {
 .ide-row:hover .ide-row-actions {
   display: inline-flex;
 }
-.ide-row-actions button,
+/* icon buttons at a row's size; on a row already hovered, their own hover is a step darker */
+.ide-row-actions .icon-btn,
 .ide-tab-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   width: 22px;
   height: 22px;
-  padding: 0;
-  border: 0;
   border-radius: var(--radius-sm);
-  background: none;
-  color: var(--text-muted);
-  cursor: pointer;
 }
-.ide-row-actions button:hover,
+.ide-row-actions .icon-btn:hover,
 .ide-tab-close:hover {
   background: var(--border);
-  color: var(--text);
-}
-.ide-dot {
-  flex: none;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--warn);
 }
 .ide-status {
   flex: none;
@@ -7661,7 +7641,7 @@ a.item.import-row:hover {
   color: var(--warn);
 }
 .ide-renamed {
-  color: var(--accent);
+  color: var(--info);
 }
 .ide-deleted {
   color: var(--danger);
@@ -7710,25 +7690,12 @@ span.ide-deleted {
   border-bottom-color: var(--tab-mark);
 }
 .ide-tab > [role="tab"] {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
   height: 100%;
   padding: 0 6px 0 12px;
-  border: 0;
-  background: none;
-  color: var(--text-muted);
-  font: inherit;
-  font-size: 13px;
   white-space: nowrap;
-  cursor: pointer;
 }
 .ide-tab[data-active] > [role="tab"] {
   color: var(--text);
-}
-.ide-tab > [role="tab"]:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
 }
 .ide-panes {
   position: relative;
@@ -7744,16 +7711,6 @@ span.ide-deleted {
 }
 .ide-pane[data-active] {
   visibility: visible;
-}
-.ide-pane .code-editor {
-  height: 100%;
-  min-height: 0;
-  border: 0;
-  border-radius: 0;
-  resize: none;
-}
-.ide-pane .code-editor:focus-within {
-  outline: none;
 }
 .ide-fill {
   height: 100%;

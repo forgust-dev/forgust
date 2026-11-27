@@ -9,8 +9,9 @@ import { useResolved } from "./Code";
 import { CommitTarget, useCommit } from "./commitTarget";
 import type { Ctx } from "./Project";
 
-// fetched while the file loads; deleting a file never needs it
-const CodeEditor = lazy(() => import("../../components/CodeEditor").then((m) => ({ default: m.CodeEditor })));
+// fetched while the file loads (see `Editor`); deleting a file never needs it
+const loadEditor = () => import("../../components/CodeEditor");
+const CodeEditor = lazy(() => loadEditor().then((m) => ({ default: m.CodeEditor })));
 
 type Mode = "edit" | "new" | "delete";
 
@@ -38,6 +39,9 @@ function Editor({ ctx, res, mode }: { ctx: Ctx; res: S["RefResolved"]; mode: Mod
   // chosen in the web IDE
   const [vim] = usePref("editor.vim", false);
 
+  useEffect(() => {
+    if (mode !== "delete") void loadEditor();
+  }, [mode]);
   // the file as it is now (raw, so it is byte for byte what gets edited)
   useEffect(() => {
     if (mode !== "edit") return;

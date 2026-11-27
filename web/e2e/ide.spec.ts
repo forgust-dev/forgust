@@ -106,6 +106,13 @@ test("the web IDE: files in tabs, edited, created, renamed and deleted, all stil
   await editor();
   await expect(page.getByRole("textbox", { name: "Content of notes/plan.md" })).toContainText("- one");
 
+  // deleting a file with typed text in it asks first, as discarding does
+  await files();
+  await item("plan.md, new").press("Delete");
+  await expect(dialog).toContainText("Delete plan.md?");
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(item("plan.md, new")).toBeVisible();
+
   // a file of the commit, deleted: struck out, to restore
   await files();
   await item("README.md").press("Delete");
@@ -210,7 +217,7 @@ test("the web IDE commits to the branch, and brings its changes onto commits mad
     await ide.panel("Changes");
     await page.getByRole("button", { name: "Commit 2 files" }).click();
     await expect(page.locator(".ide-commit .alert.error")).toContainText("changed since you opened it");
-    await expect(page.locator(".ide-commit .alert.warn")).toContainText("has new commits");
+    await expect(page.locator(".ide-commit .banner")).toContainText("has new commits");
     await expect(page.getByRole("radio", { name: /Commit directly/ })).toBeDisabled();
     await page.getByRole("button", { name: /^Update to/ }).click();
     // a.txt changed on both sides: its change cannot follow

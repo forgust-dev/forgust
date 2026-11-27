@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { GitBranch } from "lucide-react";
 import { api, ApiError, qs, type S } from "../../api/client";
@@ -38,12 +38,10 @@ export function useCommit(ctx: Ctx, gitRef: string, base: string, blocked?: stri
   const { user } = useSession();
   const branch = useBranch(ctx, gitRef);
   const isBranch = !!branch.data;
-  const [target, setTarget] = useState<Target>("here");
+  const [chosen, setTarget] = useState<Target>("here");
   const [newBranch, setNewBranch] = useState(() => suggestBranch(user?.username ?? "patch"));
   // a tag or a commit cannot take commits, nor a ref that is blocked: a new branch it is
-  useEffect(() => {
-    if ((branch.isSuccess && !isBranch) || blocked) setTarget("new");
-  }, [branch.isSuccess, isBranch, blocked]);
+  const target: Target = (branch.isSuccess && !isBranch) || blocked ? "new" : chosen;
   const commit = async (message: string, actions: S["FileAction"][]): Promise<Landed> => {
     const onBranch = target === "here" ? gitRef : newBranch.trim();
     try {

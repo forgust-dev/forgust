@@ -1,10 +1,10 @@
 import { useState, type FormEvent } from "react";
 import { RefreshCw, TriangleAlert, Undo2 } from "lucide-react";
-import { ApiError, plural, type S } from "../../../api/client";
+import { ApiError, nameOf, parentOf, plural, type S } from "../../../api/client";
 import { ErrorBox, Field } from "../../../components/ui";
 import { CommitTarget, useCommit, type Landed } from "../commitTarget";
 import type { Ctx } from "../Project";
-import { describe, MAX_ACTIONS, nameOf, parentOf, statusOf, toActions, type Drafts } from "./changes";
+import { describe, MAX_ACTIONS, statusOf, toActions, type Drafts } from "./changes";
 import { StatusMark } from "./FileTree";
 
 /**
@@ -74,43 +74,57 @@ export function Changes({
       .finally(() => setBusy(null));
   };
 
-  if (paths.length === 0) return <p className="ide-changes-empty muted small">No changes yet. Edit, add, rename or delete files: they gather here to be committed together.</p>;
+  const empty = paths.length === 0;
   return (
     <form className="ide-changes" onSubmit={submit}>
-      <ul className="ide-change-list" aria-label="Changed files">
-        {paths.map((p) => (
-          <li key={p} className="ide-row" data-active={p === active || undefined}>
-            <StatusMark status={statusOf(p, drafts[p])} />
-            <button type="button" className="ide-change-open ellipsis" title={drafts[p].origin && drafts[p].origin !== p ? `${drafts[p].origin} → ${p}` : p} onClick={() => show(p)}>
-              <span className={drafts[p].deleted ? "ide-deleted" : undefined}>{nameOf(p)}</span>
-              <span className="faint"> {parentOf(p)}</span>
-            </button>
-            <span className="ide-row-actions">
-              <button type="button" title={drafts[p].deleted ? "Restore" : "Discard the changes"} aria-label={`${drafts[p].deleted ? "Restore" : "Discard the changes of"} ${p}`} onClick={() => discard(p)}>
-                <Undo2 size={14} />
+      {empty ? (
+        <p className="ide-changes-empty muted small">No changes yet. Edit, add, rename or delete files: they gather here to be committed together.</p>
+      ) : (
+        <ul className="ide-change-list" aria-label="Changed files">
+          {paths.map((p) => (
+            <li key={p} className="ide-row" data-active={p === active || undefined}>
+              <StatusMark status={statusOf(p, drafts[p])} />
+              <button type="button" className="ide-change-open ellipsis" title={drafts[p].origin && drafts[p].origin !== p ? `${drafts[p].origin} → ${p}` : p} onClick={() => show(p)}>
+                <span className={drafts[p].deleted ? "ide-deleted" : undefined}>{nameOf(p)}</span>
+                <span className="faint"> {parentOf(p)}</span>
               </button>
-            </span>
-          </li>
-        ))}
-      </ul>
-      <div className="ide-commit stack">
-        {moved && (
-          <div className="alert warn small" role="status">
-            <TriangleAlert size={14} /> <code>{res.ref}</code> has new commits since you started. Bring your changes onto them, or commit to a new branch.
-            <button type="button" className="btn small" disabled={busy !== null} onClick={bring}>
-              <RefreshCw size={13} /> {busy === "update" ? "Updating…" : `Update to ${res.commit.slice(0, 8)}`}
-            </button>
-          </div>
-        )}
-        <ErrorBox error={error} />
-        <Field label="Commit message">
-          <textarea rows={2} value={message} onChange={(e) => setTyped(e.target.value)} />
-        </Field>
-        <CommitTarget {...targetProps} />
-        <button className="btn primary" disabled={busy !== null || !message.trim() || !ready}>
-          {busy === "commit" ? "Committing…" : `Commit ${plural(paths.length, "file")}`}
-        </button>
-      </div>
+              <span className="ide-row-actions">
+                <button type="button" className="icon-btn" title={drafts[p].deleted ? "Restore" : "Discard the changes"} aria-label={`${drafts[p].deleted ? "Restore" : "Discard the changes of"} ${p}`} onClick={() => discard(p)}>
+                  <Undo2 size={14} />
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {/* with no changes, only the files shown are out of date: Update starts over on the head */}
+      {(!empty || moved) && (
+        <div className="ide-commit stack">
+          {moved && (
+            <div className="banner" role="status">
+              <TriangleAlert size={14} />
+              <span className="grow small">
+                <code>{res.ref}</code> has new commits since you started. {empty ? "Update to read its files as they are now." : "Bring your changes onto them, or commit to a new branch."}
+              </span>
+              <button type="button" className="btn small" disabled={busy !== null} onClick={bring}>
+                <RefreshCw size={13} /> {busy === "update" ? "Updating…" : `Update to ${res.commit.slice(0, 8)}`}
+              </button>
+            </div>
+          )}
+          <ErrorBox error={error} />
+          {!empty && (
+            <>
+              <Field label="Commit message">
+                <textarea rows={2} value={message} onChange={(e) => setTyped(e.target.value)} />
+              </Field>
+              <CommitTarget {...targetProps} />
+              <button className="btn primary" aria-busy={busy === "commit"} disabled={busy !== null || !message.trim() || !ready}>
+                {busy === "commit" ? "Committing…" : `Commit ${plural(paths.length, "file")}`}
+              </button>
+            </>
+          )}
+        </div>
+      )}
     </form>
   );
 }

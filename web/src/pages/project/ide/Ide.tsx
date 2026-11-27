@@ -2,7 +2,7 @@ import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useReducer, useR
 import { Link, useNavigate } from "react-router-dom";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, FileDiff, FilePlus2, FolderTree, GitBranch, Search, TriangleAlert, X } from "lucide-react";
-import { api, ApiError, bytes, plural, qs, refLink, type S } from "../../../api/client";
+import { ancestors, api, ApiError, bytes, nameOf, parentOf, plural, qs, refLink, type S } from "../../../api/client";
 import { fetchers, keys } from "../../../prefetch";
 import { Markdown } from "../../../components/Markdown";
 import { ErrorBox, Q, Spinner, useDebounced } from "../../../components/ui";
@@ -14,13 +14,15 @@ import { usePref } from "../../../shell/theme";
 import { useToast } from "../../../shell/toast";
 import { useResolved } from "../Code";
 import type { Ctx } from "../Project";
-import { ancestors, badPath, clash, nameOf, outline, outlineKey, parentOf, reduce, renamedAway, statusOf, type Action, type Draft, type Drafts } from "./changes";
+import { badPath, clash, outline, outlineKey, reduce, renamedAway, statusOf, type Action, type Draft, type Drafts } from "./changes";
 import type { Landed } from "../commitTarget";
 import { Changes } from "./Changes";
 import { FileTree, StatusMark, type TreeOps } from "./FileTree";
 import { loadDrafts, saveDrafts, type Desk, type Saved } from "./store";
 
-const CodeEditor = lazy(() => import("../../../components/CodeEditor").then((m) => ({ default: m.CodeEditor })));
+// fetched as the page loads, alongside the first file rather than after it
+const editorChunk = import("../../../components/CodeEditor");
+const CodeEditor = lazy(() => editorChunk.then((m) => ({ default: m.CodeEditor })));
 
 /** Past this, a file is not opened as text. */
 const MAX_TEXT = 2 * 1024 * 1024;
@@ -54,31 +56,46 @@ export function Ide({ ctx, refAndPath }: { ctx: Ctx; refAndPath: string }) {
     },
     [refetch],
   );
+  // the changes handed over are taken once: a workbench drawn again in the same round
+  // (the ref failing to load a moment) reads what this browser kept since
+  const taken = useCallback(() => setRound((r) => (r.kept?.saved === undefined ? r : { ...r, kept: { ...r.kept, saved: undefined } })), []);
   return (
     <Q q={r}>
-      {(res) => (within ? <Session key={`${res.ref}:${round.n}`} ctx={ctx} res={res} path={refAndPath.slice(res.ref.length + 1)} kept={round.kept} restart={restart} refresh={refetch} /> : <Spinner />)}
+      {(res) => (within ? <Session key={`${res.ref}:${round.n}`} ctx={ctx} res={res} path={refAndPath.slice(res.ref.length + 1)} kept={round.kept} restart={restart} taken={taken} refresh={refetch} /> : <Spinner />)}
     </Q>
   );
 }
 
-/** What a workbench leaves to the one that starts over after it: the open files, the side panel as it was. */
-type Kept = { tabs: string[]; side: "files" | "changes"; sideOpen: boolean };
+/**
+ * What a workbench leaves to the one that starts over after it: the changes still to
+ * commit (null: none, it starts on the ref's head; undefined: taken already, read what
+ * this browser kept), the open files, the side panel as it was. The changes are handed
+ * over in memory: without storage in this browser, nothing is lost either.
+ */
+type Kept = { saved?: Saved | null; tabs: string[]; side: "files" | "changes"; sideOpen: boolean };
 
 /** What the workbench is given to start over, and to learn where the ref is now. */
-type Rounds = { kept: Kept | null; restart: (keep: Kept) => Promise<void>; refresh: () => Promise<unknown> };
+type Rounds = { kept: Kept | null; restart: (keep: Kept) => Promise<void>; taken: () => void; refresh: () => Promise<unknown> };
 
-/** Reads what this browser kept for the ref, then opens the workbench on it. */
+/** Reads what this browser kept for the ref (or what the workbench before it left), then opens the workbench on it. */
 function Session({ ctx, res, path, ...rounds }: { ctx: Ctx; res: S["RefResolved"]; path: string } & Rounds) {
   const userId = useSession().user?.id ?? 0;
   const desk = useMemo<Desk>(() => ({ userId, projectId: ctx.p.id, ref: res.ref }), [userId, ctx.p.id, res.ref]);
-  const [saved, setSaved] = useState<Saved | null>();
+  // what the workbench before it left, as this one starts
+  const [handed] = useState(rounds.kept?.saved);
+  const [saved, setSaved] = useState<Saved | null | undefined>(handed);
+  const { taken } = rounds;
   useEffect(() => {
+    if (handed !== undefined) {
+      taken();
+      return;
+    }
     let current = true;
     loadDrafts(desk).then((s) => current && setSaved(s));
     return () => {
       current = false;
     };
-  }, [desk]);
+  }, [desk, handed, taken]);
   if (saved === undefined) return <Spinner />;
   return <Workbench ctx={ctx} res={res} path={path} desk={desk} saved={saved} {...rounds} />;
 }
@@ -102,19 +119,18 @@ function Workbench({ ctx, res, path, desk, saved, kept, restart, refresh }: { ct
   const shape = useMemo(() => outline(drafts), [shapeKey]);
 
   // kept in the browser shortly after each change, and at once when leaving
-  const latest = useRef(drafts);
-  latest.current = drafts;
-  const unsaved = useRef(false);
-  // set once the workbench hands over (a commit, an update): what is kept is then written by hand
+  const pending = useRef<Drafts | null>(null);
+  // set once the workbench hands over (a commit, an update): what is kept is then written by hand (`seal`)
   const over = useRef(false);
   const flush = useCallback(() => {
-    if (!unsaved.current || over.current) return;
-    unsaved.current = false;
-    void saveDrafts(desk, base, latest.current);
+    const d = pending.current;
+    if (!d || over.current) return;
+    pending.current = null;
+    void saveDrafts(desk, base, d);
   }, [desk, base]);
   useEffect(() => {
     if (drafts === initial) return;
-    unsaved.current = true;
+    pending.current = drafts;
     const t = setTimeout(flush, 300);
     return () => clearTimeout(t);
   }, [drafts, initial, flush]);
@@ -189,14 +205,22 @@ function Workbench({ ctx, res, path, desk, saved, kept, restart, refresh }: { ct
     return file === undefined ? null : `${file} is a file: nothing can go under it`;
   };
 
+  /** A path asked for, without the slashes it may start with; undefined when the author cancels. */
+  const askPath = async (title: string, action: string, value: string, more: { body?: string; placeholder?: string } = {}) =>
+    (await prompt({ title, body: more.body, action, input: { label: "File path", value, placeholder: more.placeholder, mono: true } }))?.trim().replace(/^\/+/, "");
+
   const create = async (dir: string) => {
-    const to = (await prompt({ title: "New file", action: "Create", input: { label: "File path", value: dir ? `${dir}/` : "", placeholder: "docs/guide.md", mono: true } }))?.trim().replace(/^\/+/, "");
+    const to = await askPath("New file", "Create", dir ? `${dir}/` : "", { placeholder: "docs/guide.md" });
     if (to === undefined) return;
     try {
       const kind = badPath(to) ? null : await inBase(to);
-      // a file of the commit leaves its path free once it is deleted here (renamed, its path waits for the commit)
-      const there = kind === null || (kind !== "tree" && drafts[to]?.deleted) ? null : renamedAway(drafts).has(to) && !drafts[to] ? `${to} is renamed here, and still in the commit: commit the rename first` : `${to} already exists`;
-      const why = badPath(to) ?? (await taken(to)) ?? there;
+      const there = () => {
+        // a file of the commit leaves its path free once it is deleted here (renamed, its path waits for the commit)
+        if (kind === null || (kind !== "tree" && drafts[to]?.deleted)) return null;
+        if (renamedAway(drafts).has(to) && !drafts[to]) return `${to} is renamed here, and still in the commit: commit the rename first`;
+        return `${to} already exists`;
+      };
+      const why = badPath(to) ?? (await taken(to)) ?? there();
       if (why) return toast.error(why);
       dispatch({ type: "create", path: to });
       open(to);
@@ -205,7 +229,7 @@ function Workbench({ ctx, res, path, desk, saved, kept, restart, refresh }: { ct
     }
   };
   const rename = async (from: string) => {
-    const to = (await prompt({ title: `Rename ${nameOf(from)}`, body: "A new folder in the path moves the file there.", action: "Rename", input: { label: "File path", value: from, mono: true } }))?.trim().replace(/^\/+/, "");
+    const to = await askPath(`Rename ${nameOf(from)}`, "Rename", from, { body: "A new folder in the path moves the file there." });
     if (to === undefined || to === from) return;
     try {
       // back to where the commit has it is the one path of the commit a file can take
@@ -226,40 +250,46 @@ function Workbench({ ctx, res, path, desk, saved, kept, restart, refresh }: { ct
     else retab(p, d.origin);
     setCursor(d.origin ?? parentOf(p));
   };
-  const remove = (p: string) => {
+  /** Whether a change may go: only typed text is lost for good (a deletion or a plain rename is undone as it was done), so that asks first. */
+  const mayLose = async (d: Draft | undefined, title: string, action: string) =>
+    d?.text === undefined || (await confirm({ title, body: d.origin === undefined ? "The file was never committed: it is gone for good." : "What you typed is gone for good.", action, danger: true }));
+  const remove = async (p: string) => {
     const d = drafts[p];
+    if (!(await mayLose(d, `Delete ${nameOf(p)}?`, "Delete"))) return;
     // a file of the commit stays listed, struck out, under the path the commit has
     dispatch({ type: "remove", path: p });
     if (d) settle(p, d);
   };
   const discard = async (p: string) => {
     const d = drafts[p];
-    if (!d) return;
-    // only typed text is lost for good: a deletion or a plain rename is undone as it was done
-    if (d.text !== undefined && !(await confirm({ title: `Discard the changes of ${nameOf(p)}?`, body: d.origin === undefined ? "The file was never committed: it is gone for good." : "What you typed is gone for good.", action: "Discard", danger: true }))) return;
+    if (!d || !(await mayLose(d, `Discard the changes of ${nameOf(p)}?`, "Discard"))) return;
     dispatch({ type: "discard", path: p });
     settle(p, d);
   };
   const discardAll = async () => {
     if (!(await confirm({ title: "Discard every change?", body: `${plural(count, "file")} go back to what the commit has. What you typed is gone for good.`, action: "Discard all", danger: true }))) return;
-    dispatch({ type: "load", drafts: {} });
+    dispatch({ type: "clear" });
     const kept = tabs.filter((t) => !drafts[t] || drafts[t].origin === t);
     setTabs(kept);
     if (path && !kept.includes(path)) go(kept[0] ?? "", true);
     setCursor(null);
   };
 
+  /** The workbench hands over: what is kept is `next` on `onto` from now on, not what it types. */
+  const seal = (onto: string, next: Drafts) => {
+    over.current = true;
+    return saveDrafts(desk, onto, next);
+  };
   /** Starts over with what is kept now (`next` on `onto`), the open files still open. */
   const handOver = async (onto: string, next: Drafts, open: string[]) => {
-    over.current = true;
-    await saveDrafts(desk, onto, next);
+    const sealed = seal(onto, next);
     if (path && !open.includes(path)) go(open[0] ?? "", true);
-    await restart({ tabs: open, side, sideOpen: treeOpen });
+    // the next workbench is handed the changes in memory: it need not wait for the write
+    await Promise.all([sealed, restart({ saved: Object.keys(next).length > 0 ? { base: onto, drafts: next } : null, tabs: open, side, sideOpen: treeOpen })]);
   };
   const committed = async ({ target, branch, mrTarget }: Landed) => {
     if (target === "new") {
-      over.current = true;
-      await saveDrafts(desk, base, {});
+      await seal(base, {});
       return nav(`${ctx.web}/-/merge_requests/new${qs({ source: branch, target: mrTarget })}`);
     }
     toast.ok(`Committed to ${branch}`);
@@ -340,13 +370,13 @@ function Workbench({ ctx, res, path, desk, saved, kept, restart, refresh }: { ct
         void acts.current.create(dir);
       },
       rename: (p) => void acts.current.rename(p),
-      remove: (p) => acts.current.remove(p),
+      remove: (p) => void acts.current.remove(p),
       discard: (p) => void acts.current.discard(p),
     }),
     [pid, base, shape, path, expanded, cursor, open],
   );
   const count = Object.keys(drafts).length;
-  const names = useMemo(() => tabs.map(nameOf), [tabs]);
+  const names = tabs.map(nameOf);
   // where each file renamed here went
   const movedTo = useMemo(() => renamedAway(shape), [shape]);
 
@@ -359,7 +389,7 @@ function Workbench({ ctx, res, path, desk, saved, kept, restart, refresh }: { ct
               Files
             </button>
             <button type="button" role="tab" aria-selected={side === "changes"} onClick={() => setSide("changes")}>
-              Changes {count > 0 && <span className="ide-count">{count}</span>}
+              Changes {count > 0 && <span className="tab-count">{count}</span>}
             </button>
           </div>
           <span className="grow" />
@@ -384,7 +414,7 @@ function Workbench({ ctx, res, path, desk, saved, kept, restart, refresh }: { ct
       </aside>
       <section className="ide-main">
         <div className="ide-tabs">
-          <button type="button" className="icon-btn ide-tree-toggle" aria-label="Files and changes" aria-pressed={treeOpen} onClick={() => setTreeOpen(!treeOpen)}>
+          <button type="button" className="icon-btn ide-tree-toggle" title="Files and changes" aria-label="Files and changes" aria-pressed={treeOpen} onClick={() => setTreeOpen(!treeOpen)}>
             <FolderTree size={16} />
           </button>
           <div className="ide-tablist" role="tablist" aria-label="Open files">
@@ -396,18 +426,18 @@ function Workbench({ ctx, res, path, desk, saved, kept, restart, refresh }: { ct
                   {/* two files of one name: the folder tells them apart */}
                   {names.indexOf(names[i]) !== names.lastIndexOf(names[i]) && <span className="faint small">{parentOf(t) || "/"}</span>}
                 </button>
-                <button type="button" className="ide-tab-close" aria-label={`Close ${t}`} title="Close" onClick={() => close(t)}>
+                <button type="button" className="icon-btn ide-tab-close" aria-label={`Close ${t}`} title="Close" onClick={() => close(t)}>
                   <X size={13} />
                 </button>
               </div>
             ))}
           </div>
           {isMarkdown(path) && (
-            <button type="button" className="icon-btn ide-diff-toggle" title="Show Markdown files as they will read" aria-label="Preview" aria-pressed={preview} onClick={() => setPreview(!preview)}>
+            <button type="button" className={`icon-btn ide-toggle ${preview ? "on" : ""}`} title="Show Markdown files as they will read" aria-label="Preview" aria-pressed={preview} onClick={() => setPreview(!preview)}>
               <Eye size={16} />
             </button>
           )}
-          <button type="button" className="icon-btn ide-diff-toggle" title="Show what changed in the files" aria-label="Show changes" aria-pressed={diff} onClick={() => setDiff(!diff)}>
+          <button type="button" className={`icon-btn ide-toggle ${diff ? "on" : ""}`} title="Show what changed in the files" aria-label="Show changes" aria-pressed={diff} onClick={() => setDiff(!diff)}>
             <FileDiff size={16} />
           </button>
         </div>
@@ -427,11 +457,11 @@ function Workbench({ ctx, res, path, desk, saved, kept, restart, refresh }: { ct
           <span className="row" style={{ gap: 4 }}>
             <GitBranch size={13} /> {res.ref}
           </span>
-          <Link to={`${ctx.web}/-/commit/${base}`} className="mono" title="The commit these files are read from">
+          <Link to={`${ctx.web}/-/commit/${base}`} className="sha" title="The commit these files are read from">
             {base.slice(0, 8)}
           </Link>
           {base !== res.commit && (
-            <span className="row ide-modified" style={{ gap: 4 }} title={`${res.ref} is now at ${res.commit.slice(0, 8)}`}>
+            <span className="row warn-text" style={{ gap: 4 }} title={`${res.ref} is now at ${res.commit.slice(0, 8)}`}>
               <TriangleAlert size={13} /> {res.ref} has moved since these changes were started
             </span>
           )}
@@ -442,22 +472,22 @@ function Workbench({ ctx, res, path, desk, saved, kept, restart, refresh }: { ct
           {count === 0 ? (
             <span>No changes</span>
           ) : (
-            <button
-              type="button"
-              className="link-btn small"
-              title="Kept in this browser until you commit them"
-              onClick={() => {
-                setSide("changes");
-                setTreeOpen(true);
-              }}
-            >
-              {plural(count, "changed file")}
-            </button>
-          )}
-          {count > 0 && (
-            <button type="button" className="link-btn small" onClick={() => void discardAll()}>
-              Discard all
-            </button>
+            <>
+              <button
+                type="button"
+                className="link-btn small"
+                title="Kept in this browser until you commit them"
+                onClick={() => {
+                  setSide("changes");
+                  setTreeOpen(true);
+                }}
+              >
+                {plural(count, "changed file")}
+              </button>
+              <button type="button" className="link-btn small" onClick={() => void discardAll()}>
+                Discard all
+              </button>
+            </>
           )}
         </footer>
       </section>

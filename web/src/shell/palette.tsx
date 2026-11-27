@@ -51,6 +51,7 @@ export const SHORTCUTS: { keys: string[]; join?: "or"; what: string; where: stri
   { keys: [MOD, "K"], what: "Search or go to", where: "Everywhere" },
   { keys: ["/"], what: "Search or go to", where: "Signed in" },
   { keys: ["t"], what: "Find a file in this project", where: "Project" },
+  { keys: [MOD, "P"], what: "Find a file, from the editor too", where: "Web IDE" },
   { keys: ["?"], what: "Show or hide keyboard shortcuts", where: "Everywhere" },
   { keys: ["j", "k"], join: "or", what: "Move down / up the file list", where: "Repository" },
   { keys: ["Enter"], what: "Open the selected entry", where: "Repository" },
@@ -503,15 +504,16 @@ export function PaletteHost() {
     const onOpen = (e: Event) => setMode((e as CustomEvent<Mode>).detail);
     const onKey = (e: KeyboardEvent) => {
       const { nav, user, help } = now.current;
-      // Mod+K alone, and not one an editor took for itself (Mod+Shift+K deletes a line there)
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && !e.defaultPrevented && e.key.toLowerCase() === "k") {
+      // Mod and the key alone, and not one an editor took for itself (Mod+Shift+K deletes a line there)
+      const chord = (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && !e.defaultPrevented ? e.key.toLowerCase() : null;
+      if (chord === "k") {
         e.preventDefault();
         setHelp(false);
         setMode((m) => (m ? null : "all"));
         return;
       }
       // in the web IDE, Mod+P finds a file, from the editor too (`t` is a letter there)
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && !e.defaultPrevented && e.key.toLowerCase() === "p" && nav.kind === "project" && nav.ide) {
+      if (chord === "p" && nav.kind === "project" && nav.ide) {
         e.preventDefault();
         setHelp(false);
         setMode("files");

@@ -2,15 +2,7 @@
 // plain data. Nothing here knows of the editor or of the page: the tree, the tabs
 // and (later) the commit all read it.
 
-import type { S } from "../../../api/client";
-
-export const parentOf = (path: string) => path.split("/").slice(0, -1).join("/");
-export const nameOf = (path: string) => path.split("/").pop() ?? "";
-/** `a/b/c.rs` is in `a` and `a/b`. */
-export const ancestors = (path: string) => {
-  const parts = path.split("/").slice(0, -1);
-  return parts.map((_, i) => parts.slice(0, i + 1).join("/"));
-};
+import { nameOf, type S } from "../../../api/client";
 
 /** One file that differs from the base commit, under the path it has now. */
 export type Draft = {
@@ -65,13 +57,14 @@ export function touches(drafts: Drafts, dir: string): boolean {
 export type Row = {
   name: string;
   path: string;
-  dir: boolean;
-  /** the base commit's kind of entry (`tree`, `blob`, `executable`, `symlink`, `submodule`) */
+  /** the base commit's kind of entry (`tree`, `blob`, `executable`, `symlink`, `submodule`); a folder is a `tree` */
   kind: string;
   /** a directory of the base commit (one that only new files make has nothing to fetch) */
   tracked: boolean;
   status?: Status;
 };
+
+export const isDir = (row: Row) => row.kind === "tree";
 
 /**
  * What a directory shows: the base commit's entries, less the files renamed away,
@@ -83,24 +76,25 @@ export function listing(entries: { name: string; path: string; kind: string }[],
   const away = renamedAway(drafts);
   const rows = new Map<string, Row>();
   for (const e of entries) {
-    if (e.kind === "tree") rows.set(e.name, { name: e.name, path: e.path, dir: true, kind: "tree", tracked: true });
-    else if (drafts[e.path] || !away.has(e.path)) rows.set(e.name, { name: e.name, path: e.path, dir: false, kind: e.kind, tracked: true });
+    if (e.kind === "tree") rows.set(e.name, { name: e.name, path: e.path, kind: "tree", tracked: true });
+    else if (drafts[e.path] || !away.has(e.path)) rows.set(e.name, { name: e.name, path: e.path, kind: e.kind, tracked: true });
   }
   for (const [path, d] of Object.entries(drafts)) {
     if (!path.startsWith(prefix)) continue;
     const rest = path.slice(prefix.length);
     const name = rest.split("/")[0];
     if (rest.includes("/")) {
-      if (!rows.has(name)) rows.set(name, { name, path: prefix + name, dir: true, kind: "tree", tracked: false });
+      if (!rows.has(name)) rows.set(name, { name, path: prefix + name, kind: "tree", tracked: false });
     } else {
-      rows.set(name, { name, path, dir: false, kind: rows.get(name)?.kind ?? "blob", tracked: d.origin === path, status: statusOf(path, d) });
+      rows.set(name, { name, path, kind: rows.get(name)?.kind ?? "blob", tracked: d.origin === path, status: statusOf(path, d) });
     }
   }
-  return [...rows.values()].sort((a, b) => Number(b.dir) - Number(a.dir) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  return [...rows.values()].sort((a, b) => Number(isDir(b)) - Number(isDir(a)) || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }
 
 export type Action =
-  | { type: "load"; drafts: Drafts }
+  /** every change dropped */
+  | { type: "clear" }
   /** the text of a file changed; `base` is the text of its origin in the base commit (none for a new file) */
   | { type: "edit"; path: string; text: string; base?: string }
   /** a new, empty file (the caller checked that nothing is at this path) */
@@ -118,8 +112,8 @@ const without = (drafts: Drafts, path: string): Drafts => {
 
 export function reduce(drafts: Drafts, a: Action): Drafts {
   switch (a.type) {
-    case "load":
-      return a.drafts;
+    case "clear":
+      return {};
     case "edit": {
       const d = drafts[a.path];
       // a file of the base commit, untouched so far
@@ -154,7 +148,6 @@ export function reduce(drafts: Drafts, a: Action): Drafts {
       return without(drafts, a.path);
   }
 }
-
 
 /** The most files one commit takes (the server's limit). */
 export const MAX_ACTIONS = 100;

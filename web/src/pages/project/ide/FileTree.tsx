@@ -2,7 +2,7 @@ import { memo, useMemo, type KeyboardEvent } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Box, ChevronDown, ChevronRight, FileCode, FilePlus2, FileText, Link2, Pencil, Trash2, Undo2 } from "lucide-react";
 import { fetchers, keys } from "../../../prefetch";
-import { listing, touches, type Drafts, type Row, type Status } from "./changes";
+import { isDir, listing, touches, type Drafts, type Row, type Status } from "./changes";
 
 /** What the tree shows and what its rows can do: the workbench's state, handed down. */
 export type TreeOps = {
@@ -48,7 +48,7 @@ const FILE_ICONS: Record<string, React.ReactElement> = {
 };
 
 /** Only regular files open in the editor: a link or a submodule is not text to edit. */
-const opens = (row: Row) => !row.dir && row.kind !== "symlink" && row.kind !== "submodule";
+const opens = (row: Row) => !isDir(row) && row.kind !== "symlink" && row.kind !== "submodule";
 
 const indent = (depth: number) => ({ paddingLeft: 8 + (depth - 1) * 14 });
 
@@ -95,12 +95,13 @@ function Dir({ ops, dir, depth, tracked }: { ops: TreeOps; dir: string; depth: n
 }
 
 function TreeRow({ ops, row, depth, tabbable }: { ops: TreeOps; row: Row; depth: number; tabbable: boolean }) {
-  const open = row.dir && ops.expanded.has(row.path);
-  const changed = row.dir && touches(ops.drafts, row.path);
+  const dir = isDir(row);
+  const open = dir && ops.expanded.has(row.path);
+  const changed = dir && touches(ops.drafts, row.path);
   // what opens can be renamed and deleted: not a folder, a link or a submodule, nor what is already deleted
   const editable = opens(row) && row.status !== "deleted";
   const activate = () => {
-    if (row.dir) ops.toggle(row.path);
+    if (dir) ops.toggle(row.path);
     else if (opens(row)) ops.open(row.path);
   };
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -113,7 +114,7 @@ function TreeRow({ ops, row, depth, tabbable }: { ops: TreeOps; row: Row; depth:
       ArrowUp: () => focus(at - 1),
       Home: () => focus(0),
       End: () => focus(all.length - 1),
-      ArrowRight: () => (row.dir && !open ? ops.toggle(row.path) : row.dir && focus(at + 1)),
+      ArrowRight: () => (dir && !open ? ops.toggle(row.path) : dir && focus(at + 1)),
       // closes an open folder; from anything else, goes to the folder it is in
       ArrowLeft: () => (open ? ops.toggle(row.path) : all.slice(0, at).reverse().find((el) => Number(el.getAttribute("aria-level")) < depth)?.focus()),
       Enter: activate,
@@ -130,41 +131,41 @@ function TreeRow({ ops, row, depth, tabbable }: { ops: TreeOps; row: Row; depth:
       <div
         role="treeitem"
         aria-level={depth}
-        aria-expanded={row.dir ? open : undefined}
+        aria-expanded={dir ? open : undefined}
         aria-selected={row.path === ops.active}
         aria-label={row.status ? `${row.name}, ${STATUS[row.status].label}` : row.name}
         tabIndex={tabbable ? 0 : -1}
         className={`ide-row ${row.status ? `ide-${row.status}` : ""}`}
         data-active={row.path === ops.active || undefined}
-        data-inert={(!row.dir && !opens(row)) || undefined}
+        data-inert={(!dir && !opens(row)) || undefined}
         style={indent(depth)}
         title={row.path}
         onClick={activate}
         onFocus={(e) => e.target === e.currentTarget && ops.setCursor(row.path)}
         onKeyDown={onKeyDown}
       >
-        <span className="ide-row-icon">{row.dir ? open ? <ChevronDown size={15} /> : <ChevronRight size={15} /> : (FILE_ICONS[row.kind] ?? <FileText size={15} />)}</span>
+        <span className="ide-row-icon">{dir ? open ? <ChevronDown size={15} /> : <ChevronRight size={15} /> : (FILE_ICONS[row.kind] ?? <FileText size={15} />)}</span>
         <span className="ide-row-name ellipsis">{row.name}</span>
-        {changed && <span className="ide-dot" title="Has changes" />}
+        {changed && <span className="dot ic-warn" title="Has changes" />}
         {/* the keyboard has F2 and Delete: the buttons are the mouse's */}
         <span className="ide-row-actions" onClick={(e) => e.stopPropagation()}>
-          {row.dir && (
-            <button type="button" tabIndex={-1} title="New file here" aria-label={`New file in ${row.path}`} onClick={() => ops.create(row.path)}>
+          {dir && (
+            <button type="button" className="icon-btn" tabIndex={-1} title="New file here" aria-label={`New file in ${row.path}`} onClick={() => ops.create(row.path)}>
               <FilePlus2 size={14} />
             </button>
           )}
           {editable && (
             <>
-              <button type="button" tabIndex={-1} title="Rename or move (F2)" aria-label={`Rename ${row.path}`} onClick={() => ops.rename(row.path)}>
+              <button type="button" className="icon-btn" tabIndex={-1} title="Rename or move (F2)" aria-label={`Rename ${row.path}`} onClick={() => ops.rename(row.path)}>
                 <Pencil size={14} />
               </button>
-              <button type="button" tabIndex={-1} title="Delete (Del)" aria-label={`Delete ${row.path}`} onClick={() => ops.remove(row.path)}>
+              <button type="button" className="icon-btn" tabIndex={-1} title="Delete (Del)" aria-label={`Delete ${row.path}`} onClick={() => ops.remove(row.path)}>
                 <Trash2 size={14} />
               </button>
             </>
           )}
           {row.status && (
-            <button type="button" tabIndex={-1} title={row.status === "deleted" ? "Restore" : "Discard the changes"} aria-label={`${row.status === "deleted" ? "Restore" : "Discard the changes of"} ${row.path}`} onClick={() => ops.discard(row.path)}>
+            <button type="button" className="icon-btn" tabIndex={-1} title={row.status === "deleted" ? "Restore" : "Discard the changes"} aria-label={`${row.status === "deleted" ? "Restore" : "Discard the changes of"} ${row.path}`} onClick={() => ops.discard(row.path)}>
               <Undo2 size={14} />
             </button>
           )}
