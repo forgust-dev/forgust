@@ -167,8 +167,11 @@ mod committed {
         let doc = serde_json::to_value(super::document()).unwrap();
         let method = regex::Regex::new(r"\b(get|post|put|patch|delete)\(").unwrap();
         let (mut missing, mut unsummed) = (Vec::new(), Vec::new());
-        for (start, _) in src.match_indices(".route(\"") {
-            let rest = &src[start + 8..];
+        // `.route("…"`, also when rustfmt put the path on the next line
+        let route = regex::Regex::new(r#"\.route\(\s*""#).unwrap();
+        assert_eq!(route.find_iter(src).count(), src.matches(".route(").count(), "a .route( this test cannot read");
+        for found in route.find_iter(src) {
+            let rest = &src[found.end()..];
             let path = &rest[..rest.find('"').unwrap()];
             // the call's arguments, up to its closing parenthesis
             let mut depth = 1;

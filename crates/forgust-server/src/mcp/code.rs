@@ -30,7 +30,9 @@ use crate::auth::InProcess;
 use crate::state::AppState;
 
 const MEMORY: usize = 64 << 20;
-const STACK: usize = 1 << 20;
+/// Far under its thread's own stack (2 MB): `forgust.request` runs a whole API handler on
+/// it, from however deep the script is in its recursion.
+const STACK: usize = 256 << 10;
 const TIME: Duration = Duration::from_secs(30);
 /// API calls per run.
 const CALLS: usize = 50;
@@ -41,6 +43,8 @@ const BODY: usize = 4 << 20;
 const RESULT: usize = 1 << 20;
 /// `console.log` output kept.
 const LOGS: usize = 16 << 10;
+/// What is said of a run that failed (what it threw, its stack), at most.
+const ERROR: usize = 16 << 10;
 /// Scripts running at once, on the whole server: each holds a thread and up
 /// to `MEMORY` for up to `TIME`.
 const RUNS: usize = 8;
@@ -151,17 +155,11 @@ const PRELUDE: &str = r#"
 "#;
 
 pub async fn search(c: &Caller, code: String) -> Result<Value, String> {
-    sandbox(c.user.id, code, None).await
+    sandbox(c, code, false).await
 }
 
 pub async fn execute(c: &Caller, code: String) -> Result<Value, String> {
-    let host = Host {
-        router: ROUTER.clone().with_state(c.state.clone()),
-        caller: c.clone(),
-        deadline: Instant::now() + TIME,
-        calls: Cell::new(0),
-    };
-    sandbox(c.user.id, code, Some(host)).await
+    sandbox(c, code, true).await
 }
 
 /// What a request matched, kept on its response for the audit log: the
@@ -182,14 +180,16 @@ async fn keep_route(params: Result<RawPathParams, RawPathParamsRejection>, req: 
     resp
 }
 
-/// Runs `code` for `user` on a blocking thread (QuickJS is not async and its runtime
-/// stays on one thread); its result as JSON, with what it logged.
-async fn sandbox(user: i64, code: String, host: Option<Host>) -> Result<Value, String> {
-    let slot = Slot::take(user)?;
+/// Runs `code` for the caller on a blocking thread (QuickJS is not async and its runtime
+/// stays on one thread), with the API (`forgust`) when `api`; its result as JSON, with what
+/// it logged.
+async fn sandbox(c: &Caller, code: String, api: bool) -> Result<Value, String> {
+    let slot = Slot::take(c.user.id)?;
+    let deadline = Instant::now() + TIME;
+    let host = api.then(|| Host { router: ROUTER.clone().with_state(c.state.clone()), caller: c.clone(), deadline, calls: Cell::new(0) });
     let task = tokio::task::spawn_blocking(move || {
         let _slot = slot;
         let logs = Rc::new(RefCell::new(Vec::<String>::new()));
-        let deadline = host.as_ref().map_or_else(|| Instant::now() + TIME, |h| h.deadline);
         let answer = run_js(&code, host, deadline, &logs);
         let logs = logs.take();
         match answer {
@@ -243,6 +243,14 @@ fn run_js(code: &str, host: Option<Host>, deadline: Instant, logs: &Rc<RefCell<V
         let run: Function = g.get("__run").map_err(fail)?;
         let promise: Promise = run.call((code,)).map_err(fail)?;
         promise.finish::<String>().map_err(fail)
+    });
+    // a script can throw a value as large as its memory
+    let out = out.map_err(|mut e| {
+        if e.len() > ERROR {
+            e.truncate(e.floor_char_boundary(ERROR));
+            e.push_str(&format!("\n[error cut at {} KB]", ERROR >> 10));
+        }
+        e
     })?;
     if out.len() > RESULT {
         return Err(format!("the result is larger than {} MB of JSON: return less (a count, the fields you need)", RESULT >> 20));
@@ -340,14 +348,29 @@ impl Host {
         if let Some(ip) = c.ip {
             req.extensions_mut().insert(ConnectInfo(SocketAddr::new(ip, 0)));
         }
-        let resp = self.within(self.router.clone().oneshot(req))?.unwrap_or_else(|e| match e {});
+        let change = method != Method::GET;
+        // a project named by its path, found before the change: a rename, a transfer or a
+        // removal would hide it from its own audit row
+        let named = if change { block_on(self.project_named(&path)) } else { None };
+        let sent = self.router.clone().oneshot(req);
+        let resp = if change {
+            // a change once begun is not cut short at the deadline: half of it would stay,
+            // with no audit row
+            if Instant::now() > self.deadline {
+                return Err((504, late()));
+            }
+            block_on(sent)
+        } else {
+            self.within(sent)?
+        }
+        .unwrap_or_else(|e| match e {});
         let status = resp.status();
         // a change is audited once it is made, whatever becomes of its answer
         if status.is_success()
-            && method != Method::GET
+            && change
             && let Some(m) = resp.extensions().get::<Matched>()
         {
-            let project = block_on(self.project_of(m));
+            let project = project_of(m, named);
             let details = json!({
                 "tool": "execute_api", "via": "mcp", "token_id": c.token_id, "method": method.as_str(), "route": m.route.as_str(),
             });
@@ -365,9 +388,12 @@ impl Host {
         if resp.headers().get(header::CONTENT_TYPE).and_then(|v| v.to_str().ok()).is_some_and(|t| t.starts_with("text/event-stream")) {
             return Err((400, "a stream of events: execute_api reads whole answers only".to_string()));
         }
-        let bytes = self
-            .within(axum::body::to_bytes(resp.into_body(), BODY))?
-            .map_err(|_| (413, format!("the answer is larger than {} MB: ask for less (a page, a path)", BODY >> 20)))?;
+        let bytes = self.within(axum::body::to_bytes(resp.into_body(), BODY))?.map_err(|e| {
+            match e.into_inner().downcast::<http_body_util::LengthLimitError>() {
+                Ok(_) => (413, format!("the answer is larger than {} MB: ask for less (a page, a path)", BODY >> 20)),
+                Err(e) => (502, format!("the answer could not be read: {e}")),
+            }
+        })?;
         let body = serde_json::from_slice(&bytes).unwrap_or_else(|_| match std::str::from_utf8(&bytes) {
             Ok(s) => Value::String(s.to_string()),
             Err(_) => Value::String(format!("({} bytes of binary data)", bytes.len())),
@@ -381,18 +407,24 @@ impl Host {
         block_on(tokio::time::timeout(left, f)).map_err(|_| (504, late()))
     }
 
-    /// The project a `/projects/{id}/...` call changed, for its audit row
-    /// (the project's log shows it).
-    async fn project_of(&self, m: &Matched) -> Option<i64> {
-        if !m.route.as_str().starts_with("/api/v1/projects/{id}") {
+    /// The project a call to `/api/v1/projects/<its path>/...` names, when not by its number.
+    async fn project_named(&self, path: &str) -> Option<i64> {
+        let id = path.strip_prefix("/api/v1/projects/")?.split(['/', '?']).next()?;
+        if id.is_empty() || id.parse::<i64>().is_ok() {
             return None;
         }
-        let id = m.id.as_deref()?;
-        match id.parse() {
-            Ok(n) => Some(n),
-            Err(_) => crate::api::load_project(&self.caller.state, id).await.ok().map(|p| p.id),
-        }
+        let id = percent_encoding::percent_decode_str(id).decode_utf8().ok()?;
+        crate::api::load_project(&self.caller.state, &id).await.ok().map(|p| p.id)
     }
+}
+
+/// The project a `/projects/{id}/...` call changed, for its audit row (the project's log
+/// shows it): its number, or the one its path `named` before the call.
+fn project_of(m: &Matched, named: Option<i64>) -> Option<i64> {
+    if !m.route.as_str().starts_with("/api/v1/projects/{id}") {
+        return None;
+    }
+    m.id.as_deref()?.parse().ok().or(named)
 }
 
 /// Runs `f` to its end from the script's thread (a blocking one, in the runtime).
@@ -492,6 +524,8 @@ mod tests {
         assert!(e.contains("MB"), "{e}");
         let e = js("return 'x'.repeat(2 << 20)", TIME).unwrap_err();
         assert!(e.contains("larger than 1 MB"), "{e}");
+        let e = js("throw 'x'.repeat(8 << 20)", TIME).unwrap_err();
+        assert!(e.len() < ERROR + 64 && e.ends_with("KB]"), "{}", e.len());
         let e = js("const f = (n) => f(n + 1); f(0)", TIME).unwrap_err();
         assert!(e.contains("stack") || e.contains("RangeError") || e.contains("InternalError"), "{e}");
     }

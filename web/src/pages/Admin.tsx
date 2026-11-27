@@ -432,21 +432,19 @@ function SettingsForm({ initial }: { initial: S["InstanceSettings"] }) {
           MCP server <span className="muted small">— AI assistants connect to <code>/api/v4/mcp</code> with a token or by signing in</span>
         </span>
       </label>
-      <label className="check">
-        <input
-          type="checkbox"
-          checked={s.mcp_code_mode}
-          disabled={!s.mcp_enabled}
-          onChange={(e) => setS({ ...s, mcp_code_mode: e.target.checked })}
-        />
-        <span>
-          MCP code mode{" "}
-          <span className="muted small">
-            — assistants find endpoints with <code>search_api</code> and run scripts that call the API with <code>execute_api</code>, in a
-            sandbox on this server (<code>/api/v4/mcp?tools=code</code> lists only those two)
+      {/* an option of the MCP server: shown once it is on, sent as it is while off */}
+      {s.mcp_enabled && (
+        <label className="check">
+          <input type="checkbox" checked={s.mcp_code_mode} onChange={(e) => setS({ ...s, mcp_code_mode: e.target.checked })} />
+          <span>
+            MCP code mode{" "}
+            <span className="muted small">
+              — assistants find endpoints with <code>search_api</code> and run scripts that call the API with <code>execute_api</code>, in a
+              sandbox on this server (<code>/api/v4/mcp?tools=code</code> lists only those two)
+            </span>
           </span>
-        </span>
-      </label>
+        </label>
+      )}
       <label className="check">
         <input type="checkbox" checked={s.update_check_enabled} onChange={(e) => setS({ ...s, update_check_enabled: e.target.checked })} />
         <span>

@@ -399,6 +399,12 @@ async fn typed_answers_and_code_mode(pool: sqlx::PgPool) {
     assert_eq!(r["structuredContent"]["logs"], json!(["2"]));
     assert!(r["content"][0]["text"].as_str().unwrap().contains("untrusted"), "{r}");
 
+    // from near the bottom of its own stack, a call still has the thread's to run on
+    let code = "const depth = (function g() { try { return 1 + g(); } catch { return 0; } })();\n\
+                const down = (n) => (n ? down(n - 1) : forgust.get('/user'));\nreturn (await down(Math.floor(depth * 0.9))).username;";
+    let r = read.tool("execute_api", json!({ "code": code })).await;
+    assert_eq!(r["structuredContent"]["result"], "olivia", "{r}");
+
     // ...but does not write; a failed call throws with its status
     let code =
         format!("try {{ await forgust.post('/projects/{p}/issues', {{ title: 'x' }}); }} catch (e) {{ return [e.status, e.message]; }}");

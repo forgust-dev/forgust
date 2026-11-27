@@ -425,7 +425,7 @@ const LISTS: &[&str] = &[
 fn output_schema(name: &str) -> Value {
     if LISTS.contains(&name) {
         json!({ "type": "object", "properties": { "items": { "type": "array", "items": { "type": "object" } }, "truncated": { "type": "boolean" } } })
-    } else if name.ends_with("_api") {
+    } else if is_code(name) {
         json!({ "type": "object", "properties": { "result": {}, "logs": { "type": "array", "items": { "type": "string" } }, "truncated": { "type": "boolean" } } })
     } else {
         json!({ "type": "object" })
