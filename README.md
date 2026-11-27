@@ -92,7 +92,7 @@ Run the published image (amd64 and arm64) next to Postgres, or build your own wi
 ```yaml
 services:
   forgust:
-    image: ghcr.io/forgust-dev/forgust:0.7
+    image: ghcr.io/forgust-dev/forgust:0.8
     restart: unless-stopped
     read_only: true
     tmpfs: [/tmp]
@@ -252,7 +252,7 @@ against 300 ms).
 
 ## Status
 
-Forgust is young (0.7) and built for private teams first. Not there yet: forks and
+Forgust is young (0.8) and built for private teams first. Not there yet: forks and
 merge requests from forks, wikis, snippets, package registries, issue boards, system
 hooks, and SAML or LDAP sign-in.
 Code search covers each project's default branch, not other branches or tags.
