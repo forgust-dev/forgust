@@ -100,7 +100,7 @@ pub struct MapBlock {
     pub configured: bool,
 }
 
-#[derive(Serialize, Deserialize, ToSchema, Clone, Copy)]
+#[derive(Serialize, Deserialize, ToSchema, Clone, Copy, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum MapKind {
     Rust,
@@ -120,7 +120,7 @@ pub enum MapKind {
     Other,
 }
 
-#[derive(Serialize, Deserialize, ToSchema, Clone, Copy)]
+#[derive(Serialize, Deserialize, ToSchema, Clone, Copy, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum MapRole {
     Web,
@@ -187,7 +187,7 @@ pub struct MapLink {
     pub via: String,
 }
 
-#[derive(Serialize, Deserialize, ToSchema, Clone, Copy)]
+#[derive(Serialize, Deserialize, ToSchema, Clone, Copy, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum MapLinkKind {
     Uses,
@@ -349,6 +349,56 @@ pub struct MrBlocks {
     /// Who knows these blocks and could review it: its blocks' owners, then their reviewers, then
     /// who changed them; not its author nor a reviewer yet.
     pub suggested_reviewers: Vec<pdb::UserBrief>,
+    /// What it changes to the map: none until a job mapped its head (or when it is the default
+    /// branch's commit).
+    pub changes: Option<MapChanges>,
+}
+
+/// What a merge request changes to the map: its head's against the default branch's, only what
+/// the files it changes tell (a manifest, the file a link is read in, assay.toml). What the
+/// default branch changed since the merge request left it is not the merge request's.
+#[derive(Serialize, ToSchema, Default)]
+pub struct MapChanges {
+    pub blocks_added: Vec<MapBlock>,
+    pub blocks_removed: Vec<MapBlock>,
+    /// A block whose kind or role changes: as it is at the head.
+    pub blocks_changed: Vec<BlockChange>,
+    pub links_added: Vec<MapLink>,
+    pub links_removed: Vec<MapLink>,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct BlockChange {
+    pub block: MapBlock,
+    pub kind_before: MapKind,
+    pub role_before: Option<MapRole>,
+}
+
+/// [`MapChanges`] from the default branch's map (`base`) to the head's, of a merge request
+/// changing `changed`.
+fn map_changes(base: &RepoMap, head: &RepoMap, changed: &[String]) -> MapChanges {
+    let touched = |path: &str| changed.iter().any(|c| c == path || c.strip_prefix(path).is_some_and(|r| r.starts_with('/')));
+    let config = touched(forgust_assay::CONFIG_FILE);
+    // a block is the merge request's when it changes one of its manifests, or assay.toml says it
+    let its_block = |b: &MapBlock| b.manifests.iter().any(|m| touched(&m.path)) || ((b.configured || b.manifests.is_empty()) && config);
+    let its_link = |via: &str| touched(via);
+    let key = |l: &MapLink| (l.from.clone(), l.to.clone(), l.kind);
+    let mut out = MapChanges::default();
+    for b in &head.blocks {
+        match base.blocks.iter().find(|x| x.id == b.id) {
+            None if its_block(b) => out.blocks_added.push(b.clone()),
+            Some(before) if its_block(b) && (before.kind != b.kind || before.role != b.role) => {
+                out.blocks_changed.push(BlockChange { block: b.clone(), kind_before: before.kind, role_before: before.role })
+            }
+            _ => {}
+        }
+    }
+    out.blocks_removed = base.blocks.iter().filter(|b| !head.blocks.iter().any(|x| x.id == b.id) && its_block(b)).cloned().collect();
+    let base_links: HashSet<_> = base.links.iter().map(key).collect();
+    let head_links: HashSet<_> = head.links.iter().map(key).collect();
+    out.links_added = head.links.iter().filter(|l| !base_links.contains(&key(l)) && its_link(&l.via)).cloned().collect();
+    out.links_removed = base.links.iter().filter(|l| !head_links.contains(&key(l)) && its_link(&l.via)).cloned().collect();
+    out
 }
 
 #[derive(Serialize, ToSchema)]
@@ -368,7 +418,8 @@ pub async fn mr_blocks(
 ) -> ApiResult<Json<MrBlocks>> {
     let p = readable(&state, &v, &id).await?;
     let mr = mrdb::find(&state.db, p.id, iid).await?.ok_or(ApiError::NotFound)?;
-    let none = || Json(MrBlocks { commit: String::new(), blocks: Vec::new(), unassigned: 0, suggested_reviewers: Vec::new() });
+    let none =
+        || Json(MrBlocks { commit: String::new(), blocks: Vec::new(), unassigned: 0, suggested_reviewers: Vec::new(), changes: None });
     let Some(map) = kept_if_on(&state, &p, Some(mr.id)).await? else { return Ok(none()) };
     let Some(diff) = mrdb::latest_diff(&state.db, mr.id).await? else { return Ok(none()) };
     let changed = state.storage.changed_paths(p.id, None, &diff.base_sha, &diff.head_sha).await?;
@@ -384,7 +435,12 @@ pub async fn mr_blocks(
         map.map.blocks.iter().filter_map(|b| files.get(b.id.as_str()).map(|n| MrBlock { block: b.clone(), files: *n })).collect();
     blocks.sort_by_key(|t| std::cmp::Reverse(t.files));
     let suggested_reviewers = suggest(&state, &p, &mr, &blocks).await?;
-    Ok(Json(MrBlocks { commit: map.map.commit.clone(), blocks, unassigned, suggested_reviewers }))
+    // its own map against the default branch's, once both are there
+    let changes = match (kept(&state, &p, Some(mr.id)).await?, kept(&state, &p, None).await?) {
+        (Some(own), Some(base)) if own.map.commit != base.map.commit => Some(map_changes(&base.map, &own.map, &changed)),
+        _ => None,
+    };
+    Ok(Json(MrBlocks { commit: map.map.commit.clone(), blocks, unassigned, suggested_reviewers, changes }))
 }
 
 /// Who could review a merge request changing `blocks` (the most changed first): each block's
@@ -806,4 +862,78 @@ pub async fn admin_set(
     db::set_instance(&state.db, &saved).await?;
     crate::services::audit(&state, &principal, "smart_view_instance_updated", None, saved, None).await;
     Ok(Json(admin_status(&state).await?))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn block(id: &str, kind: MapKind, manifest: &str) -> MapBlock {
+        MapBlock {
+            id: id.to_string(),
+            name: id.to_string(),
+            description: None,
+            kind,
+            role: None,
+            roots: Vec::new(),
+            manifests: vec![MapPath { path: manifest.to_string(), dir: false }],
+            parent: None,
+            image: None,
+            files: 1,
+            languages: Vec::new(),
+            jobs: Vec::new(),
+            owners: Vec::new(),
+            people: Vec::new(),
+            reviewers: Vec::new(),
+            bus_factor: None,
+            configured: false,
+        }
+    }
+
+    fn link(from: &str, to: &str, via: &str) -> MapLink {
+        MapLink { from: from.to_string(), to: to.to_string(), kind: MapLinkKind::Uses, inferred: false, via: via.to_string() }
+    }
+
+    fn map(blocks: Vec<MapBlock>, links: Vec<MapLink>) -> RepoMap {
+        RepoMap {
+            commit: String::new(),
+            git_ref: String::new(),
+            blocks,
+            links,
+            unassigned: 0,
+            unassigned_sample: Vec::new(),
+            warnings: Vec::new(),
+            config_error: None,
+            config_file: true,
+            days: 365,
+        }
+    }
+
+    #[test]
+    fn what_a_merge_request_changes_to_the_map() {
+        let base = map(
+            vec![
+                block("web", MapKind::Node, "web/package.json"),
+                block("old", MapKind::Rust, "old/Cargo.toml"),
+                block("main-only", MapKind::Go, "x/go.mod"),
+            ],
+            vec![link("web", "old", "web/package.json")],
+        );
+        // the default branch moved on (`main-only`, `new-on-main`): none of that is the merge request's
+        let mut lib = block("billing", MapKind::Rust, "billing/Cargo.toml");
+        lib.role = Some(MapRole::Library);
+        let head = map(
+            vec![block("web", MapKind::Node, "web/package.json"), lib, block("db", MapKind::Node, "db/package.json")],
+            vec![link("web", "billing", "web/package.json"), link("web", "db", "web/package.json"), link("x", "y", "x/go.mod")],
+        );
+        let changed = ["web/package.json", "billing/Cargo.toml", "billing/src/lib.rs", "old/Cargo.toml"].map(str::to_string);
+        let c = map_changes(&base, &head, &changed);
+        let ids = |bs: &[MapBlock]| bs.iter().map(|b| b.id.clone()).collect::<Vec<_>>();
+        assert_eq!(ids(&c.blocks_added), ["billing"], "db's manifest is not changed by it");
+        assert_eq!(ids(&c.blocks_removed), ["old"], "main-only went on the default branch");
+        let links = |ls: &[MapLink]| ls.iter().map(|l| format!("{}>{}", l.from, l.to)).collect::<Vec<_>>();
+        assert_eq!(links(&c.links_added), ["web>billing", "web>db"]);
+        assert_eq!(links(&c.links_removed), ["web>old"]);
+        assert!(c.blocks_changed.is_empty());
+    }
 }

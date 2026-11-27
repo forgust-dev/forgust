@@ -6719,6 +6719,31 @@
           }
         }
       },
+      "BlockChange": {
+        "type": "object",
+        "required": [
+          "block",
+          "kind_before"
+        ],
+        "properties": {
+          "block": {
+            "$ref": "#/components/schemas/MapBlock"
+          },
+          "kind_before": {
+            "$ref": "#/components/schemas/MapKind"
+          },
+          "role_before": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MapRole"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      },
       "BranchDto": {
         "type": "object",
         "required": [
@@ -11222,6 +11247,50 @@
           }
         }
       },
+      "MapChanges": {
+        "type": "object",
+        "description": "What a merge request changes to the map: its head's against the default branch's, only what\nthe files it changes tell (a manifest, the file a link is read in, assay.toml). What the\ndefault branch changed since the merge request left it is not the merge request's.",
+        "required": [
+          "blocks_added",
+          "blocks_removed",
+          "blocks_changed",
+          "links_added",
+          "links_removed"
+        ],
+        "properties": {
+          "blocks_added": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapBlock"
+            }
+          },
+          "blocks_changed": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BlockChange"
+            },
+            "description": "A block whose kind or role changes: as it is at the head."
+          },
+          "blocks_removed": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapBlock"
+            }
+          },
+          "links_added": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapLink"
+            }
+          },
+          "links_removed": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MapLink"
+            }
+          }
+        }
+      },
       "MapKind": {
         "type": "string",
         "enum": [
@@ -12147,6 +12216,17 @@
               "$ref": "#/components/schemas/MrBlock"
             },
             "description": "The most changed first."
+          },
+          "changes": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MapChanges",
+                "description": "What it changes to the map: none until a job mapped its head (or when it is the default\nbranch's commit)."
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "commit": {
             "type": "string",

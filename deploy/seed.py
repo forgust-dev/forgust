@@ -1363,6 +1363,29 @@ API (`infra/pulumi`).
 """
 
 
+# a merge request's: the storefront reads the stock straight from the database
+MARKET_DB_CLIENT = {
+    "packages/db-client/package.json": json.dumps({"name": "@acme/db-client", "description": "Queries the catalog's tables straight from Postgres",
+                                                   "private": True, "type": "module", "main": "src/index.ts", "dependencies": {"pg": "8.16.0"}}, indent=2) + "\n",
+    "packages/db-client/src/index.ts": "import pg from \"pg\";\n\nexport const stock = async (sku: string): Promise<number> => {\n  const db = new pg.Client();\n  await db.connect();\n  const r = await db.query(\"select stock from products where sku = $1\", [sku]);\n  return r.rows[0]?.stock ?? 0;\n};\n",
+}
+
+
+def market_stock_mr(r, api, pid):
+    """A branch whose storefront reads the database itself: its merge request shows what it
+    changes to the map, a block and a link its reviewer may turn down."""
+    r.git("checkout", "-q", "-b", "storefront-stock", "main")
+    pkg = json.loads(r.git("show", "main:apps/storefront/package.json"))
+    pkg["dependencies"]["@acme/db-client"] = "*"
+    r.commit("carol", "storefront: show the stock, read from the database", {**MARKET_DB_CLIENT, "apps/storefront/package.json": json.dumps(pkg, indent=2) + "\n"},
+             days_ago=0)
+    r.push("storefront-stock")
+    r.git("checkout", "-q", "main")
+    time.sleep(4)  # let the server process the push first
+    api.post(f"/projects/{pid}/merge_requests", {"source_branch": "storefront-stock", "target_branch": "main", "title": "Show the stock on the product page",
+                                                "description": "Reads the stock from the catalog's table: quicker than a call to the API."})
+
+
 def market_deploy(r):
     """What deploys the marketplace, each in a few hands: for the Smart View's infrastructure."""
     r.commit("bob", "deploy: a Helm chart for the API and the storefront", MARKET_HELM)
@@ -1484,6 +1507,7 @@ def seed_marketplace(apis, platform):
     r.push("main")
     # a job on the compose runner maps it with the assay image (built with the stack)
     bob.put(f"/projects/{p['id']}/smart_view", {"enabled": True})
+    market_stock_mr(r, apis["carol"], p["id"])
     return p["id"]
 
 

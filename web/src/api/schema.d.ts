@@ -3419,6 +3419,11 @@ export interface components {
             /** Format: date-time */
             started_at: string;
         };
+        BlockChange: {
+            block: components["schemas"]["MapBlock"];
+            kind_before: components["schemas"]["MapKind"];
+            role_before?: components["schemas"]["MapRole"] | null;
+        };
         BranchDto: {
             /**
              * Format: int64
@@ -4795,6 +4800,19 @@ export interface components {
             /** @description The folders or files whose files are its own. */
             roots: components["schemas"]["MapPath"][];
         };
+        /**
+         * @description What a merge request changes to the map: its head's against the default branch's, only what
+         *     the files it changes tell (a manifest, the file a link is read in, assay.toml). What the
+         *     default branch changed since the merge request left it is not the merge request's.
+         */
+        MapChanges: {
+            blocks_added: components["schemas"]["MapBlock"][];
+            /** @description A block whose kind or role changes: as it is at the head. */
+            blocks_changed: components["schemas"]["BlockChange"][];
+            blocks_removed: components["schemas"]["MapBlock"][];
+            links_added: components["schemas"]["MapLink"][];
+            links_removed: components["schemas"]["MapLink"][];
+        };
         /** @enum {string} */
         MapKind: "rust" | "node" | "python" | "go" | "docker" | "service" | "helm" | "kubernetes" | "ansible" | "terraform" | "pulumi" | "migrations" | "ci" | "docs" | "other";
         MapLanguage: {
@@ -5076,6 +5094,7 @@ export interface components {
         MrBlocks: {
             /** @description The most changed first. */
             blocks: components["schemas"]["MrBlock"][];
+            changes?: components["schemas"]["MapChanges"] | null;
             /**
              * @description The commit of the map they are read from: its head once a job mapped it, else the
              *     default branch's (empty without a map: the Smart View is off, or no job has run yet).

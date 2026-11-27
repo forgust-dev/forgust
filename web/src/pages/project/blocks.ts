@@ -17,3 +17,6 @@ export function whoKnows(b: S["MapBlock"], max: number): string[] {
   const seen = new Set<string>();
   return names.filter((n) => !seen.has(n.toLowerCase()) && !!seen.add(n.toLowerCase())).slice(0, max);
 }
+
+/** What a link does, as a sentence says it: `web uses db`. */
+export const LINK_VERB: Record<S["MapLinkKind"], string> = { uses: "uses", builds: "builds", runs: "runs", depends_on: "depends on", connects: "connects to", calls: "calls" };

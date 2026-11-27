@@ -17,6 +17,7 @@ import {
   FileText,
   GitPullRequest,
   HardDrive,
+  HandHeart,
   Hourglass,
   Library,
   ListEnd,
@@ -58,7 +59,7 @@ import { Avatar, Empty, ListHead, Q, UserLink } from "../../components/ui";
 import { Select } from "../../components/controls";
 import { useSession } from "../../session";
 import type { AssayEdit } from "./assayToml";
-import { blockTitle } from "./blocks";
+import { LINK_VERB, blockTitle } from "./blocks";
 import { StatusIcon, duration, statusLabel } from "./ci/Status";
 import { LOGOS, type Brand, type Logo } from "./logos";
 import type { Ctx } from "./Project";
@@ -75,6 +76,8 @@ const INSET = 12;
 /** Under this zoom the cards' text is too small to read: the graph overflows the frame instead,
  *  from its start (what needs the rest, on the left), and pans. */
 const READABLE = 0.8;
+/** How far the canvas zooms out and in, its buttons and its fit too. */
+const ZOOM = { min: 0.2, max: 1.5 };
 /** The frame is as tall as the graph at the zoom it opens at, within these (the most: a share of
  *  the window's height). */
 const FRAME_MIN = 440;
@@ -117,7 +120,6 @@ function kindName(b: Block): string {
   }
   return KIND[b.kind][0];
 }
-const VERB: Record<S["MapLinkKind"], string> = { uses: "uses", builds: "builds", runs: "runs", depends_on: "depends on", connects: "connects to", calls: "calls" };
 const ROLE: Record<S["MapRole"], string> = {
   web: "web",
   api: "API",
@@ -423,6 +425,8 @@ function MapView({ ctx, gitRef, map, lay, found, words }: { ctx: Ctx; gitRef: st
   const chosen = asked && byId.has(asked) ? asked : null;
   // the chain: everything that depends on the chosen block lights up, not only what is near it
   const chain = params.get("impact") === "1";
+  // the blocks only one person knows, to share (`?share=1`)
+  const share = params.get("share") === "1";
   const setParam = useCallback(
     (key: string, value: string | null) =>
       setParams(
@@ -572,10 +576,18 @@ function MapView({ ctx, gitRef, map, lay, found, words }: { ctx: Ctx; gitRef: st
       <div className="smart-bar">
         <span>
           {plural(map.blocks.length, "block")} · {plural(map.links.length, "link")} · {plural(map.unassigned, "file")} in no block
-          {alone > 0 && <span title={SOLO}> · {plural(alone, "block")} known by one person</span>}
+          {alone > 0 && (
+            <>
+              {" · "}
+              <button type="button" className={`smart-go smart-bar-toggle${share ? " on" : ""}`} aria-pressed={share} title={SOLO} onClick={() => setParam("share", share ? null : "1")}>
+                {plural(alone, "block")} known by one person
+              </button>
+            </>
+          )}
         </span>
         {!list && lay.drawn.length > 0 && <Legend />}
       </div>
+      {share && <ToShare ctx={ctx} map={map} lay={lay} select={select} me={user?.username} fix={ctx.p.can_write_repository ? fix : undefined} onClose={() => setParam("share", null)} />}
       <p className="smart-guide">{framed && "From left to right: what runs, what it is built from, the code, its data. "}Choose a block to see what it needs and who to ask.</p>
       {mr && touched.data && (
         <div className="smart-mr" role="status">
@@ -726,6 +738,7 @@ function Flow({ lay, byId, jobs, waitsOn, chosen, joined, lit, fit: shown, selec
     return { start: { ...at, x: at.x + shift }, below: 0 };
   });
   const height = fit + open.below;
+  const fitAll = useMemo(() => ({ padding: fitPadding(lay, width, height, corner) }), [lay, width, height, corner]);
 
   const nodes = useMemo<Node<CardData>[]>(
     () =>
@@ -822,8 +835,8 @@ function Flow({ lay, byId, jobs, waitsOn, chosen, joined, lit, fit: shown, selec
         nodeTypes={NODE_TYPES}
         edgeTypes={EDGE_TYPES}
         defaultViewport={open.start}
-        minZoom={0.2}
-        maxZoom={1.5}
+        minZoom={ZOOM.min}
+        maxZoom={ZOOM.max}
         zIndexMode="auto"
         nodesDraggable={false}
         nodesConnectable={false}
@@ -843,12 +856,8 @@ function Flow({ lay, byId, jobs, waitsOn, chosen, joined, lit, fit: shown, selec
         onNodeClick={(_, n) => select(n.id)}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
-        {/* the whole graph, above the corner's buttons */}
-        <Controls
-          showInteractive={false}
-          position="bottom-left"
-          fitViewOptions={{ padding: { top: `${MARGIN}px`, right: `${MARGIN}px`, bottom: `${corner.h}px`, left: `${MARGIN}px` } }}
-        />
+        {/* the whole graph, clear of the corner's buttons */}
+        <Controls showInteractive={false} position="bottom-left" fitViewOptions={fitAll} />
         {/* beside the buttons: a graph from left to right is crowded on the right, not there */}
         {!(fitsAcross && fitsDown) && (
           <MiniMap pannable zoomable position="bottom-left" style={{ width: 120, height: 76, marginLeft: 58 }} ariaLabel="Where the view is in the whole graph" />
@@ -894,7 +903,7 @@ function LinkEdgeView({ id, sourceX, sourceY, targetX, targetY, sourcePosition, 
       {said && e.kind !== "part" && (
         <EdgeLabelRenderer>
           <div className="smart-link-label" style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}>
-            {VERB[e.kind]}
+            {LINK_VERB[e.kind]}
           </div>
         </EdgeLabelRenderer>
       )}
@@ -909,7 +918,7 @@ const EDGE_TYPES = { link: LinkEdgeView };
 function tip(e: Edge, byId: Map<string, Block>) {
   const name = (id: string) => (byId.has(id) ? title(byId.get(id)!) : id);
   if (e.kind === "part") return `${name(e.to)} is part of ${name(e.from)}`;
-  return `${name(e.from)} ${VERB[e.kind]} ${name(e.to)}${e.via ? ` · ${e.via}` : ""}${e.inferred ? " (a guess)" : ""}`;
+  return `${name(e.from)} ${LINK_VERB[e.kind]} ${name(e.to)}${e.via ? ` · ${e.via}` : ""}${e.inferred ? " (a guess)" : ""}`;
 }
 
 /** A block's logo, its name on hover, or the icon of what it is, in its kind's colour (`mark`). */
@@ -1029,7 +1038,7 @@ function Details({ ctx, gitRef, map, lay, b, jobs, pipeline, waits, chain, setCh
       )}
     </li>
   );
-  const verb = (e: Edge) => (e.kind === "part" ? undefined : VERB[e.kind]);
+  const verb = (e: Edge) => (e.kind === "part" ? undefined : LINK_VERB[e.kind]);
   const needs = lay.edges.filter((e) => e.from === b.id && e.kind !== "part");
   const holds = lay.edges.filter((e) => e.from === b.id && e.kind === "part");
   const neededBy = lay.edges.filter((e) => e.to === b.id && e.kind !== "part");
@@ -1480,6 +1489,87 @@ function Legend() {
   );
 }
 
+/** The blocks only one person knows, with no one else named for them (CODEOWNERS naming that
+ *  same person keeps it in one head): the most depended on first. What to share, never a
+ *  ranking of people. */
+function ToShare({
+  ctx,
+  map,
+  lay,
+  select,
+  me,
+  fix,
+  onClose,
+}: {
+  ctx: Ctx;
+  map: S["RepoMap"];
+  lay: Plan;
+  select: (id: string) => void;
+  me?: string;
+  fix?: (edit: AssayEdit) => void;
+  onClose: () => void;
+}) {
+  // a walk of the links per block: once per map, not on each render of the page
+  const rows = useMemo(
+    () =>
+      map.blocks
+        .filter((b) => solo(b) && !b.owners.some((o) => o.toLowerCase() !== `@${b.people[0]?.username ?? ""}`.toLowerCase()))
+        .map((b) => ({ b, reach: dependents(lay.edges, [b.id]).size, who: b.people[0] }))
+        .sort((x, y) => y.reach - x.reach || title(x.b).localeCompare(title(y.b))),
+    [map.blocks, lay.edges],
+  );
+  const issue = (b: Block, who?: Block["people"][number]) =>
+    `${ctx.web}/-/issues/new${qs({
+      title: `Share what we know of ${title(b)}`,
+      description: `Only ${who?.username ? `@${who.username}` : (who?.name ?? "one person")} made a fifth or more of the recent changes to **${title(b)}**${b.roots[0] ? ` (\`${b.roots[0].path}\`)` : ""}, and no one else is named for it.\n\nA walk through it, a README, or a second person to review its changes would help.`,
+    })}`;
+  return (
+    <section className="smart-share" aria-label="To share">
+      <div className="smart-share-head">
+        <HandHeart size={15} aria-hidden />
+        <h2 className="grow">To share</h2>
+        <button type="button" className="icon-btn" aria-label="Close" title="Close" onClick={onClose}>
+          <X size={14} />
+        </button>
+      </div>
+      <p className="meta">
+        {rows.length
+          ? "Blocks only one person knows, and no one else is named for: what most depends on them first. A second person who knows them makes them safer to change."
+          : "Every block one person knows has someone else named for it."}
+      </p>
+      {rows.length > 0 && (
+        <ul>
+          {rows.map(({ b, reach, who }) => (
+            <li key={b.id}>
+              <RowMark b={b} />
+              <span className="grow">
+                <span className="smart-line">
+                  <button type="button" className="smart-go" onClick={() => select(b.id)}>
+                    {title(b)}
+                  </button>
+                </span>
+                <span className="smart-sub">
+                  {who && (who.username ? <UserLink username={who.username}>{who.name}</UserLink> : who.name)}
+                  {who && ` · ${plural(who.commits, "commit")}`}
+                  {` · ${reach ? `${plural(reach, "block")} depend on it` : "nothing depends on it"}`}
+                </span>
+              </span>
+              {fix && me && who?.username !== me && (
+                <button type="button" className="btn small ghost" title="Name yourself among the people to ask about it" onClick={() => fix({ kind: "referent", block: b.id, title: title(b), who: `@${me}` })}>
+                  I know it
+                </button>
+              )}
+              <Link className="btn small ghost" to={issue(b, who)}>
+                Open an issue
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 /** The files in no block, what could not be read, and how to correct the map. */
 function Notes({ ctx, gitRef, map }: { ctx: Ctx; gitRef: string; map: S["RepoMap"] }) {
   return (
@@ -1573,6 +1663,21 @@ function cornerShift(lay: Plan, at: { x: number; y: number; zoom: number }, heig
     if (left < corner.w && top < height && top + H * at.zoom > height - corner.h) shift = Math.max(shift, corner.w - left);
   }
   return shift;
+}
+
+/** The fit button's padding, in a frame `width` by `height`: MARGIN around the whole graph, as
+ *  React Flow centres it. Only when a card would then be under the corner's buttons is their room
+ *  kept: their side or their top, whichever leaves the graph the larger. Their top across the
+ *  whole frame left an empty band under a graph that never reached them. */
+function fitPadding(lay: Plan, width: number, height: number, corner: { w: number; h: number }) {
+  const zoomFor = (left: number, bottom: number) =>
+    Math.min(ZOOM.max, Math.max(ZOOM.min, Math.min((width - left - MARGIN) / lay.width, (height - MARGIN - bottom) / lay.height)));
+  const px = (n: number): `${number}px` => `${n}px`;
+  const padding = (left: number, bottom: number) => ({ top: px(MARGIN), right: px(MARGIN), bottom: px(bottom), left: px(left) });
+  const zoom = zoomFor(MARGIN, MARGIN);
+  const centred = { zoom, x: (width - lay.width * zoom) / 2, y: (height - lay.height * zoom) / 2 };
+  if (!cornerShift(lay, centred, height, corner)) return padding(MARGIN, MARGIN);
+  return zoomFor(corner.w, MARGIN) >= zoomFor(MARGIN, corner.h) ? padding(corner.w, MARGIN) : padding(MARGIN, corner.h);
 }
 
 /** Where a block of the graph goes, inside the block holding it if any (`inside`), and its size. */

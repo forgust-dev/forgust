@@ -167,8 +167,10 @@ export function IssueList({ ctx }: { ctx: Ctx }) {
 export function NewIssue({ ctx }: { ctx: Ctx }) {
   const nav = useNavigate();
   const qc = useQueryClient();
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  // prefilled from elsewhere (`?title=&description=`): the Smart View's "Open an issue"
+  const [prefill] = useSearchParams();
+  const [title, setTitle] = useState(prefill.get("title") ?? "");
+  const [description, setDescription] = useState(prefill.get("description") ?? "");
   const [labels, setLabels] = useState<string[]>([]);
   const [confidential, setConfidential] = useState(false);
   const [error, setError] = useState<unknown>(null);
