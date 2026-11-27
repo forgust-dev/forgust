@@ -210,7 +210,8 @@ test("the Smart View maps the code into blocks and tells what each needs", async
     await api2.getByRole("button", { name: "Write it in assay.toml" }).click();
     await expect(page).toHaveURL(new RegExp(`${web}/-/new/main`));
     await expect(page.getByLabel("File path")).toHaveValue("assay.toml");
-    await expect(page.getByLabel("File content")).toHaveValue(/\[blocks\.api\]\nname = "API"\n/);
+    // the editor is CodeMirror: a line of the file is a line of it
+    await expect(page.getByRole("textbox", { name: "File content" }).locator(".cm-line")).toContainText(["[blocks.api]", 'name = "API"']);
 
     // a file's page names its block and who to ask
     await page.goto(`${web}/-/blob/main/api/Cargo.toml`);

@@ -65,6 +65,15 @@ export const api = {
 export const enc = (p: string | number) => encodeURIComponent(String(p));
 /** A path whose slashes stay slashes (branch names, file paths), each segment encoded. */
 export const encPath = (p: string) => p.split("/").map(encodeURIComponent).join("/");
+/** The folder a path is in (`""` at the top). */
+export const parentOf = (path: string) => path.split("/").slice(0, -1).join("/");
+/** The last name of a path. */
+export const nameOf = (path: string) => path.split("/").pop() ?? "";
+/** The folders above a path: `a/b/c.rs` is in `a` and `a/b`. */
+export const ancestors = (path: string) => {
+  const parts = path.split("/").slice(0, -1);
+  return parts.map((_, i) => parts.slice(0, i + 1).join("/"));
+};
 /**
  * A project page for a ref and a path in it (`<web>/-/blob/<ref>/<path>`), both
  * encoded: a `#`, `?` or `%` in a branch or file name is part of the name, not

@@ -11,7 +11,8 @@ export type Nav =
   // `keep`: what the sidebar went on showing while this page loads (KeepNav); the rest
   // (breadcrumbs, the New menu, the palette) has no context meanwhile
   | { kind: "pending"; keep?: SideView }
-  | { kind: "project"; project: S["ProjectDetail"]; ref?: string; crumbs?: { label: string; to?: string }[] }
+  // `ide`: the page is the web IDE (a file found opens in it)
+  | { kind: "project"; project: S["ProjectDetail"]; ref?: string; ide?: boolean; crumbs?: { label: string; to?: string }[] }
   | { kind: "group"; group: S["GroupDetail"]; crumbs?: { label: string; to?: string }[] };
 
 /** The areas that are not a project or a group but open their own menu, as one does:

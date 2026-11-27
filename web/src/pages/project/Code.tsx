@@ -6,7 +6,7 @@ import { api, bytes, qs, refLink, timeAgo, type S, filesLink } from "../../api/c
 import { Avatar, Badge, CopyField, GitPerson, Q, useCopy } from "../../components/ui";
 import { Popover, Segmented, Select } from "../../components/controls";
 import { type Ctx } from "./Project";
-import { BookOpen, Box, Boxes, Check, ChevronDown, Code2, Copy, CornerLeftUp, Download, FileCode, FileText, Folder, GitBranch, History, Link2, Search, Tag, WrapText, FilePlus2, Pencil, Trash2 } from "lucide-react";
+import { AppWindow, BookOpen, Box, Boxes, Check, ChevronDown, Code2, Copy, CornerLeftUp, Download, FileCode, FileText, Folder, GitBranch, History, Link2, Search, Tag, WrapText, FilePlus2, Pencil, Trash2 } from "lucide-react";
 import { fetchers, keys, usePrefetch } from "../../prefetch";
 import { openPalette, useShortcuts } from "../../shell/palette";
 import { usePref } from "../../shell/theme";
@@ -574,6 +574,11 @@ function BlobView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
                 {ctx.p.can_write_repository && text && (
                   <Link className="icon-btn" to={`${ctx.web}/-/edit/${res.ref}/${res.path}`} title="Edit this file" aria-label="Edit this file">
                     <Pencil size={16} />
+                  </Link>
+                )}
+                {ctx.p.can_write_repository && text && (
+                  <Link className="icon-btn" to={refLink(ctx.web, "ide", res.ref, res.path)} title="Open in the web IDE" aria-label="Open in the web IDE">
+                    <AppWindow size={16} />
                   </Link>
                 )}
                 {ctx.p.can_write_repository && (

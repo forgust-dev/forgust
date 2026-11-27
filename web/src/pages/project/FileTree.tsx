@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, ty
 import { Link, useNavigate } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, FileText, Folder, PanelLeftClose, PanelLeftOpen } from "lucide-react";
-import { filesLink, refLink, type S } from "../../api/client";
+import { ancestors, filesLink, refLink, type S } from "../../api/client";
 import { fetchers, keys } from "../../prefetch";
 import { usePref } from "../../shell/theme";
 import type { Ctx } from "./Project";
@@ -10,11 +10,6 @@ import type { Ctx } from "./Project";
 /** A folder shows this many entries here at most; its page shows them all. */
 const MAX = 500;
 
-/** The folders above a path: `a/b/c` → `a`, `a/b`. */
-const above = (path: string) => {
-  const parts = path.split("/");
-  return parts.slice(0, -1).map((_, i) => parts.slice(0, i + 1).join("/"));
-};
 
 type Where = { ctx: Ctx; gitRef: string; commit: string };
 
@@ -41,7 +36,7 @@ function FileTreePanel({ where, path, folder, shown, setShown }: { where: Where;
   const ref = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   // the folders open: those above what is read, and those opened by hand, until the ref changes
-  const opening = (p: string) => (folder ? [...above(p), p] : above(p));
+  const opening = (p: string) => (folder ? [...ancestors(p), p] : ancestors(p));
   const [open, setOpen] = useState<Set<string>>(() => new Set(opening(path)));
   const [focus, setFocus] = useState(path);
   // another ref, not a new commit of the same one (a push while reading)
