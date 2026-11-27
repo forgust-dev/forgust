@@ -136,12 +136,14 @@ async fn create_runner(
     Ok(NewRunnerToken { id, token })
 }
 
+/// Instance runners, which every project may use (administrators only).
 #[utoipa::path(get, path = "/api/v1/admin/runners", responses((status = 200, body = [RunnerDto])), tag = "ci")]
 pub async fn instance_runners(State(state): State<AppState>, Admin(..): Admin) -> ApiResult<Json<Vec<RunnerDto>>> {
     let list = cidb::instance_runners(&state.db).await?.into_iter().map(|r| (r, true)).collect();
     Ok(Json(runner_dtos(&state, list).await?))
 }
 
+/// Create an instance runner; its token is shown only in the answer (administrators; browser session only).
 #[utoipa::path(post, path = "/api/v1/admin/runners", request_body = RunnerBody, responses((status = 200, body = NewRunnerToken)), tag = "ci")]
 pub async fn create_instance_runner(
     State(state): State<AppState>,
@@ -152,6 +154,7 @@ pub async fn create_instance_runner(
     Ok(Json(create_runner(&state, "instance", None, None, me.id, b).await?))
 }
 
+/// The group's own runners (group Owners).
 #[utoipa::path(get, path = "/api/v1/groups/{id}/runners", responses((status = 200, body = [RunnerDto])), tag = "ci")]
 pub async fn group_runners(
     State(state): State<AppState>,
@@ -163,6 +166,7 @@ pub async fn group_runners(
     Ok(Json(runner_dtos(&state, list).await?))
 }
 
+/// Create a group runner; its token is shown only in the answer (group Owners; browser session, confirmed email).
 #[utoipa::path(post, path = "/api/v1/groups/{id}/runners", request_body = RunnerBody, responses((status = 200, body = NewRunnerToken)), tag = "ci")]
 pub async fn create_group_runner(
     State(state): State<AppState>,
@@ -205,6 +209,7 @@ pub async fn project_runners(
     Ok(Json(runner_dtos(&state, list).await?))
 }
 
+/// Create a project runner; its token is shown only in the answer (Maintainers; browser session, confirmed email).
 #[utoipa::path(post, path = "/api/v1/projects/{id}/runners", request_body = RunnerBody, responses((status = 200, body = NewRunnerToken)), tag = "ci")]
 pub async fn create_project_runner(
     State(state): State<AppState>,
@@ -243,12 +248,14 @@ async fn managed_runner(state: &AppState, p: &Principal, id: i64) -> ApiResult<R
     Ok(r)
 }
 
+/// A runner with its managers (its project's Maintainers, its group's Owners, or administrators).
 #[utoipa::path(get, path = "/api/v1/runners/{id}", responses((status = 200, body = RunnerDto)), tag = "ci")]
 pub async fn show_runner(State(state): State<AppState>, SignedIn(_, p): SignedIn, Path(id): Path<i64>) -> ApiResult<Json<RunnerDto>> {
     let r = managed_runner(&state, &p, id).await?;
     Ok(Json(runner_dto(&state, r, true).await?))
 }
 
+/// Change a runner's description, tags, flags and timeout (its project's Maintainers, its group's Owners, or admins).
 #[utoipa::path(put, path = "/api/v1/runners/{id}", request_body = RunnerBody, responses((status = 200, body = RunnerDto)), tag = "ci")]
 pub async fn update_runner(
     State(state): State<AppState>,
@@ -275,6 +282,7 @@ pub async fn update_runner(
     Ok(Json(runner_dto(&state, r, true).await?))
 }
 
+/// Delete a runner (its project's Maintainers, its group's Owners, or administrators).
 #[utoipa::path(delete, path = "/api/v1/runners/{id}", responses((status = 200)), tag = "ci")]
 pub async fn delete_runner(
     State(state): State<AppState>,
@@ -286,6 +294,7 @@ pub async fn delete_runner(
     Ok(Json(json!({ "deleted": true })))
 }
 
+/// Replace a runner's token; the new one is shown only in the answer (who may manage it; browser session only).
 #[utoipa::path(post, path = "/api/v1/runners/{id}/reset_token", responses((status = 200, body = NewRunnerToken)), tag = "ci")]
 pub async fn reset_runner_token(
     State(state): State<AppState>,
@@ -476,6 +485,7 @@ fn stage_statuses(builds: &[&Build]) -> Vec<(String, String)> {
         .collect()
 }
 
+/// The project's pipelines, newest first, by ref, status, sha or schedule (anyone who can read the code).
 #[utoipa::path(get, path = "/api/v1/projects/{id}/pipelines", responses((status = 200, body = [PipelineSummary])), tag = "ci")]
 pub async fn list_pipelines(
     State(state): State<AppState>,
@@ -549,6 +559,7 @@ async fn pipeline_detail(state: &AppState, p: &Principal, proj: &Project, pipeli
     })
 }
 
+/// A pipeline with its stages, jobs, coverage and upstream pipeline (anyone who can read the code).
 #[utoipa::path(get, path = "/api/v1/projects/{id}/pipelines/{iid}", responses((status = 200, body = PipelineDetail)), tag = "ci")]
 pub async fn show_pipeline(
     State(state): State<AppState>,
@@ -633,6 +644,7 @@ async fn runnable_pipeline(state: &AppState, p: &Principal, id: &str, iid: i64) 
     Ok((proj, pipeline))
 }
 
+/// Cancel a pipeline's unfinished jobs and downstream pipelines (Developers; on protected branches, who may push or merge).
 #[utoipa::path(post, path = "/api/v1/projects/{id}/pipelines/{iid}/cancel", responses((status = 200, body = PipelineDetail)), tag = "ci")]
 pub async fn cancel_pipeline(
     State(state): State<AppState>,
@@ -693,6 +705,7 @@ pub async fn commit_statuses(
     ))
 }
 
+/// The merge request's 20 latest pipelines: its own and its source branch's (anyone who can read the code).
 #[utoipa::path(get, path = "/api/v1/projects/{id}/merge_requests/{iid}/pipelines", responses((status = 200, body = [PipelineSummary])), tag = "ci")]
 pub async fn mr_pipelines(
     State(state): State<AppState>,
@@ -730,6 +743,7 @@ pub(crate) async fn load_job(state: &AppState, p: &Principal, id: &str, job_id: 
     Ok((proj, b))
 }
 
+/// A job with its pipeline, runner, attempts and artifacts (the archive only when the viewer may download it).
 #[utoipa::path(get, path = "/api/v1/projects/{id}/jobs/{job_id}", responses((status = 200, body = JobDetail)), tag = "ci")]
 pub async fn show_job(
     State(state): State<AppState>,
@@ -822,6 +836,7 @@ pub async fn job_trace(
     }))
 }
 
+/// A job's whole log as plain text (anyone who can read the project's code).
 #[utoipa::path(get, path = "/api/v1/projects/{id}/jobs/{job_id}/raw", responses((status = 200, content_type = "text/plain")), tag = "ci")]
 pub async fn job_raw(State(state): State<AppState>, Viewer(v): Viewer, Path((id, job_id)): Path<(String, i64)>) -> ApiResult<Response> {
     let (_, b) = load_job(&state, &v, &id, job_id).await?;
@@ -844,6 +859,7 @@ async fn runnable_job(state: &AppState, p: &Principal, id: &str, job_id: i64) ->
     Ok(b)
 }
 
+/// Cancel a job; a running one stops at its runner's next update (Developers; on protected branches, who may push or merge).
 #[utoipa::path(post, path = "/api/v1/projects/{id}/jobs/{job_id}/cancel", responses((status = 200, body = JobDto)), tag = "ci")]
 pub async fn cancel_job(
     State(state): State<AppState>,
@@ -856,6 +872,7 @@ pub async fn cancel_job(
     Ok(Json(JobDto::from(&b)))
 }
 
+/// Retry the latest attempt of a finished job (Developers; on protected branches, who may push or merge).
 #[utoipa::path(post, path = "/api/v1/projects/{id}/jobs/{job_id}/retry", responses((status = 200, body = JobDto)), tag = "ci")]
 pub async fn retry_job(
     State(state): State<AppState>,
@@ -871,6 +888,7 @@ pub async fn retry_job(
     Ok(Json(JobDto::from(&b)))
 }
 
+/// Start a manual or delayed job now, as the caller (Developers; on protected branches, who may push or merge).
 #[utoipa::path(post, path = "/api/v1/projects/{id}/jobs/{job_id}/play", responses((status = 200, body = JobDto)), tag = "ci")]
 pub async fn play_job(
     State(state): State<AppState>,
@@ -887,6 +905,7 @@ pub async fn play_job(
 }
 
 /// A delayed job waits for someone instead (it becomes manual).
+#[utoipa::path(post, path = "/api/v1/projects/{id}/jobs/{job_id}/unschedule", responses((status = 200, body = JobDto)), tag = "ci")]
 pub async fn unschedule_job(
     State(state): State<AppState>,
     SignedIn(_, p): SignedIn,
@@ -1023,6 +1042,7 @@ pub async fn serve_artifact_file(state: &AppState, a: &Artifact, path: &str) -> 
 
 // ================================================================ settings and variables
 
+/// The project's CI/CD settings (Maintainers).
 #[utoipa::path(get, path = "/api/v1/projects/{id}/ci/settings", responses((status = 200, body = ProjectCiSettings)), tag = "ci")]
 pub async fn ci_settings(
     State(state): State<AppState>,
@@ -1052,6 +1072,7 @@ pub struct CiSettingsBody {
     pub block_new_security_findings: bool,
 }
 
+/// Change the project's CI/CD settings: config path, timeout, git depth, merge checks, job token scope (Maintainers).
 #[utoipa::path(put, path = "/api/v1/projects/{id}/ci/settings", request_body = CiSettingsBody, responses((status = 200, body = ProjectCiSettings)), tag = "ci")]
 pub async fn update_ci_settings(
     State(state): State<AppState>,
@@ -1190,6 +1211,7 @@ async fn save_variable(state: &AppState, project_id: Option<i64>, group_id: Opti
     Ok(())
 }
 
+/// The project's CI/CD variables, without the values of masked ones (Maintainers).
 #[utoipa::path(get, path = "/api/v1/projects/{id}/variables", responses((status = 200, body = [VariableDto])), tag = "ci")]
 pub async fn project_variables(
     State(state): State<AppState>,
@@ -1200,6 +1222,7 @@ pub async fn project_variables(
     Ok(Json(variable_dtos(&state, Some(proj.id), None).await?))
 }
 
+/// Create or update a project CI/CD variable; an omitted value keeps the current one (Maintainers).
 #[utoipa::path(post, path = "/api/v1/projects/{id}/variables", request_body = VariableBody, responses((status = 200, body = [VariableDto])), tag = "ci")]
 pub async fn set_project_variable(
     State(state): State<AppState>,
@@ -1212,6 +1235,7 @@ pub async fn set_project_variable(
     Ok(Json(variable_dtos(&state, Some(proj.id), None).await?))
 }
 
+/// Delete a project CI/CD variable by key (Maintainers).
 #[utoipa::path(delete, path = "/api/v1/projects/{id}/variables/{key}", responses((status = 200)), tag = "ci")]
 pub async fn delete_project_variable(
     State(state): State<AppState>,
@@ -1225,6 +1249,7 @@ pub async fn delete_project_variable(
     Ok(Json(json!({ "deleted": true })))
 }
 
+/// The group's CI/CD variables, without the values of masked ones (group Owners).
 #[utoipa::path(get, path = "/api/v1/groups/{id}/variables", responses((status = 200, body = [VariableDto])), tag = "ci")]
 pub async fn group_variables(
     State(state): State<AppState>,
@@ -1235,6 +1260,7 @@ pub async fn group_variables(
     Ok(Json(variable_dtos(&state, None, Some(g.id)).await?))
 }
 
+/// Create or update a group CI/CD variable; an omitted value keeps the current one (group Owners).
 #[utoipa::path(post, path = "/api/v1/groups/{id}/variables", request_body = VariableBody, responses((status = 200, body = [VariableDto])), tag = "ci")]
 pub async fn set_group_variable(
     State(state): State<AppState>,
@@ -1247,6 +1273,7 @@ pub async fn set_group_variable(
     Ok(Json(variable_dtos(&state, None, Some(g.id)).await?))
 }
 
+/// Delete a group CI/CD variable by key (group Owners).
 #[utoipa::path(delete, path = "/api/v1/groups/{id}/variables/{key}", responses((status = 200)), tag = "ci")]
 pub async fn delete_group_variable(
     State(state): State<AppState>,
@@ -1268,6 +1295,7 @@ pub struct AllowProject {
     pub project: String,
 }
 
+/// Projects whose CI job tokens may read this one (Maintainers).
 #[utoipa::path(get, path = "/api/v1/projects/{id}/job_token_allowlist", responses((status = 200, body = [forgust_db::ci::AllowedProject])), tag = "ci")]
 pub async fn job_token_allowlist(
     State(state): State<AppState>,
@@ -1278,6 +1306,7 @@ pub async fn job_token_allowlist(
     Ok(Json(cidb::allowlist(&state.db, proj.id).await?))
 }
 
+/// Let another project's CI job tokens read this one (Maintainers; the other project must be visible to them).
 #[utoipa::path(post, path = "/api/v1/projects/{id}/job_token_allowlist", request_body = AllowProject, responses((status = 200, body = [forgust_db::ci::AllowedProject])), tag = "ci")]
 pub async fn allow_job_token(
     State(state): State<AppState>,
@@ -1295,6 +1324,7 @@ pub async fn allow_job_token(
     Ok(Json(cidb::allowlist(&state.db, proj.id).await?))
 }
 
+/// Remove a project from the job token allowlist (Maintainers).
 #[utoipa::path(delete, path = "/api/v1/projects/{id}/job_token_allowlist/{source_id}", responses((status = 200)), tag = "ci")]
 pub async fn disallow_job_token(
     State(state): State<AppState>,
@@ -1398,6 +1428,7 @@ async fn schedule_input<'a>(
     })
 }
 
+/// The project's pipeline schedules; variable values only for their owner or a Maintainer (Developers).
 #[utoipa::path(get, path = "/api/v1/projects/{id}/pipeline_schedules", responses((status = 200, body = [ScheduleDto])), tag = "ci")]
 pub async fn list_schedules(
     State(state): State<AppState>,
@@ -1424,6 +1455,7 @@ pub async fn list_schedules(
     Ok(Json(out))
 }
 
+/// Create a pipeline schedule owned by the caller (Developers who may run pipelines for its ref).
 #[utoipa::path(post, path = "/api/v1/projects/{id}/pipeline_schedules", request_body = ScheduleBody, responses((status = 200, body = ScheduleDto)), tag = "ci")]
 pub async fn create_schedule(
     State(state): State<AppState>,
@@ -1439,6 +1471,7 @@ pub async fn create_schedule(
     Ok(Json(schedule_dto(&state, s, true).await?))
 }
 
+/// Change a pipeline schedule; the editor becomes its owner (its owner or a Maintainer, who may run its ref).
 #[utoipa::path(put, path = "/api/v1/projects/{id}/pipeline_schedules/{sid}", request_body = ScheduleBody, responses((status = 200, body = ScheduleDto)), tag = "ci")]
 pub async fn update_schedule(
     State(state): State<AppState>,
@@ -1459,6 +1492,7 @@ pub async fn update_schedule(
     Ok(Json(schedule_dto(&state, s, true).await?))
 }
 
+/// Delete a pipeline schedule (its owner or a Maintainer).
 #[utoipa::path(delete, path = "/api/v1/projects/{id}/pipeline_schedules/{sid}", responses((status = 200)), tag = "ci")]
 pub async fn delete_schedule(
     State(state): State<AppState>,

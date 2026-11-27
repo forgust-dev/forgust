@@ -355,7 +355,13 @@ pub const EVENTS: &[EventType] = &[
     e("ai_review_requested", BUILTIN, P, &["merge_request", "pipeline_id"], "An AI review of a merge request was asked for."),
     e("smart_view_enabled", BUILTIN, P, &[], "The Smart View turned on for the project."),
     e("smart_view_disabled", BUILTIN, P, &[], "The Smart View turned off for the project."),
-    e("mcp_tool_call", BUILTIN, P, &["tool", "via", "token_id"], "An MCP client changed something through a tool."),
+    e(
+        "mcp_tool_call",
+        BUILTIN,
+        P,
+        &["tool", "via", "token_id", "method", "route"],
+        "An MCP client changed something through a tool (execute_api: once per call, with the method and route it called).",
+    ),
     // refusals
     e(
         "token_scope_refused",

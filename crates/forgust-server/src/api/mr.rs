@@ -116,6 +116,7 @@ pub async fn count(
     Ok(Json(MrCount { opened, merged, closed }))
 }
 
+/// The project's merge requests, 20 a page, by state (`opened` by default), search, author, assignee, reviewer or milestone.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/merge_requests", responses((status = 200, body = [MrListItem])), tag = "merge_requests")]
 pub async fn list(
     State(state): State<AppState>,
@@ -158,6 +159,7 @@ pub struct LabelsBody {
     pub labels: Vec<String>,
 }
 
+/// Replace the merge request's labels; a system note records the change (who may push).
 #[utoipa::path(put, path = "/api/v1/projects/{id}/merge_requests/{iid}/labels", request_body = LabelsBody, responses((status = 200, body = [Label])), tag = "merge_requests")]
 pub async fn set_labels(
     State(state): State<AppState>,
@@ -192,6 +194,7 @@ pub struct CreateMr {
     pub milestone_id: Option<i64>,
 }
 
+/// Open a merge request from a source branch, into the default branch unless another target is given (who may push).
 #[utoipa::path(post, path = "/api/v1/projects/{id}/merge_requests", request_body = CreateMr, responses((status = 200, body = MergeRequest)), tag = "merge_requests")]
 pub async fn create(
     State(state): State<AppState>,
@@ -260,6 +263,7 @@ pub struct MrDetail {
     pub auto_merge_user: Option<UserBrief>,
 }
 
+/// A merge request with its diff versions, approvals, labels, assignees, reviewers, stack and what the viewer may do.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/merge_requests/{iid}", responses((status = 200, body = MrDetail)), tag = "merge_requests")]
 pub async fn show(State(state): State<AppState>, Viewer(v): Viewer, Path((id, iid)): Path<(String, i64)>) -> ApiResult<Json<MrDetail>> {
     let (p, m) = load(&state, &v, &id, iid, ProjectAction::ReadCode).await?;
@@ -308,6 +312,8 @@ pub struct UpdateMr {
     pub milestone_id: Option<i64>,
 }
 
+/// Edit a merge request: title, description, draft, target branch, assignees, reviewers, milestone, source branch removal.
+#[utoipa::path(put, path = "/api/v1/projects/{id}/merge_requests/{iid}", request_body = UpdateMr, responses((status = 200, body = MergeRequest)), tag = "merge_requests")]
 pub async fn update(
     State(state): State<AppState>,
     SignedIn(_, p0): SignedIn,
@@ -333,6 +339,8 @@ pub async fn update(
     Ok(Json(mrdb::find(&state.db, p.id, iid).await?.ok_or(ApiError::NotFound)?))
 }
 
+/// Close a merge request (not a merged one).
+#[utoipa::path(post, path = "/api/v1/projects/{id}/merge_requests/{iid}/close", responses((status = 200, body = MergeRequest)), tag = "merge_requests")]
 pub async fn close(
     State(state): State<AppState>,
     SignedIn(_, p0): SignedIn,
@@ -342,6 +350,8 @@ pub async fn close(
     Ok(Json(mr::set_open(&state, &p0, &p, &m, false).await?))
 }
 
+/// Reopen a closed merge request, unless another one is open for the same branches.
+#[utoipa::path(post, path = "/api/v1/projects/{id}/merge_requests/{iid}/reopen", responses((status = 200, body = MergeRequest)), tag = "merge_requests")]
 pub async fn reopen(
     State(state): State<AppState>,
     SignedIn(_, p0): SignedIn,
@@ -351,6 +361,7 @@ pub async fn reopen(
     Ok(Json(mr::set_open(&state, &p0, &p, &m, true).await?))
 }
 
+/// Whether the merge request can be merged now: blockers, conflicts, approvals, pipeline, and the head SHA to merge.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/merge_requests/{iid}/merge_status", responses((status = 200, body = MergeStatus)), tag = "merge_requests")]
 pub async fn merge_status(
     State(state): State<AppState>,
@@ -374,6 +385,8 @@ pub async fn add_to_train(
     Ok(Json(crate::services::merge_train::add(&state, &p0, &p, &m, opts).await?))
 }
 
+/// Take the merge request off its merge train (whoever added it, or someone who may merge).
+#[utoipa::path(delete, path = "/api/v1/projects/{id}/merge_requests/{iid}/merge_train", responses((status = 200)), tag = "merge_requests")]
 pub async fn remove_from_train(
     State(state): State<AppState>,
     SignedIn(_, p0): SignedIn,
@@ -411,6 +424,7 @@ pub struct MergeRequestBody {
     pub message: Option<String>,
 }
 
+/// Merge the merge request now if every check passes; `sha` guards against unseen pushes (who may merge into the target).
 #[utoipa::path(post, path = "/api/v1/projects/{id}/merge_requests/{iid}/merge", request_body = MergeRequestBody, responses((status = 200, body = MergeRequest)), tag = "merge_requests")]
 pub async fn merge(
     State(state): State<AppState>,
@@ -430,6 +444,8 @@ pub async fn merge(
     Ok(Json(mr::merge(&state, &p0, &p, &m, opts).await?))
 }
 
+/// Rebase an open merge request's source branch onto its target; answers the new `head_sha`.
+#[utoipa::path(post, path = "/api/v1/projects/{id}/merge_requests/{iid}/rebase", responses((status = 200)), tag = "merge_requests")]
 pub async fn rebase(
     State(state): State<AppState>,
     SignedIn(_, p0): SignedIn,
@@ -440,6 +456,8 @@ pub async fn rebase(
     Ok(Json(json!({ "head_sha": sha })))
 }
 
+/// Approve the merge request as the caller.
+#[utoipa::path(post, path = "/api/v1/projects/{id}/merge_requests/{iid}/approve", responses((status = 200)), tag = "merge_requests")]
 pub async fn approve(
     State(state): State<AppState>,
     SignedIn(_, p0): SignedIn,
@@ -450,6 +468,8 @@ pub async fn approve(
     Ok(Json(json!({ "ok": true })))
 }
 
+/// Take back the caller's approval of the merge request.
+#[utoipa::path(post, path = "/api/v1/projects/{id}/merge_requests/{iid}/unapprove", responses((status = 200)), tag = "merge_requests")]
 pub async fn unapprove(
     State(state): State<AppState>,
     SignedIn(_, p0): SignedIn,
@@ -477,6 +497,8 @@ fn pick(versions: &[MrDiff], v: Option<i32>) -> ApiResult<&MrDiff> {
     }
 }
 
+/// The commits of one version of a merge request (the latest by default), up to 500.
+#[utoipa::path(get, path = "/api/v1/projects/{id}/merge_requests/{iid}/commits", params(("version" = Option<i32>, Query, description = "A diff version; the latest without one")), responses((status = 200, body = [forgust_storage::CommitInfo])), tag = "merge_requests")]
 pub async fn commits(
     State(state): State<AppState>,
     Viewer(v): Viewer,
@@ -495,6 +517,7 @@ pub async fn commits(
     .await
 }
 
+/// The diff of a merge request version (the latest by default), or between two versions, a page of files at a time.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/merge_requests/{iid}/diff", responses((status = 200, body = forgust_storage::Diff)), tag = "merge_requests")]
 pub async fn diff(
     State(state): State<AppState>,
@@ -540,6 +563,7 @@ pub struct NoteDto {
     pub body_html: String,
 }
 
+/// The merge request's comments and threads, placed on a diff version (internal ones for Reporters and up).
 #[utoipa::path(get, path = "/api/v1/projects/{id}/merge_requests/{iid}/notes", responses((status = 200, body = [NoteDto])), tag = "merge_requests")]
 pub async fn notes(
     State(state): State<AppState>,
@@ -581,6 +605,8 @@ pub struct CreateNote {
     pub internal: bool,
 }
 
+/// Comment on a merge request, reply to a thread (`parent_id`) or comment on a diff line (`position`).
+#[utoipa::path(post, path = "/api/v1/projects/{id}/merge_requests/{iid}/notes", request_body = CreateNote, responses((status = 200, body = Note)), tag = "merge_requests")]
 pub async fn create_note(
     State(state): State<AppState>,
     SignedIn(_, p0): SignedIn,
@@ -596,6 +622,8 @@ pub struct EditNote {
     pub body: String,
 }
 
+/// Edit a comment on a merge request (its author only).
+#[utoipa::path(put, path = "/api/v1/projects/{id}/merge_requests/{iid}/notes/{note_id}", request_body = EditNote, responses((status = 200)), tag = "merge_requests")]
 pub async fn edit_note(
     State(state): State<AppState>,
     SignedIn(_, p0): SignedIn,
@@ -607,6 +635,8 @@ pub async fn edit_note(
     Ok(Json(json!({ "ok": true })))
 }
 
+/// Delete a comment on a merge request (its author, or a Maintainer).
+#[utoipa::path(delete, path = "/api/v1/projects/{id}/merge_requests/{iid}/notes/{note_id}", responses((status = 200)), tag = "merge_requests")]
 pub async fn delete_note(
     State(state): State<AppState>,
     SignedIn(_, p0): SignedIn,
@@ -622,6 +652,8 @@ pub struct ResolveBody {
     pub resolved: bool,
 }
 
+/// Resolve or reopen a thread by its first comment (the MR's or the thread's author, or anyone who may push).
+#[utoipa::path(post, path = "/api/v1/projects/{id}/merge_requests/{iid}/notes/{note_id}/resolve", request_body = ResolveBody, responses((status = 200)), tag = "merge_requests")]
 pub async fn resolve_note(
     State(state): State<AppState>,
     SignedIn(_, p0): SignedIn,
@@ -635,6 +667,8 @@ pub async fn resolve_note(
 
 // ------------------------------------------------------------------ approval rules
 
+/// The project's approval rules.
+#[utoipa::path(get, path = "/api/v1/projects/{id}/approval_rules", responses((status = 200, body = [ApprovalRule])), tag = "merge_requests")]
 pub async fn rules(State(state): State<AppState>, Viewer(v): Viewer, Path(id): Path<String>) -> ApiResult<Json<Vec<ApprovalRule>>> {
     let p = project_for(&state, &v, &id, ProjectAction::ReadCode).await?;
     Ok(Json(mrdb::rules(&state.db, p.id).await?))
@@ -653,6 +687,8 @@ fn developer() -> String {
     "developer".into()
 }
 
+/// Add an approval rule, or change the one with that name (project admins); answers every rule.
+#[utoipa::path(post, path = "/api/v1/projects/{id}/approval_rules", request_body = RuleBody, responses((status = 200, body = [ApprovalRule])), tag = "merge_requests")]
 pub async fn upsert_rule(
     State(state): State<AppState>,
     SignedIn(_, p0): SignedIn,
@@ -690,6 +726,8 @@ fn rule_json(r: &ApprovalRule) -> Value {
     json!({ "required": r.approvals_required, "min_access_level": r.min_access_level })
 }
 
+/// Delete an approval rule (project admins).
+#[utoipa::path(delete, path = "/api/v1/projects/{id}/approval_rules/{rule_id}", responses((status = 200)), tag = "merge_requests")]
 pub async fn delete_rule(
     State(state): State<AppState>,
     SignedIn(_, p0): SignedIn,
@@ -730,6 +768,8 @@ async fn hook_owner(state: &AppState, principal: &crate::auth::Principal, kind: 
     })
 }
 
+/// The webhooks of a project or a group (`{kind}`: `projects` or `groups`; admins).
+#[utoipa::path(get, path = "/api/v1/{kind}/{id}/hooks", responses((status = 200, body = [Webhook])), tag = "projects")]
 pub async fn list_hooks(
     State(state): State<AppState>,
     SignedIn(_, p0): SignedIn,
@@ -739,6 +779,8 @@ pub async fn list_hooks(
     Ok(Json(forgust_db::webhooks::list(&state.db, pid, nid).await?))
 }
 
+/// Add a webhook to a project or a group (`{kind}`: `projects` or `groups`; admins); answers every webhook.
+#[utoipa::path(post, path = "/api/v1/{kind}/{id}/hooks", request_body = HookBody, responses((status = 200, body = [Webhook])), tag = "projects")]
 pub async fn create_hook(
     State(state): State<AppState>,
     SignedIn(_, p0): SignedIn,
@@ -765,6 +807,8 @@ pub async fn create_hook(
     Ok(Json(forgust_db::webhooks::list(&state.db, pid, nid).await?))
 }
 
+/// Delete a webhook of a project or a group (`{kind}`: `projects` or `groups`; admins).
+#[utoipa::path(delete, path = "/api/v1/{kind}/{id}/hooks/{hook_id}", responses((status = 200)), tag = "projects")]
 pub async fn delete_hook(
     State(state): State<AppState>,
     SignedIn(_, p0): SignedIn,
@@ -777,6 +821,8 @@ pub async fn delete_hook(
     Ok(Json(json!({ "ok": true })))
 }
 
+/// A webhook's recent deliveries (`{kind}`: `projects` or `groups`; admins).
+#[utoipa::path(get, path = "/api/v1/{kind}/{id}/hooks/{hook_id}/deliveries", responses((status = 200, body = [Delivery])), tag = "projects")]
 pub async fn hook_deliveries(
     State(state): State<AppState>,
     SignedIn(_, p0): SignedIn,
@@ -804,9 +850,12 @@ pub struct EventsQuery {
 /// authenticated again: a revoked session ends there).
 const EVENTS_LIFETIME: Duration = Duration::from_secs(600);
 
+/// Live updates: a server-sent events stream for the web app, not a JSON answer.
+///
 /// One SSE stream per browser tab (architecture: Frontend). The tab lists the
 /// projects it shows; events of other projects, or of projects the viewer cannot
 /// read, are never sent. Topics change by reconnecting with a new list.
+#[utoipa::path(get, path = "/api/v1/events", params(("projects" = Option<String>, Query, description = "Projects to watch, comma-separated IDs (at most 20); none: only the caller's own events")), responses((status = 200, content_type = "text/event-stream")), tag = "user")]
 pub async fn events(
     State(state): State<AppState>,
     Viewer(v): Viewer,
@@ -860,6 +909,7 @@ pub async fn events(
 }
 
 /// Ask a reviewer to look again.
+#[utoipa::path(post, path = "/api/v1/projects/{id}/merge_requests/{iid}/reviewers/{user_id}/rerequest", responses((status = 200)), tag = "merge_requests")]
 pub async fn rerequest_review(
     State(state): State<AppState>,
     SignedIn(_, p0): SignedIn,
@@ -871,6 +921,7 @@ pub async fn rerequest_review(
 }
 
 /// Block merging until the caller approves or is asked to review again.
+#[utoipa::path(post, path = "/api/v1/projects/{id}/merge_requests/{iid}/request_changes", request_body = RequestChangesBody, responses((status = 200)), tag = "merge_requests")]
 pub async fn request_changes(
     State(state): State<AppState>,
     SignedIn(_, p0): SignedIn,
@@ -910,6 +961,7 @@ pub async fn stack_on(
 }
 
 /// Take this MR, and the layers above it, out of its stack.
+#[utoipa::path(delete, path = "/api/v1/projects/{id}/merge_requests/{iid}/stack", responses((status = 200)), tag = "merge_requests")]
 pub async fn leave_stack(
     State(state): State<AppState>,
     SignedIn(_, p0): SignedIn,
@@ -921,6 +973,7 @@ pub async fn leave_stack(
 }
 
 /// Rebase every open layer of the stack onto the branch below it.
+#[utoipa::path(post, path = "/api/v1/projects/{id}/merge_requests/{iid}/stack/rebase", responses((status = 200)), tag = "merge_requests")]
 pub async fn rebase_stack(
     State(state): State<AppState>,
     SignedIn(_, p0): SignedIn,
@@ -970,6 +1023,8 @@ pub async fn auto_merge(
     Ok(Json(AutoMergeResult { outcome, merge_request }))
 }
 
+/// Turn auto-merge off (who set it, the author, or someone who may merge).
+#[utoipa::path(delete, path = "/api/v1/projects/{id}/merge_requests/{iid}/auto_merge", responses((status = 200, body = MergeRequest)), tag = "merge_requests")]
 pub async fn cancel_auto_merge(
     State(state): State<AppState>,
     SignedIn(_, p0): SignedIn,
@@ -981,6 +1036,7 @@ pub async fn cancel_auto_merge(
 }
 
 /// Commit a comment's suggested change to the source branch.
+#[utoipa::path(post, path = "/api/v1/projects/{id}/merge_requests/{iid}/notes/{note_id}/apply_suggestion", responses((status = 200)), tag = "merge_requests")]
 pub async fn apply_suggestion(
     State(state): State<AppState>,
     SignedIn(_, p0): SignedIn,

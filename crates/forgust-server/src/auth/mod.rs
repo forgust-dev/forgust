@@ -206,11 +206,19 @@ pub async fn principal_from_token(state: &AppState, token: &str) -> Result<Optio
 /// `read_api` for reads).
 pub struct Viewer(pub Principal);
 
+/// A principal the server hands to `/api/v1` itself: the MCP server's code
+/// mode calls the API in-process as its caller, already authenticated. It
+/// stands in for the token only: its scopes are checked as a token's. Only
+/// server code sets request extensions: a client cannot send one.
+#[derive(Clone)]
+pub struct InProcess(pub Principal);
+
 impl FromRequestParts<AppState> for Viewer {
     type Rejection = ApiError;
 
     async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
         let read_only = matches!(parts.method, Method::GET | Method::HEAD | Method::OPTIONS);
+        let in_process = parts.extensions.get::<InProcess>().map(|InProcess(p)| p.clone());
         let header_token = parts.headers.get("private-token").and_then(|v| v.to_str().ok()).map(str::to_string).or_else(|| {
             parts
                 .headers
@@ -219,8 +227,12 @@ impl FromRequestParts<AppState> for Viewer {
                 .and_then(|v| v.strip_prefix("Bearer "))
                 .map(str::to_string)
         });
-        if let Some(token) = header_token {
-            let p = principal_from_token(state, token.trim()).await?.ok_or(ApiError::Unauthorized)?;
+        let token_principal = match (in_process, header_token) {
+            (Some(p), _) => Some(p),
+            (None, Some(token)) => Some(principal_from_token(state, token.trim()).await?.ok_or(ApiError::Unauthorized)?),
+            (None, None) => None,
+        };
+        if let Some(p) = token_principal {
             let ok = if read_only { p.has_scope("read_api") || p.has_scope("api") } else { p.has_scope("api") };
             if !ok || matches!(p, Principal::DeployToken { .. } | Principal::Job { .. }) {
                 refused(state, parts, &p, "token_scope_refused", None).await;

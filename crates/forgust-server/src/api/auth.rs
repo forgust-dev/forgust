@@ -85,6 +85,7 @@ async fn start_session(
     ))
 }
 
+/// Sign in with a username or email and a password: sets the session cookie, or answers a two-factor challenge.
 #[utoipa::path(post, path = "/api/v1/auth/login", request_body = LoginRequest, responses((status = 200, body = LoginResponse)), tag = "auth")]
 pub async fn login(
     State(state): State<AppState>,
@@ -136,6 +137,7 @@ pub struct TotpLogin {
     pub code: String,
 }
 
+/// Finish a two-factor sign-in with its challenge and an authenticator code: sets the session cookie.
 #[utoipa::path(post, path = "/api/v1/auth/login/totp", request_body = TotpLogin, responses((status = 200, body = LoginResponse)), tag = "auth")]
 pub async fn login_totp(
     State(state): State<AppState>,
@@ -538,6 +540,7 @@ struct PendingSync {
 /// ends; stopping starts a new one. While it lasts, nothing that mints
 /// credentials or changes the account works, and the audit log names the
 /// administrator on every change.
+#[utoipa::path(post, path = "/api/v1/admin/users/{id}/impersonate", responses((status = 200)), tag = "admin")]
 pub async fn impersonate(
     State(state): State<AppState>,
     crate::auth::Admin(admin, p): crate::auth::Admin,
@@ -565,6 +568,7 @@ pub async fn impersonate(
 }
 
 /// End an impersonation: back to the administrator's own (new) session.
+#[utoipa::path(post, path = "/api/v1/auth/stop_impersonating", responses((status = 200)), tag = "auth")]
 pub async fn stop_impersonating(
     State(state): State<AppState>,
     Viewer(p): Viewer,
@@ -589,6 +593,8 @@ pub async fn stop_impersonating(
     }
 }
 
+/// Sign out: end this session and clear its cookie.
+#[utoipa::path(post, path = "/api/v1/auth/logout", responses((status = 200)), tag = "auth")]
 pub async fn logout(
     State(state): State<AppState>,
     Viewer(p): Viewer,
@@ -613,6 +619,8 @@ pub struct RegisterRequest {
     pub password: String,
 }
 
+/// Create an account and sign in (only when sign-up is enabled); a confirmation link is emailed when the instance sends email.
+#[utoipa::path(post, path = "/api/v1/auth/register", request_body = RegisterRequest, responses((status = 200, body = LoginResponse)), tag = "auth")]
 pub async fn register(
     State(state): State<AppState>,
     jar: CookieJar,
@@ -664,6 +672,8 @@ pub struct Provider {
     pub display_name: String,
 }
 
+/// The configured sign-in providers (OpenID Connect).
+#[utoipa::path(get, path = "/api/v1/auth/providers", responses((status = 200, body = [Provider])), tag = "auth")]
 pub async fn providers(State(state): State<AppState>) -> Json<Vec<Provider>> {
     Json(state.oidc.providers.iter().map(|(k, v)| Provider { name: k.clone(), display_name: v.display_name.clone() }).collect())
 }
@@ -681,6 +691,8 @@ fn sign_in_failed(e: ApiError) -> Redirect {
     Redirect::to(&format!("/login?error={}", query_value(&why)))
 }
 
+/// Start a sign-in through a provider: redirects the browser to it.
+#[utoipa::path(get, path = "/api/v1/auth/oidc/{name}/start", responses((status = 302, description = "To the provider, or back to the sign-in page with the error")), tag = "auth")]
 pub async fn oidc_start(State(state): State<AppState>, jar: CookieJar, Path(name): Path<String>) -> Response {
     match crate::auth::oidc::start(&state, &name, None).await {
         Ok((url, login_state)) => (jar.add(crate::auth::oidc::state_cookie(&state, login_state)), Redirect::to(&url)).into_response(),
@@ -747,10 +759,13 @@ async fn sync_from_provider(
     forgust_db::users::find(&state.db, user.id).await?.ok_or(ApiError::Unauthorized)
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::IntoParams)]
 pub struct OidcCallback {
+    /// The authorization code the provider gave.
     code: Option<String>,
+    /// The state the sign-in was started with.
     state: Option<String>,
+    /// The provider's error, when it refused or the sign-in was cancelled.
     error: Option<String>,
 }
 
@@ -816,6 +831,8 @@ async fn link_identity(
     Ok(())
 }
 
+/// Where the provider sends the browser back: signs in (or asks for the second factor), or links the identity when started from the settings, then redirects.
+#[utoipa::path(get, path = "/api/v1/auth/oidc/{name}/callback", params(OidcCallback), responses((status = 302, description = "To the app, the second factor, the settings, or the sign-in page with the error")), tag = "auth")]
 pub async fn oidc_callback(
     State(state): State<AppState>,
     Path(name): Path<String>,
@@ -969,6 +986,8 @@ pub struct SetupStatus {
     pub webauthn: bool,
 }
 
+/// Whether the instance still needs its first administrator, and whether email and passkeys work.
+#[utoipa::path(get, path = "/api/v1/setup", responses((status = 200, body = SetupStatus)), tag = "auth")]
 pub async fn setup_status(State(state): State<AppState>) -> ApiResult<Json<SetupStatus>> {
     Ok(Json(SetupStatus {
         needs_setup: forgust_db::users::count_humans(&state.db).await? == 0,
@@ -987,6 +1006,7 @@ pub struct SetupRequest {
 }
 
 /// Create the first administrator (only while there are no users).
+#[utoipa::path(post, path = "/api/v1/setup", request_body = SetupRequest, responses((status = 200, body = LoginResponse)), tag = "auth")]
 pub async fn setup(
     State(state): State<AppState>,
     jar: CookieJar,

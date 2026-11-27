@@ -373,23 +373,113 @@ fn build_defs() -> Vec<Def> {
                 &["project_id", "branch", "commit_message", "actions"],
             ),
         },
+        // ---- code mode (ADR-0025): the whole API in two tools
+        Def {
+            name: "search_api",
+            title: "Search the API",
+            description: "Find the Forgust REST API endpoints that execute_api can call. `code`: JavaScript run on the server, an async \
+                          function or the body of one (use `return`), with `spec`: the API's OpenAPI 3.1 document (`spec.paths`, \
+                          `spec.components.schemas`). Return only what you need, e.g. `Object.entries(spec.paths).filter(([p]) => \
+                          p.includes('/merge_requests')).map(([p, ops]) => ({ path: p, methods: Object.keys(ops), summary: Object.values(ops)[0].summary }))`.",
+            write: false,
+            schema: code_schema(),
+        },
+        Def {
+            name: "execute_api",
+            title: "Run a script against the API",
+            description: "Run JavaScript on the server that calls the Forgust REST API as you: many calls, filtering and joining in one \
+                          step, only the result back. `code`: an async function or the body of one (use `return`). \
+                          `await forgust.get(path)`, `forgust.post(path, body)`, `.put`, `.patch`, `.delete`, or \
+                          `forgust.request(method, path, body)`: `path` as in search_api (`/api/v1/projects/{id}...`, with a query string \
+                          if needed; encode a group/project path as %2F), the answer's JSON back; a failed call throws (`e.status`, `e.message`). \
+                          `console.log` is kept. No network, files or timers; at most 50 calls and 30 s a run. Needs a token with the \
+                          `read_api` scope (reads, GET) or the `api` scope (changes too).",
+            write: false,
+            schema: code_schema(),
+        },
     ]
+}
+
+fn code_schema() -> Value {
+    json!({ "type": "object", "properties": { "code": { "type": "string", "description": "JavaScript: an async function, or the body of one" } },
+            "required": ["code"], "additionalProperties": false })
+}
+
+/// The tools whose answer is a list: `{ "items": [...] }` in `structuredContent`.
+const LISTS: &[&str] = &[
+    "list_projects",
+    "get_blame",
+    "list_commits",
+    "list_branches",
+    "list_tags",
+    "list_releases",
+    "list_issues",
+    "search_labels",
+    "list_merge_requests",
+    "list_pipelines",
+    "list_environments",
+];
+
+/// What a tool's `structuredContent` looks like (MCP 2025-06-18). Loose on
+/// purpose: every answer below matches, the cut one too.
+fn output_schema(name: &str) -> Value {
+    if LISTS.contains(&name) {
+        json!({ "type": "object", "properties": { "items": { "type": "array", "items": { "type": "object" } }, "truncated": { "type": "boolean" } } })
+    } else if is_code(name) {
+        json!({ "type": "object", "properties": { "result": {}, "logs": { "type": "array", "items": { "type": "string" } }, "truncated": { "type": "boolean" } } })
+    } else {
+        json!({ "type": "object" })
+    }
+}
+
+/// An answer as `structuredContent`: always an object (MCP's rule), a list
+/// as `items`, anything else as `value`. Longer than the text may be (`len`
+/// bytes of JSON), it says `truncated` only: the text is cut too.
+fn structured(v: Value, len: usize) -> Value {
+    if len > CAP {
+        return json!({ "truncated": true });
+    }
+    match v {
+        Value::Object(_) => v,
+        Value::Array(_) => json!({ "items": v }),
+        v => json!({ "value": v }),
+    }
 }
 
 /// The tools, built once.
 static DEFS: std::sync::LazyLock<Vec<Def>> = std::sync::LazyLock::new(build_defs);
 
-/// What `tools/list` answers: write tools only for tokens that may write.
-pub fn list(write: bool) -> Vec<Value> {
+/// Why `c` may not call `d`, if it may not.
+fn refusal(c: &Caller, d: &Def) -> Option<&'static str> {
+    if d.write && !c.write() {
+        Some("this token is read-only: a token with the `api` scope can change things")
+    } else if is_code(d.name) && !c.code_mode {
+        Some("code mode is off: an administrator can turn it on (Admin, Settings)")
+    } else if d.name == "execute_api" && !c.read_api() {
+        Some("execute_api calls /api/v1 as you: it needs a token with the read_api or api scope (an mcp token keeps to the other tools)")
+    } else {
+        None
+    }
+}
+
+/// What `tools/list` answers: the tools `c` may call (only code mode's for
+/// `?tools=code`).
+pub fn list(c: &Caller) -> Vec<Value> {
     DEFS.iter()
-        .filter(|d| write || !d.write)
+        .filter(|d| refusal(c, d).is_none() && (is_code(d.name) || !c.code_only))
         .map(|d| {
+            // execute_api changes things when the token may (DELETE too)
+            let api_writes = d.name == "execute_api" && c.api();
             json!({
-                "name": d.name, "title": d.title, "description": d.description, "inputSchema": d.schema,
-                "annotations": { "title": d.title, "readOnlyHint": !d.write, "destructiveHint": false, "openWorldHint": false },
+                "name": d.name, "title": d.title, "description": d.description, "inputSchema": d.schema, "outputSchema": output_schema(d.name),
+                "annotations": { "title": d.title, "readOnlyHint": !(d.write || api_writes), "destructiveHint": api_writes, "openWorldHint": false },
             })
         })
         .collect()
+}
+
+fn is_code(name: &str) -> bool {
+    matches!(name, "search_api" | "execute_api")
 }
 
 // ------------------------------------------------------------ helpers
@@ -405,11 +495,7 @@ fn error(s: &str) -> Value {
 /// At most `CAP` bytes, cut on a character boundary, saying so.
 fn cap(mut s: String) -> String {
     if s.len() > CAP {
-        let mut end = CAP;
-        while !s.is_char_boundary(end) {
-            end -= 1;
-        }
-        s.truncate(end);
+        s.truncate(s.floor_char_boundary(CAP));
         s.push_str("\n[cut: the answer was longer than 64 KB; ask for less (a page, a path, fewer lines)]");
     }
     s
@@ -421,16 +507,18 @@ async fn call_api(r: impl IntoResponse) -> R {
     let status = resp.status();
     let bytes = axum::body::to_bytes(resp.into_body(), 64 << 20).await.map_err(|e| e.to_string())?;
     let v: Value = serde_json::from_slice(&bytes).unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&bytes).into_owned()));
-    if status.is_success() {
-        Ok(v)
-    } else {
-        Err(v["message"]
-            .as_str()
-            .or(v["error_description"].as_str())
-            .or(v["error"].as_str())
-            .map(str::to_string)
-            .unwrap_or_else(|| format!("HTTP {status}")))
-    }
+    if status.is_success() { Ok(v) } else { Err(api_message(status.as_u16(), &v)) }
+}
+
+/// A failed API call's message, as the API's errors give it.
+pub(super) fn api_message(status: u16, body: &Value) -> String {
+    body["message"]
+        .as_str()
+        .or(body["error_description"].as_str())
+        .or(body["error"].as_str())
+        .or(body.as_str().filter(|s| !s.is_empty() && s.len() < 500))
+        .map(str::to_string)
+        .unwrap_or_else(|| format!("HTTP {status}"))
 }
 
 fn q<T: DeserializeOwned>(v: Value) -> Result<Query<T>, String> {
@@ -597,39 +685,41 @@ pub async fn call(c: &Caller, name: &str, args: &Value) -> Value {
     };
     let args = &args;
     let Some(def) = DEFS.iter().find(|d| d.name == name) else { return error(&format!("unknown tool {name}")) };
-    if def.write && !c.write {
-        return error("this token is read-only: a token with the `api` scope can change things");
+    if let Some(why) = refusal(c, def) {
+        return error(why);
     }
-    match run(c, name, args).await {
-        Ok(v) if def.write => {
-            let project = project_arg(args).ok();
-            let pid = match &project {
-                Some(p) => api::load_project(&c.state, p).await.ok().map(|p| p.id),
-                None => None,
-            };
-            crate::services::audit(
-                &c.state,
-                &c.principal,
-                "mcp_tool_call",
-                pid.map(|id| ("project", id)),
-                json!({ "tool": name, "via": "mcp", "token_id": c.token_id }),
-                None,
-            )
-            .await;
-            text(cap(format!("Done, as @{}.\n{}", c.user.username, serde_json::to_string_pretty(&v).unwrap_or_default())))
-        }
-        Ok(v) => {
-            text(cap(format!("{UNTRUSTED}\n<forgust-data>\n{}\n</forgust-data>", serde_json::to_string_pretty(&v).unwrap_or_default())))
-        }
-        Err(e) => error(&e),
-    }
+    let v = match run(c, name, args).await {
+        Ok(v) => v,
+        Err(e) => return error(&e),
+    };
+    let json = serde_json::to_string_pretty(&v).unwrap_or_default();
+    let mut out = if def.write {
+        let pid = match project_arg(args) {
+            Ok(p) => api::load_project(&c.state, &p).await.ok().map(|p| p.id),
+            Err(_) => None,
+        };
+        crate::services::audit(
+            &c.state,
+            &c.principal,
+            "mcp_tool_call",
+            pid.map(|id| ("project", id)),
+            json!({ "tool": name, "via": "mcp", "token_id": c.token_id }),
+            None,
+        )
+        .await;
+        text(cap(format!("Done, as @{}.\n{json}", c.user.username)))
+    } else {
+        text(cap(format!("{UNTRUSTED}\n<forgust-data>\n{json}\n</forgust-data>")))
+    };
+    out["structuredContent"] = structured(v, json.len());
+    out
 }
 
 async fn run(c: &Caller, name: &str, a: &Value) -> R {
     match name {
         "get_mcp_server_version" => Ok(json!({
             "name": "Forgust", "version": env!("CARGO_PKG_VERSION"), "url": c.state.cfg.server.external_url,
-            "user": c.user.username, "can_write": c.write,
+            "user": c.user.username, "can_write": c.write(),
         })),
         "list_projects" => {
             let paging = json!({ "search": s(a, "search").unwrap_or_default(), "page": i(a, "page").unwrap_or(1), "per_page": 50 });
@@ -1105,6 +1195,8 @@ async fn run(c: &Caller, name: &str, a: &Value) -> R {
                                "commit_message": s(a, "commit_message").ok_or("commit_message is required")?, "actions": a["actions"].clone() });
             call_api(api::repo::create_commit(st(c), signed(c), Path(project_arg(a)?), j(body)?).await).await
         }
+        "search_api" => super::code::search(c, s(a, "code").ok_or("code is required")?).await,
+        "execute_api" => super::code::execute(c, s(a, "code").ok_or("code is required")?).await,
         _ => Err(format!("unknown tool {name}")),
     }
 }

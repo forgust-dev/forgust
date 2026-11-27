@@ -90,6 +90,7 @@ pub struct IssueList {
     pub closed: i64,
 }
 
+/// List a project's issues by state, label, assignee, author, milestone or text; hidden confidential ones are left out.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/issues", responses((status = 200, body = IssueList)), tag = "issues")]
 pub async fn list(
     State(state): State<AppState>,
@@ -176,6 +177,7 @@ pub(crate) async fn plan(
     idb::find(&state.db, p.id, i.iid).await?.ok_or(ApiError::NotFound)
 }
 
+/// Create an issue (anyone signed in who sees the project); setting labels or a milestone needs Developer.
 #[utoipa::path(post, path = "/api/v1/projects/{id}/issues", request_body = CreateIssueBody, responses((status = 200, body = IssueDto)), tag = "issues")]
 pub async fn create(
     State(state): State<AppState>,
@@ -248,6 +250,7 @@ async fn related_mrs(state: &AppState, p: &Project, i: &Issue, members: bool) ->
         .collect())
 }
 
+/// One issue with its rendered description, related merge requests and what the caller may change.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/issues/{iid}", responses((status = 200, body = IssueDetail)), tag = "issues")]
 pub async fn show(State(state): State<AppState>, Viewer(v): Viewer, Path((id, iid)): Path<(String, i64)>) -> ApiResult<Json<IssueDetail>> {
     let (p, i) = load(&state, &v, &id, iid).await?;
@@ -294,6 +297,7 @@ pub struct UpdateIssueBody {
     pub confidential: Option<bool>,
 }
 
+/// Update an issue (the author or a Developer; labels, milestone: Developers; only confidential: also assignees, Reporters).
 #[utoipa::path(put, path = "/api/v1/projects/{id}/issues/{iid}", request_body = UpdateIssueBody, responses((status = 200, body = IssueDto)), tag = "issues")]
 pub async fn update(
     State(state): State<AppState>,
@@ -337,6 +341,7 @@ pub struct IssueNoteDto {
     pub body_html: String,
 }
 
+/// List an issue's comments and system notes, rendered; internal ones only for Reporters and above.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/issues/{iid}/notes", responses((status = 200, body = [IssueNoteDto])), tag = "issues")]
 pub async fn notes(
     State(state): State<AppState>,
@@ -360,6 +365,7 @@ pub struct NoteBody {
     pub internal: bool,
 }
 
+/// Comment on an issue (anyone signed in who sees it); an internal comment needs Reporter.
 #[utoipa::path(post, path = "/api/v1/projects/{id}/issues/{iid}/notes", request_body = NoteBody, responses((status = 200)), tag = "issues")]
 pub async fn create_note(
     State(state): State<AppState>,
@@ -372,6 +378,7 @@ pub async fn create_note(
     Ok(Json(json!({ "id": note_id })))
 }
 
+/// Edit a comment of an issue (its author only).
 #[utoipa::path(put, path = "/api/v1/projects/{id}/issues/{iid}/notes/{note_id}", request_body = NoteBody, responses((status = 200)), tag = "issues")]
 pub async fn edit_note(
     State(state): State<AppState>,
@@ -384,6 +391,7 @@ pub async fn edit_note(
     Ok(Json(json!({ "ok": true })))
 }
 
+/// Delete a comment of an issue (its author or a Maintainer).
 #[utoipa::path(delete, path = "/api/v1/projects/{id}/issues/{iid}/notes/{note_id}", responses((status = 200)), tag = "issues")]
 pub async fn delete_note(
     State(state): State<AppState>,
@@ -397,6 +405,7 @@ pub async fn delete_note(
 
 // ------------------------------------------------------------------ labels
 
+/// List a project's labels with their open issue and merge request counts.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/labels", responses((status = 200, body = [LabelWithCounts])), tag = "issues")]
 pub async fn labels(State(state): State<AppState>, Viewer(v): Viewer, Path(id): Path<String>) -> ApiResult<Json<Vec<LabelWithCounts>>> {
     let p = project_for(&state, &v, &id, ProjectAction::Read).await?;
@@ -428,6 +437,7 @@ fn check_label(body: &LabelBody, fallback_index: usize) -> ApiResult<(String, St
     Ok((name.to_string(), color))
 }
 
+/// Create a project label; a color is picked when none is given (Developers and above).
 #[utoipa::path(post, path = "/api/v1/projects/{id}/labels", request_body = LabelBody, responses((status = 200, body = Label)), tag = "issues")]
 pub async fn create_label(
     State(state): State<AppState>,
@@ -445,6 +455,7 @@ pub async fn create_label(
     Ok(Json(idb::upsert_label(&state.db, p.id, &name, &color, req.description.trim()).await?))
 }
 
+/// Rename a label or change its color or description (Developers and above).
 #[utoipa::path(put, path = "/api/v1/projects/{id}/labels/{label_id}", request_body = LabelBody, responses((status = 200, body = Label)), tag = "issues")]
 pub async fn update_label(
     State(state): State<AppState>,
@@ -463,6 +474,7 @@ pub async fn update_label(
     }
 }
 
+/// Delete a project label (Developers and above).
 #[utoipa::path(delete, path = "/api/v1/projects/{id}/labels/{label_id}", responses((status = 200)), tag = "issues")]
 pub async fn delete_label(
     State(state): State<AppState>,

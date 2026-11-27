@@ -46,6 +46,7 @@ fn interval(minutes: Option<i32>) -> ApiResult<i32> {
     Ok(m)
 }
 
+/// Pull and push mirrors of the project with their last update and error (Maintainers only).
 #[utoipa::path(get, path = "/api/v1/projects/{id}/mirrors", responses((status = 200, body = [MirrorDto])), tag = "projects")]
 pub async fn list(State(state): State<AppState>, SignedIn(_, p0): SignedIn, Path(id): Path<String>) -> ApiResult<Json<Vec<MirrorDto>>> {
     let p = admin(&state, &p0, &id).await?;
@@ -138,6 +139,7 @@ pub struct MirrorChangeBody {
     pub token: Option<String>,
 }
 
+/// Change a mirror's state, interval, options or credentials; it updates at once if re-enabled or re-keyed (Maintainers only).
 #[utoipa::path(put, path = "/api/v1/projects/{id}/mirrors/{mirror_id}", request_body = MirrorChangeBody, responses((status = 200, body = [MirrorDto])), tag = "projects")]
 pub async fn update(
     State(state): State<AppState>,

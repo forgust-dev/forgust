@@ -269,6 +269,7 @@ pub async fn create(
     Ok(Json(detail(&state, import).await?))
 }
 
+/// The caller's last 50 imports, newest first.
 #[utoipa::path(get, path = "/api/v1/imports", responses((status = 200, body = [Import])), tag = "imports")]
 pub async fn list(State(state): State<AppState>, SignedIn(_, p0): SignedIn) -> ApiResult<Json<Vec<Import>>> {
     let user = p0.direct_user().ok_or(ApiError::Unauthorized)?;
@@ -284,6 +285,7 @@ async fn mine(state: &AppState, p0: &Principal, id: i64) -> ApiResult<Import> {
     Ok(import)
 }
 
+/// One import with its projects and the source users seen so far (its creator or an administrator).
 #[utoipa::path(get, path = "/api/v1/imports/{id}", responses((status = 200, body = ImportDetail)), tag = "imports")]
 pub async fn show(State(state): State<AppState>, SignedIn(_, p0): SignedIn, Path(id): Path<i64>) -> ApiResult<Json<ImportDetail>> {
     let import = mine(&state, &p0, id).await?;

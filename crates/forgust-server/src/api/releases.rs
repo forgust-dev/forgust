@@ -122,6 +122,7 @@ pub async fn list(
     Ok(r)
 }
 
+/// One release by its tag: notes, links, and the tagged commit and source archives for those who read the code.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/releases/{tag}", responses((status = 200, body = ReleaseDto)), tag = "releases")]
 pub async fn show(
     State(state): State<AppState>,
@@ -180,6 +181,7 @@ pub struct UpdateReleaseBody {
     pub released_at: Option<DateTime<Utc>>,
 }
 
+/// Change a release's name, notes or release date (Developer+, or a CI job of the project acting for one).
 #[utoipa::path(put, path = "/api/v1/projects/{id}/releases/{tag}", request_body = UpdateReleaseBody, responses((status = 200, body = ReleaseDto)), tag = "releases")]
 pub async fn update(
     State(state): State<AppState>,
@@ -211,6 +213,7 @@ pub async fn delete(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// Add a link (an asset) to a release, at most 100 (Developer+, or a CI job of the project acting for one).
 #[utoipa::path(post, path = "/api/v1/projects/{id}/releases/{tag}/links", request_body = NewLink, responses((status = 201, body = LinkDto)), tag = "releases")]
 pub async fn add_link(
     State(state): State<AppState>,
@@ -223,6 +226,7 @@ pub async fn add_link(
     Ok((StatusCode::CREATED, Json(link_dto(&state, &p, &tag, link))).into_response())
 }
 
+/// Delete a link of a release (Developer+, or a CI job of the project acting for one).
 #[utoipa::path(delete, path = "/api/v1/projects/{id}/releases/{tag}/links/{link_id}", responses((status = 204)), tag = "releases")]
 pub async fn delete_link(
     State(state): State<AppState>,

@@ -35,12 +35,14 @@ fn check(level: &str, project: bool) -> ApiResult<()> {
     }
 }
 
+/// The caller's default notification level: watch, participating, mention or disabled.
 #[utoipa::path(get, path = "/api/v1/user/notification_settings", responses((status = 200, body = LevelDto)), tag = "user")]
 pub async fn mine(State(state): State<AppState>, SignedIn(u, _): SignedIn) -> ApiResult<Json<LevelDto>> {
     let level = ndb::global_level(&state.db, u.id).await?;
     Ok(Json(LevelDto { effective: level.clone(), level }))
 }
 
+/// Set the caller's default notification level: watch, participating, mention or disabled (not from a CI job).
 #[utoipa::path(put, path = "/api/v1/user/notification_settings", request_body = LevelBody, responses((status = 200, body = LevelDto)), tag = "user")]
 pub async fn set_mine(State(state): State<AppState>, SignedIn(u, v): SignedIn, Json(b): Json<LevelBody>) -> ApiResult<Json<LevelDto>> {
     if v.direct_user().is_none() {
@@ -51,6 +53,7 @@ pub async fn set_mine(State(state): State<AppState>, SignedIn(u, v): SignedIn, J
     Ok(Json(LevelDto { level: b.level.clone(), effective: b.level }))
 }
 
+/// The caller's notification level for a project (`global`: their default) and the level that applies.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/notification_settings", responses((status = 200, body = LevelDto)), tag = "projects")]
 pub async fn project(State(state): State<AppState>, SignedIn(u, v): SignedIn, Path(id): Path<String>) -> ApiResult<Json<LevelDto>> {
     let p = project_for(&state, &v, &id, ProjectAction::Read).await?;
@@ -59,6 +62,7 @@ pub async fn project(State(state): State<AppState>, SignedIn(u, v): SignedIn, Pa
     Ok(Json(LevelDto { level: own.clone().unwrap_or_else(|| "global".into()), effective: own.unwrap_or(global) }))
 }
 
+/// Set the caller's notification level for a project; `global` follows their default (not from a CI job).
 #[utoipa::path(put, path = "/api/v1/projects/{id}/notification_settings", request_body = LevelBody, responses((status = 200, body = LevelDto)), tag = "projects")]
 pub async fn set_project(
     State(state): State<AppState>,
@@ -205,11 +209,13 @@ async fn read(state: &AppState, user_id: i64, id: Option<i64>) -> ApiResult<Json
 }
 
 /// Mark one notification read.
+#[utoipa::path(post, path = "/api/v1/user/notifications/{id}/read", responses((status = 200, body = Inbox)), tag = "user")]
 pub async fn read_one(State(state): State<AppState>, SignedIn(u, _): SignedIn, Path(id): Path<i64>) -> ApiResult<Json<Inbox>> {
     read(&state, u.id, Some(id)).await
 }
 
 /// Mark every notification read.
+#[utoipa::path(post, path = "/api/v1/user/notifications/read", responses((status = 200, body = Inbox)), tag = "user")]
 pub async fn read_all(State(state): State<AppState>, SignedIn(u, _): SignedIn) -> ApiResult<Json<Inbox>> {
     read(&state, u.id, None).await
 }

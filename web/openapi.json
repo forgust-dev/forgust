@@ -33,6 +33,7 @@
         "tags": [
           "ai_review"
         ],
+        "summary": "Change AI review on this instance: provider, endpoint, model, key, image, limits, options (administrators only).",
         "operationId": "admin_set",
         "requestBody": {
           "content": {
@@ -87,6 +88,463 @@
         }
       }
     },
+    "/api/v1/admin/audit": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "The audit log, newest first (200 events), optionally for one target and before an event id.",
+        "operationId": "audit",
+        "parameters": [
+          {
+            "name": "target_type",
+            "in": "path",
+            "description": "Only events on this kind of target (`user`, `project`, ...).",
+            "required": true,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "target_id",
+            "in": "path",
+            "description": "Only events on this target.",
+            "required": true,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            }
+          },
+          {
+            "name": "before",
+            "in": "path",
+            "description": "Only events older than this event id (the next page).",
+            "required": true,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AuditEvent"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/audit/catalogue": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Every event the audit log can hold, with its fields.",
+        "operationId": "audit_catalogue",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditCatalogue"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/backups": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Backups made from here (the database and the repositories; not the blob store).",
+        "operationId": "backups",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Backups"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Back up the database and every repository now, in the background.",
+        "operationId": "start_backup",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/admin/backups/{name}": {
+      "delete": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Delete a backup made from here.",
+        "operationId": "delete_backup",
+        "responses": {
+          "204": {}
+        }
+      }
+    },
+    "/api/v1/admin/banner": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "The banner as set (also when ended), for the admin's form.",
+        "operationId": "banner_settings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Banner"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Set the banner everyone sees: one line of at most 500 characters, tone info or warn, until an optional time.",
+        "operationId": "set_banner",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Banner"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Banner"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/groups": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Every group.",
+        "operationId": "groups",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "path",
+            "description": "Only those whose path or name matches.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "path",
+            "description": "projects: size, activity (default) or name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AdminGroup"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/health": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Is every part of the instance working: database, blob store, email, git, workers, runners.",
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/health/email": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Send a test email now (not queued), so the answer says whether it left.",
+        "operationId": "test_email",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestEmail"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/admin/jobs": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "The background job queue.",
+        "operationId": "jobs",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobsOverview"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/jobs/{job_id}": {
+      "delete": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Drop a failed job.",
+        "operationId": "drop_job",
+        "responses": {
+          "204": {}
+        }
+      }
+    },
+    "/api/v1/admin/jobs/{job_id}/retry": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Run a failed job again now.",
+        "operationId": "retry_job",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/admin/namespaces/{id}/quota": {
+      "put": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Set the storage quota of a top-level group or personal namespace (none: the instance default, 0: no quota).",
+        "operationId": "set_namespace_quota",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetQuota"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/admin/overview": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "The admin dashboard: users, version, instance counts, CI and dependency update activity.",
+        "operationId": "overview",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Overview"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/projects": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Every project, with what it keeps and how busy it is.",
+        "operationId": "projects",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "path",
+            "description": "Only those whose path or name matches.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "path",
+            "description": "projects: size, activity (default) or name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AdminProject"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/projects/{id}/maintenance": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Repack a project's repository now (full maintenance, queued with its pushes).",
+        "operationId": "project_maintenance",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/admin/projects/{id}/quota": {
+      "put": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Set a project's storage quota (none or 0: no quota).",
+        "operationId": "set_project_quota",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetQuota"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {}
+        }
+      }
+    },
     "/api/v1/admin/renovate": {
       "get": {
         "tags": [
@@ -110,6 +568,7 @@
         "tags": [
           "renovate"
         ],
+        "summary": "Change built-in Renovate here: image, limits, variables, github.com token, image pull credentials (administrators only).",
         "operationId": "admin_set",
         "requestBody": {
           "content": {
@@ -160,6 +619,7 @@
         "tags": [
           "renovate"
         ],
+        "summary": "Add a registry credential every project's Renovate runs use; returns the instance's rules (administrators only).",
         "operationId": "admin_add_host_rule",
         "requestBody": {
           "content": {
@@ -192,6 +652,7 @@
         "tags": [
           "renovate"
         ],
+        "summary": "Delete an instance-wide Renovate host rule (administrators only).",
         "operationId": "admin_delete_host_rule",
         "responses": {
           "204": {}
@@ -203,6 +664,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Instance runners, which every project may use (administrators only).",
         "operationId": "instance_runners",
         "responses": {
           "200": {
@@ -223,6 +685,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Create an instance runner; its token is shown only in the answer (administrators; browser session only).",
         "operationId": "create_instance_runner",
         "requestBody": {
           "content": {
@@ -252,6 +715,7 @@
         "tags": [
           "security"
         ],
+        "summary": "Instance scanning settings, scans running, the most exposed projects and Trivy DB mirrors (administrators only).",
         "operationId": "admin_scanning",
         "responses": {
           "200": {
@@ -269,6 +733,7 @@
         "tags": [
           "security"
         ],
+        "summary": "Change the instance's scanning settings; turning DB mirroring on copies them now (administrators only).",
         "operationId": "set_admin_scanning",
         "requestBody": {
           "content": {
@@ -286,6 +751,54 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AdminScanning"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/settings": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "The instance settings (sign-up, personal projects, default branch, MCP, update check).",
+        "operationId": "settings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstanceSettings"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Save the instance settings; a switch left out keeps its value.",
+        "operationId": "update_settings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateInstanceSettings"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstanceSettings"
                 }
               }
             }
@@ -316,6 +829,7 @@
         "tags": [
           "smart_view"
         ],
+        "summary": "Change the Smart View on this instance: whether projects may use it, image, runner tags, timeout (administrators only).",
         "operationId": "admin_set",
         "requestBody": {
           "content": {
@@ -337,6 +851,425 @@
               }
             }
           }
+        }
+      }
+    },
+    "/api/v1/admin/storage": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "What the instance keeps, by kind and by project.",
+        "operationId": "storage",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageOverview"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/storage/quota": {
+      "put": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "The storage quota of each top-level group and personal namespace without its own.",
+        "operationId": "set_default_quota",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetQuota"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/admin/storage/scan": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "List the blob store by prefix in the background (one scan at a time).",
+        "operationId": "scan_storage",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/admin/tasks": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "The scheduled tasks an administrator may run now.",
+        "operationId": "runnable",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Runnable"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/tasks/{task}": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Run a scheduled task now (queued; at most one waits at a time).",
+        "operationId": "run_task",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/admin/update": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Whether a newer Forgust release is out.",
+        "operationId": "update_status",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "List users, by filter and search (administrators only).",
+        "operationId": "users",
+        "parameters": [
+          {
+            "name": "filter",
+            "in": "path",
+            "description": "all (people), admins, blocked, external, unconfirmed, two_factor_off, bots",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AdminUser"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Create a user (administrators only); their email counts as confirmed.",
+        "operationId": "create_user",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUser"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users/{id}": {
+      "put": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Change a user's admin rights, external flag, state (active or blocked), password or email (confirmed at once); blocking or a new password ends their sessions.",
+        "operationId": "update_user",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUser"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Delete a person. What they wrote (merge requests, issues, comments, pipelines)\nstays, without its author; their memberships, keys, tokens, approvals and\nto-dos go. Refused for yourself, the only Owner of a group, and while they\nhave personal projects (unless those go too).",
+        "operationId": "delete_user",
+        "parameters": [
+          {
+            "name": "delete_projects",
+            "in": "path",
+            "description": "Delete their personal projects too (else they block the deletion).",
+            "required": true,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/admin/users/{id}/confirm_email": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Confirm the account's address without a link: the administrator vouches\nthat it is the user's (an instance without email has no other way).",
+        "operationId": "confirm_email",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmUserEmail"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/admin/users/{id}/emails": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Someone's other email addresses.",
+        "operationId": "list_user_emails",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserEmail"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users/{id}/emails/{email_id}": {
+      "delete": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Remove one of someone's addresses (one they should not hold, or that\nholds back its owner: a confirmed one is nobody else's).",
+        "operationId": "remove_user_email",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/admin/users/{id}/emails/{email_id}/confirm": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Confirm one of someone's addresses without a link: the administrator\nvouches that it is theirs (an instance without email has no other way).",
+        "operationId": "confirm_user_email",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserEmail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users/{id}/identities": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Link a provider identity to someone's account, for them (they can also do\nit themselves, from their settings).",
+        "operationId": "link_identity",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkIdentity"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/admin/users/{id}/identities/{provider}": {
+      "delete": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Unlink a provider from someone's account: they no longer sign in through it.",
+        "operationId": "unlink_identity",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/admin/users/{id}/impersonate": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "An administrator signs in as someone else, for an hour (Admin > Users), to\nsee what they see. Only an active person who is not an administrator; only\nfrom the administrator's own browser session. The administrator's session\nends; stopping starts a new one. While it lasts, nothing that mints\ncredentials or changes the account works, and the audit log names the\nadministrator on every change.",
+        "operationId": "impersonate",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/admin/users/{id}/resend_confirmation": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Email the confirmation link again (to the new address when one waits).",
+        "operationId": "resend_confirmation",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/admin/users/{id}/reset_two_factor": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Turn two-factor authentication off (a lost authenticator or security key):\nthe app, the recovery codes, security keys and passkeys go, and their\nsessions end. They sign in with their password and set it up again.",
+        "operationId": "reset_two_factor",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/admin/users/{id}/revoke_tokens": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Revoke every personal access token of a user.",
+        "operationId": "revoke_tokens",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/admin/users/{id}/sign_out": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "End every session of a user (they sign in again).",
+        "operationId": "sign_out",
+        "responses": {
+          "200": {}
         }
       }
     },
@@ -367,6 +1300,7 @@
         "tags": [
           "auth"
         ],
+        "summary": "Sign in with a username or email and a password: sets the session cookie, or answers a two-factor challenge.",
         "operationId": "login",
         "requestBody": {
           "content": {
@@ -456,6 +1390,7 @@
         "tags": [
           "auth"
         ],
+        "summary": "Finish a two-factor sign-in with its challenge and an authenticator code: sets the session cookie.",
         "operationId": "login_totp",
         "requestBody": {
           "content": {
@@ -536,6 +1471,84 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Sign out: end this session and clear its cookie.",
+        "operationId": "logout",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/auth/oidc/{name}/callback": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Where the provider sends the browser back: signs in (or asks for the second factor), or links the identity when started from the settings, then redirects.",
+        "operationId": "oidc_callback",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "description": "The authorization code the provider gave.",
+            "required": true,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "state",
+            "in": "path",
+            "description": "The state the sign-in was started with.",
+            "required": true,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "error",
+            "in": "path",
+            "description": "The provider's error, when it refused or the sign-in was cancelled.",
+            "required": true,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "To the app, the second factor, the settings, or the sign-in page with the error"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/oidc/{name}/start": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Start a sign-in through a provider: redirects the browser to it.",
+        "operationId": "oidc_start",
+        "responses": {
+          "302": {
+            "description": "To the provider, or back to the sign-in page with the error"
           }
         }
       }
@@ -634,11 +1647,132 @@
         }
       }
     },
+    "/api/v1/auth/providers": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "The configured sign-in providers (OpenID Connect).",
+        "operationId": "providers",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Provider"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Create an account and sign in (only when sign-up is enabled); a confirmation link is emailed when the instance sends email.",
+        "operationId": "register",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/stop_impersonating": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "End an impersonation: back to the administrator's own (new) session.",
+        "operationId": "stop_impersonating",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/banner": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "The banner everyone sees (none when empty or ended). Public: signed-out pages show it too.",
+        "operationId": "banner",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/Banner"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/events": {
+      "get": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Live updates: a server-sent events stream for the web app, not a JSON answer.",
+        "description": "One SSE stream per browser tab (architecture: Frontend). The tab lists the\nprojects it shows; events of other projects, or of projects the viewer cannot\nread, are never sent. Topics change by reconnecting with a new list.",
+        "operationId": "events",
+        "parameters": [
+          {
+            "name": "projects",
+            "in": "query",
+            "description": "Projects to watch, comma-separated IDs (at most 20); none: only the caller's own events",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {}
+            }
+          }
+        }
+      }
+    },
     "/api/v1/groups": {
       "get": {
         "tags": [
           "groups"
         ],
+        "summary": "Top-level groups the viewer may see, by name; `member=true` keeps those they belong to.",
         "operationId": "list_top",
         "parameters": [
           {
@@ -670,6 +1804,7 @@
         "tags": [
           "groups"
         ],
+        "summary": "Create a top-level group, or a subgroup of `parent_id` (who may create subgroups there); the creator owns it. Not bots.",
         "operationId": "create",
         "requestBody": {
           "content": {
@@ -699,6 +1834,7 @@
         "tags": [
           "groups"
         ],
+        "summary": "A group, with the viewer's role and what they may create or manage, its breadcrumbs and, for an organization, its policy.",
         "operationId": "show",
         "responses": {
           "200": {
@@ -711,6 +1847,258 @@
             }
           }
         }
+      },
+      "put": {
+        "tags": [
+          "groups"
+        ],
+        "summary": "Change the group's name, description or visibility (Owners only).",
+        "operationId": "update",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateGroup"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "groups"
+        ],
+        "summary": "Delete the group (Owners only); its subgroups and projects must be gone first.",
+        "operationId": "delete",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/groups/{id}/access_tokens": {
+      "get": {
+        "tags": [
+          "groups"
+        ],
+        "summary": "The group's access tokens, held by its bot members (Owners only).",
+        "operationId": "list_access_tokens",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AccessTokenDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "groups"
+        ],
+        "summary": "Create a group access token: a bot member with that role, and its token, shown only here (Owners only; needs a signed-in browser session).",
+        "operationId": "create_access_token",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAccessToken"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewToken"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/groups/{id}/access_tokens/{bot_id}": {
+      "delete": {
+        "tags": [
+          "groups"
+        ],
+        "summary": "Revoke a group access token: blocks its bot and removes its membership (Owners only).",
+        "operationId": "revoke_access_token",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/groups/{id}/avatar": {
+      "get": {
+        "tags": [
+          "groups"
+        ],
+        "summary": "A group's avatar (PNG), for those who can see the group; 404 when it has none.",
+        "operationId": "group_avatar",
+        "responses": {
+          "200": {
+            "content": {
+              "image/png": {}
+            }
+          },
+          "304": {
+            "description": "Unchanged (If-None-Match)"
+          },
+          "404": {
+            "description": "No avatar"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "groups"
+        ],
+        "summary": "Owners set a group's avatar from a PNG, JPEG, GIF or WebP image (at most 5 MB, sent as the body), stored as a 256 px square PNG.",
+        "operationId": "set_group_avatar",
+        "requestBody": {
+          "description": "The image as the raw body: PNG, JPEG, GIF or WebP, at most 5 MB",
+          "content": {
+            "image/gif": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32",
+                  "minimum": 0
+                }
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32",
+                  "minimum": 0
+                }
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32",
+                  "minimum": 0
+                }
+              }
+            },
+            "image/webp": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32",
+                  "minimum": 0
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {}
+        }
+      },
+      "delete": {
+        "tags": [
+          "groups"
+        ],
+        "summary": "Owners remove a group's avatar.",
+        "operationId": "delete_group_avatar",
+        "responses": {
+          "204": {}
+        }
+      }
+    },
+    "/api/v1/groups/{id}/deploy_tokens": {
+      "get": {
+        "tags": [
+          "groups"
+        ],
+        "summary": "The group's deploy tokens (Owners only).",
+        "operationId": "list_deploy_tokens",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DeployToken"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "groups"
+        ],
+        "summary": "Create a deploy token for the group; the answer is the only time it is shown (Owners only; needs a signed-in browser session).",
+        "operationId": "create_deploy_token",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDeployToken"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewToken"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/groups/{id}/deploy_tokens/{token_id}": {
+      "delete": {
+        "tags": [
+          "groups"
+        ],
+        "summary": "Revoke a deploy token (Owners only).",
+        "operationId": "revoke_deploy_token",
+        "responses": {
+          "200": {}
+        }
       }
     },
     "/api/v1/groups/{id}/members": {
@@ -718,6 +2106,7 @@
         "tags": [
           "groups"
         ],
+        "summary": "The group's direct members, highest role first (signed-in users who may see the group).",
         "operationId": "members",
         "responses": {
           "200": {
@@ -732,6 +2121,90 @@
               }
             }
           }
+        }
+      },
+      "post": {
+        "tags": [
+          "groups"
+        ],
+        "summary": "Add a member or change their role (Maintainers; not above their own role).",
+        "operationId": "add_member",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddMember"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/groups/{id}/members/{user_id}": {
+      "delete": {
+        "tags": [
+          "groups"
+        ],
+        "summary": "Remove a member (Maintainers, not one above them); anyone may leave. A group keeps at least one Owner.",
+        "operationId": "remove_member",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/groups/{id}/path": {
+      "post": {
+        "tags": [
+          "groups"
+        ],
+        "summary": "Change the group's path (Owners only).",
+        "operationId": "rename",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewPath"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/groups/{id}/policy": {
+      "put": {
+        "tags": [
+          "groups"
+        ],
+        "summary": "Set an organization's policy: maximum visibility, two-factor, who creates projects and subgroups (Owners of a top-level group).",
+        "operationId": "set_policy",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PolicyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {}
         }
       }
     },
@@ -763,6 +2236,7 @@
         "tags": [
           "groups"
         ],
+        "summary": "The projects directly in the group that the viewer may see, most recently active first.",
         "operationId": "projects",
         "responses": {
           "200": {
@@ -785,6 +2259,7 @@
         "tags": [
           "renovate"
         ],
+        "summary": "Whether dependency updates are on by default for the group's projects (group Owners only).",
         "operationId": "group_get",
         "responses": {
           "200": {
@@ -832,6 +2307,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "The group's own runners (group Owners).",
         "operationId": "group_runners",
         "responses": {
           "200": {
@@ -852,6 +2328,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Create a group runner; its token is shown only in the answer (group Owners; browser session, confirmed email).",
         "operationId": "create_group_runner",
         "requestBody": {
           "content": {
@@ -881,6 +2358,7 @@
         "tags": [
           "security"
         ],
+        "summary": "Whether a group turns scanning on for its projects that never chose (group Owners only).",
         "operationId": "group_scanning",
         "responses": {
           "200": {
@@ -898,6 +2376,7 @@
         "tags": [
           "security"
         ],
+        "summary": "Set a group's scanning default; on turns it on for projects below that never chose (group Owners only).",
         "operationId": "set_group_scanning",
         "requestBody": {
           "content": {
@@ -919,6 +2398,61 @@
               }
             }
           }
+        }
+      }
+    },
+    "/api/v1/groups/{id}/shares": {
+      "get": {
+        "tags": [
+          "groups"
+        ],
+        "summary": "Groups this group is shared with (those the viewer may see).",
+        "operationId": "shares",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ShareDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "groups"
+        ],
+        "summary": "Share the group with another group, capped at a role (Maintainers; not above their own role).",
+        "operationId": "share",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShareRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/groups/{id}/shares/{group_id}": {
+      "delete": {
+        "tags": [
+          "groups"
+        ],
+        "summary": "Stop sharing the group with another group (Maintainers).",
+        "operationId": "unshare",
+        "responses": {
+          "200": {}
         }
       }
     },
@@ -947,6 +2481,7 @@
         "tags": [
           "groups"
         ],
+        "summary": "The direct subgroups of the group that the viewer may see.",
         "operationId": "subgroups",
         "responses": {
           "200": {
@@ -964,11 +2499,42 @@
         }
       }
     },
+    "/api/v1/groups/{id}/transfer": {
+      "post": {
+        "tags": [
+          "groups"
+        ],
+        "summary": "Move the group under another group, or make it an organization (Owners only).",
+        "operationId": "transfer",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferGroup"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/groups/{id}/variables": {
       "get": {
         "tags": [
           "ci"
         ],
+        "summary": "The group's CI/CD variables, without the values of masked ones (group Owners).",
         "operationId": "group_variables",
         "responses": {
           "200": {
@@ -989,6 +2555,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Create or update a group CI/CD variable; an omitted value keeps the current one (group Owners).",
         "operationId": "set_group_variable",
         "requestBody": {
           "content": {
@@ -1021,9 +2588,26 @@
         "tags": [
           "ci"
         ],
+        "summary": "Delete a group CI/CD variable by key (group Owners).",
         "operationId": "delete_group_variable",
         "responses": {
           "200": {}
+        }
+      }
+    },
+    "/api/v1/highlight.css": {
+      "get": {
+        "tags": [
+          "repository"
+        ],
+        "summary": "The style sheet of syntax highlighting (for the web app).",
+        "operationId": "highlight_css",
+        "responses": {
+          "200": {
+            "content": {
+              "text/css": {}
+            }
+          }
         }
       }
     },
@@ -1032,6 +2616,7 @@
         "tags": [
           "imports"
         ],
+        "summary": "The caller's last 50 imports, newest first.",
         "operationId": "list",
         "responses": {
           "200": {
@@ -1198,6 +2783,7 @@
         "tags": [
           "imports"
         ],
+        "summary": "One import with its projects and the source users seen so far (its creator or an administrator).",
         "operationId": "show",
         "responses": {
           "200": {
@@ -1390,11 +2976,24 @@
         }
       }
     },
+    "/api/v1/openapi.json": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "This document: the OpenAPI description of `/api/v1`.",
+        "operationId": "spec",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
     "/api/v1/projects": {
       "get": {
         "tags": [
           "projects"
         ],
+        "summary": "Public projects, and internal ones for signed-in users, most recently active first; `search` filters by path.",
         "operationId": "explore",
         "responses": {
           "200": {
@@ -1415,6 +3014,7 @@
         "tags": [
           "projects"
         ],
+        "summary": "Create a project in a namespace (your own by default) with its default branch protected (who may create projects there).",
         "operationId": "create",
         "requestBody": {
           "content": {
@@ -1444,6 +3044,7 @@
         "tags": [
           "projects"
         ],
+        "summary": "A project, with the viewer's role and what they may do, its breadcrumbs and pull mirror source.",
         "operationId": "show",
         "responses": {
           "200": {
@@ -1455,6 +3056,107 @@
               }
             }
           }
+        }
+      },
+      "put": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Change the project's name, description, visibility or default branch (Maintainers; visibility is the Owners' call).",
+        "operationId": "update",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateProject"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectDto"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Delete the project (Owners only).",
+        "operationId": "delete",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/projects/{id}/access_tokens": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "The project's access tokens, held by its bot members (Maintainers).",
+        "operationId": "list_access_tokens",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AccessTokenDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Create a project access token: a bot member with that role, and its token, shown only here (Maintainers; needs a signed-in browser session).",
+        "operationId": "create_access_token",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAccessToken"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewToken"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/access_tokens/{bot_id}": {
+      "delete": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Revoke a project access token: blocks its bot and removes its membership (Maintainers).",
+        "operationId": "revoke_access_token",
+        "responses": {
+          "200": {}
         }
       }
     },
@@ -1506,11 +3208,216 @@
         }
       }
     },
+    "/api/v1/projects/{id}/approval_rules": {
+      "get": {
+        "tags": [
+          "merge_requests"
+        ],
+        "summary": "The project's approval rules.",
+        "operationId": "rules",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ApprovalRule"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "merge_requests"
+        ],
+        "summary": "Add an approval rule, or change the one with that name (project admins); answers every rule.",
+        "operationId": "upsert_rule",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuleBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ApprovalRule"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/approval_rules/{rule_id}": {
+      "delete": {
+        "tags": [
+          "merge_requests"
+        ],
+        "summary": "Delete an approval rule (project admins).",
+        "operationId": "delete_rule",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/projects/{id}/archive": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Archive the project: read-only for everyone until its Owner unarchives it.",
+        "operationId": "archive",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/projects/{id}/audit": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "The project's audit log, newest first, 100 events at a time (Maintainers).",
+        "operationId": "audit_log",
+        "parameters": [
+          {
+            "name": "before",
+            "in": "path",
+            "description": "Only events older than this event id (the next page).",
+            "required": true,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AuditEvent"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/avatar": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "A project's avatar (PNG), for those who can see the project; 404 when it has none.",
+        "operationId": "project_avatar",
+        "responses": {
+          "200": {
+            "content": {
+              "image/png": {}
+            }
+          },
+          "304": {
+            "description": "Unchanged (If-None-Match)"
+          },
+          "404": {
+            "description": "No avatar"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Maintainers set a project's avatar.\nThe body is a PNG, JPEG, GIF or WebP image (at most 5 MB), stored as a 256 px square PNG.",
+        "operationId": "set_project_avatar",
+        "requestBody": {
+          "description": "The image as the raw body: PNG, JPEG, GIF or WebP, at most 5 MB",
+          "content": {
+            "image/gif": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32",
+                  "minimum": 0
+                }
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32",
+                  "minimum": 0
+                }
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32",
+                  "minimum": 0
+                }
+              }
+            },
+            "image/webp": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32",
+                  "minimum": 0
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {}
+        }
+      },
+      "delete": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Maintainers remove a project's avatar.",
+        "operationId": "delete_project_avatar",
+        "responses": {
+          "204": {}
+        }
+      }
+    },
     "/api/v1/projects/{id}/ci/settings": {
       "get": {
         "tags": [
           "ci"
         ],
+        "summary": "The project's CI/CD settings (Maintainers).",
         "operationId": "ci_settings",
         "responses": {
           "200": {
@@ -1528,6 +3435,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Change the project's CI/CD settings: config path, timeout, git depth, merge checks, job token scope (Maintainers).",
         "operationId": "update_ci_settings",
         "requestBody": {
           "content": {
@@ -1575,11 +3483,141 @@
         }
       }
     },
+    "/api/v1/projects/{id}/deploy_keys": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "The project's deploy keys (Maintainers).",
+        "operationId": "deploy_keys",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DeployKey"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Add a deploy key, or attach one another project uses (Maintainers; needs a signed-in browser session).",
+        "operationId": "add_deploy_key",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddDeployKey"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DeployKey"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/deploy_keys/{key_id}": {
+      "delete": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Detach a deploy key from the project (Maintainers); a key no project uses any more is deleted.",
+        "operationId": "remove_deploy_key",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/projects/{id}/deploy_tokens": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "The project's deploy tokens (Maintainers).",
+        "operationId": "list_deploy_tokens",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DeployToken"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Create a deploy token; the answer is the only time it is shown (Maintainers; needs a signed-in browser session).",
+        "operationId": "create_deploy_token",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDeployToken"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewToken"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/deploy_tokens/{token_id}": {
+      "delete": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Revoke a deploy token (Maintainers).",
+        "operationId": "revoke_deploy_token",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
     "/api/v1/projects/{id}/environments": {
       "get": {
         "tags": [
           "ci"
         ],
+        "summary": "Environments of the project, their last deployment and whether you may stop each (`state`: available, stopped, all).",
         "operationId": "list",
         "responses": {
           "200": {
@@ -1602,6 +3640,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "One environment: its last 100 deployments, whether it is protected and whether you may stop it.",
         "operationId": "show",
         "responses": {
           "200": {
@@ -1614,6 +3653,36 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "ci"
+        ],
+        "summary": "Delete a stopped environment and its deployment history.",
+        "operationId": "delete",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/projects/{id}/environments/{env_id}/stop": {
+      "post": {
+        "tags": [
+          "ci"
+        ],
+        "summary": "Stop an environment: its `on_stop` job runs (as you), or it is marked stopped.",
+        "operationId": "stop",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Environment"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/projects/{id}/issues": {
@@ -1621,6 +3690,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "List a project's issues by state, label, assignee, author, milestone or text; hidden confidential ones are left out.",
         "operationId": "list",
         "responses": {
           "200": {
@@ -1638,6 +3708,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "Create an issue (anyone signed in who sees the project); setting labels or a milestone needs Developer.",
         "operationId": "create",
         "requestBody": {
           "content": {
@@ -1667,6 +3738,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "One issue with its rendered description, related merge requests and what the caller may change.",
         "operationId": "show",
         "responses": {
           "200": {
@@ -1684,6 +3756,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "Update an issue (the author or a Developer; labels, milestone: Developers; only confidential: also assignees, Reporters).",
         "operationId": "update",
         "requestBody": {
           "content": {
@@ -1713,6 +3786,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "List an issue's comments and system notes, rendered; internal ones only for Reporters and above.",
         "operationId": "notes",
         "responses": {
           "200": {
@@ -1733,6 +3807,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "Comment on an issue (anyone signed in who sees it); an internal comment needs Reporter.",
         "operationId": "create_note",
         "requestBody": {
           "content": {
@@ -1754,6 +3829,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "Edit a comment of an issue (its author only).",
         "operationId": "edit_note",
         "requestBody": {
           "content": {
@@ -1773,6 +3849,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "Delete a comment of an issue (its author or a Maintainer).",
         "operationId": "delete_note",
         "responses": {
           "200": {}
@@ -1784,6 +3861,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "Emoji reactions on an issue and its comments, grouped by emoji (none on internal comments one may not see).",
         "operationId": "issue_reactions",
         "responses": {
           "200": {
@@ -1801,6 +3879,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "Add a reaction to an issue or one of its comments, or take it back when it is there.",
         "operationId": "issue_react",
         "requestBody": {
           "content": {
@@ -1830,6 +3909,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Projects whose CI job tokens may read this one (Maintainers).",
         "operationId": "job_token_allowlist",
         "responses": {
           "200": {
@@ -1850,6 +3930,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Let another project's CI job tokens read this one (Maintainers; the other project must be visible to them).",
         "operationId": "allow_job_token",
         "requestBody": {
           "content": {
@@ -1882,6 +3963,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Remove a project from the job token allowlist (Maintainers).",
         "operationId": "disallow_job_token",
         "responses": {
           "200": {}
@@ -1893,6 +3975,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "A job with its pipeline, runner, attempts and artifacts (the archive only when the viewer may download it).",
         "operationId": "show_job",
         "responses": {
           "200": {
@@ -1960,6 +4043,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Cancel a job; a running one stops at its runner's next update (Developers; on protected branches, who may push or merge).",
         "operationId": "cancel_job",
         "responses": {
           "200": {
@@ -1979,6 +4063,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Start a manual or delayed job now, as the caller (Developers; on protected branches, who may push or merge).",
         "operationId": "play_job",
         "responses": {
           "200": {
@@ -1998,6 +4083,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "A job's whole log as plain text (anyone who can read the project's code).",
         "operationId": "job_raw",
         "responses": {
           "200": {
@@ -2013,6 +4099,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Retry the latest attempt of a finished job (Developers; on protected branches, who may push or merge).",
         "operationId": "retry_job",
         "responses": {
           "200": {
@@ -2047,11 +4134,32 @@
         }
       }
     },
+    "/api/v1/projects/{id}/jobs/{job_id}/unschedule": {
+      "post": {
+        "tags": [
+          "ci"
+        ],
+        "summary": "A delayed job waits for someone instead (it becomes manual).",
+        "operationId": "unschedule_job",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{id}/labels": {
       "get": {
         "tags": [
           "issues"
         ],
+        "summary": "List a project's labels with their open issue and merge request counts.",
         "operationId": "labels",
         "responses": {
           "200": {
@@ -2072,6 +4180,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "Create a project label; a color is picked when none is given (Developers and above).",
         "operationId": "create_label",
         "requestBody": {
           "content": {
@@ -2101,6 +4210,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "Rename a label or change its color or description (Developers and above).",
         "operationId": "update_label",
         "requestBody": {
           "content": {
@@ -2128,6 +4238,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "Delete a project label (Developers and above).",
         "operationId": "delete_label",
         "responses": {
           "200": {}
@@ -2139,6 +4250,7 @@
         "tags": [
           "repository"
         ],
+        "summary": "Git LFS locks of the project: path, owner, when (the first 1000).",
         "operationId": "lfs_locks",
         "responses": {
           "200": {
@@ -2156,11 +4268,54 @@
         }
       }
     },
+    "/api/v1/projects/{id}/lfs_locks/{lock_id}": {
+      "delete": {
+        "tags": [
+          "repository"
+        ],
+        "summary": "Remove a lock: its owner, or a Maintainer for anyone's.",
+        "operationId": "unlock",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/projects/{id}/markdown": {
+      "post": {
+        "tags": [
+          "repository"
+        ],
+        "summary": "Comment previews: the same sanitized renderer the server uses everywhere.",
+        "operationId": "markdown",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkdownBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkdownHtml"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{id}/members": {
       "get": {
         "tags": [
           "projects"
         ],
+        "summary": "The project's direct members, highest role first (signed-in users who may see the project).",
         "operationId": "members",
         "responses": {
           "200": {
@@ -2176,6 +4331,38 @@
             }
           }
         }
+      },
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Add a member or change their role (Maintainers; not above their own role).",
+        "operationId": "add_member",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddMember"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/projects/{id}/members/{user_id}": {
+      "delete": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Remove a member (Maintainers, not one above them); anyone may leave.",
+        "operationId": "remove_member",
+        "responses": {
+          "200": {}
+        }
       }
     },
     "/api/v1/projects/{id}/merge_requests": {
@@ -2183,6 +4370,7 @@
         "tags": [
           "merge_requests"
         ],
+        "summary": "The project's merge requests, 20 a page, by state (`opened` by default), search, author, assignee, reviewer or milestone.",
         "operationId": "list",
         "responses": {
           "200": {
@@ -2203,6 +4391,7 @@
         "tags": [
           "merge_requests"
         ],
+        "summary": "Open a merge request from a source branch, into the default branch unless another target is given (who may push).",
         "operationId": "create",
         "requestBody": {
           "content": {
@@ -2232,6 +4421,7 @@
         "tags": [
           "merge_requests"
         ],
+        "summary": "A merge request with its diff versions, approvals, labels, assignees, reviewers, stack and what the viewer may do.",
         "operationId": "show",
         "responses": {
           "200": {
@@ -2239,6 +4429,34 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MrDetail"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "merge_requests"
+        ],
+        "summary": "Edit a merge request: title, description, draft, target branch, assignees, reviewers, milestone, source branch removal.",
+        "operationId": "update",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMr"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MergeRequest"
                 }
               }
             }
@@ -2284,6 +4502,18 @@
         }
       }
     },
+    "/api/v1/projects/{id}/merge_requests/{iid}/approve": {
+      "post": {
+        "tags": [
+          "merge_requests"
+        ],
+        "summary": "Approve the merge request as the caller.",
+        "operationId": "approve",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
     "/api/v1/projects/{id}/merge_requests/{iid}/auto_merge": {
       "post": {
         "tags": [
@@ -2312,6 +4542,24 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "merge_requests"
+        ],
+        "summary": "Turn auto-merge off (who set it, the author, or someone who may merge).",
+        "operationId": "cancel_auto_merge",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MergeRequest"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/projects/{id}/merge_requests/{iid}/blocks": {
@@ -2334,11 +4582,32 @@
         }
       }
     },
+    "/api/v1/projects/{id}/merge_requests/{iid}/close": {
+      "post": {
+        "tags": [
+          "merge_requests"
+        ],
+        "summary": "Close a merge request (not a merged one).",
+        "operationId": "close",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MergeRequest"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{id}/merge_requests/{iid}/code_owners": {
       "get": {
         "tags": [
           "merge_requests"
         ],
+        "summary": "Code owners of a merge request's changed files (CODEOWNERS of the target branch), their approvals, reviewers to add.",
         "operationId": "code_owners",
         "responses": {
           "200": {
@@ -2353,11 +4622,47 @@
         }
       }
     },
+    "/api/v1/projects/{id}/merge_requests/{iid}/commits": {
+      "get": {
+        "tags": [
+          "merge_requests"
+        ],
+        "summary": "The commits of one version of a merge request (the latest by default), up to 500.",
+        "operationId": "commits",
+        "parameters": [
+          {
+            "name": "version",
+            "in": "query",
+            "description": "A diff version; the latest without one",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CommitInfo"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{id}/merge_requests/{iid}/diff": {
       "get": {
         "tags": [
           "merge_requests"
         ],
+        "summary": "The diff of a merge request version (the latest by default), or between two versions, a page of files at a time.",
         "operationId": "diff",
         "responses": {
           "200": {
@@ -2377,6 +4682,7 @@
         "tags": [
           "merge_requests"
         ],
+        "summary": "Replace the merge request's labels; a system note records the change (who may push).",
         "operationId": "set_labels",
         "requestBody": {
           "content": {
@@ -2409,6 +4715,7 @@
         "tags": [
           "merge_requests"
         ],
+        "summary": "Merge the merge request now if every check passes; `sha` guards against unseen pushes (who may merge into the target).",
         "operationId": "merge",
         "requestBody": {
           "content": {
@@ -2438,6 +4745,7 @@
         "tags": [
           "merge_requests"
         ],
+        "summary": "Whether the merge request can be merged now: blockers, conflicts, approvals, pipeline, and the head SHA to merge.",
         "operationId": "merge_status",
         "responses": {
           "200": {
@@ -2470,6 +4778,16 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "merge_requests"
+        ],
+        "summary": "Take the merge request off its merge train (whoever added it, or someone who may merge).",
+        "operationId": "remove_from_train",
+        "responses": {
+          "200": {}
+        }
       }
     },
     "/api/v1/projects/{id}/merge_requests/{iid}/notes": {
@@ -2477,6 +4795,7 @@
         "tags": [
           "merge_requests"
         ],
+        "summary": "The merge request's comments and threads, placed on a diff version (internal ones for Reporters and up).",
         "operationId": "notes",
         "responses": {
           "200": {
@@ -2492,6 +4811,100 @@
             }
           }
         }
+      },
+      "post": {
+        "tags": [
+          "merge_requests"
+        ],
+        "summary": "Comment on a merge request, reply to a thread (`parent_id`) or comment on a diff line (`position`).",
+        "operationId": "create_note",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateNote"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Note"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/merge_requests/{iid}/notes/{note_id}": {
+      "put": {
+        "tags": [
+          "merge_requests"
+        ],
+        "summary": "Edit a comment on a merge request (its author only).",
+        "operationId": "edit_note",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditNote"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {}
+        }
+      },
+      "delete": {
+        "tags": [
+          "merge_requests"
+        ],
+        "summary": "Delete a comment on a merge request (its author, or a Maintainer).",
+        "operationId": "delete_note",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/projects/{id}/merge_requests/{iid}/notes/{note_id}/apply_suggestion": {
+      "post": {
+        "tags": [
+          "merge_requests"
+        ],
+        "summary": "Commit a comment's suggested change to the source branch.",
+        "operationId": "apply_suggestion",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/projects/{id}/merge_requests/{iid}/notes/{note_id}/resolve": {
+      "post": {
+        "tags": [
+          "merge_requests"
+        ],
+        "summary": "Resolve or reopen a thread by its first comment (the MR's or the thread's author, or anyone who may push).",
+        "operationId": "resolve_note",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {}
+        }
       }
     },
     "/api/v1/projects/{id}/merge_requests/{iid}/pipelines": {
@@ -2499,6 +4912,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "The merge request's 20 latest pipelines: its own and its source branch's (anyone who can read the code).",
         "operationId": "mr_pipelines",
         "responses": {
           "200": {
@@ -2521,6 +4935,7 @@
         "tags": [
           "merge_requests"
         ],
+        "summary": "Emoji reactions on a merge request and its comments, grouped by emoji (readers of the code).",
         "operationId": "mr_reactions",
         "responses": {
           "200": {
@@ -2563,11 +4978,78 @@
         }
       }
     },
+    "/api/v1/projects/{id}/merge_requests/{iid}/rebase": {
+      "post": {
+        "tags": [
+          "merge_requests"
+        ],
+        "summary": "Rebase an open merge request's source branch onto its target; answers the new `head_sha`.",
+        "operationId": "rebase",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/projects/{id}/merge_requests/{iid}/reopen": {
+      "post": {
+        "tags": [
+          "merge_requests"
+        ],
+        "summary": "Reopen a closed merge request, unless another one is open for the same branches.",
+        "operationId": "reopen",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MergeRequest"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/merge_requests/{iid}/request_changes": {
+      "post": {
+        "tags": [
+          "merge_requests"
+        ],
+        "summary": "Block merging until the caller approves or is asked to review again.",
+        "operationId": "request_changes",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestChangesBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/projects/{id}/merge_requests/{iid}/reviewers/{user_id}/rerequest": {
+      "post": {
+        "tags": [
+          "merge_requests"
+        ],
+        "summary": "Ask a reviewer to look again.",
+        "operationId": "rerequest_review",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
     "/api/v1/projects/{id}/merge_requests/{iid}/security": {
       "get": {
         "tags": [
           "security"
         ],
+        "summary": "Security findings a merge request adds and fixes, against the default branch's last scan (Developers and above).",
         "operationId": "merge_request",
         "responses": {
           "200": {
@@ -2610,6 +5092,28 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "merge_requests"
+        ],
+        "summary": "Take this MR, and the layers above it, out of its stack.",
+        "operationId": "leave_stack",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/projects/{id}/merge_requests/{iid}/stack/rebase": {
+      "post": {
+        "tags": [
+          "merge_requests"
+        ],
+        "summary": "Rebase every open layer of the stack onto the branch below it.",
+        "operationId": "rebase_stack",
+        "responses": {
+          "200": {}
+        }
       }
     },
     "/api/v1/projects/{id}/merge_requests/{iid}/test_summary": {
@@ -2617,6 +5121,7 @@
         "tags": [
           "merge_requests"
         ],
+        "summary": "Test results of a merge request's head pipeline against its target branch: new, existing and fixed failures.",
         "operationId": "mr_tests",
         "responses": {
           "200": {
@@ -2628,6 +5133,18 @@
               }
             }
           }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/merge_requests/{iid}/unapprove": {
+      "post": {
+        "tags": [
+          "merge_requests"
+        ],
+        "summary": "Take back the caller's approval of the merge request.",
+        "operationId": "unapprove",
+        "responses": {
+          "200": {}
         }
       }
     },
@@ -2679,6 +5196,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "List a project's milestones: active (default), closed or all, optionally searched by title.",
         "operationId": "list",
         "responses": {
           "200": {
@@ -2699,6 +5217,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "Create a milestone (Developers and above).",
         "operationId": "create",
         "requestBody": {
           "content": {
@@ -2728,6 +5247,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "One milestone of a project.",
         "operationId": "show",
         "responses": {
           "200": {
@@ -2745,6 +5265,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "Edit a milestone's title, description, dates or state (Developers and above).",
         "operationId": "update",
         "requestBody": {
           "content": {
@@ -2772,6 +5293,7 @@
         "tags": [
           "issues"
         ],
+        "summary": "Delete a milestone; its issues and merge requests lose it (Developers and above).",
         "operationId": "delete",
         "responses": {
           "204": {}
@@ -2783,6 +5305,7 @@
         "tags": [
           "projects"
         ],
+        "summary": "Pull and push mirrors of the project with their last update and error (Maintainers only).",
         "operationId": "list",
         "responses": {
           "200": {
@@ -2836,6 +5359,7 @@
         "tags": [
           "projects"
         ],
+        "summary": "Change a mirror's state, interval, options or credentials; it updates at once if re-enabled or re-keyed (Maintainers only).",
         "operationId": "update",
         "requestBody": {
           "content": {
@@ -2912,6 +5436,7 @@
         "tags": [
           "projects"
         ],
+        "summary": "The caller's notification level for a project (`global`: their default) and the level that applies.",
         "operationId": "project",
         "responses": {
           "200": {
@@ -2929,6 +5454,7 @@
         "tags": [
           "projects"
         ],
+        "summary": "Set the caller's notification level for a project; `global` follows their default (not from a CI job).",
         "operationId": "set_project",
         "requestBody": {
           "content": {
@@ -2958,6 +5484,7 @@
         "tags": [
           "projects"
         ],
+        "summary": "The project's Pages site: whether the instance serves sites, its URL and current deployment (who may read the code).",
         "operationId": "pages",
         "responses": {
           "200": {
@@ -2970,6 +5497,46 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Take the site down (Maintainers); the next Pages job puts it back.",
+        "operationId": "remove_pages",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/projects/{id}/path": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Change the project's path (Owners only).",
+        "operationId": "rename",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewPath"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectDto"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/projects/{id}/pipeline_schedules": {
@@ -2977,6 +5544,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "The project's pipeline schedules; variable values only for their owner or a Maintainer (Developers).",
         "operationId": "list_schedules",
         "responses": {
           "200": {
@@ -2997,6 +5565,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Create a pipeline schedule owned by the caller (Developers who may run pipelines for its ref).",
         "operationId": "create_schedule",
         "requestBody": {
           "content": {
@@ -3026,6 +5595,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Change a pipeline schedule; the editor becomes its owner (its owner or a Maintainer, who may run its ref).",
         "operationId": "update_schedule",
         "requestBody": {
           "content": {
@@ -3053,6 +5623,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Delete a pipeline schedule (its owner or a Maintainer).",
         "operationId": "delete_schedule",
         "responses": {
           "200": {}
@@ -3076,6 +5647,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "The project's pipelines, newest first, by ref, status, sha or schedule (anyone who can read the code).",
         "operationId": "list_pipelines",
         "responses": {
           "200": {
@@ -3126,6 +5698,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "A pipeline with its stages, jobs, coverage and upstream pipeline (anyone who can read the code).",
         "operationId": "show_pipeline",
         "responses": {
           "200": {
@@ -3145,6 +5718,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Cancel a pipeline's unfinished jobs and downstream pipelines (Developers; on protected branches, who may push or merge).",
         "operationId": "cancel_pipeline",
         "responses": {
           "200": {
@@ -3207,6 +5781,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "A pipeline's JUnit test totals and each job's report with its failures.",
         "operationId": "pipeline_tests",
         "responses": {
           "200": {
@@ -3226,7 +5801,39 @@
         "tags": [
           "projects"
         ],
+        "summary": "The project's branch protection rules (who may read the code).",
         "operationId": "protected_branches",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProtectedBranchDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Protect branches matching a name or glob, or change their rule (Maintainers).",
+        "operationId": "protect_branch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProtectBranch"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {
@@ -3243,11 +5850,24 @@
         }
       }
     },
+    "/api/v1/projects/{id}/protected_branches/{pb_id}": {
+      "delete": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Remove a branch protection rule (Maintainers).",
+        "operationId": "unprotect_branch",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
     "/api/v1/projects/{id}/protected_environments": {
       "get": {
         "tags": [
           "ci"
         ],
+        "summary": "Protected environments of the project: names or globs and the access level deploying to them needs.",
         "operationId": "protected",
         "responses": {
           "200": {
@@ -3268,6 +5888,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Protect an environment name or glob, or change the level it asks for deploying (Maintainers only).",
         "operationId": "protect",
         "requestBody": {
           "content": {
@@ -3295,11 +5916,24 @@
         }
       }
     },
+    "/api/v1/projects/{id}/protected_environments/{pe_id}": {
+      "delete": {
+        "tags": [
+          "ci"
+        ],
+        "summary": "Remove an environment's protection (project admins).",
+        "operationId": "unprotect",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
     "/api/v1/projects/{id}/protected_tags": {
       "get": {
         "tags": [
           "projects"
         ],
+        "summary": "The project's tag protection rules (who may read the code).",
         "operationId": "protected_tags",
         "responses": {
           "200": {
@@ -3353,6 +5987,7 @@
         "tags": [
           "projects"
         ],
+        "summary": "Remove a tag protection rule (Maintainers).",
         "operationId": "unprotect_tag",
         "responses": {
           "200": {}
@@ -3364,6 +5999,7 @@
         "tags": [
           "projects"
         ],
+        "summary": "Push rules of the project: commit message, author email and branch name patterns, file size, secrets, signatures.",
         "operationId": "push_rule",
         "responses": {
           "200": {
@@ -3381,6 +6017,7 @@
         "tags": [
           "projects"
         ],
+        "summary": "Replace the project's push rules (Maintainers only).",
         "operationId": "set_push_rule",
         "requestBody": {
           "content": {
@@ -3410,6 +6047,7 @@
         "tags": [
           "registry"
         ],
+        "summary": "Container registry of the project: whether it is on, the host and image to push to, its image repositories.",
         "operationId": "info",
         "responses": {
           "200": {
@@ -3424,11 +6062,24 @@
         }
       }
     },
+    "/api/v1/projects/{id}/registry/cleanup": {
+      "post": {
+        "tags": [
+          "registry"
+        ],
+        "summary": "Run the cleanup policy now (it also runs daily): how many tags went.",
+        "operationId": "run_cleanup",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
     "/api/v1/projects/{id}/registry/cleanup_policy": {
       "get": {
         "tags": [
           "registry"
         ],
+        "summary": "Cleanup policy of the project's container images: which tags it removes or keeps, and after how long.",
         "operationId": "cleanup_policy",
         "responses": {
           "200": {
@@ -3446,6 +6097,7 @@
         "tags": [
           "registry"
         ],
+        "summary": "Replace the cleanup policy of the project's container images (Maintainers only).",
         "operationId": "set_cleanup_policy",
         "requestBody": {
           "content": {
@@ -3470,11 +6122,24 @@
         }
       }
     },
+    "/api/v1/projects/{id}/registry/repositories/{repository_id}": {
+      "delete": {
+        "tags": [
+          "registry"
+        ],
+        "summary": "Delete an image repository with all its tags (its layers go with the next sweep).",
+        "operationId": "delete_repository",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
     "/api/v1/projects/{id}/registry/repositories/{repository_id}/tags": {
       "get": {
         "tags": [
           "registry"
         ],
+        "summary": "Tags of one of the project's image repositories, most recently updated first.",
         "operationId": "tags",
         "responses": {
           "200": {
@@ -3489,6 +6154,18 @@
               }
             }
           }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/registry/repositories/{repository_id}/tags/{tag}": {
+      "delete": {
+        "tags": [
+          "registry"
+        ],
+        "summary": "Delete one tag of an image repository (anyone who may push).",
+        "operationId": "delete_tag",
+        "responses": {
+          "200": {}
         }
       }
     },
@@ -3548,6 +6225,7 @@
         "tags": [
           "releases"
         ],
+        "summary": "One release by its tag: notes, links, and the tagged commit and source archives for those who read the code.",
         "operationId": "show",
         "responses": {
           "200": {
@@ -3565,6 +6243,7 @@
         "tags": [
           "releases"
         ],
+        "summary": "Change a release's name, notes or release date (Developer+, or a CI job of the project acting for one).",
         "operationId": "update",
         "requestBody": {
           "content": {
@@ -3604,6 +6283,7 @@
         "tags": [
           "releases"
         ],
+        "summary": "Add a link (an asset) to a release, at most 100 (Developer+, or a CI job of the project acting for one).",
         "operationId": "add_link",
         "requestBody": {
           "content": {
@@ -3633,6 +6313,7 @@
         "tags": [
           "releases"
         ],
+        "summary": "Delete a link of a release (Developer+, or a CI job of the project acting for one).",
         "operationId": "delete_link",
         "responses": {
           "204": {}
@@ -3713,6 +6394,7 @@
         "tags": [
           "renovate"
         ],
+        "summary": "Add a credential Renovate uses for one of the project's private registries; returns its rules (Maintainers only).",
         "operationId": "add_host_rule",
         "requestBody": {
           "content": {
@@ -3745,6 +6427,7 @@
         "tags": [
           "renovate"
         ],
+        "summary": "Delete one of the project's Renovate host rules (Maintainers only).",
         "operationId": "delete_host_rule",
         "responses": {
           "204": {}
@@ -3771,11 +6454,53 @@
         }
       }
     },
+    "/api/v1/projects/{id}/repository/archive": {
+      "get": {
+        "tags": [
+          "repository"
+        ],
+        "summary": "Download the repository at a ref (the default branch by default) as a tar.gz, tar or zip archive.",
+        "operationId": "archive",
+        "parameters": [
+          {
+            "name": "ref",
+            "in": "path",
+            "description": "Branch, tag or commit; the default branch without one.",
+            "required": true,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "format",
+            "in": "path",
+            "description": "`tar.gz` (default), `tar` or `zip`.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/gzip": {},
+              "application/x-tar": {},
+              "application/zip": {}
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{id}/repository/blame": {
       "get": {
         "tags": [
           "repository"
         ],
+        "summary": "Blame a text file at a ref (the default branch by default): the commit behind each line, and the highlighted lines.",
         "operationId": "blame",
         "responses": {
           "200": {
@@ -3795,6 +6520,7 @@
         "tags": [
           "repository"
         ],
+        "summary": "A file at a ref (the default branch by default), highlighted, Markdown rendered; binary or too large: its details only.",
         "operationId": "blob",
         "responses": {
           "200": {
@@ -3814,6 +6540,7 @@
         "tags": [
           "repository"
         ],
+        "summary": "The repository's branches (default and protected flagged), a page at a time, filtered by name; `x-total` counts matches.",
         "operationId": "branches",
         "responses": {
           "200": {
@@ -3851,11 +6578,24 @@
         }
       }
     },
+    "/api/v1/projects/{id}/repository/branches/{branch}": {
+      "delete": {
+        "tags": [
+          "repository"
+        ],
+        "summary": "Delete a branch (Developer+; protected patterns apply as for a push); never the default branch.",
+        "operationId": "delete_branch",
+        "responses": {
+          "204": {}
+        }
+      }
+    },
     "/api/v1/projects/{id}/repository/commits": {
       "get": {
         "tags": [
           "repository"
         ],
+        "summary": "The history from a ref (the default branch by default), of one path if given, 40 commits a page (at most 100).",
         "operationId": "commits",
         "responses": {
           "200": {
@@ -3906,6 +6646,7 @@
         "tags": [
           "repository"
         ],
+        "summary": "One commit, by its SHA.",
         "operationId": "commit",
         "responses": {
           "200": {
@@ -3925,6 +6666,7 @@
         "tags": [
           "repository"
         ],
+        "summary": "What a commit changed, against its first parent, a page of files at a time.",
         "operationId": "commit_diff",
         "responses": {
           "200": {
@@ -3952,6 +6694,109 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Verification"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/repository/compare": {
+      "get": {
+        "tags": [
+          "repository"
+        ],
+        "summary": "Compare two refs: the commits between them (at most 250) and the diff, from their merge base unless `straight`.",
+        "operationId": "compare",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "path",
+            "description": "Branch, tag or commit to compare from.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "to",
+            "in": "path",
+            "description": "Branch, tag or commit to compare to.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "straight",
+            "in": "path",
+            "description": "`true`: diff `from..to` directly; default compares from the merge base.",
+            "required": true,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "path",
+            "description": "Diff files to skip (paging).",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "path",
+            "description": "Diff files in this page; at most the instance's limit, which is the default.",
+            "required": true,
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompareResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/repository/files": {
+      "get": {
+        "tags": [
+          "repository"
+        ],
+        "summary": "Every file path at a ref, for the \"go to file\" finder.",
+        "operationId": "files",
+        "parameters": [
+          {
+            "name": "ref",
+            "in": "query",
+            "description": "Branch, tag or commit; the default branch without one",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileList"
                 }
               }
             }
@@ -4062,6 +6907,134 @@
         }
       }
     },
+    "/api/v1/projects/{id}/repository/raw": {
+      "get": {
+        "tags": [
+          "repository"
+        ],
+        "summary": "Raw file. Never served as HTML; LFS pointers resolve to the stored object.",
+        "operationId": "raw",
+        "parameters": [
+          {
+            "name": "ref",
+            "in": "path",
+            "description": "Branch, tag or commit; the default branch without one.",
+            "required": true,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "description": "A path in the repository; the top folder without one.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The file: images and PDFs as such, text as text/plain, the rest as application/octet-stream",
+            "content": {
+              "application/octet-stream": {},
+              "text/plain": {},
+              "image/png": {},
+              "image/jpeg": {},
+              "image/gif": {},
+              "image/webp": {},
+              "image/svg+xml": {},
+              "application/pdf": {}
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/repository/readme": {
+      "get": {
+        "tags": [
+          "repository"
+        ],
+        "summary": "The README of a folder at a ref (default branch, top folder by default), rendered to HTML; null when there is none.",
+        "operationId": "readme",
+        "parameters": [
+          {
+            "name": "ref",
+            "in": "path",
+            "description": "Branch, tag or commit; the default branch without one.",
+            "required": true,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          {
+            "name": "path",
+            "in": "path",
+            "description": "A path in the repository; the top folder without one.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/ReadmeResponse"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/repository/resolve": {
+      "get": {
+        "tags": [
+          "repository"
+        ],
+        "summary": "Split `feature/x/src/main.rs` into ref `feature/x` and path `src/main.rs`.",
+        "operationId": "resolve",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "path",
+            "description": "`<ref>/<path>` as found in `/-/tree/` and `/-/blob/` URLs; refs may contain\nslashes, so the longest prefix that names a ref wins.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefResolved"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{id}/repository/signatures": {
       "post": {
         "tags": [
@@ -4103,6 +7076,7 @@
         "tags": [
           "repository"
         ],
+        "summary": "Repository statistics at a ref (the default branch by default): disk size, LFS usage, languages, commit count.",
         "operationId": "stats",
         "responses": {
           "200": {
@@ -4118,6 +7092,76 @@
       }
     },
     "/api/v1/projects/{id}/repository/tags": {
+      "get": {
+        "tags": [
+          "repository"
+        ],
+        "summary": "The repository's tags, a page at a time, filtered by name; `x-total` gives how many match.",
+        "operationId": "tags",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "path",
+            "description": "Part of the name.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "path",
+            "description": "Page, from 1.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "path",
+            "description": "At most 100; 40 by default.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "details",
+            "in": "path",
+            "description": "Branches only: each one's distance from the default branch, latest pipeline and open\nmerge request (the Branches page; the branch pickers do without).",
+            "required": true,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "headers": {
+              "x-total": {
+                "schema": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "description": "Tags matching the search"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TagDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "tags": [
           "repository"
@@ -4164,6 +7208,7 @@
         "tags": [
           "repository"
         ],
+        "summary": "The entries of a folder at a ref (the default branch and top folder by default), and the last commit to touch it.",
         "operationId": "tree",
         "responses": {
           "200": {
@@ -4204,6 +7249,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Create a project runner; its token is shown only in the answer (Maintainers; browser session, confirmed email).",
         "operationId": "create_project_runner",
         "requestBody": {
           "content": {
@@ -4233,6 +7279,7 @@
         "tags": [
           "security"
         ],
+        "summary": "List a project's security findings with counts, by state, severity, report type or text (Developers and above).",
         "operationId": "findings",
         "responses": {
           "200": {
@@ -4252,6 +7299,7 @@
         "tags": [
           "security"
         ],
+        "summary": "One security finding with its history and the Renovate MRs updating its package (Developers and above).",
         "operationId": "finding",
         "responses": {
           "200": {
@@ -4271,6 +7319,7 @@
         "tags": [
           "security"
         ],
+        "summary": "Dismiss a security finding with a reason and an optional comment (Developers and above).",
         "operationId": "dismiss",
         "requestBody": {
           "content": {
@@ -4300,6 +7349,7 @@
         "tags": [
           "security"
         ],
+        "summary": "Reopen a dismissed security finding (Developers and above).",
         "operationId": "reopen",
         "responses": {
           "200": {
@@ -4319,6 +7369,7 @@
         "tags": [
           "security"
         ],
+        "summary": "A project's built-in security scanning: on or off, scanners, interval, next and last run (Developers and above).",
         "operationId": "scanning",
         "responses": {
           "200": {
@@ -4336,6 +7387,7 @@
         "tags": [
           "security"
         ],
+        "summary": "Turn a project's built-in scanning on or off, set its scanners, interval and SBOMs on tags (Maintainers only).",
         "operationId": "set_scanning",
         "requestBody": {
           "content": {
@@ -4365,6 +7417,7 @@
         "tags": [
           "security"
         ],
+        "summary": "Start a scan of the default branch now; scanning must be on for the project (Maintainers only).",
         "operationId": "run_scan",
         "responses": {
           "200": {
@@ -4376,6 +7429,61 @@
               }
             }
           }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/shares": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Groups the project is shared with (those the viewer may see).",
+        "operationId": "shares",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ShareDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Share the project with a group, capped at a role (Maintainers; not above their own role).",
+        "operationId": "share",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShareRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/projects/{id}/shares/{group_id}": {
+      "delete": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Stop sharing the project with a group (Maintainers).",
+        "operationId": "unshare",
+        "responses": {
+          "200": {}
         }
       }
     },
@@ -4470,6 +7578,48 @@
         }
       }
     },
+    "/api/v1/projects/{id}/transfer": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Move the project to another namespace (Owners only, and who may create projects there).",
+        "operationId": "transfer",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferProject"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/unarchive": {
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Unarchive the project (Owners only).",
+        "operationId": "unarchive",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
     "/api/v1/projects/{id}/uploads": {
       "post": {
         "tags": [
@@ -4518,6 +7668,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "The project's CI/CD variables, without the values of masked ones (Maintainers).",
         "operationId": "project_variables",
         "responses": {
           "200": {
@@ -4538,6 +7689,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Create or update a project CI/CD variable; an omitted value keeps the current one (Maintainers).",
         "operationId": "set_project_variable",
         "requestBody": {
           "content": {
@@ -4570,9 +7722,41 @@
         "tags": [
           "ci"
         ],
+        "summary": "Delete a project CI/CD variable by key (Maintainers).",
         "operationId": "delete_project_variable",
         "responses": {
           "200": {}
+        }
+      }
+    },
+    "/api/v1/resolve": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Resolve a URL path to a project, group or user namespace (used by the web app\nfor GitLab-shaped URLs). Old paths report where they moved.",
+        "operationId": "resolve_path",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "path",
+            "description": "A URL path: group/project, a group or a username.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Resolved"
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -4581,6 +7765,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "A runner with its managers (its project's Maintainers, its group's Owners, or administrators).",
         "operationId": "show_runner",
         "responses": {
           "200": {
@@ -4598,6 +7783,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Change a runner's description, tags, flags and timeout (its project's Maintainers, its group's Owners, or admins).",
         "operationId": "update_runner",
         "requestBody": {
           "content": {
@@ -4625,6 +7811,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Delete a runner (its project's Maintainers, its group's Owners, or administrators).",
         "operationId": "delete_runner",
         "responses": {
           "200": {}
@@ -4636,6 +7823,7 @@
         "tags": [
           "ci"
         ],
+        "summary": "Replace a runner's token; the new one is shown only in the answer (who may manage it; browser session only).",
         "operationId": "reset_runner_token",
         "responses": {
           "200": {
@@ -4655,6 +7843,7 @@
         "tags": [
           "projects"
         ],
+        "summary": "Search projects, issues and merge requests by title, only what the caller may see (`scope`, `state`, paging).",
         "operationId": "search",
         "responses": {
           "200": {
@@ -4732,6 +7921,54 @@
         }
       }
     },
+    "/api/v1/setup": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Whether the instance still needs its first administrator, and whether email and passkeys work.",
+        "operationId": "setup_status",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetupStatus"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Create the first administrator (only while there are no users).",
+        "operationId": "setup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/unsubscribe/{user_id}/{project_id}/{sig}": {
       "get": {
         "tags": [
@@ -4775,6 +8012,7 @@
         "tags": [
           "user"
         ],
+        "summary": "Your own account, the signed-in user, with its email and security settings.",
         "operationId": "me",
         "responses": {
           "200": {
@@ -4786,6 +8024,114 @@
               }
             }
           }
+        }
+      },
+      "put": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Update your name and email (needs a signed-in browser session of the account); a new address needs the current password and takes over once confirmed from its inbox.",
+        "operationId": "update_me",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateMe"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/user/avatar": {
+      "put": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Set your avatar from a PNG, JPEG, GIF or WebP image (at most 5 MB, sent as the body), stored as a 256 px square PNG.",
+        "operationId": "set_my_avatar",
+        "requestBody": {
+          "description": "The image as the raw body: PNG, JPEG, GIF or WebP, at most 5 MB",
+          "content": {
+            "image/gif": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32",
+                  "minimum": 0
+                }
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32",
+                  "minimum": 0
+                }
+              }
+            },
+            "image/png": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32",
+                  "minimum": 0
+                }
+              }
+            },
+            "image/webp": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "format": "int32",
+                  "minimum": 0
+                }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {}
+        }
+      },
+      "delete": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Remove your avatar.",
+        "operationId": "delete_my_avatar",
+        "responses": {
+          "204": {}
+        }
+      }
+    },
+    "/api/v1/user/email/resend": {
+      "post": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Send the confirmation link again: for the new address waiting, else for\nthe account's own unconfirmed one.\nIt needs a signed-in browser session of the account; only with email on.",
+        "operationId": "resend_confirmation",
+        "responses": {
+          "200": {}
         }
       }
     },
@@ -4810,6 +8156,58 @@
             }
           }
         }
+      },
+      "post": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Add an address: a link is mailed to it; without email, an administrator\nconfirms it (or it is confirmed at once: see `services::emails`).",
+        "operationId": "add_email",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddEmail"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserEmail"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/user/emails/{id}": {
+      "delete": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Remove one of your other email addresses (needs a signed-in browser session of the account).",
+        "operationId": "remove_email",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/user/emails/{id}/resend": {
+      "post": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Mail the link for one of your addresses again.",
+        "operationId": "resend_email",
+        "responses": {
+          "200": {}
+        }
       }
     },
     "/api/v1/user/gpg_keys": {
@@ -4817,6 +8215,7 @@
         "tags": [
           "user"
         ],
+        "summary": "GPG keys of the caller, used to verify their commits' signatures.",
         "operationId": "list_gpg_keys",
         "responses": {
           "200": {
@@ -4837,6 +8236,7 @@
         "tags": [
           "user"
         ],
+        "summary": "Add an armored GPG public key to the caller (a browser session, not a token; a confirmed email when email is on).",
         "operationId": "add_gpg_key",
         "requestBody": {
           "content": {
@@ -4861,11 +8261,24 @@
         }
       }
     },
+    "/api/v1/user/gpg_keys/{id}": {
+      "delete": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Remove one of the caller's GPG keys.",
+        "operationId": "delete_gpg_key",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
     "/api/v1/user/identities": {
       "get": {
         "tags": [
           "user"
         ],
+        "summary": "The instance's sign-in providers, and when your account was linked to each.",
         "operationId": "list_identities",
         "responses": {
           "200": {
@@ -4883,11 +8296,64 @@
         }
       }
     },
+    "/api/v1/user/identities/{name}/link": {
+      "post": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Start linking a provider to the signed-in account: the provider's sign-in,\nwhose callback adds the identity to this account. Asked for with the\npassword, like any new way into the account.\nIt needs a signed-in browser session of the account and, with email on, a confirmed address.",
+        "operationId": "link_identity",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmPassword"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkStart"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/user/identities/{name}/unlink": {
+      "post": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Unlink a provider. Never the last way in: an account without a password\nkeeps at least one provider.\nIt needs a signed-in browser session of the account and the password.",
+        "operationId": "unlink_identity",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmPassword"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {}
+        }
+      }
+    },
     "/api/v1/user/keys": {
       "get": {
         "tags": [
           "user"
         ],
+        "summary": "Your SSH keys.",
         "operationId": "list_keys",
         "responses": {
           "200": {
@@ -4902,6 +8368,46 @@
               }
             }
           }
+        }
+      },
+      "post": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Add an SSH key to your account (needs a signed-in browser session of the account and, with email on, a confirmed address).",
+        "operationId": "add_key",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddKey"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SshKey"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/user/keys/{id}": {
+      "delete": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Remove one of your SSH keys (needs a signed-in browser session of the account).",
+        "operationId": "delete_key",
+        "responses": {
+          "200": {}
         }
       }
     },
@@ -4964,6 +8470,7 @@
         "tags": [
           "user"
         ],
+        "summary": "The caller's default notification level: watch, participating, mention or disabled.",
         "operationId": "mine",
         "responses": {
           "200": {
@@ -4981,6 +8488,7 @@
         "tags": [
           "user"
         ],
+        "summary": "Set the caller's default notification level: watch, participating, mention or disabled (not from a CI job).",
         "operationId": "set_mine",
         "requestBody": {
           "content": {
@@ -5025,6 +8533,68 @@
         }
       }
     },
+    "/api/v1/user/notifications/read": {
+      "post": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Mark every notification read.",
+        "operationId": "read_all",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Inbox"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/user/notifications/{id}/read": {
+      "post": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Mark one notification read.",
+        "operationId": "read_one",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Inbox"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/user/password": {
+      "put": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Change your password with the current one (needs a signed-in browser session of the account); your other sessions are signed out.",
+        "operationId": "change_password",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePassword"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {}
+        }
+      }
+    },
     "/api/v1/user/project_states": {
       "get": {
         "tags": [
@@ -5053,6 +8623,7 @@
         "tags": [
           "user"
         ],
+        "summary": "Projects you have a role in, with that role, most recently active first; `search` filters by path.",
         "operationId": "my_projects",
         "responses": {
           "200": {
@@ -5075,6 +8646,7 @@
         "tags": [
           "user"
         ],
+        "summary": "Your to-dos, `pending` (the default) or `done`, at most 100.",
         "operationId": "todos",
         "responses": {
           "200": {
@@ -5092,11 +8664,36 @@
         }
       }
     },
+    "/api/v1/user/todos/done": {
+      "post": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Mark every pending to-do done.",
+        "operationId": "todos_done",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/user/todos/{id}/done": {
+      "post": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Mark one to-do done.",
+        "operationId": "todo_done",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
     "/api/v1/user/tokens": {
       "get": {
         "tags": [
           "user"
         ],
+        "summary": "Your personal access tokens, newest first, revoked ones included (never the secrets).",
         "operationId": "list_tokens",
         "responses": {
           "200": {
@@ -5107,6 +8704,316 @@
                   "items": {
                     "$ref": "#/components/schemas/AccessToken"
                   }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Create a personal access token, shown this once (needs a signed-in browser session of the account and, with email on, a confirmed address); `admin_mode` is for administrators.",
+        "operationId": "create_token",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateToken"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewToken"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/user/tokens/{id}": {
+      "delete": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Revoke one of your personal access tokens (needs a signed-in browser session of the account).",
+        "operationId": "revoke_token",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/user/two_factor/disable": {
+      "post": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Turn off two-factor authentication with the password (needs a signed-in browser session of the account).",
+        "operationId": "totp_disable",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TotpDisable"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/user/two_factor/enable": {
+      "post": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Turn on two-factor authentication with a code of the app set up first and the password (needs a signed-in browser session of the account); answers the recovery codes, shown this once.",
+        "operationId": "totp_enable",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TotpCode"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TotpEnabled"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/user/two_factor/recovery_codes": {
+      "get": {
+        "tags": [
+          "user"
+        ],
+        "summary": "How many unused two-factor recovery codes you have left (needs a signed-in browser session of the account).",
+        "operationId": "recovery_codes",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecoveryCodesLeft"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "user"
+        ],
+        "summary": "New recovery codes; the old ones stop working.\nIt needs a signed-in browser session of the account, the password and two-factor turned on.",
+        "operationId": "recovery_codes_reset",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmPassword"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NewRecoveryCodes"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/user/two_factor/setup": {
+      "post": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Start enrolment: store a new (not yet enabled) secret. Asked for with the\npassword, like enabling it: a borrowed session must not be able to put its\nown secret on the account. An account without a password keeps its recent\nsign-in for the enabling.\nIt needs a signed-in browser session of the account.",
+        "operationId": "totp_setup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmPassword"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TotpSetup"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/user/webauthn": {
+      "get": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Your security keys and passkeys, and whether they work on this instance.",
+        "operationId": "webauthn_list",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebauthnCredentials"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/user/webauthn/register/finish": {
+      "post": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Finish adding a security key or a passkey, from the session that started it.\nIt needs a signed-in browser session of the account; the first security key brings the recovery codes, shown this once.",
+        "operationId": "webauthn_register_finish",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebauthnRegisterFinish"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebauthnRegistered"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/user/webauthn/register/start": {
+      "post": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Start adding a security key or a passkey. The authenticator is asked not to\nmake a second credential for the account; a passkey must be one it can\noffer with no username (discoverable) and that verifies its user.\nIt needs a signed-in browser session of the account, the password and, with email on, a confirmed address.",
+        "operationId": "webauthn_register_start",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebauthnRegisterStart"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebauthnRegistration"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/user/webauthn/{id}": {
+      "put": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Rename one of your security keys or passkeys (needs a signed-in browser session of the account).",
+        "operationId": "webauthn_rename",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebauthnRename"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/user/webauthn/{id}/remove": {
+      "post": {
+        "tags": [
+          "user"
+        ],
+        "summary": "Remove a security key or a passkey (the password again). With the last\nsecond factor go the recovery codes.\nIt needs a signed-in browser session of the account.",
+        "operationId": "webauthn_remove",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmPassword"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDto"
                 }
               }
             }
@@ -5134,6 +9041,60 @@
         }
       }
     },
+    "/api/v1/users": {
+      "get": {
+        "tags": [
+          "user"
+        ],
+        "summary": "User picker for member dialogs.\nThe search matches usernames and names; administrators also see (and match) emails, and blocked users.",
+        "operationId": "search_users",
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Part of a username or name",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page, from 1",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "per_page",
+            "in": "query",
+            "description": "At most 100; 20 by default",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/users/{username}": {
       "get": {
         "tags": [
@@ -5154,6 +9115,28 @@
         }
       }
     },
+    "/api/v1/users/{username}/avatar": {
+      "get": {
+        "tags": [
+          "user"
+        ],
+        "summary": "A person's avatar, by username. Anyone may fetch it; unknown usernames and\npeople without one both answer 404.",
+        "operationId": "user_avatar",
+        "responses": {
+          "200": {
+            "content": {
+              "image/png": {}
+            }
+          },
+          "304": {
+            "description": "Unchanged (If-None-Match)"
+          },
+          "404": {
+            "description": "No avatar"
+          }
+        }
+      }
+    },
     "/api/v1/users/{username}/contributions": {
       "get": {
         "tags": [
@@ -5167,6 +9150,107 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Contributions"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/version": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "The server's name and version.",
+        "operationId": "version",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/{kind}/{id}/hooks": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "The webhooks of a project or a group (`{kind}`: `projects` or `groups`; admins).",
+        "operationId": "list_hooks",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Webhook"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Add a webhook to a project or a group (`{kind}`: `projects` or `groups`; admins); answers every webhook.",
+        "operationId": "create_hook",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HookBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Webhook"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/{kind}/{id}/hooks/{hook_id}": {
+      "delete": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "Delete a webhook of a project or a group (`{kind}`: `projects` or `groups`; admins).",
+        "operationId": "delete_hook",
+        "responses": {
+          "200": {}
+        }
+      }
+    },
+    "/api/v1/{kind}/{id}/hooks/{hook_id}/deliveries": {
+      "get": {
+        "tags": [
+          "projects"
+        ],
+        "summary": "A webhook's recent deliveries (`{kind}`: `projects` or `groups`; admins).",
+        "operationId": "hook_deliveries",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Delivery"
+                  }
                 }
               }
             }
@@ -6268,6 +10352,26 @@
           "truncated": {
             "type": "boolean",
             "description": "The archive has more entries than can be listed."
+          }
+        }
+      },
+      "AuditCatalogue": {
+        "type": "object",
+        "required": [
+          "version",
+          "events"
+        ],
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EventType"
+            }
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
           }
         }
       },
@@ -9034,6 +13138,42 @@
           }
         ]
       },
+      "EventType": {
+        "type": "object",
+        "required": [
+          "name",
+          "area",
+          "targets",
+          "fields",
+          "description"
+        ],
+        "properties": {
+          "area": {
+            "type": "string",
+            "description": "Area, for grouping in the docs."
+          },
+          "description": {
+            "type": "string"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Keys of `details` (besides the conventional ones); `[\"*\"]`: the\nwhole of some settings object, whatever its keys."
+          },
+          "name": {
+            "type": "string"
+          },
+          "targets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "`target_type`s it is written with (`project`, `namespace`, `user`);\nempty: none (instance-wide)."
+          }
+        }
+      },
       "ExposedProject": {
         "type": "object",
         "description": "Projects with open critical or high findings on their default branch.",
@@ -10184,6 +14324,7 @@
           "allow_personal_projects",
           "default_branch_name",
           "mcp_enabled",
+          "mcp_code_mode",
           "update_check_enabled",
           "auto_confirm_emails"
         ],
@@ -10197,6 +14338,10 @@
           },
           "default_branch_name": {
             "type": "string"
+          },
+          "mcp_code_mode": {
+            "type": "boolean",
+            "description": "The MCP server's code mode: scripts an assistant writes, run in a sandbox."
           },
           "mcp_enabled": {
             "type": "boolean",
@@ -15535,6 +19680,18 @@
           }
         }
       },
+      "RequestChangesBody": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "What to change: posted as a comment that carries the verdict."
+          }
+        }
+      },
       "ResetPassword": {
         "type": "object",
         "required": [
@@ -17697,6 +21854,12 @@
           "default_branch_name": {
             "type": "string"
           },
+          "mcp_code_mode": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
           "mcp_enabled": {
             "type": [
               "boolean",
@@ -18632,6 +22795,9 @@
     }
   },
   "tags": [
+    {
+      "name": "admin"
+    },
     {
       "name": "auth"
     },

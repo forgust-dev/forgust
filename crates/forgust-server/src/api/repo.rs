@@ -60,10 +60,12 @@ pub(crate) async fn commit_of(state: &AppState, p: &Project, rev: Option<&str>) 
     Ok((rev, id))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::IntoParams)]
 pub struct RefPath {
+    /// Branch, tag or commit; the default branch without one.
     #[serde(rename = "ref")]
     pub git_ref: Option<String>,
+    /// A path in the repository; the top folder without one.
     #[serde(default)]
     pub path: String,
 }
@@ -76,7 +78,7 @@ pub struct RefResolved {
     pub path: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::IntoParams)]
 pub struct ResolveQuery {
     /// `<ref>/<path>` as found in `/-/tree/` and `/-/blob/` URLs; refs may contain
     /// slashes, so the longest prefix that names a ref wins.
@@ -84,6 +86,7 @@ pub struct ResolveQuery {
 }
 
 /// Split `feature/x/src/main.rs` into ref `feature/x` and path `src/main.rs`.
+#[utoipa::path(get, path = "/api/v1/projects/{id}/repository/resolve", params(ResolveQuery), responses((status = 200, body = RefResolved)), tag = "repository")]
 pub async fn resolve(
     State(state): State<AppState>,
     Viewer(v): Viewer,
@@ -131,6 +134,7 @@ pub struct TreeResponse {
     pub last_commit: Option<forgust_storage::CommitInfo>,
 }
 
+/// The entries of a folder at a ref (the default branch and top folder by default), and the last commit to touch it.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/repository/tree", responses((status = 200, body = TreeResponse)), tag = "repository")]
 pub async fn tree(
     State(state): State<AppState>,
@@ -243,6 +247,7 @@ pub struct RepoStats {
     pub commit_count: u64,
 }
 
+/// Repository statistics at a ref (the default branch by default): disk size, LFS usage, languages, commit count.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/repository/stats", responses((status = 200, body = RepoStats)), tag = "repository")]
 pub async fn stats(
     State(state): State<AppState>,
@@ -359,6 +364,7 @@ async fn render_blob(state: &AppState, p: &Project, git_ref: &str, commit: &str,
     })
 }
 
+/// A file at a ref (the default branch by default), highlighted, Markdown rendered; binary or too large: its details only.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/repository/blob", responses((status = 200, body = BlobResponse)), tag = "repository")]
 pub async fn blob(
     State(state): State<AppState>,
@@ -378,6 +384,7 @@ pub async fn blob(
 }
 
 /// Raw file. Never served as HTML; LFS pointers resolve to the stored object.
+#[utoipa::path(get, path = "/api/v1/projects/{id}/repository/raw", params(RefPath), responses((status = 200, description = "The file: images and PDFs as such, text as text/plain, the rest as application/octet-stream", content(("application/octet-stream"), ("text/plain"), ("image/png"), ("image/jpeg"), ("image/gif"), ("image/webp"), ("image/svg+xml"), ("application/pdf")))), tag = "repository")]
 pub async fn raw(
     State(state): State<AppState>,
     Viewer(v): Viewer,
@@ -438,6 +445,8 @@ pub struct ReadmeResponse {
     pub html: String,
 }
 
+/// The README of a folder at a ref (default branch, top folder by default), rendered to HTML; null when there is none.
+#[utoipa::path(get, path = "/api/v1/projects/{id}/repository/readme", params(RefPath), responses((status = 200, body = Option<ReadmeResponse>)), tag = "repository")]
 pub async fn readme(
     State(state): State<AppState>,
     Viewer(v): Viewer,
@@ -473,10 +482,12 @@ pub async fn readme(
     .await
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::IntoParams)]
 pub struct ArchiveQuery {
+    /// Branch, tag or commit; the default branch without one.
     #[serde(rename = "ref")]
     git_ref: Option<String>,
+    /// `tar.gz` (default), `tar` or `zip`.
     #[serde(default = "tgz")]
     format: String,
 }
@@ -485,6 +496,8 @@ fn tgz() -> String {
     "tar.gz".into()
 }
 
+/// Download the repository at a ref (the default branch by default) as a tar.gz, tar or zip archive.
+#[utoipa::path(get, path = "/api/v1/projects/{id}/repository/archive", params(ArchiveQuery), responses((status = 200, content(("application/gzip"), ("application/x-tar"), ("application/zip")))), tag = "repository")]
 pub async fn archive(
     State(state): State<AppState>,
     Viewer(v): Viewer,
@@ -532,6 +545,7 @@ fn per() -> usize {
     40
 }
 
+/// The history from a ref (the default branch by default), of one path if given, 40 commits a page (at most 100).
 #[utoipa::path(get, path = "/api/v1/projects/{id}/repository/commits", responses((status = 200, body = [forgust_storage::CommitInfo])), tag = "repository")]
 pub async fn commits(
     State(state): State<AppState>,
@@ -555,6 +569,7 @@ pub async fn commits(
     .await
 }
 
+/// One commit, by its SHA.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/repository/commits/{sha}", responses((status = 200, body = forgust_storage::CommitInfo)), tag = "repository")]
 pub async fn commit(State(state): State<AppState>, Viewer(v): Viewer, Path((id, sha)): Path<(String, String)>) -> ApiResult<Response> {
     let p = readable(&state, &v, &id).await?;
@@ -587,6 +602,7 @@ impl DiffQuery {
     }
 }
 
+/// What a commit changed, against its first parent, a page of files at a time.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/repository/commits/{sha}/diff", responses((status = 200, body = forgust_storage::Diff)), tag = "repository")]
 pub async fn commit_diff(
     State(state): State<AppState>,
@@ -608,15 +624,19 @@ pub async fn commit_diff(
     .await
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::IntoParams)]
 pub struct CompareQuery {
+    /// Branch, tag or commit to compare from.
     from: String,
+    /// Branch, tag or commit to compare to.
     to: String,
     /// `true`: diff `from..to` directly; default compares from the merge base.
     #[serde(default)]
     straight: bool,
+    /// Diff files to skip (paging).
     #[serde(default)]
     offset: usize,
+    /// Diff files in this page; at most the instance's limit, which is the default.
     limit: Option<usize>,
 }
 
@@ -629,6 +649,8 @@ pub struct CompareResponse {
     pub diff: forgust_storage::Diff,
 }
 
+/// Compare two refs: the commits between them (at most 250) and the diff, from their merge base unless `straight`.
+#[utoipa::path(get, path = "/api/v1/projects/{id}/repository/compare", params(CompareQuery), responses((status = 200, body = CompareResponse)), tag = "repository")]
 pub async fn compare(
     State(state): State<AppState>,
     Viewer(v): Viewer,
@@ -686,12 +708,15 @@ pub struct BranchMergeRequest {
     pub title: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::IntoParams)]
 pub struct RefsQuery {
+    /// Part of the name.
     #[serde(default)]
     search: String,
+    /// Page, from 1.
     #[serde(default = "one")]
     page: usize,
+    /// At most 100; 40 by default.
     #[serde(default = "per")]
     per_page: usize,
     /// Branches only: each one's distance from the default branch, latest pipeline and open
@@ -711,6 +736,7 @@ fn page_refs(refs: Vec<RefInfo>, prefix: &str, q: &RefsQuery) -> (Vec<RefInfo>, 
     (filtered.into_iter().skip((q.page.max(1) - 1) * per).take(per).collect(), total)
 }
 
+/// The repository's branches (default and protected flagged), a page at a time, filtered by name; `x-total` counts matches.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/repository/branches", responses((status = 200, body = [BranchDto])), tag = "repository")]
 pub async fn branches(
     State(state): State<AppState>,
@@ -785,6 +811,8 @@ pub struct TagDto {
     pub protected: bool,
 }
 
+/// The repository's tags, a page at a time, filtered by name; `x-total` gives how many match.
+#[utoipa::path(get, path = "/api/v1/projects/{id}/repository/tags", params(RefsQuery), responses((status = 200, body = [TagDto], headers(("x-total" = usize, description = "Tags matching the search")))), tag = "repository")]
 pub async fn tags(
     State(state): State<AppState>,
     Viewer(v): Viewer,
@@ -825,6 +853,7 @@ pub struct BlameResponse {
     pub lines: Vec<String>,
 }
 
+/// Blame a text file at a ref (the default branch by default): the commit behind each line, and the highlighted lines.
 #[utoipa::path(get, path = "/api/v1/projects/{id}/repository/blame", responses((status = 200, body = BlameResponse)), tag = "repository")]
 pub async fn blame(
     State(state): State<AppState>,
@@ -947,6 +976,7 @@ pub struct FileList {
 }
 
 /// Every file path at a ref, for the "go to file" finder.
+#[utoipa::path(get, path = "/api/v1/projects/{id}/repository/files", params(("ref" = Option<String>, Query, description = "Branch, tag or commit; the default branch without one")), responses((status = 200, body = FileList)), tag = "repository")]
 pub async fn files(
     State(state): State<AppState>,
     Viewer(v): Viewer,
@@ -974,6 +1004,7 @@ pub struct MarkdownHtml {
 }
 
 /// Comment previews: the same sanitized renderer the server uses everywhere.
+#[utoipa::path(post, path = "/api/v1/projects/{id}/markdown", request_body = MarkdownBody, responses((status = 200, body = MarkdownHtml)), tag = "repository")]
 pub async fn markdown(
     State(state): State<AppState>,
     Viewer(v): Viewer,
@@ -1071,6 +1102,8 @@ pub async fn create_branch(
     Ok(axum::Json(serde_json::json!({ "name": req.branch.trim(), "commit": sha })))
 }
 
+/// Delete a branch (Developer+; protected patterns apply as for a push); never the default branch.
+#[utoipa::path(delete, path = "/api/v1/projects/{id}/repository/branches/{branch}", responses((status = 204)), tag = "repository")]
 pub async fn delete_branch(
     State(state): State<AppState>,
     crate::auth::SignedIn(_, v): crate::auth::SignedIn,

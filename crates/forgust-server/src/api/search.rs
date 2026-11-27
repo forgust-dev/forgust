@@ -36,6 +36,7 @@ pub struct SearchResults {
     pub merge_requests: Vec<ItemHit>,
 }
 
+/// Search projects, issues and merge requests by title, only what the caller may see (`scope`, `state`, paging).
 #[utoipa::path(get, path = "/api/v1/search", responses((status = 200, body = SearchResults)), tag = "projects")]
 pub async fn search(State(state): State<AppState>, Viewer(v): Viewer, Query(q): Query<SearchQuery>) -> ApiResult<Json<SearchResults>> {
     let term = q.q.trim();

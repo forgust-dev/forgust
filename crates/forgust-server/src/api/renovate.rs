@@ -171,6 +171,7 @@ pub async fn host_rules(
     Ok(Json(forgust_db::renovate::host_rules(&state.db, Some(p.id)).await?))
 }
 
+/// Add a credential Renovate uses for one of the project's private registries; returns its rules (Maintainers only).
 #[utoipa::path(post, path = "/api/v1/projects/{id}/renovate/host_rules", request_body = NewHostRule, responses((status = 200, body = Vec<forgust_db::renovate::HostRule>)), tag = "renovate")]
 pub async fn add_host_rule(
     State(state): State<AppState>,
@@ -182,6 +183,7 @@ pub async fn add_host_rule(
     Ok(Json(add_rule(&state, &principal, Some(p.id), r).await?))
 }
 
+/// Delete one of the project's Renovate host rules (Maintainers only).
 #[utoipa::path(delete, path = "/api/v1/projects/{id}/renovate/host_rules/{rule_id}", responses((status = 204)), tag = "renovate")]
 pub async fn delete_host_rule(
     State(state): State<AppState>,
@@ -198,6 +200,7 @@ pub async fn admin_host_rules(State(state): State<AppState>, Admin(..): Admin) -
     Ok(Json(forgust_db::renovate::host_rules(&state.db, None).await?))
 }
 
+/// Add a registry credential every project's Renovate runs use; returns the instance's rules (administrators only).
 #[utoipa::path(post, path = "/api/v1/admin/renovate/host_rules", request_body = NewHostRule, responses((status = 200, body = Vec<forgust_db::renovate::HostRule>)), tag = "renovate")]
 pub async fn admin_add_host_rule(
     State(state): State<AppState>,
@@ -207,6 +210,7 @@ pub async fn admin_add_host_rule(
     Ok(Json(add_rule(&state, &principal, None, r).await?))
 }
 
+/// Delete an instance-wide Renovate host rule (administrators only).
 #[utoipa::path(delete, path = "/api/v1/admin/renovate/host_rules/{rule_id}", responses((status = 204)), tag = "renovate")]
 pub async fn admin_delete_host_rule(
     State(state): State<AppState>,
@@ -274,6 +278,7 @@ pub struct GroupRenovateStatus {
     pub turned_on: usize,
 }
 
+/// Whether dependency updates are on by default for the group's projects (group Owners only).
 #[utoipa::path(get, path = "/api/v1/groups/{id}/renovate", responses((status = 200, body = GroupRenovateStatus)), tag = "renovate")]
 pub async fn group_get(
     State(state): State<AppState>,
@@ -368,6 +373,7 @@ pub async fn admin_get(State(state): State<AppState>, Admin(..): Admin) -> ApiRe
     Ok(Json(admin_status(&state).await?))
 }
 
+/// Change built-in Renovate here: image, limits, variables, github.com token, image pull credentials (administrators only).
 #[utoipa::path(put, path = "/api/v1/admin/renovate", request_body = AdminRenovate, responses((status = 200, body = AdminRenovateStatus)), tag = "renovate")]
 pub async fn admin_set(
     State(state): State<AppState>,
