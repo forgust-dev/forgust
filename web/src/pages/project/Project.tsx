@@ -301,7 +301,7 @@ function ProjectHeader({ p }: { p: S["ProjectDetail"] }) {
         )}
         <span className="grow" />
         {p.access_level !== "none" && <Badge>{p.access_level}</Badge>}
-        {user && <NotificationBell projectId={p.id} />}
+        {user && <NotificationBell projectId={p.id} name={p.name} />}
       </div>
       {p.description && <p className="repo-desc">{p.description}</p>}
     </div>

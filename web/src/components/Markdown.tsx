@@ -1,13 +1,247 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { TableOfContents } from "lucide-react";
+import { useToast } from "../shell/toast";
+import { Menu } from "./controls";
 
 /** Markdown the server rendered and sanitized. Math (`$x$`, ```math) and Mermaid
- * diagrams are drawn here, loading KaTeX or Mermaid only on pages that have some. */
+ * diagrams are drawn here, loading KaTeX or Mermaid only on pages that have some. A code block
+ * gets a button to copy it, a picture made for each theme shows the one of the theme picked here,
+ * and a link to a section (`#install`) finds it, as on GitHub (its ids read `user-content-…`). */
 export function Markdown({ html, className }: { html: string; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
+  const { ok } = useToast();
+  const goToSection = useGoToSection();
+  const { key } = useLocation();
+  const keyRef = useRef(key);
+  keyRef.current = key;
+  // a section gone to on this page is no arrival: nothing brings the reader back to it
   useEffect(() => {
-    if (ref.current) void enhance(ref.current);
+    if (!jumped) return;
+    jumped = false;
+    arrived = key;
+  }, [key]);
+  useEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+    copyButtons(root);
+    themePictures(root);
+    watchTheme();
+    void enhance(root);
+    // once for each arrival on a page, by the first text that holds the section: not again
+    // when a text changes (edited, fetched anew) under a reader who has moved on
+    if (arrived === keyRef.current) return;
+    const stop = revealHash(root);
+    if (stop) arrived = keyRef.current;
+    return stop;
   }, [html]);
+  useEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+    const onClick = (e: MouseEvent) => {
+      const t = e.target as Element;
+      const copy = t.closest<HTMLButtonElement>("button.code-copy");
+      if (copy) return void copyCode(copy);
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = t.closest<HTMLAnchorElement>("a[href^='#']");
+      const frag = a?.getAttribute("href")?.slice(1);
+      const el = frag && sectionOf(root, frag);
+      if (!a || !frag || !el) return;
+      e.preventDefault();
+      goToSection(el, frag);
+      // a heading's own link: its address, to share
+      if (a.classList.contains("anchor") && navigator.clipboard) {
+        const name = a.parentElement?.textContent?.trim();
+        navigator.clipboard.writeText(location.href).then(
+          () => ok(name ? `Link to “${name}” copied` : "Link copied"),
+          () => {},
+        );
+      }
+    };
+    // an address typed or followed to a section of this text (of the first, when several
+    // texts of a page have one of that name)
+    const onHash = () => {
+      const frag = location.hash.slice(1);
+      const el = sectionOf(root, frag);
+      if (el && el === sectionOf(document, frag)) el.scrollIntoView();
+    };
+    root.addEventListener("click", onClick);
+    window.addEventListener("hashchange", onHash);
+    return () => {
+      root.removeEventListener("click", onClick);
+      window.removeEventListener("hashchange", onHash);
+    };
+  }, [goToSection, ok]);
   return <div ref={ref} className={className} dangerouslySetInnerHTML={{ __html: html }} />;
+}
+
+/** What the server starts a text's ids with (render.rs `USER_CONTENT`). */
+const USER = "user-content-";
+
+/** The section a link to `#frag` means in `root`: a heading or an anchor of the text
+ * (`#install` → `user-content-install`), or an element with that very id. */
+function sectionOf(root: ParentNode, frag: string): HTMLElement | null {
+  const name = decoded(frag);
+  if (!name) return null;
+  for (const n of new Set([name, name.toLowerCase()])) {
+    const id = CSS.escape(n.startsWith(USER) ? n : USER + n);
+    const el = root.querySelector<HTMLElement>(`[id="${id}"], a[name="${id}"]`);
+    if (el) return el;
+  }
+  return root.querySelector<HTMLElement>(`[id="${CSS.escape(name)}"]`);
+}
+
+function decoded(frag: string) {
+  try {
+    return decodeURIComponent(frag);
+  } catch {
+    // a `%` of its own: the address as written
+    return frag;
+  }
+}
+
+/** The page (the router's `key`) whose section was last brought into view, and whether the
+ * reader just went to one there by a link of the text or its outline. */
+let arrived = "";
+let jumped = false;
+
+/** Show a section of a text: its address in the bar (replacing the page's, through the router:
+ * what reads the address, a file's `#L5`, follows), the section at the top of the window. */
+function useGoToSection() {
+  const navigate = useNavigate();
+  const loc = useLocation();
+  const at = useRef(loc);
+  at.current = loc;
+  return useCallback(
+    (el: Element, frag: string) => {
+      jumped = true;
+      navigate({ search: at.current.search, hash: `#${frag}` }, { replace: true, preventScrollReset: true, state: at.current.state });
+      el.scrollIntoView();
+    },
+    [navigate],
+  );
+}
+
+/** A page opened at a section (`…/shop#install`): that section, once the text is there, kept at
+ * the top while what is above it settles (its images load), until the reader moves. */
+function revealHash(root: HTMLElement): (() => void) | undefined {
+  const frag = location.hash.slice(1);
+  if (!frag) return;
+  const el = sectionOf(root, frag);
+  // the page's own (`#readme`) is not the text's
+  const own = document.getElementById(decoded(frag));
+  if (!el || (own && !root.contains(own))) return;
+  el.scrollIntoView();
+  const settle = new ResizeObserver(() => el.scrollIntoView());
+  settle.observe(root);
+  const moves = ["wheel", "touchstart", "keydown", "pointerdown"] as const;
+  const stop = () => {
+    settle.disconnect();
+    clearTimeout(timer);
+    for (const m of moves) window.removeEventListener(m, stop);
+  };
+  const timer = setTimeout(stop, 3000);
+  for (const m of moves) window.addEventListener(m, stop, { passive: true });
+  return stop;
+}
+
+/** A button to copy each code block (not a diagram, math, or a suggested change, which have their
+ * own); where the browser cannot copy (an `http://` address but localhost), none. */
+function copyButtons(root: HTMLElement) {
+  if (!navigator.clipboard) return;
+  for (const code of root.querySelectorAll<HTMLElement>("pre > code")) {
+    const pre = code.parentElement!;
+    if (pre.parentElement?.classList.contains("code-block")) continue;
+    if (code.matches(".language-mermaid, [data-math-style], [class^='language-suggestion']")) continue;
+    const box = document.createElement("div");
+    box.className = "code-block";
+    pre.replaceWith(box);
+    box.append(pre);
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "icon-btn small-icon code-copy";
+    b.title = "Copy";
+    b.setAttribute("aria-label", "Copy the code");
+    box.append(b);
+  }
+}
+
+async function copyCode(b: HTMLButtonElement) {
+  const text = b.parentElement?.querySelector("pre")?.textContent ?? "";
+  try {
+    // without the block's last line break: a pasted command waits for Enter
+    await navigator.clipboard.writeText(text.replace(/\n$/, ""));
+  } catch {
+    return;
+  }
+  b.classList.add("copied");
+  b.title = "Copied";
+  b.setAttribute("aria-label", "Copied");
+  clearTimeout(Number(b.dataset.timer));
+  b.dataset.timer = String(
+    setTimeout(() => {
+      b.classList.remove("copied");
+      b.title = "Copy";
+      b.setAttribute("aria-label", "Copy the code");
+    }, 1500),
+  );
+}
+
+/** A picture's source for one theme (`media="(prefers-color-scheme: dark)"`) follows the theme
+ * picked here, not only the system's. */
+function themePictures(root: ParentNode) {
+  const picked = document.documentElement.dataset.theme;
+  for (const s of root.querySelectorAll<HTMLSourceElement>("picture > source[media]")) {
+    const scheme = (s.dataset.scheme ??= /prefers-color-scheme:\s*(dark|light)/.exec(s.media)?.[1] ?? "");
+    if (!scheme) continue;
+    const media = picked === "dark" || picked === "light" ? (picked === scheme ? "all" : "not all") : `(prefers-color-scheme: ${scheme})`;
+    if (s.media !== media) s.media = media;
+  }
+}
+
+let watching = false;
+/** Pictures change with the theme picked (theme.tsx sets `data-theme`, or removes it for the
+ * system's). */
+function watchTheme() {
+  if (watching) return;
+  watching = true;
+  new MutationObserver(() => themePictures(document)).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+}
+
+/** A text's sections, to go to one: a menu of its headings (a long README's, as on GitHub),
+ * from three of them on. */
+export function Outline({ html }: { html: string }) {
+  const heads = useMemo(() => {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    return Array.from(doc.querySelectorAll<HTMLElement>("h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]"), (h) => ({
+      id: h.id,
+      level: Number(h.tagName[1]),
+      text: h.textContent?.trim() ?? "",
+    })).filter((h) => h.text);
+  }, [html]);
+  const goToSection = useGoToSection();
+  if (heads.length < 3) return null;
+  const top = Math.min(...heads.map((h) => h.level));
+  return (
+    <Menu
+      trigger={
+        <button type="button" className="icon-btn small-icon" title="Outline" aria-label="Outline">
+          <TableOfContents size={16} />
+        </button>
+      }
+      items={heads.map((h) => ({
+        label: (
+          <span className="outline-item ellipsis" style={{ paddingLeft: (h.level - top) * 14 }}>
+            {h.text}
+          </span>
+        ),
+        onSelect: () => {
+          const el = document.getElementById(h.id);
+          if (el) goToSection(el, h.id.startsWith(USER) ? h.id.slice(USER.length) : h.id);
+        },
+      }))}
+    />
+  );
 }
 
 let diagrams = 0;

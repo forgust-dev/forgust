@@ -11,7 +11,7 @@ import { fetchers, keys, usePrefetch } from "../../prefetch";
 import { openPalette, useShortcuts } from "../../shell/palette";
 import { usePref } from "../../shell/theme";
 import { columns, HBar, hsVar, htmlText, remeasure, useCharWidth, useHScroll, useWidth } from "../../components/hscroll";
-import { Markdown } from "../../components/Markdown";
+import { Markdown, Outline } from "../../components/Markdown";
 import { SignatureBadge, useSignatures } from "./Signatures";
 import { EDITORS } from "./editors";
 import { blockTitle, whoKnows } from "./blocks";
@@ -359,6 +359,13 @@ function TreeView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
           <div className="card-head">
             <BookOpen size={15} className="muted" />
             <strong>{readme.data.path.split("/").pop()}</strong>
+            <div className="spacer" />
+            <Outline html={readme.data.html} />
+            {ctx.p.can_write_repository && (
+              <Link className="icon-btn small-icon" to={`${ctx.web}/-/edit/${res.ref}/${readme.data.path}`} title="Edit this file" aria-label="Edit this file">
+                <Pencil size={16} />
+              </Link>
+            )}
           </div>
           <Markdown className="card-body markdown" html={readme.data.html} />
         </div>
@@ -545,6 +552,7 @@ function BlobView({ ctx, res }: { ctx: Ctx; res: S["RefResolved"] }) {
                 </span>
                 {blob.lfs && <Badge>LFS</Badge>}
                 <div className="spacer" />
+                {preview && <Outline html={blob.markdown_html!} />}
                 {text && !preview && (
                   <button className={`icon-btn ${wrap ? "on" : ""}`} onClick={() => setWrap(!wrap)} aria-pressed={wrap} title="Wrap long lines" aria-label="Wrap long lines">
                     <WrapText size={16} />
