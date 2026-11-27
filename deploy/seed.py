@@ -1528,7 +1528,7 @@ def seed_marketplace(apis, platform):
     """acme/platform/marketplace: a monorepo to open in the Smart View."""
     bob = apis["bob"]
     log("acme/platform/marketplace: a monorepo for the Smart View")
-    p = bob.post("/projects", {"namespace_id": platform, "name": "Marketplace", "path": "marketplace", "visibility": "internal",
+    p = bob.post("/projects", {"namespace_id": platform, "name": "Marketplace", "path": "marketplace", "visibility": "private",
                                "description": MARKET_DESCRIPTION})
     r = Repo("marketplace", "bob", bob.token, "acme/platform/marketplace")
     market_history(r)
