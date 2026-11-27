@@ -1144,6 +1144,7 @@ pub async fn audit_catalogue(Admin(..): Admin) -> Json<AuditCatalogue> {
 }
 
 /// Someone's other email addresses.
+#[utoipa::path(get, path = "/api/v1/admin/users/{id}/emails", responses((status = 200, body = [forgust_db::user_emails::UserEmail])), tag = "admin")]
 pub async fn list_user_emails(
     State(state): State<AppState>,
     Admin(..): Admin,
@@ -1155,6 +1156,7 @@ pub async fn list_user_emails(
 
 /// Confirm one of someone's addresses without a link: the administrator
 /// vouches that it is theirs (an instance without email has no other way).
+#[utoipa::path(post, path = "/api/v1/admin/users/{id}/emails/{email_id}/confirm", responses((status = 200, body = forgust_db::user_emails::UserEmail)), tag = "admin")]
 pub async fn confirm_user_email(
     State(state): State<AppState>,
     Admin(_, p): Admin,
@@ -1166,6 +1168,7 @@ pub async fn confirm_user_email(
 
 /// Remove one of someone's addresses (one they should not hold, or that
 /// holds back its owner: a confirmed one is nobody else's).
+#[utoipa::path(delete, path = "/api/v1/admin/users/{id}/emails/{email_id}", responses((status = 200)), tag = "admin")]
 pub async fn remove_user_email(
     State(state): State<AppState>,
     Admin(_, p): Admin,

@@ -604,6 +604,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/users/{id}/emails": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Someone's other email addresses. */
+        get: operations["list_user_emails"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{id}/emails/{email_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove one of someone's addresses (one they should not hold, or that
+         *     holds back its owner: a confirmed one is nobody else's).
+         */
+        delete: operations["remove_user_email"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/users/{id}/emails/{email_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm one of someone's addresses without a link: the administrator
+         *     vouches that it is theirs (an instance without email has no other way).
+         */
+        post: operations["confirm_user_email"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/users/{id}/identities": {
         parameters: {
             query?: never;
@@ -3913,6 +3970,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/repository/map/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The history of the Smart View's map: what each commit of the default branch changed to it,
+         *     with the merge request that brought it, and who made it.
+         */
+        get: operations["history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/repository/raw": {
         parameters: {
             query?: never;
@@ -4595,6 +4672,61 @@ export interface paths {
          *     It needs a signed-in browser session of the account; only with email on.
          */
         post: operations["resend_confirmation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/emails": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Your other email addresses: commits made with a confirmed one show as yours. */
+        get: operations["list_emails"];
+        put?: never;
+        /**
+         * Add an address: a link is mailed to it; without email, an administrator
+         *     confirms it (or it is confirmed at once: see `services::emails`).
+         */
+        post: operations["add_email"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/emails/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove one of your other email addresses (needs a signed-in browser session of the account). */
+        delete: operations["remove_email"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/user/emails/{id}/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mail the link for one of your addresses again. */
+        post: operations["resend_email"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5366,6 +5498,14 @@ export interface components {
             key: string;
             title: string;
         };
+        AddEmail: {
+            /**
+             * @description Needed when the address is confirmed as it is added (an instance that
+             *     sends no email): a borrowed session must not be able to claim one.
+             */
+            current_password?: string;
+            email: string;
+        };
         AddGpgKey: {
             /** @description The armored public key (`gpg --armor --export <id>`). */
             key: string;
@@ -5554,6 +5694,13 @@ export interface components {
             /** Format: date-time */
             last_sign_in_at?: string | null;
             name: string;
+            /**
+             * Format: int64
+             * @description Its other email addresses, and how many of them wait for confirmation.
+             */
+            other_emails: number;
+            /** Format: int64 */
+            other_emails_unconfirmed: number;
             /** @description Sign-in providers linked to the account. */
             providers: string[];
             /**
@@ -5821,11 +5968,38 @@ export interface components {
             /** Format: date-time */
             started_at: string;
         };
+        BlockChange: {
+            block: components["schemas"]["MapBlock"];
+            kind_before: components["schemas"]["MapKind"];
+            role_before?: components["schemas"]["MapRole"] | null;
+        };
         BranchDto: {
+            /**
+             * Format: int64
+             * @description With `details`: commits on this branch that the default branch has not.
+             */
+            ahead?: number | null;
+            /**
+             * Format: int64
+             * @description With `details`: commits on the default branch that this branch has not.
+             */
+            behind?: number | null;
             commit?: components["schemas"]["CommitSummary"] | null;
             default: boolean;
+            merge_request?: components["schemas"]["BranchMergeRequest"] | null;
             name: string;
+            pipeline?: components["schemas"]["BranchPipeline"] | null;
             protected: boolean;
+        };
+        BranchMergeRequest: {
+            /** Format: int64 */
+            iid: number;
+            title: string;
+        };
+        BranchPipeline: {
+            /** Format: int64 */
+            iid: number;
+            status: string;
         };
         Breadcrumb: {
             full_path: string;
@@ -5898,6 +6072,51 @@ export interface components {
             screen: boolean;
             /** @description The bell in the app. */
             web: boolean;
+        };
+        ChapterAuthor: {
+            name: string;
+            /** @description Their account, by their verified email. */
+            username?: string | null;
+        };
+        /** @description A block as it was then: enough to draw it. */
+        ChapterBlock: {
+            id: string;
+            kind: components["schemas"]["MapKind"];
+            name: string;
+            role?: components["schemas"]["MapRole"] | null;
+        };
+        /**
+         * @description What a commit changed to the map. A block found again under another id is renamed rather
+         *     than removed and added; a role is a guess whose changes are not told, a kind's are.
+         */
+        ChapterChanges: {
+            blocks_added: components["schemas"]["ChapterBlock"][];
+            blocks_removed: components["schemas"]["ChapterBlock"][];
+            blocks_renamed: components["schemas"]["ChapterRename"][];
+            kinds_changed: components["schemas"]["ChapterKind"][];
+            links_added: components["schemas"]["MapLink"][];
+            links_removed: components["schemas"]["MapLink"][];
+        };
+        ChapterKind: {
+            from: components["schemas"]["MapKind"];
+            id: string;
+            to: components["schemas"]["MapKind"];
+        };
+        ChapterMergeRequest: {
+            /**
+             * Format: int64
+             * @description Its comments, not the system's.
+             */
+            comments: number;
+            /** @description The start of its description: why it was made. None without one. */
+            description?: string | null;
+            /** Format: int64 */
+            iid: number;
+            title: string;
+        };
+        ChapterRename: {
+            from: components["schemas"]["ChapterBlock"];
+            to: components["schemas"]["ChapterBlock"];
         };
         CiActivity: {
             /** @description Most pipelines in the last 30 days. */
@@ -6678,6 +6897,11 @@ export interface components {
             /** @description ok, warn or fail */
             status: string;
         };
+        HistoryStart: {
+            /** Format: date-time */
+            at: string;
+            commit: string;
+        };
         HookBody: {
             /** @description push, merge_request, note, release, pipeline, build */
             events: string[];
@@ -6810,6 +7034,11 @@ export interface components {
         };
         InstanceSettings: {
             allow_personal_projects: boolean;
+            /**
+             * @description While the instance sends no email and sign-up is closed, the addresses
+             *     people add to their account are confirmed at once.
+             */
+            auto_confirm_emails: boolean;
             default_branch_name: string;
             /** @description The MCP server's code mode: scripts an assistant writes, run in a sandbox. */
             mcp_code_mode: boolean;
@@ -7188,6 +7417,49 @@ export interface components {
             /** @description The folders or files whose files are its own. */
             roots: components["schemas"]["MapPath"][];
         };
+        /**
+         * @description What a merge request changes to the map: its head's against the default branch's, only what
+         *     the files it changes tell (a manifest, the file a link is read in, assay.toml). What the
+         *     default branch changed since the merge request left it is not the merge request's.
+         */
+        MapChanges: {
+            blocks_added: components["schemas"]["MapBlock"][];
+            /** @description A block whose kind or role changes: as it is at the head. */
+            blocks_changed: components["schemas"]["BlockChange"][];
+            blocks_removed: components["schemas"]["MapBlock"][];
+            /** @description A block found again under another id: once merged, as the history tells it. */
+            blocks_renamed: components["schemas"]["ChapterRename"][];
+            links_added: components["schemas"]["MapLink"][];
+            links_removed: components["schemas"]["MapLink"][];
+        };
+        /** @description A commit that changed the map, and what it changed. */
+        MapChapter: {
+            /**
+             * Format: date-time
+             * @description When they reached the default branch.
+             */
+            at: string;
+            author: components["schemas"]["ChapterAuthor"];
+            changes: components["schemas"]["ChapterChanges"];
+            /** @description The commit that made the changes. */
+            commit: string;
+            /** @description The default branch's merge commit that brought them, when it was made on the branch merged. */
+            merge_commit?: string | null;
+            merge_request?: components["schemas"]["ChapterMergeRequest"] | null;
+            /** @description The first line of the commit's message. */
+            title: string;
+        };
+        /**
+         * @description What the commits of the default branch changed to the map, as the map jobs read it. Empty
+         *     until one has (the Smart View off, or no job of the default branch since it came).
+         */
+        MapHistory: {
+            /** @description The commits that changed the map, oldest first. A revert and what it undid are left out. */
+            chapters: components["schemas"]["MapChapter"][];
+            /** @description The last commit read. */
+            head?: string | null;
+            start?: components["schemas"]["HistoryStart"] | null;
+        };
         /** @enum {string} */
         MapKind: "rust" | "node" | "python" | "go" | "docker" | "service" | "helm" | "kubernetes" | "ansible" | "terraform" | "pulumi" | "migrations" | "ci" | "docs" | "other";
         MapLanguage: {
@@ -7469,6 +7741,7 @@ export interface components {
         MrBlocks: {
             /** @description The most changed first. */
             blocks: components["schemas"]["MrBlock"][];
+            changes?: components["schemas"]["MapChanges"] | null;
             /**
              * @description The commit of the map they are read from: its head once a job mapped it, else the
              *     default branch's (empty without a map: the Smart View is off, or no job has run yet).
@@ -7758,7 +8031,10 @@ export interface components {
             target_type: string;
             title: string;
         };
-        /** @description What an import brings besides the repository (all on by default). */
+        /**
+         * @description What an import brings besides the repository (all on by default, but the mirror and the
+         *     Smart View: the import page turns the Smart View on).
+         */
         Options: {
             /** @default true */
             issues: boolean;
@@ -7784,6 +8060,12 @@ export interface components {
             mirror: boolean;
             /** @default true */
             protected_branches: boolean;
+            /**
+             * @description Turn the Smart View on: the code is mapped, and the map's history read, which the merge
+             *     requests imported tell (off by default, for who calls the API; on in the import page).
+             * @default false
+             */
+            smart_view: boolean;
             /**
              * @description CI/CD variables (Owners of the target group only).
              * @default true
@@ -9241,6 +9523,7 @@ export interface components {
          */
         UpdateInstanceSettings: {
             allow_personal_projects: boolean;
+            auto_confirm_emails?: boolean | null;
             default_branch_name: string;
             mcp_code_mode?: boolean | null;
             mcp_enabled?: boolean | null;
@@ -9371,6 +9654,23 @@ export interface components {
             unconfirmed_email?: string | null;
             user_type: string;
             username: string;
+        };
+        UserEmail: {
+            /**
+             * Format: date-time
+             * @description When it was confirmed (None: not yet).
+             */
+            confirmed_at?: string | null;
+            /**
+             * @description How: `link` (from its inbox), `admin` (an administrator vouched for
+             *     it) or `auto` (the instance trusted it, sending no email).
+             */
+            confirmed_by?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            email: string;
+            /** Format: int64 */
+            id: number;
         };
         VariableBody: {
             description?: string;
@@ -10455,6 +10755,61 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    list_user_emails: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserEmail"][];
+                };
+            };
+        };
+    };
+    remove_user_email: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    confirm_user_email: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserEmail"];
+                };
             };
         };
     };
@@ -15569,6 +15924,25 @@ export interface operations {
             };
         };
     };
+    history: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapHistory"];
+                };
+            };
+        };
+    };
     raw: {
         parameters: {
             query?: never;
@@ -15705,6 +16079,11 @@ export interface operations {
                 page: number;
                 /** @description At most 100; 40 by default. */
                 per_page: number;
+                /**
+                 * @description Branches only: each one's distance from the default branch, latest pipeline and open
+                 *     merge request (the Branches page; the branch pickers do without).
+                 */
+                details: boolean;
             };
             cookie?: never;
         };
@@ -16579,6 +16958,82 @@ export interface operations {
         };
     };
     resend_confirmation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_emails: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserEmail"][];
+                };
+            };
+        };
+    };
+    add_email: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddEmail"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserEmail"];
+                };
+            };
+        };
+    };
+    remove_email: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    resend_email: {
         parameters: {
             query?: never;
             header?: never;

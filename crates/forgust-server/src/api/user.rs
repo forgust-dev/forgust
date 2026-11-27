@@ -1085,6 +1085,7 @@ pub struct AddEmail {
 
 /// Add an address: a link is mailed to it; without email, an administrator
 /// confirms it (or it is confirmed at once: see `services::emails`).
+#[utoipa::path(post, path = "/api/v1/user/emails", request_body = AddEmail, responses((status = 200, body = UserEmail)), tag = "user")]
 pub async fn add_email(
     State(state): State<AppState>,
     SignedIn(u, p): SignedIn,
@@ -1111,6 +1112,8 @@ pub async fn add_email(
     Ok(Json(row))
 }
 
+/// Remove one of your other email addresses (needs a signed-in browser session of the account).
+#[utoipa::path(delete, path = "/api/v1/user/emails/{id}", responses((status = 200)), tag = "user")]
 pub async fn remove_email(State(state): State<AppState>, SignedIn(u, p): SignedIn, Path(id): Path<i64>) -> ApiResult<Json<Value>> {
     require_interactive(&u, &p)?;
     services::emails::remove(&state, &p, &u, id).await?;
@@ -1118,6 +1121,7 @@ pub async fn remove_email(State(state): State<AppState>, SignedIn(u, p): SignedI
 }
 
 /// Mail the link for one of your addresses again.
+#[utoipa::path(post, path = "/api/v1/user/emails/{id}/resend", responses((status = 200)), tag = "user")]
 pub async fn resend_email(State(state): State<AppState>, SignedIn(u, p): SignedIn, Path(id): Path<i64>) -> ApiResult<Json<Value>> {
     require_interactive(&u, &p)?;
     services::accounts::require_email(&state)?;
