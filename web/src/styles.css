@@ -9228,3 +9228,249 @@ button.test-case-row:hover {
     flex-wrap: wrap;
   }
 }
+/* since when a link is there: the merge request or the commit it came with */
+.smart-since a {
+  color: inherit;
+}
+.smart-since a:hover {
+  color: var(--accent);
+}
+/* the map through its history, a commit at a time */
+.smart-history {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.smart-history-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.smart-history-bar .meta {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.smart-history-chapter {
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  font-size: 13px;
+}
+.smart-history-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+}
+.smart-history-title > a {
+  font-weight: 600;
+}
+.smart-history-title .meta {
+  color: var(--text-muted);
+}
+.smart-history-chapter p,
+.smart-history-chapter ul {
+  margin: 6px 0 0;
+}
+.smart-history-chapter ul {
+  padding-left: 18px;
+}
+.smart-history-chapter li {
+  padding: 1px 0;
+}
+/* why a change was made: its merge request's own words */
+.smart-history-why {
+  color: var(--text);
+}
+.smart-history-story {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+/* what a commit did to a block: brought it (or it is new since the last visit), took it away, changed it */
+.smart-card.mark-added {
+  border-color: var(--ok);
+  box-shadow: 0 0 0 1px var(--ok), var(--shadow);
+}
+.smart-card.mark-removed {
+  border-style: dashed;
+  border-color: var(--danger);
+  box-shadow: none;
+}
+.smart-card.mark-removed .smart-name {
+  text-decoration: line-through;
+}
+.smart-card.mark-changed {
+  border-color: var(--warn);
+  box-shadow: 0 0 0 1px var(--warn), var(--shadow);
+}
+/* its tone from `.tone-*`, as a state's */
+.smart-mark-tag {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--tone-soft);
+  color: var(--tone);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.smart-frame .react-flow__edge.is-added .smart-link {
+  stroke: var(--ok);
+  stroke-width: 2;
+}
+.smart-frame .react-flow__edge.is-removed .smart-link {
+  stroke: var(--danger);
+}
+.smart-frame .react-flow__minimap-node.is-absent {
+  display: none;
+}
+/* a history's steps: every block keeps its place. What a commit brings fades in, a touch smaller
+   first; what it takes away stays the step, faded; what is not there yet (or no more) is hidden,
+   once faded out */
+.smart-history .smart-frame .react-flow__node,
+.smart-history .smart-frame .react-flow__edge {
+  transition:
+    opacity 200ms var(--ease-out),
+    visibility 0s;
+}
+.smart-history .smart-frame .react-flow__node.is-absent,
+.smart-history .smart-frame .react-flow__edge.is-absent {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 200ms var(--ease-out),
+    visibility 0s 200ms;
+}
+.smart-history .smart-frame .react-flow__node.is-removed,
+.smart-history .smart-frame .react-flow__edge.is-removed {
+  opacity: 0.55;
+}
+.smart-history .smart-frame .smart-card {
+  transition:
+    opacity 200ms var(--ease-out),
+    transform 200ms var(--ease-out);
+}
+.smart-history .smart-frame .react-flow__node.is-absent .smart-card {
+  transform: scale(0.96);
+}
+@media (prefers-reduced-motion: reduce) {
+  /* the fades stay: they say what came and went; nothing grows */
+  .smart-history .smart-frame .smart-card {
+    transition: opacity 200ms var(--ease-out);
+  }
+  .smart-history .smart-frame .react-flow__node.is-absent .smart-card {
+    transform: none;
+  }
+}
+/* the history as a line: a dot a commit, bigger as it changed more; the five biggest named above,
+   the years or months below, the releases as ticks */
+.smart-history-bar .smart-timeline {
+  flex: 1;
+}
+.smart-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 0 8px;
+}
+.smart-timeline-names,
+.smart-timeline-dates {
+  position: relative;
+  height: 15px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.smart-timeline-names > span,
+.smart-timeline-dates > span {
+  position: absolute;
+  max-width: 160px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  transform: translateX(-50%);
+}
+.smart-timeline-names > span.start,
+.smart-timeline-dates > span.start {
+  transform: none;
+}
+.smart-timeline-names > span.end,
+.smart-timeline-dates > span.end {
+  transform: translateX(-100%);
+}
+.smart-timeline-track {
+  position: relative;
+  height: 20px;
+  border-radius: 10px;
+  cursor: pointer;
+  touch-action: none;
+}
+.smart-timeline-track:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.smart-timeline-line,
+.smart-timeline-done {
+  position: absolute;
+  top: 9px;
+  right: 0;
+  left: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--border-strong);
+}
+.smart-timeline-done {
+  background: var(--accent);
+  transform-origin: left;
+}
+.smart-timeline-dot {
+  position: absolute;
+  top: 10px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  transform: translate(-50%, -50%);
+}
+.smart-timeline-dot.past {
+  background: var(--accent);
+}
+.smart-timeline-flag {
+  position: absolute;
+  top: 1px;
+  width: 2px;
+  height: 18px;
+  border-radius: 1px;
+  background: var(--text-faint);
+  transform: translateX(-50%);
+}
+.smart-timeline-thumb {
+  position: absolute;
+  top: 10px;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  background: var(--bg);
+  box-shadow: var(--shadow);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+@media (max-width: 700px) {
+  .smart-timeline-names {
+    display: none;
+  }
+  /* a line of its own, under the buttons */
+  .smart-history-bar {
+    flex-wrap: wrap;
+  }
+  .smart-history-bar .smart-timeline {
+    flex-basis: 100%;
+    order: 1;
+  }
+}
+/* what this browser has not seen of the history yet */
+.smart-visit {
+  margin-bottom: 12px;
+}

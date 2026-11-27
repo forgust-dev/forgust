@@ -2,7 +2,8 @@ import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { S } from "../api/client";
 
-/** A server event (see `events.rs`): `push`, `merge_request`, `pipeline`, `job`, `job_trace`, ... */
+/** A server event (see `events.rs`): `push`, `merge_request`, `pipeline`, `job`, `job_trace`,
+ * `smart_view`, ... */
 export type LiveEvent = {
   type: string;
   /** The project it happened in (none for the person's own events, see `UserEvent`). */

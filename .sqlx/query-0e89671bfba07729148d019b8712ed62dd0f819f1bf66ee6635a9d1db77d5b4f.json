@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE smart_view_history SET head = $4, updated_at = now() WHERE project_id = $1 AND git_ref = $2 AND head = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0e89671bfba07729148d019b8712ed62dd0f819f1bf66ee6635a9d1db77d5b4f"
+}

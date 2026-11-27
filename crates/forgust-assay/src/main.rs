@@ -45,6 +45,31 @@ enum Command {
         /// The repository's name, which the block of its top folder takes (default: the folder's)
         #[arg(long)]
         name: Option<String>,
+        /// Add what the branch's commits changed to the map (see `assay history`)
+        #[arg(long)]
+        history: bool,
+        /// With `--history`: only the commits after this one, which the forge has read already
+        #[arg(long, requires = "history")]
+        since: Option<String>,
+        /// With `--history`: the most maps to make, of the latest commits that could change it
+        #[arg(long, requires = "history", default_value_t = forgust_assay::MAX_MAPS)]
+        history_max: usize,
+    },
+    /// Tell what each commit of the current branch changed to the map, along first parents: the
+    /// blocks and links that came or went, the blocks renamed or turned into another kind
+    History {
+        /// The repository's folder, a git clone
+        #[arg(default_value = ".")]
+        path: PathBuf,
+        /// Only the commits after this one
+        #[arg(long)]
+        since: Option<String>,
+        /// The most maps to make, of the latest commits that could change it
+        #[arg(long, default_value_t = forgust_assay::MAX_MAPS)]
+        max: usize,
+        /// JSON rather than text to read
+        #[arg(long)]
+        json: bool,
     },
     /// Write the map of a repository as a page to look at: one HTML file, which opens offline
     View {
@@ -78,10 +103,26 @@ fn main() -> anyhow::Result<()> {
                 println!("{}", serde_json::to_string(&map)?);
             }
         }
-        Command::Report { path, out, name } => {
-            let report = forgust_assay::report::report(&path, &forgust_assay::Options { name, ..Default::default() })?;
+        Command::Report { path, out, name, history, since, history_max } => {
+            let opts = forgust_assay::Options { name, ..Default::default() };
+            let mut report = forgust_assay::report::report(&path, &opts)?;
+            if history {
+                // a history that cannot be read leaves the map as it is
+                match forgust_assay::history(&path, &opts, &forgust_assay::HistoryOptions { since, max: history_max }) {
+                    Ok(h) => report.history = Some(h),
+                    Err(e) => eprintln!("assay: the history could not be read: {e:#}"),
+                }
+            }
             std::fs::write(&out, serde_json::to_vec(&report)?)?;
             println!("{}", out.display());
+        }
+        Command::History { path, since, max, json } => {
+            let history = forgust_assay::history(&path, &forgust_assay::Options::default(), &forgust_assay::HistoryOptions { since, max })?;
+            if json {
+                println!("{}", serde_json::to_string(&history)?);
+            } else {
+                print!("{}", history.story());
+            }
         }
         Command::View { path, out, open, no_people, days } => {
             let map = forgust_assay::map(&path, &forgust_assay::Options { people: !no_people, days, name: None })?;

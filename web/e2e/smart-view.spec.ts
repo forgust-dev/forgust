@@ -48,22 +48,49 @@ test("the Smart View maps the code into blocks and tells what each needs", async
     await api("put", `/projects/${project.id}/smart_view`, { enabled: true });
     await page.reload();
     await expect(page.getByText("The code is being mapped by")).toBeVisible();
-    let job: any = null;
-    for (let i = 0; i < 40 && !job; i++) {
-      const r = await page.request.post("/api/v4/jobs/request", { data: { token: runner.token, system_id: tag, info: { version: "19.5.3", executor: "docker" } } });
-      if (r.status() === 201) job = await r.json();
-      else await page.waitForTimeout(250);
-    }
-    expect(job, "the map job").toBeTruthy();
-    expect(JSON.stringify(job.steps)).toContain("assay report");
-    const sha = job.git_info.sha;
-    const report = { ...REPORT, commit: sha, map: { ...REPORT.map, commit: sha } };
-    const up = await page.request.post(`/api/v4/jobs/${job.id}/artifacts?artifact_type=smart_view&artifact_format=raw`, {
-      headers: { "JOB-TOKEN": job.token },
-      multipart: { file: { name: "assay-report.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(report)) } },
+    // the runner takes the map job waiting, and uploads what assay writes for its commit: the
+    // default branch's map, with what its commits changed to it (`history`)
+    const mapJob = async (history: (sha: string) => any) => {
+      let job: any = null;
+      for (let i = 0; i < 40 && !job; i++) {
+        const r = await page.request.post("/api/v4/jobs/request", { data: { token: runner.token, system_id: tag, info: { version: "19.5.3", executor: "docker" } } });
+        if (r.status() === 201) job = await r.json();
+        else await page.waitForTimeout(250);
+      }
+      expect(job, "the map job").toBeTruthy();
+      expect(JSON.stringify(job.steps)).toContain("assay report");
+      expect(JSON.stringify(job.steps)).toContain("--history");
+      const sha: string = job.git_info.sha;
+      const report = { ...REPORT, commit: sha, map: { ...REPORT.map, commit: sha }, history: history(sha) };
+      const up = await page.request.post(`/api/v4/jobs/${job.id}/artifacts?artifact_type=smart_view&artifact_format=raw`, {
+        headers: { "JOB-TOKEN": job.token },
+        multipart: { file: { name: "assay-report.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(report)) } },
+      });
+      expect(up.status()).toBe(201);
+      expect((await page.request.put(`/api/v4/jobs/${job.id}`, { data: { token: job.token, state: "success", exit_code: 0 } })).status()).toBe(200);
+      return sha;
+    };
+    const commits = await api("get", `/projects/${project.id}/repository/commits?ref_name=main`);
+    const first = commits[commits.length - 1].id;
+    // two commits: the workspace, its image and services, then the crates
+    const crates = ["api", "core"];
+    const ofCrates = (l: any) => crates.includes(l.from) || crates.includes(l.to);
+    const now = Math.floor(Date.now() / 1000);
+    const chapter = (commit: string, title: string, at: number, blocks: any[], links: any[]) => ({
+      commit,
+      author: "E2E",
+      email: "e2e@example.com",
+      at,
+      title,
+      changes: { blocks_added: blocks.map((b) => ({ id: b.id, name: b.name, kind: b.kind, ...(b.role ? { role: b.role } : {}) })), links_added: links },
     });
-    expect(up.status()).toBe(201);
-    expect((await page.request.put(`/api/v4/jobs/${job.id}`, { data: { token: job.token, state: "success", exit_code: 0 } })).status()).toBe(200);
+    // the first time, all of them
+    const sha = await mapJob((sha) => ({
+      chapters: [
+        chapter(first, "Start the map", now - 3600, REPORT.map.blocks.filter((b: any) => !crates.includes(b.id)), REPORT.map.links.filter((l: any) => !ofCrates(l))),
+        chapter(sha, "Add the crates", now, REPORT.map.blocks.filter((b: any) => crates.includes(b.id)), REPORT.map.links.filter(ofCrates)),
+      ],
+    }));
 
     // the page takes the map in when the job is done
     // compose.yml declares the services but holds no block's files
@@ -78,6 +105,33 @@ test("the Smart View maps the code into blocks and tells what each needs", async
     await expect(card("db").locator(".smart-mark title")).toHaveText("PostgreSQL");
     if (!isMobile(page)) await expect(page.getByRole("link", { name: "Smart View" }).first()).toBeVisible();
 
+    // the first visit tells the map's story, and plays it: the next commit comes by itself
+    const visit = page.locator(".smart-visit");
+    await expect(visit).toContainText("The story of this map. From 3 blocks in");
+    await expect(visit).toContainText("to 5 blocks now: 2 changes by 1 person.");
+    await visit.getByRole("button", { name: "Watch it grow" }).click();
+    await expect(page).toHaveURL(new RegExp(`[?&]history=${first}`));
+    await expect(page.locator(".smart-history-chapter")).toContainText("Start the map");
+    await expect(page).toHaveURL(new RegExp(`[?&]history=${sha}`), { timeout: 5000 });
+    await expect(page.getByRole("button", { name: "Play the history" })).toBeVisible();
+    await page.getByRole("button", { name: "Back to the map of now" }).click();
+    await expect(page).not.toHaveURL(/history=/);
+
+    // a commit pushed while the page is open: it says the commit is being mapped, then takes its
+    // map in, all without a reload
+    await page.evaluate(() => ((window as any).notReloaded = true));
+    await api("post", `/projects/${project.id}/repository/commits`, {
+      branch: "main",
+      commit_message: "A line in the README",
+      actions: [{ action: "update", file_path: "README.md", content: "# Map\n\nMapped again.\n" }],
+    });
+    await expect(page.getByText(/A newer commit \(\w{8}\) is being mapped by pipeline #\d+/)).toBeVisible();
+    // read since the last head: the README's commit changes nothing on the map
+    await mapJob(() => ({ since: sha, chapters: [] }));
+    await expect(page.getByText(/is being mapped by/)).toBeHidden();
+    await expect(page.getByText("5 blocks · 4 links · 3 files in no block")).toBeVisible();
+    expect(await page.evaluate(() => (window as any).notReloaded)).toBe(true);
+
     // a block chosen: what it needs and what needs it, each with the link and the file that says so
     await card("api").click();
     await expect(page).toHaveURL(/[?&]block=api\b/);
@@ -90,6 +144,16 @@ test("the Smart View maps the code into blocks and tells what each needs", async
     await expect(row(panel, "image").getByRole("link", { name: "From Dockerfile" })).toBeVisible();
     // where it is, and the manifest it was found in
     await expect(panel.getByRole("link", { name: "Cargo.toml", exact: true })).toHaveAttribute("href", `${web}/-/blob/main/api/Cargo.toml`);
+    // since when each link is there, and what the history tells of the block
+    await expect(row(panel, "core")).toContainText(`since ${sha.slice(0, 7)}`);
+    const told = panel.locator("section").filter({ has: page.getByRole("heading", { name: /^History/ }) });
+    await expect(told).toContainText("Added · Now uses core");
+    await expect(told.getByRole("link", { name: "Add the crates" })).toHaveAttribute("href", `${web}/-/commit/${sha}`);
+    // and opens the map as it was then
+    await told.getByRole("button", { name: /^The map then:/ }).click();
+    await expect(page).toHaveURL(new RegExp(`[?&]history=${sha}`));
+    await page.getByRole("button", { name: "Back to the map of now" }).click();
+    await expect(page.getByRole("complementary", { name: "api, details" })).toBeVisible();
 
     // from one block to the next: the image, and who made it
     await panel.getByRole("button", { name: "image", exact: true }).click();
@@ -107,6 +171,28 @@ test("the Smart View maps the code into blocks and tells what each needs", async
     await expect(page.locator(".smart-find-count")).toHaveText("1 block");
     await find.press("Enter");
     await expect(page).toHaveURL(/[?&]block=core\b/);
+
+    // the map through its history, a commit at a time, then back to now
+    await page.goto(`${web}/-/smart_view`);
+    await page.getByRole("button", { name: /^2 changes since / }).click();
+    await expect(page).toHaveURL(new RegExp(`[?&]history=${sha}`));
+    const chapterNow = page.locator(".smart-history-chapter");
+    await expect(chapterNow).toContainText("Add the crates");
+    await expect(chapterNow).toContainText("Adds 2 blocks: api and core");
+    await page.getByRole("button", { name: "The change before" }).click();
+    await expect(page).toHaveURL(new RegExp(`[?&]history=${first}`));
+    await expect(chapterNow).toContainText("The first map: 3 blocks and 2 links.");
+    await page.getByRole("button", { name: "Back to the map of now" }).click();
+    await expect(page).not.toHaveURL(/history=/);
+
+    // a visit after a commit not seen yet: said, and what it brought marked on the map
+    await page.evaluate(([key, commit]) => localStorage.setItem(key, commit), [`forgust.smart-view.seen.${project.id}`, first]);
+    await page.reload();
+    await expect(page.locator(".smart-visit")).toContainText("1 change since your last visit: Adds 2 blocks: api and core");
+    await expect(card("api")).toHaveClass(/\bmark-added\b/);
+    await expect(card("app")).not.toHaveClass(/\bmark-added\b/);
+    await page.locator(".smart-visit").getByRole("button", { name: "Show them" }).click();
+    await expect(page).toHaveURL(new RegExp(`[?&]history=${sha}`));
 
     // what a change reaches, through others too; lit up when asked
     await page.goto(`${web}/-/smart_view?block=api`);

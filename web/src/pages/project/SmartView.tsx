@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode, Ref } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   AlertTriangle,
@@ -10,6 +10,8 @@ import {
   BookOpen,
   Box,
   Boxes,
+  ChevronLeft,
+  ChevronRight,
   Container,
   Database,
   DatabaseZap,
@@ -18,11 +20,14 @@ import {
   GitPullRequest,
   HardDrive,
   HandHeart,
+  History as HistoryIcon,
   Hourglass,
   Library,
   ListEnd,
   Mail,
+  Pause,
   Pencil,
+  Play,
   Search,
   Server,
   SquareTerminal,
@@ -54,14 +59,17 @@ import {
 import "@xyflow/react/dist/base.css";
 import ELK from "elkjs/lib/elk.bundled.js";
 import type { ElkExtendedEdge, ElkNode } from "elkjs/lib/elk-api";
-import { api, qs, refLink, timeAgo, type S } from "../../api/client";
-import { Avatar, Empty, ListHead, Q, UserLink } from "../../components/ui";
+import { api, listAnd, qs, refLink, timeAgo, type S } from "../../api/client";
+import { Avatar, Empty, ListHead, Q, UserLink, type Tone } from "../../components/ui";
 import { Select } from "../../components/controls";
+import { useProjectEvents } from "../../shell/live";
 import { useSession } from "../../session";
 import type { AssayEdit } from "./assayToml";
 import { LINK_VERB, blockTitle } from "./blocks";
+import { useTags } from "./Code";
 import { StatusIcon, duration, statusLabel } from "./ci/Status";
 import { LOGOS, type Brand, type Logo } from "./logos";
+import { chapterTitle, linkKey, replay, size, stories, storyOf, type Chapter, type Event, type Step, type Told } from "./mapHistory";
 import type { Ctx } from "./Project";
 
 type Block = S["MapBlock"];
@@ -78,6 +86,43 @@ const INSET = 12;
 const READABLE = 0.8;
 /** How far the canvas zooms out and in, its buttons and its fit too. */
 const ZOOM = { min: 0.2, max: 1.5 };
+/** How long the view glides to a change of a history's step out of sight. */
+const GLIDE = 300;
+
+/** The curve `cubic-bezier(x1, y1, x2, y2)` as a function of time (0 to 1): for the motion CSS does
+ *  not run, the view's own. */
+function bezier(x1: number, y1: number, x2: number, y2: number): (t: number) => number {
+  const cx = 3 * x1;
+  const bx = 3 * (x2 - x1) - cx;
+  const ax = 1 - cx - bx;
+  const cy = 3 * y1;
+  const by = 3 * (y2 - y1) - cy;
+  const ay = 1 - cy - by;
+  const x = (s: number) => ((ax * s + bx) * s + cx) * s;
+  const y = (s: number) => ((ay * s + by) * s + cy) * s;
+  const slope = (s: number) => (3 * ax * s + 2 * bx) * s + cx;
+  return (t) => {
+    // the curve's parameter at that time: Newton's steps, else halving
+    let s = t;
+    for (let i = 0; i < 8; i++) {
+      const off = x(s) - t;
+      if (Math.abs(off) < 1e-6) return y(s);
+      const d = slope(s);
+      if (Math.abs(d) < 1e-6) break;
+      s -= off / d;
+    }
+    let [lo, hi] = [0, 1];
+    s = t;
+    while (hi - lo > 1e-6) {
+      if (x(s) < t) lo = s;
+      else hi = s;
+      s = (lo + hi) / 2;
+    }
+    return y(s);
+  };
+}
+/** `--ease-in-out` (styles.css): what moves on screen. */
+const EASE_IN_OUT = bezier(0.77, 0, 0.175, 1);
 /** The frame is as tall as the graph at the zoom it opens at, within these (the most: a share of
  *  the window's height). */
 const FRAME_MIN = 440;
@@ -265,6 +310,14 @@ export function SmartView({ ctx }: { ctx: Ctx }) {
     // a commit is being mapped: its map comes in when the job is done
     refetchInterval: (query) => (query.state.data?.view.run?.state === "pending" ? 4000 : false),
   });
+  // the server says the map changed (a commit started being mapped, its map was kept, or it
+  // could not be): read it again, though the page was shown before the job started
+  const qc = useQueryClient();
+  useProjectEvents(ctx.p.id, (ev) => {
+    if (ev.type !== "smart_view") return;
+    void qc.invalidateQueries({ queryKey: ["map", ctx.p.id] });
+    void qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === "mr" && q.queryKey[1] === ctx.p.id && q.queryKey[3] === "blocks" });
+  });
   const [words, setWords] = useState("");
   // the blocks the words find, in the order the graph shows them
   const found = useMemo(() => (q.data?.map && q.data.lay && words.trim() ? findBlocks(q.data.map, q.data.lay, words) : null), [q.data, words]);
@@ -427,19 +480,23 @@ function MapView({ ctx, gitRef, map, lay, found, words }: { ctx: Ctx; gitRef: st
   const chain = params.get("impact") === "1";
   // the blocks only one person knows, to share (`?share=1`)
   const share = params.get("share") === "1";
-  const setParam = useCallback(
-    (key: string, value: string | null) =>
+  // the address's parameters changed in place, in order (null: gone)
+  const patch = useCallback(
+    (changes: Record<string, string | null>) =>
       setParams(
         (now) => {
           const next = new URLSearchParams(now);
-          if (value) next.set(key, value);
-          else next.delete(key);
+          for (const [key, value] of Object.entries(changes)) {
+            if (value) next.set(key, value);
+            else next.delete(key);
+          }
           return next;
         },
         { replace: true },
       ),
     [setParams],
   );
+  const setParam = useCallback((key: string, value: string | null) => patch({ [key]: value }), [patch]);
   const select = useCallback((id: string | null) => setParam("block", id), [setParam]);
   const setChain = useCallback((on: boolean) => setParam("impact", on ? "1" : null), [setParam]);
   useEffect(() => {
@@ -459,6 +516,43 @@ function MapView({ ctx, gitRef, map, lay, found, words }: { ctx: Ctx; gitRef: st
     staleTime: 60_000,
   });
   const changed = useMemo(() => (touched.data ? touched.data.blocks.map((t) => t.block.id).filter((id) => byId.has(id)) : null), [touched.data, byId]);
+  // what each commit of the default branch changed to the map: since when each link is there,
+  // what each block went through, and the map as it was (`?history=<commit>`)
+  const history = useQuery({
+    queryKey: ["map-history", ctx.p.id, map.commit],
+    queryFn: () => api.get<S["MapHistory"]>(`${ctx.base}/map/history`),
+    staleTime: 60_000,
+    // a new map come in: the history shown (and played) stays until the new one is read
+    placeholderData: keepPreviousData,
+  });
+  const read = history.data;
+  const told = useMemo(() => (read?.chapters.length ? stories(read) : null), [read]);
+  const at = params.get("history");
+  const past = !mr && at && read?.chapters.length ? read : null;
+  // another chapter of the history (none: back to now); it plays only when asked again
+  const setAt = useCallback((commit: string | null) => patch({ history: commit, play: null }), [patch]);
+  // what this browser has not seen of the history yet, said once
+  const visit = useLastVisit(ctx.p.id, mr ? undefined : read);
+  const [quiet, setQuiet] = useState(false);
+  const fresh = visit && !mr && !past && !quiet ? visit : null;
+  // the blocks and links new since the last visit, marked on the map
+  const news = useMemo(() => {
+    if (!fresh?.unseen.length) return null;
+    const blocks = new Map<string, NodeState>();
+    const edges = new Map<string, NodeState>();
+    for (const c of fresh.unseen) {
+      for (const b of c.changes.blocks_added) if (byId.has(b.id)) blocks.set(b.id, "added");
+      for (const l of c.changes.links_added) edges.set(edgeId(l), "added");
+    }
+    return { blocks, edges };
+  }, [fresh, byId]);
+  // a block chosen in the map of then: as it is now, when it still is
+  const pick = useCallback(
+    (id: string | null) => {
+      if (id && byId.has(id)) patch({ history: null, block: id });
+    },
+    [byId, patch],
+  );
   // what stays bright, the rest stepping back: the chosen block and what is near it (or, asked,
   // all that depends on it); else the blocks found; else those the merge request changes (and,
   // asked, what depends on them)
@@ -536,6 +630,7 @@ function MapView({ ctx, gitRef, map, lay, found, words }: { ctx: Ctx; gitRef: st
       dim={!!lit && !lit.has(b.id)}
       onSelect={() => select(b.id)}
       links={links}
+      mark={markOf(news?.blocks.get(b.id))}
     />
   );
   // a block chosen from another's details opens at its top
@@ -555,6 +650,7 @@ function MapView({ ctx, gitRef, map, lay, found, words }: { ctx: Ctx; gitRef: st
       gitRef={gitRef}
       me={user?.username}
       fix={ctx.p.can_write_repository ? fix : undefined}
+      history={read?.head ? { told: told?.of.get(chosen) ?? [], since: told?.since, start: read.start, open: setAt } : undefined}
     />
   ) : null;
   // a phone's list keeps only the blocks found
@@ -584,80 +680,131 @@ function MapView({ ctx, gitRef, map, lay, found, words }: { ctx: Ctx; gitRef: st
               </button>
             </>
           )}
+          {!mr && read && read.chapters.length > 0 && (
+            <>
+              {" · "}
+              <button
+                type="button"
+                className={`smart-go smart-bar-toggle${past ? " on" : ""}`}
+                aria-pressed={!!past}
+                title="The map as it was after each commit of the default branch that changed it"
+                onClick={() => setAt(past ? null : read.chapters[read.chapters.length - 1].commit)}
+              >
+                {plural(read.chapters.length, "change")} since {month(read.start?.at ?? read.chapters[0].at)}
+              </button>
+            </>
+          )}
         </span>
         {!list && lay.drawn.length > 0 && <Legend />}
       </div>
-      {share && <ToShare ctx={ctx} map={map} lay={lay} select={select} me={user?.username} fix={ctx.p.can_write_repository ? fix : undefined} onClose={() => setParam("share", null)} />}
-      <p className="smart-guide">{framed && "From left to right: what runs, what it is built from, the code, its data. "}Choose a block to see what it needs and who to ask.</p>
-      {mr && touched.data && (
-        <div className="smart-mr" role="status">
-          <GitPullRequest size={15} aria-hidden />
-          <span className="grow">
-            <Link to={`${ctx.web}/-/merge_requests/${mr}`}>!{mr}</Link> changes {plural(touched.data.blocks.length, "block")}
-            {touched.data.unassigned > 0 && ` and ${plural(touched.data.unassigned, "file")} in none`}
-            {touched.data.blocks.length > 0 && ": "}
-            {touched.data.blocks.slice(0, 8).map((t, i) => (
-              <span key={t.block.id}>
-                {i > 0 && ", "}
-                <button type="button" className="smart-go" onClick={() => select(t.block.id)}>
-                  {title(t.block)}
-                </button>
+      {past && <HistoryView ctx={ctx} map={map} history={past} at={at ?? ""} setAt={setAt} autoplay={params.get("play") === "1"} room={room} measure={main} pick={pick} />}
+      {!past && (
+        <>
+          {fresh && read && (fresh.first || fresh.unseen.length > 0) && (
+            <div className="smart-mr smart-visit" role="status">
+              <HistoryIcon size={15} aria-hidden />
+              <span className="grow">
+                {fresh.first ? (
+                  <>The story of this map. {storyLine(read, map.blocks.length)}</>
+                ) : (
+                  <>
+                    {plural(fresh.unseen.length, "change")} since your last visit: {visitWords(fresh.unseen, (id) => (byId.get(id) ? title(byId.get(id)!) : id))}
+                  </>
+                )}
               </span>
-            ))}
-            {touched.data.blocks.length > 8 && `, and ${touched.data.blocks.length - 8} more`}
-          </span>
-          {touched.data.blocks.length > 0 && (
-            <button type="button" className={`btn small${chain ? " on" : ""}`} aria-pressed={chain} onClick={() => setChain(!chain)}>
-              With what depends on them
-            </button>
-          )}
-          <button type="button" className="icon-btn" aria-label="Show every block alike" title="Show every block alike" onClick={() => setParam("mr", null)}>
-            <X size={14} />
-          </button>
-        </div>
-      )}
-      {/* the details: over the canvas when there is one, else beside the blocks */}
-      <div className={`smart-layout${details && room > 0 && !framed ? " open" : ""}`}>
-        <div className="smart-main" ref={main}>
-          {framed && (
-            <Canvas
-              key={lay.id}
-              lay={lay}
-              byId={byId}
-              jobs={jobs}
-              waitsOn={waitsOn}
-              chosen={chosen}
-              joined={joined}
-              lit={lit}
-              fit={fit}
-              select={select}
-              room={room}
-              panel={details}
-            />
-          )}
-          {list && found?.length === 0 && <Empty>No block has “{words.trim()}” in its name, what it is for or where it is.</Empty>}
-          {list
-            ? GROUPS.map(([group, kinds]) => {
-                const here = map.blocks.filter((b) => kinds.includes(b.kind) && shown(b)).sort((a, b) => rank.get(a.id)! - rank.get(b.id)!);
-                return (
-                  here.length > 0 && (
-                    <section key={group} className="smart-group" aria-label={group}>
-                      <h2>{group}</h2>
-                      <div className="smart-grid list">{here.map((b) => card(b, counts(b.id)))}</div>
-                    </section>
-                  )
-                );
-              })
-            : lay.loose.length > 0 && (
-                <section className="smart-group" aria-label="Not linked to other blocks">
-                  <h2>Not linked to other blocks</h2>
-                  <div className="smart-grid">{lay.loose.map((id) => card(byId.get(id)!))}</div>
-                </section>
+              {fresh.first ? (
+                <button
+                  type="button"
+                  className="btn small"
+                  onClick={() => patch({ history: read.chapters[0].commit, play: "1" })}
+                >
+                  <Play size={13} aria-hidden /> Watch it grow
+                </button>
+              ) : (
+                <button type="button" className="btn small" onClick={() => setAt(fresh.unseen[0].commit)}>
+                  Show them
+                </button>
               )}
-          <Notes ctx={ctx} gitRef={gitRef} map={map} />
-        </div>
-        {!framed && details}
-      </div>
+              <button type="button" className="icon-btn" aria-label="Hide" title="Hide" onClick={() => setQuiet(true)}>
+                <X size={14} />
+              </button>
+            </div>
+          )}
+          {share && <ToShare ctx={ctx} map={map} lay={lay} select={select} me={user?.username} fix={ctx.p.can_write_repository ? fix : undefined} onClose={() => setParam("share", null)} />}
+          <p className="smart-guide">{framed && "From left to right: what runs, what it is built from, the code, its data. "}Choose a block to see what it needs and who to ask.</p>
+          {mr && touched.data && (
+            <div className="smart-mr" role="status">
+              <GitPullRequest size={15} aria-hidden />
+              <span className="grow">
+                <Link to={`${ctx.web}/-/merge_requests/${mr}`}>!{mr}</Link> changes {plural(touched.data.blocks.length, "block")}
+                {touched.data.unassigned > 0 && ` and ${plural(touched.data.unassigned, "file")} in none`}
+                {touched.data.blocks.length > 0 && ": "}
+                {touched.data.blocks.slice(0, 8).map((t, i) => (
+                  <span key={t.block.id}>
+                    {i > 0 && ", "}
+                    <button type="button" className="smart-go" onClick={() => select(t.block.id)}>
+                      {title(t.block)}
+                    </button>
+                  </span>
+                ))}
+                {touched.data.blocks.length > 8 && `, and ${touched.data.blocks.length - 8} more`}
+              </span>
+              {touched.data.blocks.length > 0 && (
+                <button type="button" className={`btn small${chain ? " on" : ""}`} aria-pressed={chain} onClick={() => setChain(!chain)}>
+                  With what depends on them
+                </button>
+              )}
+              <button type="button" className="icon-btn" aria-label="Show every block alike" title="Show every block alike" onClick={() => setParam("mr", null)}>
+                <X size={14} />
+              </button>
+            </div>
+          )}
+          {/* the details: over the canvas when there is one, else beside the blocks */}
+          <div className={`smart-layout${details && room > 0 && !framed ? " open" : ""}`}>
+            <div className="smart-main" ref={main}>
+              {framed && (
+                <Canvas
+                  key={lay.id}
+                  lay={lay}
+                  byId={byId}
+                  jobs={jobs}
+                  waitsOn={waitsOn}
+                  chosen={chosen}
+                  joined={joined}
+                  lit={lit}
+                  fit={fit}
+                  select={select}
+                  room={room}
+                  panel={details}
+                  states={news?.blocks}
+                  edgeStates={news?.edges}
+                />
+              )}
+              {list && found?.length === 0 && <Empty>No block has “{words.trim()}” in its name, what it is for or where it is.</Empty>}
+              {list
+                ? GROUPS.map(([group, kinds]) => {
+                    const here = map.blocks.filter((b) => kinds.includes(b.kind) && shown(b)).sort((a, b) => rank.get(a.id)! - rank.get(b.id)!);
+                    return (
+                      here.length > 0 && (
+                        <section key={group} className="smart-group" aria-label={group}>
+                          <h2>{group}</h2>
+                          <div className="smart-grid list">{here.map((b) => card(b, counts(b.id)))}</div>
+                        </section>
+                      )
+                    );
+                  })
+                : lay.loose.length > 0 && (
+                    <section className="smart-group" aria-label="Not linked to other blocks">
+                      <h2>Not linked to other blocks</h2>
+                      <div className="smart-grid">{lay.loose.map((id) => card(byId.get(id)!))}</div>
+                    </section>
+                  )}
+              <Notes ctx={ctx} gitRef={gitRef} map={map} />
+            </div>
+            {!framed && details}
+          </div>
+        </>
+      )}
     </>
   );
 }
@@ -679,7 +826,18 @@ function useWidth(): [(el: HTMLDivElement | null) => void, number] {
 
 /** `links`: what it needs and what uses it, in words (a phone's list, which draws no line);
  *  `waits`: the block whose failed jobs hold it up. */
-type CardData = { b: Block; status: string | null; waits?: string; chosen: boolean; dim: boolean; onSelect: () => void; links?: string };
+/** What a commit did to a block or a link: brought it (or it is new since the last visit), took it
+ *  away, or changed it (renamed it, or made it another kind). */
+type Mark = "added" | "removed" | "changed";
+/** A block or a link on a canvas that shows a history: not there yet (or no more), there, or marked. */
+type NodeState = "absent" | "present" | Mark;
+const markOf = (s?: NodeState): Mark | undefined => (s === "added" || s === "removed" || s === "changed" ? s : undefined);
+const MARK_LABEL: Record<Mark, string> = { added: "New", removed: "Gone", changed: "Changed" };
+const MARK_TONE: Record<Mark, Tone> = { added: "ok", removed: "danger", changed: "warn" };
+/** A line's id on the canvas. */
+const edgeId = (e: { from: string; to: string; kind: string }) => `${e.from}>${e.to}:${e.kind}`;
+
+type CardData = { b: Block; status: string | null; waits?: string; chosen: boolean; dim: boolean; onSelect: () => void; links?: string; mark?: Mark };
 type BlockNode = Node<CardData, "block">;
 type HolderNode = Node<CardData, "holder">;
 /** `mine`: a line lit with the chosen block (`said`: one of its own, which says its verb). */
@@ -703,6 +861,12 @@ type CanvasProps = {
   room: number;
   /** The chosen block's details, over the frame's right side. */
   panel: ReactNode;
+  /** Each block's state, by its id, and each line's (by `edgeId`): a history's, or what is new
+   *  since the last visit. None: all there, none marked. */
+  states?: Map<string, NodeState>;
+  edgeStates?: Map<string, NodeState>;
+  /** A history's: the blocks of `fit` are brought into view only when out of it, gliding there. */
+  follow?: boolean;
 };
 
 /** The linked blocks on a canvas that pans and zooms, from what needs to what is needed; a block
@@ -716,7 +880,7 @@ function Canvas(props: CanvasProps) {
   );
 }
 
-function Flow({ lay, byId, jobs, waitsOn, chosen, joined, lit, fit: shown, select, room, panel }: CanvasProps) {
+function Flow({ lay, byId, jobs, waitsOn, chosen, joined, lit, fit: shown, select, room, panel, states, edgeStates, follow }: CanvasProps) {
   const flow = useReactFlow();
   const arrow = useId();
   // the frame's border takes 2px; its height: the graph's, within FRAME_MIN and FRAME_MAX
@@ -755,10 +919,19 @@ function Flow({ lay, byId, jobs, waitsOn, chosen, joined, lit, fit: shown, selec
           draggable: false,
           selectable: false,
           focusable: false,
-          data: { b, status: blockStatus(b, jobs), waits: waitsOn(id), chosen: chosen === id, dim: !!lit && !lit.has(id), onSelect: () => select(id) },
+          className: states ? `is-${states.get(id) ?? "present"}` : undefined,
+          data: {
+            b,
+            status: blockStatus(b, jobs),
+            waits: waitsOn(id),
+            chosen: chosen === id,
+            dim: !!lit && !lit.has(id),
+            onSelect: () => select(id),
+            mark: markOf(states?.get(id)),
+          },
         };
       }),
-    [lay, byId, jobs, waitsOn, chosen, lit, select],
+    [lay, byId, jobs, waitsOn, chosen, lit, select, states],
   );
   const edges = useMemo<LinkEdge[]>(
     () =>
@@ -767,17 +940,18 @@ function Flow({ lay, byId, jobs, waitsOn, chosen, joined, lit, fit: shown, selec
         // a chain's, a merge request's: a line between two bright blocks
         const mine = said || (joined && !!lit?.has(e.from) && !!lit?.has(e.to));
         return {
-          id: `${e.from}>${e.to}:${e.kind}`,
+          id: edgeId(e),
           source: e.from,
           target: e.to,
           type: "link",
           selectable: false,
           focusable: false,
+          className: edgeStates ? `is-${edgeStates.get(edgeId(e)) ?? "present"}` : undefined,
           markerEnd: e.kind === "part" ? undefined : `url(#${arrow}${mine ? "-hl" : ""})`,
           data: { e, mine, said, dim: !!lit && !mine, tip: tip(e, byId) },
         };
       }),
-    [lay, chosen, joined, lit, byId, arrow],
+    [lay, chosen, joined, lit, byId, arrow, edgeStates],
   );
 
   // a block chosen out of sight, or under the panel: brought to the middle of what is in view
@@ -801,22 +975,37 @@ function Flow({ lay, byId, jobs, waitsOn, chosen, joined, lit, fit: shown, selec
     return () => cancelAnimationFrame(frame);
   }, [chosen, lay, flow, width, height]);
   // a chain, or what a merge request changes: all of it brought into view (beside the panel when
-  // it is open), zooming out if it must; read again only when the blocks do
+  // it is open), zooming out if it must; read again only when the blocks do. A history's step:
+  // only what is out of sight, gliding there
   const fitKey = shown.join(" ");
   const panelOpen = !!panel;
   useEffect(() => {
     if (!fitKey) return;
     const frame = requestAnimationFrame(() => {
+      const ids = fitKey.split(" ");
+      const vp = flow.getViewport();
+      const seen = (id: string) => {
+        const n = flow.getInternalNode(id);
+        if (!n) return true;
+        const x = n.internals.positionAbsolute.x * vp.zoom + vp.x;
+        const y = n.internals.positionAbsolute.y * vp.zoom + vp.y;
+        return x >= 0 && y >= 0 && x + (n.measured.width ?? W) * vp.zoom <= width && y + (n.measured.height ?? H) * vp.zoom <= height;
+      };
+      if (follow && ids.every(seen)) return;
       const side = panelOpen && !window.matchMedia("(max-width: 900px)").matches ? PANEL + INSET : 0;
+      const glide = follow && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       void flow.fitView({
-        nodes: fitKey.split(" ").map((id) => ({ id })),
+        nodes: ids.map((id) => ({ id })),
         padding: { top: `${MARGIN}px`, right: `${side + MARGIN}px`, bottom: `${corner.h}px`, left: `${MARGIN}px` },
-        maxZoom: flow.getViewport().zoom,
+        maxZoom: vp.zoom,
         minZoom: 0.4,
+        ...(glide ? { duration: GLIDE, ease: EASE_IN_OUT } : {}),
       });
     });
     return () => cancelAnimationFrame(frame);
-  }, [fitKey, panelOpen, flow, corner]);
+    // the frame's size counts only for a history's step: a chain or a merge request's blocks are
+    // fitted once, and a resize leaves the view where it was moved to
+  }, [fitKey, panelOpen, flow, corner, follow, follow && width, follow && height]);
 
   return (
     <div className="smart-frame" style={{ height }}>
@@ -860,7 +1049,14 @@ function Flow({ lay, byId, jobs, waitsOn, chosen, joined, lit, fit: shown, selec
         <Controls showInteractive={false} position="bottom-left" fitViewOptions={fitAll} />
         {/* beside the buttons: a graph from left to right is crowded on the right, not there */}
         {!(fitsAcross && fitsDown) && (
-          <MiniMap pannable zoomable position="bottom-left" style={{ width: 120, height: 76, marginLeft: 58 }} ariaLabel="Where the view is in the whole graph" />
+          <MiniMap
+            pannable
+            zoomable
+            position="bottom-left"
+            style={{ width: 120, height: 76, marginLeft: 58 }}
+            ariaLabel="Where the view is in the whole graph"
+            nodeClassName={(n) => n.className ?? ""}
+          />
         )}
       </ReactFlow>
       {panel}
@@ -933,13 +1129,13 @@ function Mark({ b }: { b: Block }) {
   );
 }
 
-function BlockCard({ b, status, waits, chosen, dim, onSelect, links }: CardData) {
+function BlockCard({ b, status, waits, chosen, dim, onSelect, links, mark }: CardData) {
   const [kind, color] = [kindName(b), KIND[b.kind][1]];
   const lang = b.languages[0];
   return (
     <button
       type="button"
-      className={`smart-card${chosen ? " selected" : ""}${dim ? " dim" : ""}`}
+      className={`smart-card${chosen ? " selected" : ""}${dim ? " dim" : ""}${mark ? ` mark-${mark}` : ""}`}
       style={{ "--k": color } as CSSProperties}
       data-id={b.id}
       aria-pressed={chosen}
@@ -951,8 +1147,9 @@ function BlockCard({ b, status, waits, chosen, dim, onSelect, links }: CardData)
       <span className="smart-kind">
         <Mark b={b} />
         <span>{`${kind}${b.role ? ` · ${ROLE[b.role]}` : ""}`}</span>
-        {(solo(b) || status || waits) && (
+        {(solo(b) || status || waits || mark) && (
           <span className="smart-flags">
+            {mark && <span className={`smart-mark-tag tone-${MARK_TONE[mark]}`}>{MARK_LABEL[mark]}</span>}
             {solo(b) && (
               <span className="smart-solo" title={SOLO}>
                 1 person
@@ -1010,9 +1207,12 @@ type DetailsProps = {
   me?: string;
   /** Opens a correction in the editor; none for who cannot commit here. */
   fix?: (edit: AssayEdit) => void;
+  /** What the history read tells of it: the chapters that changed it, the latest first, and
+   *  since when each link is there. None until the default branch's history is read. */
+  history?: { told: Told[]; since?: Map<string, Chapter>; start?: S["HistoryStart"] | null; open: (commit: string) => void };
 };
 
-function Details({ ctx, gitRef, map, lay, b, jobs, pipeline, waits, chain, setChain, select, me, fix }: DetailsProps) {
+function Details({ ctx, gitRef, map, lay, b, jobs, pipeline, waits, chain, setChain, select, me, fix, history }: DetailsProps) {
   const byId = new Map(map.blocks.map((x) => [x.id, x]));
   const [kind, color] = [kindName(b), KIND[b.kind][1]];
   // once it scrolls, a line parts the name, which stays, from what goes under it
@@ -1024,20 +1224,29 @@ function Details({ ctx, gitRef, map, lay, b, jobs, pipeline, waits, chain, setCh
     </button>
   );
   const at = (p: S["MapPath"]) => (p.dir ? refLink(ctx.web, "tree", gitRef, p.path === "." ? undefined : p.path) : refLink(ctx.web, "blob", gitRef, p.path));
-  // a block in a list: its mark and name, then what the link is, whether it is a guess, and the file that says so
-  const row = (id: string, what?: string, e?: Edge) => (
-    <li key={`${id}:${e?.kind ?? ""}`}>
-      <RowMark b={byId.get(id)} />
-      <span className="grow">{go(id)}</span>
-      {what && <span className="meta">{what}</span>}
-      {e?.inferred && <span className="smart-tag">a guess</span>}
-      {e?.via && (
-        <Link className="smart-via" to={refLink(ctx.web, "blob", gitRef, e.via)} title={`From ${e.via}`} aria-label={`From ${e.via}`}>
-          <FileText size={13} aria-hidden />
-        </Link>
-      )}
-    </li>
-  );
+  // a block in a list: its mark and name, then what the link is, whether it is a guess, since
+  // when it is there, and the file that says so
+  const row = (id: string, what?: string, e?: Edge) => {
+    const since = e && e.kind !== "part" ? history?.since?.get(linkKey({ from: e.from, to: e.to, kind: e.kind })) : undefined;
+    return (
+      <li key={`${id}:${e?.kind ?? ""}`}>
+        <RowMark b={byId.get(id)} />
+        <span className="grow">{go(id)}</span>
+        {what && <span className="meta">{what}</span>}
+        {e?.inferred && <span className="smart-tag">a guess</span>}
+        {since && (
+          <span className="meta smart-since">
+            since <ChapterLink ctx={ctx} c={since} short />
+          </span>
+        )}
+        {e?.via && (
+          <Link className="smart-via" to={refLink(ctx.web, "blob", gitRef, e.via)} title={`From ${e.via}`} aria-label={`From ${e.via}`}>
+            <FileText size={13} aria-hidden />
+          </Link>
+        )}
+      </li>
+    );
+  };
   const verb = (e: Edge) => (e.kind === "part" ? undefined : LINK_VERB[e.kind]);
   const needs = lay.edges.filter((e) => e.from === b.id && e.kind !== "part");
   const holds = lay.edges.filter((e) => e.from === b.id && e.kind === "part");
@@ -1268,8 +1477,546 @@ function Details({ ctx, gitRef, map, lay, b, jobs, pipeline, waits, chain, setCh
         </Part>
       )}
       <Impact b={b} lay={lay} byId={byId} usedBy={new Set(neededBy.map((e) => e.from))} chain={chain} setChain={setChain} go={go} />
+      {history && (history.told.length > 0 || history.start) && (
+        <BlockHistory ctx={ctx} told={history.told} start={history.start} name={(id) => (byId.get(id) ? title(byId.get(id)!) : id)} open={history.open} />
+      )}
       {fix && <Fix key={b.id} b={b} map={map} me={me} fix={fix} />}
     </aside>
+  );
+}
+
+/** A day, as a chapter of the history says when it came: `24 Nov 2026`. */
+// one formatter each, not one a call: a timeline's dots each have their date
+const LONG_DATE = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short", year: "numeric" });
+const MONTH = new Intl.DateTimeFormat(undefined, { month: "short", year: "numeric" });
+const longDate = (at: string) => LONG_DATE.format(new Date(at));
+/** `Nov 2026`. */
+const month = (at: string) => MONTH.format(new Date(at));
+
+/** Someone by name, a link to their profile when they have an account here. */
+function Person({ p }: { p: { name: string; username?: string | null } }) {
+  return p.username ? <UserLink username={p.username}>{p.name}</UserLink> : <>{p.name}</>;
+}
+
+/** Where a chapter of the history comes from: its merge request (`!12 Its title`), else its
+ *  commit's title. `short`: the merge request's number, or the commit's start, alone. */
+function ChapterLink({ ctx, c, short }: { ctx: Ctx; c: Chapter; short?: boolean }) {
+  const mr = c.merge_request;
+  const tip = `${mr ? `!${mr.iid} ${mr.title}` : c.title} · ${c.author.name} · ${longDate(c.at)}`;
+  if (mr) {
+    return (
+      <Link to={`${ctx.web}/-/merge_requests/${mr.iid}`} title={tip}>
+        !{mr.iid}
+        {!short && ` ${mr.title}`}
+      </Link>
+    );
+  }
+  return (
+    <Link to={`${ctx.web}/-/commit/${c.commit}`} className={short ? "sha" : undefined} title={tip}>
+      {short ? c.commit.slice(0, 7) : c.title}
+    </Link>
+  );
+}
+
+/** What a chapter did to a block, in a few words. */
+function say(e: Event, name: (id: string) => string): string {
+  switch (e.what) {
+    case "added":
+      return "Added";
+    case "removed":
+      return "Removed";
+    case "renamed":
+      return `Renamed from ${e.from}`;
+    case "kind":
+      return `${KIND[e.from][0]} → ${KIND[e.to][0]}`;
+    case "needs":
+      return `Now ${LINK_VERB[e.link.kind]} ${name(e.link.to)}`;
+    case "drops":
+      return `No longer ${LINK_VERB[e.link.kind]} ${name(e.link.to)}`;
+    case "used":
+      return `${name(e.link.from)} now ${LINK_VERB[e.link.kind]} it`;
+    case "unused":
+      return `${name(e.link.from)} no longer ${LINK_VERB[e.link.kind]} it`;
+  }
+}
+
+/** The chapters shown at first in a block's history; the older ones on asking. */
+const SHOWN_CHAPTERS = 5;
+
+/** What the history tells of a block, the latest first: each commit that changed it or its links,
+ *  in words, with its merge request (or commit), who made it and when. */
+function BlockHistory({
+  ctx,
+  told,
+  start,
+  name,
+  open,
+}: {
+  ctx: Ctx;
+  told: Told[];
+  start?: S["HistoryStart"] | null;
+  name: (id: string) => string;
+  /** Opens the map as it was once a commit was made. */
+  open: (commit: string) => void;
+}) {
+  const [all, setAll] = useState(false);
+  const shown = all ? told : told.slice(0, SHOWN_CHAPTERS);
+  const added = told.some((t) => t.events.some((e) => e.what === "added"));
+  return (
+    <Part icon={HistoryIcon} title="History" count={told.length || undefined}>
+      {shown.length > 0 && (
+        <ul>
+          {shown.map(({ chapter: c, events }) => {
+            const said = events.slice(0, 3).map((e) => say(e, name));
+            if (events.length > 3) said.push(`${events.length - 3} more`);
+            const what = said.join(" · ");
+            return (
+              <li key={`${c.commit}:${c.at}`}>
+                <span className="grow">
+                  <span className="smart-line" title={what}>
+                    {what}
+                  </span>
+                  <span className="smart-sub">
+                    <ChapterLink ctx={ctx} c={c} /> · <Person p={c.author} /> ·{" "}
+                    <span title={longDate(c.at)}>{timeAgo(c.at)}</span>
+                  </span>
+                </span>
+                <button type="button" className="smart-via" aria-label={`The map then: ${longDate(c.at)}`} title="The map as it was then" onClick={() => open(c.commit)}>
+                  <HistoryIcon size={13} aria-hidden />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {told.length > shown.length && (
+        <button type="button" className="smart-go small" onClick={() => setAll(true)}>
+          {plural(told.length - shown.length, "older change")}
+        </button>
+      )}
+      {start && !added && <p className="muted small">Here before {longDate(start.at)}, where the history read starts.</p>}
+    </Part>
+  );
+}
+
+/** Names in a line: `a, b and c`; past `max`, `a, b, c and 9 more`. */
+const names = (list: string[], max = 6) => (list.length > max ? `${list.slice(0, max - 1).join(", ")} and ${list.length - max + 1} more` : listAnd(list));
+
+/** What a chapter changed, in words: the blocks that came or went together in a line, and the
+ *  links of a block that came or went alike (an image built from the whole repository's). */
+function chapterLines(c: Chapter, name: (id: string) => string): string[] {
+  const ch = c.changes;
+  // a block it added, as the map has it; one it removed, as the chapter knew it
+  const blocks = (verb: string, list: S["ChapterBlock"][], call: (b: S["ChapterBlock"]) => string) =>
+    list.length === 1 ? [`${verb} ${call(list[0])} (${KIND[list[0].kind][0]})`] : list.length ? [`${verb} ${plural(list.length, "block")}: ${names(list.map(call))}`] : [];
+  const out = [
+    ...blocks("Adds", ch.blocks_added, (b) => name(b.id)),
+    ...blocks("Removes", ch.blocks_removed, chapterTitle),
+    ...ch.blocks_renamed.map((r) => `Renames ${chapterTitle(r.from)} to ${chapterTitle(r.to)}`),
+    ...ch.kinds_changed.map((k) => `${name(k.id)}: ${KIND[k.from][0]} → ${KIND[k.to][0]}`),
+  ];
+  const links = (list: S["MapLink"][], now: boolean) => {
+    const alike = new Map<string, S["MapLink"][]>();
+    for (const l of list) alike.set(`${l.from} ${l.kind}`, [...(alike.get(`${l.from} ${l.kind}`) ?? []), l]);
+    for (const [first, ...more] of alike.values()) {
+      out.push(`${name(first.from)} ${now ? "now" : "no longer"} ${LINK_VERB[first.kind]} ${names([first, ...more].map((l) => name(l.to)))}`);
+    }
+  };
+  links(ch.links_added, true);
+  links(ch.links_removed, false);
+  return out;
+}
+
+/** The lines of a chapter told at first. */
+const SHOWN_LINES = 10;
+const NO_JOBS = new Map<string, Job>();
+const NO_WAIT = () => undefined;
+/** How long a step stays while the history plays. */
+const PLAY_STEP = 1400;
+
+/** The history in a line: from how many blocks, when, to how many now, by how many changes and
+ *  people. */
+function storyLine(h: S["MapHistory"], now: number) {
+  const t = storyOf(h, now);
+  return `From ${plural(t.from, "block")} in ${t.since ? month(t.since) : "the start"} to ${plural(now, "block")} now: ${plural(t.changes, "change")} by ${plural(t.people, "person", "people")}.`;
+}
+
+/** What this browser has not seen of a project's history: nothing the first time (`first`), then
+ *  the chapters after the latest it saw. Read once, when the history comes; the latest is kept for
+ *  the next visit, in this browser only. */
+function useLastVisit(projectId: number, h: S["MapHistory"] | undefined) {
+  const [visit, setVisit] = useState<{ first: boolean; unseen: Chapter[] } | null>(null);
+  useEffect(() => {
+    if (visit || !h?.chapters.length) return;
+    const key = `forgust.smart-view.seen.${projectId}`;
+    let last: string | null = null;
+    let lastAt = NaN;
+    try {
+      last = localStorage.getItem(key);
+      lastAt = Number(localStorage.getItem(`${key}.at`) ?? NaN);
+    } catch {
+      // no storage here: a first visit each time
+    }
+    const seen = last ? h.chapters.findIndex((c) => c.commit === last) : -1;
+    // the latest seen is no longer told (a revert took it out, or the branch was rewritten): what
+    // came after it, by when it came
+    const unseen = seen >= 0 ? h.chapters.slice(seen + 1) : last && Number.isFinite(lastAt) ? h.chapters.filter((c) => Date.parse(c.at) > lastAt) : [];
+    setVisit({ first: !last, unseen });
+    try {
+      const latest = h.chapters[h.chapters.length - 1];
+      localStorage.setItem(key, latest.commit);
+      localStorage.setItem(`${key}.at`, String(Date.parse(latest.at)));
+    } catch {
+      // not kept: said again next time
+    }
+  }, [visit, h, projectId]);
+  return visit;
+}
+
+/** The first changes of a few chapters, in words. */
+function visitWords(chapters: Chapter[], name: (id: string) => string) {
+  const lines = chapters.flatMap((c) => chapterLines(c, name));
+  return `${lines.slice(0, 2).join("; ")}${lines.length > 2 ? "…" : "."}`;
+}
+
+/** What a chapter did to each block and link, by the ids they keep: what the step after it has that
+ *  the one before had not (added), the other way (removed), or has otherwise (renamed, another
+ *  kind: changed). */
+function marksOf(step: Step, before: Step) {
+  const blocks = new Map<string, Mark>();
+  const links = new Map<string, Mark>();
+  for (const [id, b] of step.blocks) {
+    const was = before.blocks.get(id);
+    if (!was) blocks.set(id, "added");
+    else if (was.name !== b.name || was.kind !== b.kind) blocks.set(id, "changed");
+  }
+  for (const id of before.blocks.keys()) if (!step.blocks.has(id)) blocks.set(id, "removed");
+  for (const key of step.links.keys()) if (!before.links.has(key)) links.set(key, "added");
+  for (const key of before.links.keys()) if (!step.links.has(key)) links.set(key, "removed");
+  return { blocks, links };
+}
+
+type HistoryProps = {
+  ctx: Ctx;
+  map: S["RepoMap"];
+  history: S["MapHistory"];
+  /** The chapter shown, by its commit: the latest when the history has none of it. */
+  at: string;
+  /** Another chapter; none: back to the map of now. */
+  setAt: (commit: string | null) => void;
+  /** Play it at once (from the story: "Watch it grow"). */
+  autoplay: boolean;
+  room: number;
+  /** Follows the width the view has. */
+  measure: (el: HTMLDivElement | null) => void;
+  /** A block chosen: as it is now, when it still is. */
+  pick: (id: string | null) => void;
+};
+
+/** The map through its history, a chapter at a time. Every block that ever was keeps one place:
+ *  a step shows those it has. What the commit brought fades in, what it took away stays the step,
+ *  faded, and the view goes to a change out of sight; what it changed is said in words, with why
+ *  (its merge request's description). It plays too, a step after another. */
+function HistoryView({ ctx, map, history, at, setAt, autoplay, room, measure, pick }: HistoryProps) {
+  const chapters = history.chapters;
+  const found = chapters.findIndex((c) => c.commit === at);
+  const index = found >= 0 ? found : chapters.length - 1;
+  const c = chapters[index];
+  const told = useMemo(() => replay(map, history), [map, history]);
+  // every block and link laid out once
+  const laid = useQuery({ queryKey: ["map-all", ctx.p.id, history.head, map.commit], queryFn: () => plan(told.all), staleTime: Infinity });
+  const lay = laid.data;
+  const step = told.steps[index];
+  const before = index > 0 ? told.steps[index - 1] : told.base;
+  const marks = useMemo(() => marksOf(step, before), [step, before]);
+  // each block as it was then; one the step has not, as it last was
+  const byId = useMemo(() => {
+    const out = new Map(told.all.blocks.map((b) => [b.id, b]));
+    for (const [id, b] of before.blocks) out.set(id, b);
+    for (const [id, b] of step.blocks) out.set(id, b);
+    return out;
+  }, [told, step, before]);
+  const states = useMemo(() => {
+    const out = new Map<string, NodeState>();
+    for (const b of told.all.blocks) out.set(b.id, marks.blocks.get(b.id) ?? (step.blocks.has(b.id) ? "present" : "absent"));
+    return out;
+  }, [told, marks, step]);
+  const edgeStates = useMemo(() => {
+    const out = new Map<string, NodeState>();
+    for (const e of lay?.drawn ?? []) {
+      if (e.kind === "part") {
+        out.set(edgeId(e), states.get(e.from) === "absent" || states.get(e.to) === "absent" ? "absent" : "present");
+        continue;
+      }
+      const key = linkKey({ from: e.from, to: e.to, kind: e.kind });
+      out.set(edgeId(e), marks.links.get(key) ?? (step.links.has(key) ? "present" : "absent"));
+    }
+    return out;
+  }, [lay, states, marks, step]);
+  // what to look at: the blocks the commit changed, and those its links join
+  const lit = useMemo(() => {
+    const out = new Set(marks.blocks.keys());
+    for (const key of marks.links.keys()) {
+      const [from, , to] = key.split(" ");
+      out.add(from);
+      out.add(to);
+    }
+    return out;
+  }, [marks]);
+  const [playing, setPlaying] = useState(autoplay);
+  // played again from its end: the first chapter is on its way (the address changes in a
+  // transition, after `playing`), and the end seen meanwhile does not stop it
+  const restart = useRef(false);
+  // a step after another while it plays, then it stops at the latest
+  useEffect(() => {
+    if (!playing) return;
+    const next = chapters[index + 1];
+    if (!next) {
+      if (!restart.current) setPlaying(false);
+      return;
+    }
+    restart.current = false;
+    const t = window.setTimeout(() => setAt(next.commit), PLAY_STEP);
+    return () => window.clearTimeout(t);
+  }, [playing, index, chapters, setAt]);
+  // a step chosen stops the playing
+  const go = (i: number) => {
+    restart.current = false;
+    setPlaying(false);
+    if (chapters[i]) setAt(chapters[i].commit);
+  };
+  const play = () => {
+    if (playing) {
+      restart.current = false;
+      return setPlaying(false);
+    }
+    // from the start when it is at its end
+    if (index === chapters.length - 1) {
+      if (chapters.length < 2) return;
+      restart.current = true;
+      setAt(chapters[0].commit);
+    }
+    setPlaying(true);
+  };
+  // the releases: the tags every page reads (one query, one cache)
+  const tags = useTags(ctx);
+  const releases = useMemo(() => (tags.data ?? []).flatMap((t) => (t.commit ? [{ name: t.name, at: t.commit.committed_at }] : [])), [tags.data]);
+  // a block this chapter removed or renamed is named as it was
+  const gone = new Map([...c.changes.blocks_removed.map((b): [string, string] => [b.id, chapterTitle(b)]), ...c.changes.blocks_renamed.map((r): [string, string] => [r.from.id, chapterTitle(r.from)])]);
+  const then = new Map([...before.blocks, ...step.blocks].map(([, b]) => [b.id, b]));
+  const name = (id: string) => (then.get(id) ? title(then.get(id)!) : (gone.get(id) ?? id));
+  const lines = chapterLines(c, name);
+  const first = index === 0 && !history.start;
+  const when = longDate(c.at);
+  const mr = c.merge_request;
+  const loose = lay ? lay.loose.filter((id) => states.get(id) !== "absent") : [];
+  return (
+    <div className="smart-history" role="region" aria-label="The map's history" ref={measure}>
+      <div className="smart-history-bar">
+        <button type="button" className="icon-btn" aria-label={playing ? "Pause" : "Play the history"} title={playing ? "Pause" : "Play the history"} onClick={play}>
+          {playing ? <Pause size={15} /> : <Play size={15} />}
+        </button>
+        <button type="button" className="icon-btn" aria-label="The change before" title="The change before" disabled={index === 0} onClick={() => go(index - 1)}>
+          <ChevronLeft size={15} />
+        </button>
+        <Timeline chapters={chapters} index={index} onChange={go} releases={releases} />
+        <button type="button" className="icon-btn" aria-label="The change after" title="The change after" disabled={index === chapters.length - 1} onClick={() => go(index + 1)}>
+          <ChevronRight size={15} />
+        </button>
+        <span className="meta">
+          {index + 1} of {chapters.length}
+        </span>
+        <button type="button" className="icon-btn" aria-label="Back to the map of now" title="Back to the map of now" onClick={() => setAt(null)}>
+          <X size={14} />
+        </button>
+      </div>
+      <p className="smart-history-story">{storyLine(history, map.blocks.length)}</p>
+      <div className="smart-history-chapter" aria-live="polite">
+        <div className="smart-history-title">
+          <span className="meta">{when}</span>
+          <ChapterLink ctx={ctx} c={c} />
+          <span className="meta"><Person p={c.author} /></span>
+          {mr && mr.comments > 0 && (
+            <Link className="meta" to={`${ctx.web}/-/merge_requests/${mr.iid}`}>
+              {plural(mr.comments, "comment")}
+            </Link>
+          )}
+        </div>
+        {mr?.description && <p className="smart-history-why">{mr.description}</p>}
+        {first ? (
+          <p>
+            The first map: {plural(step.blocks.size, "block")} and {plural(step.links.size, "link")}.
+          </p>
+        ) : (
+          <ul>
+            {lines.slice(0, SHOWN_LINES).map((l) => (
+              <li key={l}>{l}</li>
+            ))}
+            {lines.length > SHOWN_LINES && <li className="muted">and {lines.length - SHOWN_LINES} more</li>}
+          </ul>
+        )}
+      </div>
+      {room >= LIST_BELOW && lay && (
+        <>
+          {lay.graph.length > 0 && (
+            <Canvas
+              key={lay.id}
+              lay={lay}
+              byId={byId}
+              jobs={NO_JOBS}
+              waitsOn={NO_WAIT}
+              chosen={null}
+              joined
+              lit={lit}
+              fit={[...lit].filter((id) => lay.at.has(id))}
+              select={pick}
+              room={room}
+              panel={null}
+              states={states}
+              edgeStates={edgeStates}
+              follow
+            />
+          )}
+          {loose.length > 0 && (
+            <section className="smart-group" aria-label="Not linked to other blocks">
+              <h2>Not linked to other blocks</h2>
+              <div className="smart-grid">
+                {loose.map((id) => (
+                  <BlockCard key={id} b={byId.get(id)!} status={null} chosen={false} dim={!lit.has(id)} mark={markOf(states.get(id))} onSelect={() => pick(id)} />
+                ))}
+              </div>
+            </section>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** A number kept within `lo` and `hi`. */
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+/** Where a label at `x` (in % of the line) is pinned: on it, but by its start or its end near the
+ *  line's ends, so that it does not overflow. */
+const pin = (x: number) => (x < 10 ? "start" : x > 90 ? "end" : "");
+/** What a chapter is called: its merge request's title, else its commit's. */
+const chapterName = (c: Chapter) => c.merge_request?.title ?? c.title;
+
+/** The history as a line of its commits, the oldest on the left: a dot each, bigger as it changed
+ *  more, the five biggest named above (where they leave each other room), the releases marked, the
+ *  years (or the months) below. A slider: the arrows, Page Up and Down, Home and End move it, a
+ *  click or a drag too. */
+function Timeline({ chapters, index, onChange, releases }: { chapters: Chapter[]; index: number; onChange: (i: number) => void; releases: { name: string; at: number }[] }) {
+  const track = useRef<HTMLDivElement>(null);
+  const n = chapters.length;
+  const pos = useCallback((i: number) => (n > 1 ? (i / (n - 1)) * 100 : 50), [n]);
+  const sizes = useMemo(() => chapters.map(size), [chapters]);
+  const most = Math.max(1, ...sizes);
+  const named = useMemo(() => {
+    const out: number[] = [];
+    const biggest = [...sizes.keys()].sort((a, b) => sizes[b] - sizes[a]).slice(0, 5);
+    for (const i of biggest.sort((a, b) => a - b)) if (out.every((j) => Math.abs(pos(i) - pos(j)) > 16)) out.push(i);
+    return out;
+  }, [sizes, pos]);
+  const ticks = useMemo(() => {
+    const years = new Set(chapters.map((c) => new Date(c.at).getFullYear())).size > 1;
+    const label = (at: string) => new Date(at).toLocaleDateString(undefined, years ? { year: "numeric" } : { month: "short" });
+    const out: { i: number; label: string }[] = [];
+    chapters.forEach((c, i) => {
+      const l = label(c.at);
+      if (i > 0 && l === label(chapters[i - 1].at)) return;
+      if (out.length && pos(i) - pos(out[out.length - 1].i) < 9) return;
+      out.push({ i, label: l });
+    });
+    return out;
+  }, [chapters, pos]);
+  // a release between the commits it came between
+  const flags = useMemo(() => {
+    const first = Date.parse(chapters[0].at) / 1000;
+    const last = Date.parse(chapters[n - 1].at) / 1000;
+    return releases
+      .filter((r) => r.at >= first && r.at <= last)
+      .map((r) => {
+        const after = chapters.findIndex((c) => Date.parse(c.at) / 1000 > r.at);
+        return { name: r.name, x: pos(after < 0 ? n - 1 : clamp(after - 0.5, 0, n - 1)) };
+      });
+  }, [releases, chapters, n, pos]);
+  const at = (clientX: number) => {
+    const r = track.current!.getBoundingClientRect();
+    return Math.round(clamp((clientX - r.left) / r.width, 0, 1) * (n - 1));
+  };
+  const page = Math.max(1, Math.round(n / 10));
+  const keys: Record<string, (i: number) => number> = {
+    ArrowLeft: (i) => i - 1,
+    ArrowDown: (i) => i - 1,
+    ArrowRight: (i) => i + 1,
+    ArrowUp: (i) => i + 1,
+    PageDown: (i) => i - page,
+    PageUp: (i) => i + page,
+    Home: () => 0,
+    End: () => n - 1,
+  };
+  const c = chapters[index];
+  // a step other than this one
+  const go = (to: number) => to !== index && onChange(to);
+  return (
+    <div className="smart-timeline">
+      <div className="smart-timeline-names" aria-hidden>
+        {named.map((i) => (
+          <span key={i} className={pin(pos(i))} style={{ left: `${pos(i)}%` }}>
+            {chapterName(chapters[i])}
+          </span>
+        ))}
+      </div>
+      <div
+        ref={track}
+        className="smart-timeline-track"
+        role="slider"
+        tabIndex={0}
+        aria-label="Move through the map's history"
+        aria-valuemin={1}
+        aria-valuemax={n}
+        aria-valuenow={index + 1}
+        aria-valuetext={`${longDate(c.at)}: ${chapterName(c)}`}
+        onKeyDown={(e) => {
+          const move = keys[e.key];
+          if (!move) return;
+          e.preventDefault();
+          go(clamp(move(index), 0, n - 1));
+        }}
+        onPointerDown={(e) => {
+          e.currentTarget.setPointerCapture(e.pointerId);
+          go(at(e.clientX));
+        }}
+        onPointerMove={(e) => {
+          if (e.currentTarget.hasPointerCapture(e.pointerId)) go(at(e.clientX));
+        }}
+      >
+        <span className="smart-timeline-line" />
+        <span className="smart-timeline-done" style={{ transform: `scaleX(${pos(index) / 100})` }} />
+        {flags.map((f) => (
+          <span key={f.name} className="smart-timeline-flag" style={{ left: `${f.x}%` }} title={`Release ${f.name}`} />
+        ))}
+        {chapters.map((ch, i) => {
+          const r = 3 + 4 * Math.sqrt(sizes[i] / most);
+          return (
+            <span
+              key={`${ch.commit}:${i}`}
+              className={`smart-timeline-dot${i <= index ? " past" : ""}`}
+              style={{ left: `${pos(i)}%`, width: 2 * r, height: 2 * r }}
+              title={`${longDate(ch.at)}: ${chapterName(ch)}`}
+            />
+          );
+        })}
+        <span className="smart-timeline-thumb" style={{ left: `${pos(index)}%` }} />
+      </div>
+      <div className="smart-timeline-dates" aria-hidden>
+        {ticks.map((t) => (
+          <span key={t.i} className={pin(pos(t.i))} style={{ left: `${pos(t.i)}%` }}>
+            {t.label}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -1549,7 +2296,7 @@ function ToShare({
                   </button>
                 </span>
                 <span className="smart-sub">
-                  {who && (who.username ? <UserLink username={who.username}>{who.name}</UserLink> : who.name)}
+                  {who && <Person p={who} />}
                   {who && ` · ${plural(who.commits, "commit")}`}
                   {` · ${reach ? `${plural(reach, "block")} depend on it` : "nothing depends on it"}`}
                 </span>

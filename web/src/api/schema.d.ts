@@ -2176,6 +2176,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/repository/map/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The history of the Smart View's map: what each commit of the default branch changed to it,
+         *     with the merge request that brought it, and who made it.
+         */
+        get: operations["history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{id}/repository/signatures": {
         parameters: {
             query?: never;
@@ -3524,6 +3544,51 @@ export interface components {
             /** @description The bell in the app. */
             web: boolean;
         };
+        ChapterAuthor: {
+            name: string;
+            /** @description Their account, by their verified email. */
+            username?: string | null;
+        };
+        /** @description A block as it was then: enough to draw it. */
+        ChapterBlock: {
+            id: string;
+            kind: components["schemas"]["MapKind"];
+            name: string;
+            role?: components["schemas"]["MapRole"] | null;
+        };
+        /**
+         * @description What a commit changed to the map. A block found again under another id is renamed rather
+         *     than removed and added; a role is a guess whose changes are not told, a kind's are.
+         */
+        ChapterChanges: {
+            blocks_added: components["schemas"]["ChapterBlock"][];
+            blocks_removed: components["schemas"]["ChapterBlock"][];
+            blocks_renamed: components["schemas"]["ChapterRename"][];
+            kinds_changed: components["schemas"]["ChapterKind"][];
+            links_added: components["schemas"]["MapLink"][];
+            links_removed: components["schemas"]["MapLink"][];
+        };
+        ChapterKind: {
+            from: components["schemas"]["MapKind"];
+            id: string;
+            to: components["schemas"]["MapKind"];
+        };
+        ChapterMergeRequest: {
+            /**
+             * Format: int64
+             * @description Its comments, not the system's.
+             */
+            comments: number;
+            /** @description The start of its description: why it was made. None without one. */
+            description?: string | null;
+            /** Format: int64 */
+            iid: number;
+            title: string;
+        };
+        ChapterRename: {
+            from: components["schemas"]["ChapterBlock"];
+            to: components["schemas"]["ChapterBlock"];
+        };
         CiActivity: {
             /** @description Most pipelines in the last 30 days. */
             busiest_projects: components["schemas"]["BusyProject"][];
@@ -4287,6 +4352,11 @@ export interface components {
             /** @description ok, warn or fail */
             status: string;
         };
+        HistoryStart: {
+            /** Format: date-time */
+            at: string;
+            commit: string;
+        };
         HookBody: {
             /** @description push, merge_request, note, release, pipeline, build */
             events: string[];
@@ -4810,8 +4880,38 @@ export interface components {
             /** @description A block whose kind or role changes: as it is at the head. */
             blocks_changed: components["schemas"]["BlockChange"][];
             blocks_removed: components["schemas"]["MapBlock"][];
+            /** @description A block found again under another id: once merged, as the history tells it. */
+            blocks_renamed: components["schemas"]["ChapterRename"][];
             links_added: components["schemas"]["MapLink"][];
             links_removed: components["schemas"]["MapLink"][];
+        };
+        /** @description A commit that changed the map, and what it changed. */
+        MapChapter: {
+            /**
+             * Format: date-time
+             * @description When they reached the default branch.
+             */
+            at: string;
+            author: components["schemas"]["ChapterAuthor"];
+            changes: components["schemas"]["ChapterChanges"];
+            /** @description The commit that made the changes. */
+            commit: string;
+            /** @description The default branch's merge commit that brought them, when it was made on the branch merged. */
+            merge_commit?: string | null;
+            merge_request?: components["schemas"]["ChapterMergeRequest"] | null;
+            /** @description The first line of the commit's message. */
+            title: string;
+        };
+        /**
+         * @description What the commits of the default branch changed to the map, as the map jobs read it. Empty
+         *     until one has (the Smart View off, or no job of the default branch since it came).
+         */
+        MapHistory: {
+            /** @description The commits that changed the map, oldest first. A revert and what it undid are left out. */
+            chapters: components["schemas"]["MapChapter"][];
+            /** @description The last commit read. */
+            head?: string | null;
+            start?: components["schemas"]["HistoryStart"] | null;
         };
         /** @enum {string} */
         MapKind: "rust" | "node" | "python" | "go" | "docker" | "service" | "helm" | "kubernetes" | "ansible" | "terraform" | "pulumi" | "migrations" | "ci" | "docs" | "other";
@@ -5384,7 +5484,10 @@ export interface components {
             target_type: string;
             title: string;
         };
-        /** @description What an import brings besides the repository (all on by default). */
+        /**
+         * @description What an import brings besides the repository (all on by default, but the mirror and the
+         *     Smart View: the import page turns the Smart View on).
+         */
         Options: {
             /** @default true */
             issues: boolean;
@@ -5410,6 +5513,12 @@ export interface components {
             mirror: boolean;
             /** @default true */
             protected_branches: boolean;
+            /**
+             * @description Turn the Smart View on: the code is mapped, and the map's history read, which the merge
+             *     requests imported tell (off by default, for who calls the API; on in the import page).
+             * @default false
+             */
+            smart_view: boolean;
             /**
              * @description CI/CD variables (Owners of the target group only).
              * @default true
@@ -10754,6 +10863,25 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PathBlock"];
+                };
+            };
+        };
+    };
+    history: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapHistory"];
                 };
             };
         };

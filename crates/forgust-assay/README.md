@@ -13,7 +13,8 @@ cargo run -p forgust-assay -- map ../some-repo --pretty   # the JSON (schema 1)
 ```
 assay view [PATH] [-o FILE] [--open] [--no-people] [--days N]
 assay map [PATH] [--text | --pretty] [--no-people] [--days N]
-assay report [PATH] [-o FILE] [--name NAME]
+assay history [PATH] [--since COMMIT] [--max N] [--json]
+assay report [PATH] [-o FILE] [--name NAME] [--history [--since COMMIT] [--history-max N]]
 ```
 
 `assay view` writes one HTML file (`<repository>.assay.html` by default), its map inside and nothing to fetch: the blocks as cards, from what needs to what is needed, left to right; a block clicked shows its links, its languages and the people to ask.
@@ -60,7 +61,7 @@ smart-view:
 | `ci` | `.gitlab-ci.yml`, `.github/workflows/`, and other CI configurations | those files |
 | `docs` | the top-level `docs/` folder | that folder |
 
-A file belongs to the block with the deepest root holding it; the rest is reported as in no block. Left out of every map: `fixtures`, `testdata`, `vendor`, `node_modules`, `third_party` and `.terraform` folders and the `.sqlx` cache, plus what assay.toml excludes. A block's `role` (`web`, `api`, `cli`, `library`, `database`, `cache`, `queue`, `search`, `storage`, `mail`) is a guess from its manifest (what it depends on, a binary, what it exports, a library chart) or its image (an Ansible role, from its name: `postgres` is a `database`); without a clue, it has none. Its `description` is its manifest's (a package's, a chart's, a Pulumi project's, an Ansible role's `meta/main.yml`, an image's `org.opencontainers.image.description` label) or assay.toml's.
+A file belongs to the block with the deepest root holding it; the rest is reported as in no block. Left out of every map: `fixtures`, `testdata`, `examples`, `vendor`, `node_modules`, `third_party` and `.terraform` folders and the `.sqlx` cache, plus what assay.toml excludes. A block's `role` (`web`, `api`, `cli`, `library`, `database`, `cache`, `queue`, `search`, `storage`, `mail`) is a guess from its manifest (what it depends on, a binary, what it exports, a library chart) or its image (an Ansible role, from its name: `postgres` is a `database`); without a clue, it has none. Its `description` is its manifest's (a package's, a chart's, a Pulumi project's, an Ansible role's `meta/main.yml`, an image's `org.opencontainers.image.description` label) or assay.toml's.
 
 Links go from the block that needs to the one needed:
 
@@ -112,6 +113,17 @@ remove = true
 exclude = ["someone@example.com"]
 days = 180
 ```
+
+## History
+
+`assay history` tells what each commit of the current branch changed to the map, oldest first and along first parents: the blocks and links that came (`+`) or went (`-`), a block renamed (`»`), or turned into another kind (`~`: a Rust crate rewritten in Go). It reads git, not the working copy. Only the commits that add or remove files, or change one that assay reads, are mapped, since the others cannot change the map: on a history of seven years and 3,592 commits, that is 41 % of them, mapped in about a minute.
+
+- A block found again under another id, in the same manifest (a service: running the same image), is renamed rather than removed and added, and its links follow it.
+- A role is a guess that comes and goes with the tooling: its changes are left out.
+- What a merge brings is told by the commit of the merged branch that made it, so that a release's merge does not stand for all the work it brings.
+- Only the latest 2,000 commits that could change the map are mapped (`--max`): the history then starts from the map as it was before them.
+
+`assay report --history` adds it to the report, from `--since` (the last commit the forge read) when the branch still has it. Forgust's Smart View keeps it, and links each commit to its merge request.
 
 ## As a library
 

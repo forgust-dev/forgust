@@ -41,6 +41,10 @@ pub struct Report {
     /// holds it.
     #[serde(default)]
     pub exclude: Vec<String>,
+    /// What the branch's commits changed to the map, when asked (`--history`): the forge keeps it
+    /// apart from the map.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub history: Option<crate::History>,
 }
 
 /// The report of the repository at `root`, a git clone. Fails only when the folder cannot be

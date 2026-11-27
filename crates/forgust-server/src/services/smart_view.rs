@@ -111,6 +111,7 @@ pub async fn configure(state: &AppState, principal: &Principal, project: &Projec
         map_default_branch(state, project).await;
     } else {
         db::set(&state.db, project.id, false, None, None).await?;
+        db::drop_history(&state.db, project.id).await?;
         for pl in db::drop_project(&state.db, project.id).await? {
             crate::ci::pipeline::cancel(state, pl).await.map_err(ApiError::Internal)?;
         }
@@ -118,26 +119,52 @@ pub async fn configure(state: &AppState, principal: &Principal, project: &Projec
     if enabled != was_on {
         let action = if enabled { "smart_view_enabled" } else { "smart_view_disabled" };
         super::audit(state, principal, action, Some(("project", project.id)), json!({}), None).await;
+        told(state, project.id);
     }
     Ok(())
 }
 
+/// The project's open pages hear that its map changed, and read it again: one shown before a
+/// commit started being mapped would otherwise wait for a reload. While one is being mapped
+/// they also ask every few seconds, so a run settled by the sweep reaches them too.
+fn told(state: &AppState, project_id: i64) {
+    state.events.publish(crate::events::Event::SmartView { project_id });
+}
+
+/// What a map job reads besides the map: for the default branch, what its
+/// commits changed to it, after the last one read (`since`) when there is one.
+#[derive(Debug, Clone, Copy)]
+enum Reads<'a> {
+    Map,
+    History { since: Option<&'a str> },
+}
+
 /// The job: the assay image running `assay report` on a full clone (the
-/// history tells who knows each block). The image's entrypoint is overridden:
-/// one that is not a shell would not run the script.
-fn job_config(cfg: &SmartViewConfig, name: &str) -> String {
+/// history tells who knows each block, and what each commit changed). The
+/// image's entrypoint is overridden: one that is not a shell would not run the
+/// script.
+fn job_config(cfg: &SmartViewConfig, name: &str, reads: Reads) -> String {
+    let mut variables = json!({
+        "GIT_DEPTH": "0",
+        // the block of the repository's top folder takes the project's name,
+        // not the folder a runner clones into
+        "FORGUST_SMART_VIEW_NAME": name,
+    });
+    let mut script = format!("assay report --name \"$FORGUST_SMART_VIEW_NAME\" --out {}", report::FILE);
+    if let Reads::History { since } = reads {
+        script.push_str(" --history");
+        if let Some(since) = since {
+            variables["FORGUST_SMART_VIEW_SINCE"] = json!(since);
+            script.push_str(" --since \"$FORGUST_SMART_VIEW_SINCE\"");
+        }
+    }
     let job = json!({
         "image": { "name": cfg.image, "entrypoint": [""] },
         "tags": cfg.tags,
         "timeout": format!("{} minutes", cfg.timeout_secs.div_ceil(60).max(1)),
-        "variables": {
-            "GIT_DEPTH": "0",
-            // the block of the repository's top folder takes the project's name,
-            // not the folder a runner clones into
-            "FORGUST_SMART_VIEW_NAME": name,
-        },
+        "variables": variables,
         "rules": [{ "when": "always" }],
-        "script": [format!("assay report --name \"$FORGUST_SMART_VIEW_NAME\" --out {}", report::FILE)],
+        "script": [script],
         // the server keeps what it reads of it: the file goes soon
         "artifacts": { "expire_in": "1 day", "reports": { REPORT: report::FILE } },
     });
@@ -174,10 +201,16 @@ async fn start(state: &AppState, project: &Project, mr: Option<&MergeRequest>, g
     let claimed = db::claim(&mut tx, project.id, mr_id, git_ref, sha).await?;
     tx.commit().await?;
     if let Some(id) = claimed {
+        // the default branch's history goes on from the last commit read of it
+        let kept = match mr {
+            None => db::history(&state.db, project.id).await?.filter(|h| h.git_ref == git_ref).map(|h| h.head),
+            Some(_) => None,
+        };
+        let reads = if mr.is_none() { Reads::History { since: kept.as_deref() } } else { Reads::Map };
         let started: anyhow::Result<()> = async {
             let trigger = crate::ci::pipeline::Trigger {
                 merge_request_id: mr_id,
-                config: Some(job_config(&cfg, &project.path)),
+                config: Some(job_config(&cfg, &project.path, reads)),
                 ..crate::ci::pipeline::Trigger::new(project.id, git_ref, sha, SOURCE, Some(bot.id))
             };
             let pipeline_id = crate::ci::pipeline::create(state, trigger).await?.id().ok_or_else(|| anyhow::anyhow!("no pipeline"))?;
@@ -190,6 +223,7 @@ async fn start(state: &AppState, project: &Project, mr: Option<&MergeRequest>, g
             db::unclaim(&state.db, id).await?;
             return Err(ApiError::Internal(e));
         }
+        told(state, project.id);
     }
     // the head is mapped or being mapped (now, or already: a branch pushed back to a commit it
     // was at): the runs of the commits it left would only put an older map over its own
@@ -234,7 +268,9 @@ pub async fn on_pipeline_finished(state: &AppState, pipeline: &forgust_db::ci::P
     }
     let settled: anyhow::Result<()> = async {
         let Some(row) = db::of_pipeline(&state.db, pipeline.id).await? else { return Ok(()) };
-        settle_failed(state, row.id, &format!("the job ended ({status}) without a report")).await
+        settle_failed(state, row.id, &format!("the job ended ({status}) without a report")).await?;
+        told(state, pipeline.project_id);
+        Ok(())
     }
     .await;
     if let Err(e) = settled {
@@ -281,7 +317,12 @@ pub async fn ingest(state: &AppState, build_id: i64) -> anyhow::Result<()> {
     }
     // given up since (a newer commit, the Smart View turned off): nothing to keep
     let Some(row) = db::of_pipeline(&state.db, pl.id).await? else { return Ok(()) };
-    let fail = |why: String| async move { settle_failed(state, row.id, &why).await };
+    let project_id = pl.project_id;
+    let fail = |why: String| async move {
+        settle_failed(state, row.id, &why).await?;
+        told(state, project_id);
+        Ok(())
+    };
     let user = match pl.user_id {
         Some(id) => forgust_db::users::find(&state.db, id).await?,
         None => None,
@@ -294,7 +335,7 @@ pub async fn ingest(state: &AppState, build_id: i64) -> anyhow::Result<()> {
         return fail("the job uploaded no report".into()).await;
     };
     let read = crate::ci::reports::read(state, &art.blob_key, &art.file_format, report::MAX_BYTES).await;
-    let rep: Report = match read.and_then(|d| serde_json::from_slice(&d).map_err(Into::into)) {
+    let mut rep: Report = match read.and_then(|d| serde_json::from_slice(&d).map_err(Into::into)) {
         Ok(r) => r,
         Err(e) => return fail(format!("the report is unreadable: {e}")).await,
     };
@@ -304,10 +345,47 @@ pub async fn ingest(state: &AppState, build_id: i64) -> anyhow::Result<()> {
     if rep.map.is_none() && rep.error.is_none() {
         return fail("the report has no map".into()).await;
     }
+    // the history is kept apart from the map, and only the default branch's
+    let history = rep.history.take().filter(|_| pl.merge_request_id.is_none());
     let mut tx = state.db.begin().await?;
     db::ready(&mut tx, row.id, &serde_json::to_value(&rep)?).await?;
+    if let Some(h) = history {
+        let kept = keep_history(&mut tx, pl.project_id, &row.git_ref, &rep.commit, h).await?;
+        if !kept {
+            tracing::info!(project_id = pl.project_id, commit = %rep.commit, "a map's history not kept: another one was, read from a later commit");
+        }
+    }
     tx.commit().await?;
+    told(state, project_id);
     Ok(())
+}
+
+/// What a job read of the default branch's history, kept: after the chapters kept
+/// when it read on from the last commit kept, else in their place.
+async fn keep_history(
+    tx: &mut sqlx::PgConnection,
+    project_id: i64,
+    git_ref: &str,
+    head: &str,
+    h: forgust_assay::History,
+) -> anyhow::Result<bool> {
+    let chapters = h
+        .chapters
+        .into_iter()
+        .map(|c| {
+            Ok(db::NewChapter {
+                changes: serde_json::to_string(&c.changes)?,
+                sha: c.commit,
+                merge_sha: c.merge,
+                author_name: c.author,
+                author_email: c.email,
+                at: c.at,
+                title: c.title,
+            })
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    let start = h.start.as_ref().map(|s| (s.commit.as_str(), s.at));
+    Ok(db::keep_history(tx, project_id, git_ref, head, h.since.as_deref(), start, &chapters).await?)
 }
 
 #[cfg(test)]
@@ -317,14 +395,23 @@ mod tests {
     #[test]
     fn the_pipeline_parses() {
         let cfg = SmartViewConfig { tags: vec!["docker".into()], ..Default::default() };
-        let text = job_config(&cfg, "shop");
-        let parsed = forgust_ci_config::parse(&text).unwrap_or_else(|e| panic!("{e}\n{text}"));
-        assert_eq!(parsed.jobs.keys().collect::<Vec<_>>(), [JOB]);
-        let job = &parsed.jobs[JOB];
-        assert_eq!(job.variables.get("GIT_DEPTH").map(String::as_str), Some("0"));
-        assert_eq!(job.variables.get("FORGUST_SMART_VIEW_NAME").map(String::as_str), Some("shop"));
-        assert!(text.contains("assay report --name"), "{text}");
-        assert!(text.contains(report::FILE), "{text}");
+        for (reads, history, since) in [
+            (Reads::Map, false, None),
+            (Reads::History { since: None }, true, None),
+            (Reads::History { since: Some("abc123") }, true, Some("abc123")),
+        ] {
+            let text = job_config(&cfg, "shop", reads);
+            let parsed = forgust_ci_config::parse(&text).unwrap_or_else(|e| panic!("{e}\n{text}"));
+            assert_eq!(parsed.jobs.keys().collect::<Vec<_>>(), [JOB]);
+            let job = &parsed.jobs[JOB];
+            assert_eq!(job.variables.get("GIT_DEPTH").map(String::as_str), Some("0"));
+            assert_eq!(job.variables.get("FORGUST_SMART_VIEW_NAME").map(String::as_str), Some("shop"));
+            assert!(text.contains("assay report --name"), "{text}");
+            assert!(text.contains(report::FILE), "{text}");
+            assert_eq!(text.contains("--history"), history, "{text}");
+            assert_eq!(job.variables.get("FORGUST_SMART_VIEW_SINCE").map(String::as_str), since);
+            assert_eq!(text.contains("--since \\\"$FORGUST_SMART_VIEW_SINCE\\\""), since.is_some(), "{text}");
+        }
     }
 
     #[test]

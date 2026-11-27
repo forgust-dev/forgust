@@ -668,7 +668,8 @@ async fn import_a_github_repository(pool: sqlx::PgPool) {
         .ok_post(
             "/api/v1/imports",
             json!({ "source": "github", "url": github, "token": token, "target_namespace_id": target["id"],
-                    "projects": [{ "source_id": "octo/app", "source_path": "octo/app", "target_path": "app" }] }),
+                    "projects": [{ "source_id": "octo/app", "source_path": "octo/app", "target_path": "app" }],
+                    "options": { "smart_view": true } }),
         )
         .await;
     let id = started["id"].as_i64().unwrap();
@@ -714,6 +715,10 @@ async fn import_a_github_repository(pool: sqlx::PgPool) {
     assert_eq!(root["position"]["new_line"], 2);
     let reply = notes.iter().find(|n| n["body"] == "Because.").unwrap();
     assert_eq!(reply["parent_id"], root["id"]);
+
+    // asked for: the Smart View is on, its first map (and the history) on the way
+    assert_eq!(owner.ok_get(&format!("/api/v1/projects/{pid}/smart_view")).await, json!({ "available": true, "enabled": true }));
+    assert_eq!(owner.ok_get(&format!("/api/v1/projects/{pid}/repository/map")).await["run"]["state"], "pending");
 
     // collaborators become members by email; protected branches come along
     let members = owner.ok_get(&format!("/api/v1/projects/{pid}/members")).await;

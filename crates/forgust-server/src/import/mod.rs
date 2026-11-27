@@ -35,7 +35,8 @@ use crate::services;
 use crate::state::AppState;
 use model::*;
 
-/// What an import brings besides the repository (all on by default).
+/// What an import brings besides the repository (all on by default, but the mirror and the
+/// Smart View: the import page turns the Smart View on).
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(default)]
 pub struct Options {
@@ -52,6 +53,9 @@ pub struct Options {
     /// Keep the repository in sync afterwards: a pull mirror of the source,
     /// which keeps the token (off by default).
     pub mirror: bool,
+    /// Turn the Smart View on: the code is mapped, and the map's history read, which the merge
+    /// requests imported tell (off by default, for who calls the API; on in the import page).
+    pub smart_view: bool,
 }
 
 impl Default for Options {
@@ -65,6 +69,7 @@ impl Default for Options {
             members: true,
             lfs: true,
             mirror: false,
+            smart_view: false,
         }
     }
 }
@@ -500,6 +505,13 @@ impl<'a> Runner<'a> {
         if self.options.mirror {
             let r = self.keep_in_sync(&p, &sp).await;
             self.optional("Keeping the repository in sync", r)?;
+        }
+        // once the merge requests are in: the history the map job reads links each change to its own
+        if self.options.smart_view
+            && !sp.empty
+            && let Err(e) = crate::services::smart_view::configure(self.state, &self.principal, &p, true).await
+        {
+            self.warnings.push(format!("The Smart View was not turned on ({e})."));
         }
         // keep the dry-run report, add what this run left out
         let mut report: Report = serde_json::from_value(self.row.report.clone()).unwrap_or_default();

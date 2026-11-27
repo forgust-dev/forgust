@@ -363,6 +363,8 @@ pub struct MapChanges {
     pub blocks_removed: Vec<MapBlock>,
     /// A block whose kind or role changes: as it is at the head.
     pub blocks_changed: Vec<BlockChange>,
+    /// A block found again under another id: once merged, as the history tells it.
+    pub blocks_renamed: Vec<ChapterRename>,
     pub links_added: Vec<MapLink>,
     pub links_removed: Vec<MapLink>,
 }
@@ -435,12 +437,73 @@ pub async fn mr_blocks(
         map.map.blocks.iter().filter_map(|b| files.get(b.id.as_str()).map(|n| MrBlock { block: b.clone(), files: *n })).collect();
     blocks.sort_by_key(|t| std::cmp::Reverse(t.files));
     let suggested_reviewers = suggest(&state, &p, &mr, &blocks).await?;
-    // its own map against the default branch's, once both are there
-    let changes = match (kept(&state, &p, Some(mr.id)).await?, kept(&state, &p, None).await?) {
-        (Some(own), Some(base)) if own.map.commit != base.map.commit => Some(map_changes(&base.map, &own.map, &changed)),
+    // its own map against the default branch's, once both are there; merged, what the history
+    // tells it changed (its own map goes, and the default branch's has its changes already)
+    // (`map` is its own, else the default branch's: the same commit as `base` then)
+    let base = kept(&state, &p, None).await?;
+    let changes = match base {
+        Some(now) if mr.state == "merged" => merged_changes(&state, &p, &mr, &now.map).await?,
+        Some(base) if base.map.commit != map.map.commit => Some(map_changes(&base.map, &map.map, &changed)),
         _ => None,
     };
     Ok(Json(MrBlocks { commit: map.map.commit.clone(), blocks, unassigned, suggested_reviewers, changes }))
+}
+
+/// What a merged merge request changed to the map, as the default branch's history tells it: the
+/// changes of the commits it merged, each block as the map has it now (else as the history knew
+/// it). None when the history has none of it.
+async fn merged_changes(state: &AppState, p: &Project, mr: &MergeRequest, now: &RepoMap) -> ApiResult<Option<MapChanges>> {
+    if !db::history(&state.db, p.id).await?.is_some_and(|h| p.default_branch.as_deref() == Some(h.git_ref.as_str())) {
+        return Ok(None);
+    }
+    let block = |b: forgust_assay::BlockRef| now.blocks.iter().find(|x| x.id == b.id).cloned().unwrap_or_else(|| bare(b));
+    let mut out = MapChanges::default();
+    let mut any = false;
+    for c in db::chapters(&state.db, p.id).await?.into_iter().filter(|c| c.mr_iid == Some(mr.iid)) {
+        // one a newer assay wrote, which this server does not read, tells nothing
+        let Ok(ch) = serde_json::from_value::<forgust_assay::Changes>(c.changes) else { continue };
+        any = true;
+        out.blocks_added.extend(ch.blocks_added.into_iter().map(block));
+        out.blocks_removed.extend(ch.blocks_removed.into_iter().map(block));
+        out.blocks_renamed.extend(ch.blocks_renamed.into_iter().map(chapter_rename));
+        // a kind told as such: the role the block has now is not the one it had
+        out.blocks_changed.extend(ch.kinds_changed.into_iter().map(|k| BlockChange {
+            kind_before: kind(k.from),
+            role_before: None,
+            block: MapBlock { role: None, ..block(bare_of(&k.id, k.to)) },
+        }));
+        out.links_added.extend(ch.links_added.into_iter().map(map_link));
+        out.links_removed.extend(ch.links_removed.into_iter().map(map_link));
+    }
+    Ok(any.then_some(out))
+}
+
+/// A block the map no longer has, as the history knew it.
+fn bare(b: forgust_assay::BlockRef) -> MapBlock {
+    MapBlock {
+        id: b.id,
+        name: b.name,
+        description: None,
+        kind: kind(b.kind),
+        role: b.role.map(role),
+        roots: Vec::new(),
+        manifests: Vec::new(),
+        parent: None,
+        image: None,
+        files: 0,
+        languages: Vec::new(),
+        jobs: Vec::new(),
+        owners: Vec::new(),
+        people: Vec::new(),
+        reviewers: Vec::new(),
+        bus_factor: None,
+        configured: false,
+    }
+}
+
+/// A block known by its id and kind alone, named by its id.
+fn bare_of(id: &str, k: forgust_assay::Kind) -> forgust_assay::BlockRef {
+    forgust_assay::BlockRef { id: id.to_string(), name: id.to_string(), kind: k, role: None }
 }
 
 /// Who could review a merge request changing `blocks` (the most changed first): each block's
@@ -509,6 +572,214 @@ pub async fn path_block(
     Ok(Json(PathBlock { block: map.block_of(if path.is_empty() { "." } else { path }).cloned() }))
 }
 
+/// What the commits of the default branch changed to the map, as the map jobs read it. Empty
+/// until one has (the Smart View off, or no job of the default branch since it came).
+#[derive(Serialize, ToSchema)]
+pub struct MapHistory {
+    /// The last commit read.
+    pub head: Option<String>,
+    /// Where it starts when it does not go back to the first commit: what came before is not told.
+    pub start: Option<HistoryStart>,
+    /// The commits that changed the map, oldest first. A revert and what it undid are left out.
+    pub chapters: Vec<MapChapter>,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct HistoryStart {
+    pub commit: String,
+    pub at: DateTime<Utc>,
+}
+
+/// A commit that changed the map, and what it changed.
+#[derive(Serialize, ToSchema)]
+pub struct MapChapter {
+    /// The commit that made the changes.
+    pub commit: String,
+    /// The default branch's merge commit that brought them, when it was made on the branch merged.
+    pub merge_commit: Option<String>,
+    /// When they reached the default branch.
+    pub at: DateTime<Utc>,
+    /// The first line of the commit's message.
+    pub title: String,
+    pub author: ChapterAuthor,
+    /// The merge request merged as the commit (squashed) or as its merge.
+    pub merge_request: Option<ChapterMergeRequest>,
+    pub changes: ChapterChanges,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct ChapterAuthor {
+    pub name: String,
+    /// Their account, by their verified email.
+    pub username: Option<String>,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct ChapterMergeRequest {
+    pub iid: i64,
+    pub title: String,
+    /// The start of its description: why it was made. None without one.
+    pub description: Option<String>,
+    /// Its comments, not the system's.
+    pub comments: i64,
+}
+
+/// What a commit changed to the map. A block found again under another id is renamed rather
+/// than removed and added; a role is a guess whose changes are not told, a kind's are.
+#[derive(Serialize, ToSchema)]
+pub struct ChapterChanges {
+    pub blocks_added: Vec<ChapterBlock>,
+    pub blocks_removed: Vec<ChapterBlock>,
+    pub blocks_renamed: Vec<ChapterRename>,
+    pub kinds_changed: Vec<ChapterKind>,
+    pub links_added: Vec<MapLink>,
+    pub links_removed: Vec<MapLink>,
+}
+
+/// A block as it was then: enough to draw it.
+#[derive(Serialize, ToSchema)]
+pub struct ChapterBlock {
+    pub id: String,
+    pub name: String,
+    pub kind: MapKind,
+    pub role: Option<MapRole>,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct ChapterRename {
+    pub from: ChapterBlock,
+    pub to: ChapterBlock,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct ChapterKind {
+    pub id: String,
+    pub from: MapKind,
+    pub to: MapKind,
+}
+
+/// The history of the Smart View's map: what each commit of the default branch changed to it,
+/// with the merge request that brought it, and who made it.
+#[utoipa::path(get, path = "/api/v1/projects/{id}/repository/map/history", responses((status = 200, body = MapHistory)), tag = "repository")]
+pub async fn history(State(state): State<AppState>, Viewer(v): Viewer, Path(id): Path<String>) -> ApiResult<Json<MapHistory>> {
+    let p = readable(&state, &v, &id).await?;
+    let none = || Json(MapHistory { head: None, start: None, chapters: Vec::new() });
+    if !svc::is_on(&state, p.id).await? {
+        return Ok(none());
+    }
+    // the default branch's as it is now: another one's starts again at its next map
+    let Some(h) = db::history(&state.db, p.id).await?.filter(|h| p.default_branch.as_deref() == Some(h.git_ref.as_str())) else {
+        return Ok(none());
+    };
+    // a chapter a newer assay wrote, which this server does not read, is left out
+    let read: Vec<(db::Chapter, forgust_assay::Changes)> = db::chapters(&state.db, p.id)
+        .await?
+        .into_iter()
+        .filter_map(|c| forgust_assay::Changes::deserialize(&c.changes).ok().map(|ch| (c, ch)))
+        .collect();
+    let mut mr_ids: Vec<i64> = read.iter().filter_map(|(c, _)| c.mr_id).collect();
+    mr_ids.sort_unstable();
+    mr_ids.dedup();
+    let comments: HashMap<i64, i64> = mrdb::user_notes_counts(&state.db, &mr_ids).await?.into_iter().collect();
+    let mut emails: Vec<String> = read.iter().map(|(c, _)| c.author_email.to_lowercase()).collect();
+    emails.sort();
+    emails.dedup();
+    let accounts: HashMap<String, String> = usernames(&state, &emails).await.into_iter().collect();
+    let chapters = fold_reverts(read, |c| &c.title)
+        .into_iter()
+        .map(|(c, ch)| MapChapter {
+            author: ChapterAuthor { username: accounts.get(&c.author_email.to_lowercase()).cloned(), name: c.author_name },
+            merge_request: c.mr_iid.zip(c.mr_title).map(|(iid, title)| ChapterMergeRequest {
+                iid,
+                title,
+                description: c.mr_description.as_deref().and_then(excerpt),
+                comments: c.mr_id.and_then(|id| comments.get(&id).copied()).unwrap_or(0),
+            }),
+            commit: c.sha,
+            merge_commit: c.merge_sha,
+            at: c.at,
+            title: c.title,
+            changes: chapter_changes(ch),
+        })
+        .collect();
+    Ok(Json(MapHistory {
+        head: Some(h.head),
+        start: h.start_sha.zip(h.start_at).map(|(commit, at)| HistoryStart { commit, at }),
+        chapters,
+    }))
+}
+
+/// Leaves out each revert (a commit named so) and what it undid: a change that came and went
+/// tells nothing of the map. The revert of a revert stays, as what made the change.
+fn fold_reverts<T>(chapters: Vec<(T, forgust_assay::Changes)>, title: impl Fn(&T) -> &str) -> Vec<(T, forgust_assay::Changes)> {
+    let mut gone = vec![false; chapters.len()];
+    for j in 0..chapters.len() {
+        if !title(&chapters[j].0).starts_with("Revert \"") {
+            continue;
+        }
+        if let Some(i) = (0..j).rev().find(|&i| !gone[i] && chapters[j].1.undoes(&chapters[i].1)) {
+            gone[i] = true;
+            gone[j] = true;
+        }
+    }
+    chapters.into_iter().zip(gone).filter(|(_, g)| !g).map(|(c, _)| c).collect()
+}
+
+/// The start of a merge request's description, under its title: its first paragraph that is not a
+/// heading nor a template's comment, on one line, cut on a word past 240 characters.
+fn excerpt(text: &str) -> Option<String> {
+    const MAX: usize = 240;
+    // a template's comments say nothing, even those over several paragraphs
+    let mut plain = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(i) = rest.find("<!--") {
+        plain.push_str(&rest[..i]);
+        rest = rest[i..].find("-->").map_or("", |j| &rest[i + j + 3..]);
+    }
+    plain.push_str(rest);
+    // a paragraph ends at a blank line, even one of spaces, or of a `\r` (GitHub's, imported)
+    let mut lines = plain.lines().map(str::trim);
+    let first = loop {
+        let paragraph: Vec<&str> = lines.by_ref().skip_while(|l| l.is_empty()).take_while(|l| !l.is_empty()).collect();
+        match paragraph.first() {
+            None => return None,
+            Some(l) if l.starts_with('#') => continue,
+            Some(_) => break paragraph,
+        }
+    };
+    let line = first.iter().flat_map(|l| l.split_whitespace()).collect::<Vec<_>>().join(" ");
+    if line.chars().count() <= MAX {
+        return Some(line);
+    }
+    let cut: String = line.chars().take(MAX).collect();
+    let cut = cut.rsplit_once(' ').map_or(cut.as_str(), |(words, _)| words);
+    Some(format!("{}…", cut.trim_end_matches([',', ';', ':', '.'])))
+}
+
+fn chapter_block(b: forgust_assay::BlockRef) -> ChapterBlock {
+    ChapterBlock { id: b.id, name: b.name, kind: kind(b.kind), role: b.role.map(role) }
+}
+
+fn chapter_rename(r: forgust_assay::Renamed) -> ChapterRename {
+    ChapterRename { from: chapter_block(r.from), to: chapter_block(r.to) }
+}
+
+fn chapter_changes(c: forgust_assay::Changes) -> ChapterChanges {
+    let block = chapter_block;
+    ChapterChanges {
+        blocks_added: c.blocks_added.into_iter().map(block).collect(),
+        blocks_removed: c.blocks_removed.into_iter().map(block).collect(),
+        blocks_renamed: c.blocks_renamed.into_iter().map(chapter_rename).collect(),
+        kinds_changed: c.kinds_changed.into_iter().map(|k| ChapterKind { id: k.id, from: kind(k.from), to: kind(k.to) }).collect(),
+        links_added: c.links_added.into_iter().map(map_link).collect(),
+        links_removed: c.links_removed.into_iter().map(map_link).collect(),
+    }
+}
+
+fn map_link(l: forgust_assay::Link) -> MapLink {
+    MapLink { from: l.from, to: l.to, kind: link_kind(l.kind), inferred: l.certainty == forgust_assay::Certainty::Inferred, via: l.via }
+}
+
 /// A report read from a job, as the Smart View shows it: with the accounts of its people and
 /// who reviewed each block's changes.
 async fn present(state: &AppState, p: &Project, row: &db::Map, report: svc::report::Report) -> ShownMap {
@@ -544,17 +815,7 @@ async fn present(state: &AppState, p: &Project, row: &db::Map, report: svc::repo
             block(b, &accounts, reviewers, &files)
         })
         .collect();
-    out.links = map
-        .links
-        .into_iter()
-        .map(|l| MapLink {
-            from: l.from,
-            to: l.to,
-            kind: link_kind(l.kind),
-            inferred: l.certainty == forgust_assay::Certainty::Inferred,
-            via: l.via,
-        })
-        .collect();
+    out.links = map.links.into_iter().map(map_link).collect();
     out.unassigned = map.unassigned.files;
     out.unassigned_sample = map.unassigned.sample;
     out.warnings = map.warnings;
@@ -907,6 +1168,41 @@ mod tests {
             config_file: true,
             days: 365,
         }
+    }
+
+    /// A description's start: its first paragraph of words, on a line, cut on a word.
+    #[test]
+    fn a_description_starts_with_its_first_paragraph() {
+        assert_eq!(excerpt(""), None);
+        assert_eq!(excerpt("## Why\n\nReads the stock\nfrom the table.\n\nMore."), Some("Reads the stock from the table.".into()));
+        assert_eq!(excerpt("<!-- the template -->\n\nA fix."), Some("A fix.".into()));
+        assert_eq!(excerpt("## Summary\r\n\r\nReads the stock.\r\n\r\nMore."), Some("Reads the stock.".into()), "GitHub's line ends");
+        assert_eq!(excerpt("<!-- Say why.\n\nAnd how. -->\n\nA fix."), Some("A fix.".into()), "a comment over paragraphs");
+        assert_eq!(excerpt("## Why\n \nReads the stock."), Some("Reads the stock.".into()), "a blank line of spaces");
+        let long = excerpt(&"word ".repeat(80)).unwrap();
+        assert!(long.ends_with("word…") && long.chars().count() <= 241, "{long}");
+    }
+
+    /// A revert and what it undid tell nothing of the map; the revert of a revert is what made the
+    /// change, and what undoes a change without being a revert is a change of its own.
+    #[test]
+    fn a_revert_and_what_it_undid_are_left_out() {
+        let web = |added: bool| {
+            let b = vec![forgust_assay::BlockRef { id: "web".into(), name: "web".into(), kind: forgust_assay::Kind::Node, role: None }];
+            if added {
+                forgust_assay::Changes { blocks_added: b, ..Default::default() }
+            } else {
+                forgust_assay::Changes { blocks_removed: b, ..Default::default() }
+            }
+        };
+        let chapters = vec![
+            ("a web app", web(true)),
+            ("Revert \"a web app\"", web(false)),
+            ("Revert \"Revert \"a web app\"\"", web(true)),
+            ("drop the web app", web(false)),
+        ];
+        let kept: Vec<&str> = fold_reverts(chapters, |t: &&str| *t).into_iter().map(|(t, _)| t).collect();
+        assert_eq!(kept, ["Revert \"Revert \"a web app\"\"", "drop the web app"]);
     }
 
     #[test]

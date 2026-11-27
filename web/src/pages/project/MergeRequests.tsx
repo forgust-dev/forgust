@@ -33,6 +33,7 @@ import { Ring } from "../../components/decide";
 import { readinessChecks, readinessScore } from "../../components/readiness";
 import { Timeline, type LogEntry } from "../../components/timeline";
 import { LINK_VERB, blockTitle, whoKnows } from "./blocks";
+import { chapterTitle } from "./mapHistory";
 
 /** Invalidate MR queries when the server reports a change (shared SSE stream). */
 export function useLiveUpdates(projectId: number) {
@@ -45,6 +46,8 @@ export function useLiveUpdates(projectId: number) {
     // a push to a source branch arrives as a merge_request event; one to a target
     // branch only changes whether MRs can merge: refresh just their status
     if (ev.type === "push") qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === "mr" && q.queryKey[1] === projectId && q.queryKey[3] === "status" });
+    // a Smart View map came in: the blocks a merge request changes are read from it
+    if (ev.type === "smart_view") qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === "mr" && q.queryKey[1] === projectId && q.queryKey[3] === "blocks" });
   });
 }
 
@@ -1418,6 +1421,7 @@ function MapChangesFact({ ctx, m, c }: { ctx: Ctx; m: S["MrDetail"]; c: S["MapCh
   const at = (id: string) => <Link to={`${ctx.web}/-/smart_view${qs({ mr: m.iid, block: id })}`}>{id}</Link>;
   for (const b of c.blocks_added) lines.push(<div key={`a${b.id}`} className="small">Adds the block {at(b.id)}</div>);
   for (const b of c.blocks_removed) lines.push(<div key={`r${b.id}`} className="small">Removes the block <b>{b.id}</b></div>);
+  for (const r of c.blocks_renamed) lines.push(<div key={`n${r.to.id}`} className="small">Renames the block <b>{chapterTitle(r.from)}</b> to {at(r.to.id)}</div>);
   for (const ch of c.blocks_changed) {
     // its kind when that changes, else its role: one compared with the same, never with the other
     const [is, was] = ch.block.kind !== ch.kind_before ? [ch.block.kind, ch.kind_before] : [ch.block.role ?? "no role", ch.role_before ?? "no role"];
