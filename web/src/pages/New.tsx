@@ -6,6 +6,7 @@ import { useSession } from "../session";
 import { ErrorBox, Field, VisibilitySelect } from "../components/ui";
 import { Select } from "../components/controls";
 import { useGroups } from "../prefetch";
+import { usePageTitle } from "../shell/title";
 
 const slug = (s: string) =>
   s
@@ -17,6 +18,7 @@ export function NewGroup() {
   const nav = useNavigate();
   const [params] = useSearchParams();
   const parentId = params.get("parent");
+  usePageTitle(parentId ? "New subgroup" : "New organization");
   const parent = useQuery({ queryKey: ["group", Number(parentId)], queryFn: () => api.get<S["GroupDetail"]>(`/groups/${parentId}`), enabled: !!parentId });
   const [name, setName] = useState("");
   const [path, setPath] = useState("");
@@ -82,6 +84,7 @@ type NsOption = { id: number; label: string };
 
 export function NewProject() {
   const nav = useNavigate();
+  usePageTitle("New project");
   const { user } = useSession();
   const [params] = useSearchParams();
   const groups = useGroups();

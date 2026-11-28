@@ -10,6 +10,7 @@ import type { Ctx } from "./Project";
 import { useCiLive } from "../../shell/live";
 import { StatusIcon } from "./ci/Status";
 import { SignatureBadge, useSignatures } from "./Signatures";
+import { usePageTitle } from "../../shell/title";
 
 /** Latest pipeline status per commit, for lists. */
 export function useCommitStatuses(ctx: Ctx, shas: string[]) {
@@ -150,6 +151,7 @@ function CommitBody({ body }: { body: string }) {
 
 export function Commit({ ctx, sha }: { ctx: Ctx; sha: string }) {
   const c = useQuery({ queryKey: ["commit", ctx.p.id, sha], queryFn: () => api.get<S["CommitInfo"]>(`${ctx.base}/commits/${sha}`) });
+  usePageTitle(c.data && `${c.data.subject} · Commit ${c.data.id.slice(0, 8)}`);
   const statuses = useCommitStatuses(ctx, c.data ? [c.data.id] : []);
   const signatures = useSignatures(ctx, c.data ? [c.data.id] : []);
   return (

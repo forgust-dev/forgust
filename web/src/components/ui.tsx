@@ -4,6 +4,7 @@ import { Link, NavLink } from "react-router-dom";
 import { ApiError, LEVELS, bytes } from "../api/client";
 import { Select } from "./controls";
 import { useConfirm, type Ask } from "../shell/dialog";
+import { usePageTitle } from "../shell/title";
 
 /** How long a wait goes unmarked: a page that comes sooner never shows a loader. */
 export const SPINNER_DELAY = 400;
@@ -83,6 +84,7 @@ export function Q<T>({ q, children }: { q: { isLoading: boolean; error: unknown;
 }
 
 export function NotFound() {
+  usePageTitle("Not found");
   return (
     <div className="empty">
       <h2>Not found</h2>
@@ -324,6 +326,8 @@ export function ListHead({ title, sub, children }: { title: ReactNode; sub?: Rea
         <h1>{title}</h1>
         {sub && <div className="list-sub">{sub}</div>}
       </div>
+  // the page's title names its tab too
+  usePageTitle(typeof title === "string" ? title : null);
       {children && <div className="list-actions">{children}</div>}
     </header>
   );

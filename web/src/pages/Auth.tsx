@@ -7,6 +7,7 @@ import { useSession } from "../session";
 import { ErrorBox, Field, PasswordInput } from "../components/ui";
 import { Logo } from "../components/Logo";
 import { ThemeButton } from "../shell/Shell";
+import { usePageTitle } from "../shell/title";
 
 /** `?next=` only ever leads to a path on this site (no `//host`, no `/\host`). */
 export function safeNext(next: string | null): string {
@@ -18,8 +19,10 @@ export function safeNext(next: string | null): string {
 /** The frame of the pages that let someone in: the mark, a title and the form
  *  on a card, over paper that glows like a forge. Signed in (a confirmation
  *  link), it is the plain card. */
-function AuthLayout({ title, lede, children }: { title: string; lede?: ReactNode; children: ReactNode }) {
+/** `tab`: the page's name in the browser's tab, when its title already says "Forgust". */
+function AuthLayout({ title, tab, lede, children }: { title: string; tab?: string; lede?: ReactNode; children: ReactNode }) {
   const { user } = useSession();
+  usePageTitle(tab ?? title);
   if (user) {
     return (
       <div className="page narrow auth-page">
@@ -149,7 +152,7 @@ export function Login() {
 
   if (setup.data?.needs_setup) {
     return (
-      <AuthLayout title="Welcome to Forgust" lede="No account exists yet.">
+      <AuthLayout title="Welcome to Forgust" tab="Welcome" lede="No account exists yet.">
         <p className="muted">
           Open the setup link printed in the server log (<code>/setup?token=…</code>) to create the first administrator, or run{" "}
           <code>forgust admin create-user --admin</code>.
@@ -165,6 +168,7 @@ export function Login() {
   return (
     <AuthLayout
       title={challenge ? "Two-factor authentication" : "Sign in to Forgust"}
+      tab={challenge ? undefined : "Sign in"}
       lede={
         !challenge
           ? undefined

@@ -8,6 +8,7 @@ import { applyAssayEdit, assayMessage, type AssayEdit } from "./assayToml";
 import { useResolved } from "./Code";
 import { CommitTarget, useCommit } from "./commitTarget";
 import type { Ctx } from "./Project";
+import { usePageTitle } from "../../shell/title";
 
 // fetched while the file loads (see `Editor`); deleting a file never needs it
 const loadEditor = () => import("../../components/CodeEditor");
@@ -18,6 +19,7 @@ type Mode = "edit" | "new" | "delete";
 /** Edit, create or delete a file and commit it, here or on a new branch with an MR. */
 export function EditFile({ ctx, refAndPath, mode }: { ctx: Ctx; refAndPath: string; mode: Mode }) {
   const r = useResolved(ctx, refAndPath);
+  usePageTitle(mode === "new" ? "New file" : r.data && `${mode === "edit" ? "Edit" : "Delete"} ${r.data.path}`);
   return <Q q={r}>{(res) => <Editor ctx={ctx} res={res} mode={mode} />}</Q>;
 }
 

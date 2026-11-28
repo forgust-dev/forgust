@@ -12,6 +12,7 @@ import type { Ctx } from "../Project";
 import { LogParser, sectionDuration, type LogLine, type Span } from "./log";
 import { RETRYABLE, StatusBadge, StatusIcon, duration, isActive } from "./Status";
 import { PipelineHeader, pipelineHref, pipelineQuery, useConfirmRun, usePipeline } from "./Pipelines";
+import { usePageTitle } from "../../../shell/title";
 
 const jobQuery = (pid: number, jobId: number) => queryOptions({ queryKey: ["job", pid, jobId], queryFn: () => api.get<S["JobDetail"]>(`/projects/${pid}/jobs/${jobId}`) });
 
@@ -301,6 +302,7 @@ export function JobPage({ ctx, jobId }: { ctx: Ctx; jobId: number }) {
   const nav = useNavigate();
   // a job that came after the wait: the last one stays on screen until it arrives
   const q = useQuery({ ...jobQuery(ctx.p.id, jobId), placeholderData: keepPreviousData });
+  usePageTitle(q.data?.id === jobId ? `${q.data.name} · Job #${jobId}` : null);
   // status changes: through usePipeline's live updates (the "job" queries too)
   const pipeline = usePipeline(ctx, q.data?.pipeline_iid);
   const trace = useTrace(ctx.p.id, jobId, q.data?.status);

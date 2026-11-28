@@ -20,6 +20,7 @@ import { ReactionBar } from "../../components/Reactions";
 import { Markdown } from "../../components/Markdown";
 import { StateMark, StateOf, issueLook } from "../../components/states";
 import { FormDialog, useJustAdded } from "../../components/FormDialog";
+import { usePageTitle } from "../../shell/title";
 
 type State = "opened" | "closed" | "all";
 
@@ -241,6 +242,7 @@ export function IssuePage({ ctx, iid }: { ctx: Ctx; iid: number }) {
   const toast = useToast();
   const path = `/projects/${ctx.p.id}/issues/${iid}`;
   const q = useQuery({ queryKey: ["issue", ctx.p.id, iid], queryFn: () => api.get<S["IssueDetail"]>(path) });
+  usePageTitle(q.data && `${q.data.title} · Issue #${iid}`);
   const notes = useQuery({ queryKey: ["issue", ctx.p.id, iid, "notes"], queryFn: () => api.get<S["IssueNoteDto"][]>(`${path}/notes`) });
   const labels = useLabels(ctx.p.id);
   const [editing, setEditing] = useState(false);

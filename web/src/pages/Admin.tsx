@@ -9,6 +9,7 @@ import { useSession } from "../session";
 import { Avatar, Badge, Card, ErrorBox, Field, FilterTabs, NotFound, PasswordInput, Q, SearchField, UserLink, useDebounced, useFormRun, StateBadge } from "../components/ui";
 import { adminPage } from "./adminPages";
 import { useTopOnSwitch } from "../shell/scroll";
+import { usePageTitle } from "../shell/title";
 import { Combobox, Menu, Select, type MenuItem } from "../components/controls";
 import { MoreHorizontal, Ban, Plus, ShieldCheck } from "lucide-react";
 import { FormActions, FormDialog, useJustAdded } from "../components/FormDialog";
@@ -22,6 +23,8 @@ export function Admin() {
   const { user } = useSession();
   const loc = useLocation();
   useTopOnSwitch(loc.pathname);
+  const label = adminPage(loc.pathname)?.label;
+  usePageTitle(!user?.is_admin ? null : label ? `${label} · Admin area` : "Admin area");
   if (!user?.is_admin) return <NotFound />;
   // the area's pages are in the sidebar (shell/Shell.tsx): here, which one this is
   return (

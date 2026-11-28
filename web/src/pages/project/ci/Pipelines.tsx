@@ -13,6 +13,7 @@ import { PipelineTests } from "./Tests";
 import { MiniPipeline, RETRYABLE, StatusBadge, StatusIcon, duration, isActive, statusLabel } from "./Status";
 import { DecideCard } from "../../../components/decide";
 import { useBranches, useTags } from "../Code";
+import { usePageTitle } from "../../../shell/title";
 
 export const SOURCE: Record<string, string> = {
   push: "push",
@@ -650,6 +651,7 @@ export function PipelinePage({ ctx, iid }: { ctx: Ctx; iid: number }) {
   const [hover, setHover] = useState<string | null>(null);
   const [graph, setGraph] = useState<HTMLDivElement | null>(null);
   const q = usePipeline(ctx, iid);
+  usePageTitle(`Pipeline #${iid}`);
   return (
     <Q q={q}>
       {(p) => {

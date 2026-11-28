@@ -153,7 +153,7 @@ export function ProjectPage({ id, fullPath, rest }: { id: number; fullPath: stri
                   {section === "" && <FilesRoot ctx={ctx} refAndPath={ref} gitRef={ref} />}
                   {/* one layout for a folder, a file and its blame: the files beside them stay as you go */}
                   {(section === "tree" || section === "blob" || section === "blame") && (
-                    <CodeLayout ctx={ctx} kind={section === "tree" ? "tree" : "blob"} refAndPath={tail}>
+                    <CodeLayout ctx={ctx} kind={section === "tree" ? "tree" : "blob"} blame={section === "blame"} refAndPath={tail}>
                       {section === "tree" && <TreeRoute ctx={ctx} refAndPath={tail} />}
                       {section === "blob" && <Blob ctx={ctx} refAndPath={tail} />}
                       {section === "blame" && <Blame ctx={ctx} refAndPath={tail} />}

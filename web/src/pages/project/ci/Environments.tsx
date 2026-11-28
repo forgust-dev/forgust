@@ -11,6 +11,7 @@ import { useCiLive } from "../../../shell/live";
 import type { Ctx } from "../Project";
 import { StatusIcon, duration, statusLabel } from "./Status";
 import { useConfirmRun } from "./Pipelines";
+import { usePageTitle } from "../../../shell/title";
 
 type Env = S["Environment"];
 type Deployment = S["Deployment"];
@@ -186,6 +187,7 @@ function EnvRow({ ctx, e, short, onStop }: { ctx: Ctx; e: S["EnvironmentRow"]; s
 export function EnvironmentPage({ ctx, id }: { ctx: Ctx; id: number }) {
   useCiLive(ctx.p.id);
   const q = useQuery({ queryKey: ["environment", ctx.p.id, id], queryFn: () => api.get<S["EnvironmentDetail"]>(`/projects/${ctx.p.id}/environments/${id}`) });
+  usePageTitle(q.data && `${q.data.name} · Environment`);
   return <Q q={q}>{(e) => <EnvironmentView ctx={ctx} e={e} />}</Q>;
 }
 

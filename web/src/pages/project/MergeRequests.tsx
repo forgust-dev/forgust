@@ -34,6 +34,7 @@ import { readinessChecks, readinessScore } from "../../components/readiness";
 import { Timeline, type LogEntry } from "../../components/timeline";
 import { LINK_VERB, blockTitle, whoKnows } from "./blocks";
 import { chapterTitle } from "./mapHistory";
+import { usePageTitle } from "../../shell/title";
 
 /** Invalidate MR queries when the server reports a change (shared SSE stream). */
 export function useLiveUpdates(projectId: number) {
@@ -285,6 +286,7 @@ type Tab = "overview" | "commits" | "diffs";
 export function MergeRequestPage({ ctx, iid, tab }: { ctx: Ctx; iid: number; tab: Tab }) {
   useLiveUpdates(ctx.p.id);
   const q = useQuery({ queryKey: keys.mr(ctx.p.id, iid), queryFn: () => fetchers.mr(ctx.p.id, iid) });
+  usePageTitle(q.data && `${q.data.title} · Merge request !${iid}`);
   const base = `${ctx.web}/-/merge_requests/${iid}`;
   const nav = useNavigate();
   const [panel, setPanel] = usePref("mr.panel", true);

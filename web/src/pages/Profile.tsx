@@ -15,11 +15,14 @@ import { NotificationDefaults } from "../components/Notifications";
 import { cancelled, createCredential, webauthnSupported } from "../api/webauthn";
 import { profilePage } from "./profilePages";
 import { useTopOnSwitch } from "../shell/scroll";
+import { usePageTitle } from "../shell/title";
 import { Ban, CircleCheck, Link2, ShieldCheck, ShieldOff, Unlink } from "lucide-react";
 
 export function Profile() {
   const loc = useLocation();
   useTopOnSwitch(loc.pathname);
+  const label = profilePage(loc.pathname)?.label;
+  usePageTitle(label ? `${label} · Your settings` : "Your settings");
   // the pages are in the sidebar while you are here (shell/Shell.tsx): here, which one this is
   return (
     <div className="page">
