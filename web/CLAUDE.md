@@ -62,6 +62,15 @@ A spinner (`Loader2`) always turns, with `className="spin"`. `StateBadge` adds i
 A date is a `DateField` (typed, or picked on a calendar), never `type="date"` and its browser
 picker; a password a `PasswordInput`, with its Show button.
 
+A field that holds what a machine reads (a username, a path, a branch or a tag, an address, a
+code, a search) takes `{...AS_TYPED}`: a phone neither capitalizes nor corrects it. A field's
+own keys (Enter to pick or to go, the arrows) first check `composing(e)` (`shell/platform.ts`):
+while an input method composes a word (Japanese, Chinese, Korean…), its keys are its own.
+
+Every page names its browser tab. `ListHead` does it with its title; a page without one calls
+`usePageTitle` (`shell/title.tsx`) with what it shows ("Fix the login · Issue #12"); its project
+or group and the site follow on their own.
+
 ## Sizes
 
 Buttons, fields and menus share one height, from tokens in `src/styles.css`: `--control-h`
