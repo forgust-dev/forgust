@@ -264,6 +264,13 @@ h2,
 h3 {
   line-height: 1.25;
   margin: 0 0 12px;
+  /* a title on two lines splits in two even halves, not a long line and a word */
+  text-wrap: balance;
+}
+/* a paragraph leaves no word alone on its last line (where the browser can: not Firefox yet) */
+p,
+.markdown :is(li, blockquote) {
+  text-wrap: pretty;
 }
 h1,
 h2 {
@@ -6594,7 +6601,6 @@ a.item.group-row:hover .row-title {
   margin: 0;
   font-size: 32px;
   letter-spacing: -0.035em;
-  text-wrap: balance;
 }
 .auth-lede {
   margin: 6px 0 0;
