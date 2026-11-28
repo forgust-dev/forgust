@@ -224,11 +224,11 @@ export function Login() {
         ) : (
           <>
             <Field label="Username or email">
-              <input autoFocus id="username" name="username" autoComplete="username" required {...AS_TYPED} value={login} onChange={(e) => setLogin(e.target.value)} />
+              <input autoFocus id="username" name="username" autoComplete="username" {...AS_TYPED} value={login} onChange={(e) => setLogin(e.target.value)} />
             </Field>
             <div className="auth-pw">
               <Field label="Password">
-                <PasswordInput id="current-password" name="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+                <PasswordInput id="current-password" name="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
               </Field>
               <Link className="auth-forgot" to={`/forgot-password${login ? `?login=${encodeURIComponent(login)}` : ""}`}>
                 Forgot password?
@@ -290,16 +290,16 @@ export function Setup() {
       <form className="stack auth-stack" onSubmit={submit}>
         <ErrorBox error={error} />
         <Field label="Setup token" hint="Printed in the server log on first start">
-          <input autoComplete="off" required {...AS_TYPED} value={form.token} onChange={set("token")} />
+          <input autoComplete="off" {...AS_TYPED} value={form.token} onChange={set("token")} />
         </Field>
         <Field label="Username">
-          <input autoComplete="username" required {...AS_TYPED} value={form.username} onChange={set("username")} />
+          <input id="username" name="username" autoComplete="username" {...AS_TYPED} value={form.username} onChange={set("username")} />
         </Field>
         <Field label="Email">
-          <input type="email" autoComplete="email" required value={form.email} onChange={set("email")} />
+          <input type="email" id="email" name="email" autoComplete="email" value={form.email} onChange={set("email")} />
         </Field>
         <Field label="Password" hint="At least 8 characters">
-          <PasswordInput autoComplete="new-password" required value={form.password} onChange={set("password")} />
+          <PasswordInput id="new-password" name="password" autoComplete="new-password" value={form.password} onChange={set("password")} />
         </Field>
         <button className="btn primary auth-submit">Create administrator</button>
       </form>
@@ -400,7 +400,7 @@ export function ResetPassword() {
           <ErrorBox error={error} />
           {!token && <p className="muted">This page needs the link from your email.</p>}
           <Field label="New password" hint="At least 8 characters">
-            <PasswordInput autoFocus autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <PasswordInput autoFocus id="new-password" name="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </Field>
           <Field label="Repeat it">
             <PasswordInput autoComplete="new-password" value={again} onChange={(e) => setAgain(e.target.value)} aria-invalid={mismatch} />
