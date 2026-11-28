@@ -8,6 +8,7 @@ import { Choices, Segmented, Select } from "../components/controls";
 import { useSession } from "../session";
 import { useAct } from "../shell/toast";
 import { useConfirm } from "../shell/dialog";
+import { composing } from "../shell/platform";
 import { useGroups } from "../prefetch";
 
 type Kind = S["ImportSource"];
@@ -410,7 +411,7 @@ function ImportMany({ conn, connected, back, started }: { conn: Conn; connected:
               onChange={(e) => setTyped(e.target.value)}
               onBlur={() => setEntered(typed.trim())}
               onKeyDown={(e) => {
-                if (e.key === "Enter") setEntered(typed.trim());
+                if (e.key === "Enter" && !composing(e)) setEntered(typed.trim());
               }}
               placeholder={conn.source === "gitlab" ? "group, group/sub or a username" : "an organization or a username"}
               aria-label={`User or ${groupWord}`}

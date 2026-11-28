@@ -64,6 +64,7 @@ import { Avatar, Empty, ListHead, Q, UserLink, type Tone } from "../../component
 import { Select } from "../../components/controls";
 import { useProjectEvents } from "../../shell/live";
 import { useSession } from "../../session";
+import { composing } from "../../shell/platform";
 import type { AssayEdit } from "./assayToml";
 import { LINK_VERB, blockTitle } from "./blocks";
 import { useTags } from "./Code";
@@ -402,6 +403,7 @@ function FindBlock({ value, onChange, found, onNext }: { value: string; onChange
         aria-description="Enter chooses the next one"
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
+          if (composing(e)) return;
           if (e.key === "Enter") {
             e.preventDefault();
             onNext();
@@ -502,7 +504,7 @@ function MapView({ ctx, gitRef, map, lay, found, words }: { ctx: Ctx; gitRef: st
   useEffect(() => {
     if (!chosen) return;
     const close = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !e.defaultPrevented) select(null);
+      if (e.key === "Escape" && !e.defaultPrevented && !composing(e)) select(null);
     };
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);

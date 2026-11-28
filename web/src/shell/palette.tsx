@@ -10,7 +10,7 @@ import { useNav } from "./nav";
 import { fetchers, keys, useGroups, useMyProjects } from "../prefetch";
 import { useRecentProjects } from "./recent";
 import { globalPages, groupItems, newItems, projectPages, type Item } from "./navItems";
-import { MOD } from "./platform";
+import { MOD, composing } from "./platform";
 
 // ---------------------------------------------------------------- shortcuts
 
@@ -370,6 +370,7 @@ function Palette({ mode, close }: { mode: Mode; close: () => void }) {
           aria-controls="palette-list"
           aria-activedescendant={entries[sel] ? `pal-${sel}` : undefined}
           onKeyDown={(e) => {
+            if (composing(e)) return;
             if (e.key === "Escape") close();
             else if (e.key === "ArrowDown" || (e.ctrlKey && e.key === "n")) {
               e.preventDefault();
