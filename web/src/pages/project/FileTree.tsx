@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, ty
 import { Link, useNavigate } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, FileText, Folder, PanelLeftClose, PanelLeftOpen } from "lucide-react";
-import { ancestors, filesLink, refLink, type S } from "../../api/client";
+import { ancestors, filesLink, refLink, refName, type S } from "../../api/client";
 import { fetchers, keys } from "../../prefetch";
 import { usePref } from "../../shell/theme";
 import type { Ctx } from "./Project";
@@ -25,7 +25,7 @@ export function CodeLayout({ ctx, kind, blame, refAndPath, children }: { ctx: Ct
   const [shown, setShown] = usePref("code.filetree", true);
   const res = r.data;
   const panel = res && !(kind === "tree" && res.path === "");
-  usePageTitle(res && `${blame ? "Blame of " : ""}${res.path || "Files"} at ${res.ref}`);
+  usePageTitle(res && `${blame ? "Blame of " : ""}${res.path || "Files"} at ${refName(res.ref)}`);
   return (
     <div className={`code-layout${panel ? (shown ? "" : " tree-hidden") : " no-tree"}`}>
       {panel ? <FileTreePanel where={{ ctx, gitRef: res.ref, commit: res.commit }} path={res.path} folder={kind === "tree"} shown={shown} setShown={setShown} /> : null}

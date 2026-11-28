@@ -82,6 +82,10 @@ export const ancestors = (path: string) => {
 export const refLink = (web: string, kind: string, ref: string, path?: string) =>
   `${web}/-/${kind}/${encPath(ref)}${path ? `/${encPath(path)}` : ""}`;
 
+/** A ref as it is shown: a commit by its first 8 characters, as everywhere; a branch or a tag by
+ *  its name. */
+export const refName = (ref: string) => (/^[0-9a-f]{40}$|^[0-9a-f]{64}$/.test(ref) ? ref.slice(0, 8) : ref);
+
 /** A project's files at `ref` (and `path`): the project's own address for the default branch's root,
  *  the Files page every way there leads to. */
 export const filesLink = (web: string, ref: string, defaultBranch: string | null | undefined, path?: string) =>
