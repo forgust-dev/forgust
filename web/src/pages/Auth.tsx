@@ -366,11 +366,9 @@ export function ResetPassword() {
   const [params] = useSearchParams();
   const token = params.get("token") ?? "";
   const [password, setPassword] = useState("");
-  const [again, setAgain] = useState("");
   const [done, setDone] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
-  const mismatch = again !== "" && again !== password;
   return (
     <AuthLayout title="Choose a new password">
       {done ? (
@@ -402,11 +400,8 @@ export function ResetPassword() {
           <Field label="New password" hint="At least 8 characters">
             <PasswordInput autoFocus id="new-password" name="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </Field>
-          <Field label="Repeat it">
-            <PasswordInput autoComplete="new-password" value={again} onChange={(e) => setAgain(e.target.value)} aria-invalid={mismatch} />
-          </Field>
-          {mismatch && <span className="small danger-text">The two passwords differ.</span>}
-          <button className="btn primary auth-submit" aria-busy={busy} disabled={busy || !token || password.length < 8 || password !== again}>
+          {/* typed once: its Show button lets it be checked (a second field only makes it longer) */}
+          <button className="btn primary auth-submit" aria-busy={busy} disabled={busy || !token || password.length < 8}>
             Set the password
           </button>
         </form>

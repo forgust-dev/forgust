@@ -302,9 +302,6 @@ test("forgot password, reset and email links", async ({ browser }) => {
   // a link that is not (or no longer) valid says so
   await page.goto("/reset-password?token=not-a-real-token");
   await page.getByLabel("New password").fill("a-long-new-password");
-  await page.getByLabel("Repeat it").fill("a-long-new-password-x");
-  await expect(page.getByText("The two passwords differ.")).toBeVisible();
-  await page.getByLabel("Repeat it").fill("a-long-new-password");
   await page.getByRole("button", { name: "Set the password" }).click();
   await expect(page.locator(".alert, .error-box, [role=alert]").first()).toContainText(/invalid or has expired/);
   // signed out, a confirmation link asks to sign in first
