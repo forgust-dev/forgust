@@ -10063,3 +10063,12 @@ button.test-case-row:hover {
 .smart-visit {
   margin-bottom: 12px;
 }
+
+/* what is typed on a touch screen: an iPhone zooms into a field whose text is under 16 px as it
+   is focused, and stays zoomed. :root's weight and this place, last, put it over each field's
+   own size (the 2FA code is larger already; a read-only field takes no typing) */
+@media (pointer: coarse) {
+  :root :is(input:not([type="checkbox"], [type="radio"], [type="range"], [readonly], .auth-code), textarea:not([readonly]), select) {
+    font-size: 16px;
+  }
+}

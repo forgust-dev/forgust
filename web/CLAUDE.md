@@ -75,9 +75,10 @@ or group and the site follow on their own.
 
 Buttons, fields and menus share one height, from tokens in `src/styles.css`: `--control-h`
 (30 px), `--control-h-sm` (26 px, `btn small`) and `--control-h-lg` (34 px). On a touch screen
-they are 36 px. Button text is 13 px, a field's label 13 px, what is typed 14 px. A control
-next to another takes its height from the same token, so they line up; never write a height.
-A page's title (`ListHead`) is 24 px. A row's line of details (`.row-meta`) is in the page's
+they are 36 px. Button text is 13 px, a field's label 13 px, what is typed 14 px (16 px on a
+touch screen: under 16 px, an iPhone zooms into the field it focuses). A control next to
+another takes its height from the same token, so they line up; never write a height. A page's
+title (`ListHead`) is 24 px. A row's line of details (`.row-meta`) is in the page's
 letters at 12.5 px; a sha, a branch or a path in it keep code's, by their own class.
 
 The one main action of a page is a step taller (`btn large`): the buttons of its head
