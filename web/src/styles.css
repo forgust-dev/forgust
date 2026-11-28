@@ -534,6 +534,18 @@ a.dropdown-item:focus-visible {
 .dropdown-item[data-highlighted] {
   background: var(--bg-hover);
 }
+/* Windows' high contrast (forced colors) paints over backgrounds: the entry the keyboard is on,
+   in a menu, a select, the palette or the suggestions, is outlined in the system's highlight */
+@media (forced-colors: active) {
+  .select-item[data-highlighted],
+  .dropdown-item[data-highlighted],
+  a.dropdown-item[data-highlighted]:focus-visible,
+  .palette-item.active,
+  .md-suggest li.active {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+}
 .select-item[data-disabled],
 .dropdown-item[data-disabled] {
   color: var(--text-faint);
