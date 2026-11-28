@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { GitBranch } from "lucide-react";
 import { api, ApiError, qs, type S } from "../../api/client";
 import { useSession } from "../../session";
+import { AS_TYPED } from "../../components/ui";
 import type { Ctx } from "./Project";
 
 // Where a commit made in the browser goes: the file editor's and the web IDE's choice.
@@ -112,7 +113,7 @@ export function CommitTarget({
           <GitBranch size={13} /> Commit to a new branch and open a merge request
         </span>
       </label>
-      {target === "new" && <input aria-label="New branch name" value={newBranch} onChange={(e) => setNewBranch(e.target.value)} spellCheck={false} />}
+      {target === "new" && <input aria-label="New branch name" value={newBranch} onChange={(e) => setNewBranch(e.target.value)} {...AS_TYPED} />}
     </fieldset>
   );
 }

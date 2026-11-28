@@ -4,9 +4,10 @@ import { api, ApiError, type S } from "../api/client";
 import { cancelled, getCredential, webauthnSupported } from "../api/webauthn";
 import { useProviders, useSetup } from "../prefetch";
 import { useSession } from "../session";
-import { ErrorBox, Field, PasswordInput } from "../components/ui";
+import { AS_TYPED, ErrorBox, Field, PasswordInput } from "../components/ui";
 import { Logo } from "../components/Logo";
 import { ThemeButton } from "../shell/Shell";
+import { usePageTitle } from "../shell/title";
 
 /** `?next=` only ever leads to a path on this site (no `//host`, no `/\host`). */
 export function safeNext(next: string | null): string {
@@ -17,9 +18,11 @@ export function safeNext(next: string | null): string {
 
 /** The frame of the pages that let someone in: the mark, a title and the form
  *  on a card, over paper that glows like a forge. Signed in (a confirmation
- *  link), it is the plain card. */
-function AuthLayout({ title, lede, children }: { title: string; lede?: ReactNode; children: ReactNode }) {
+ *  link), it is the plain card. `tab`: the page's name in the browser's tab, when its
+ *  title already says "Forgust". */
+function AuthLayout({ title, tab, lede, children }: { title: string; tab?: string; lede?: ReactNode; children: ReactNode }) {
   const { user } = useSession();
+  usePageTitle(tab ?? title);
   if (user) {
     return (
       <div className="page narrow auth-page">
@@ -149,7 +152,7 @@ export function Login() {
 
   if (setup.data?.needs_setup) {
     return (
-      <AuthLayout title="Welcome to Forgust" lede="No account exists yet.">
+      <AuthLayout title="Welcome to Forgust" tab="Welcome" lede="No account exists yet.">
         <p className="muted">
           Open the setup link printed in the server log (<code>/setup?token=…</code>) to create the first administrator, or run{" "}
           <code>forgust admin create-user --admin</code>.
@@ -165,6 +168,7 @@ export function Login() {
   return (
     <AuthLayout
       title={challenge ? "Two-factor authentication" : "Sign in to Forgust"}
+      tab={challenge ? undefined : "Sign in"}
       lede={
         !challenge
           ? undefined
@@ -197,7 +201,7 @@ export function Login() {
                   className={recovery ? undefined : "auth-code"}
                   inputMode={recovery ? undefined : "numeric"}
                   autoComplete={recovery ? "off" : "one-time-code"}
-                  spellCheck={false}
+                  {...AS_TYPED}
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
                 />
@@ -220,11 +224,11 @@ export function Login() {
         ) : (
           <>
             <Field label="Username or email">
-              <input autoFocus autoComplete="username" value={login} onChange={(e) => setLogin(e.target.value)} />
+              <input autoFocus id="username" name="username" autoComplete="username" {...AS_TYPED} value={login} onChange={(e) => setLogin(e.target.value)} />
             </Field>
             <div className="auth-pw">
               <Field label="Password">
-                <PasswordInput autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+                <PasswordInput id="current-password" name="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
               </Field>
               <Link className="auth-forgot" to={`/forgot-password${login ? `?login=${encodeURIComponent(login)}` : ""}`}>
                 Forgot password?
@@ -286,16 +290,16 @@ export function Setup() {
       <form className="stack auth-stack" onSubmit={submit}>
         <ErrorBox error={error} />
         <Field label="Setup token" hint="Printed in the server log on first start">
-          <input value={form.token} onChange={set("token")} />
+          <input autoComplete="off" {...AS_TYPED} value={form.token} onChange={set("token")} />
         </Field>
         <Field label="Username">
-          <input value={form.username} onChange={set("username")} />
+          <input id="username" name="username" autoComplete="username" {...AS_TYPED} value={form.username} onChange={set("username")} />
         </Field>
         <Field label="Email">
-          <input type="email" value={form.email} onChange={set("email")} />
+          <input type="email" id="email" name="email" autoComplete="email" value={form.email} onChange={set("email")} />
         </Field>
         <Field label="Password" hint="At least 8 characters">
-          <PasswordInput autoComplete="new-password" value={form.password} onChange={set("password")} />
+          <PasswordInput id="new-password" name="password" autoComplete="new-password" value={form.password} onChange={set("password")} />
         </Field>
         <button className="btn primary auth-submit">Create administrator</button>
       </form>
@@ -343,7 +347,7 @@ export function ForgotPassword() {
           <ErrorBox error={error} />
           <p className="muted">Enter your username or email address. We send a link to choose a new password.</p>
           <Field label="Username or email">
-            <input autoFocus autoComplete="username" value={login} onChange={(e) => setLogin(e.target.value)} />
+            <input autoFocus autoComplete="username" {...AS_TYPED} value={login} onChange={(e) => setLogin(e.target.value)} />
           </Field>
           <button className="btn primary auth-submit" aria-busy={busy} disabled={busy || !login.trim() || !setup.data}>
             Send the link
@@ -362,11 +366,9 @@ export function ResetPassword() {
   const [params] = useSearchParams();
   const token = params.get("token") ?? "";
   const [password, setPassword] = useState("");
-  const [again, setAgain] = useState("");
   const [done, setDone] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
-  const mismatch = again !== "" && again !== password;
   return (
     <AuthLayout title="Choose a new password">
       {done ? (
@@ -396,13 +398,10 @@ export function ResetPassword() {
           <ErrorBox error={error} />
           {!token && <p className="muted">This page needs the link from your email.</p>}
           <Field label="New password" hint="At least 8 characters">
-            <PasswordInput autoFocus autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <PasswordInput autoFocus id="new-password" name="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </Field>
-          <Field label="Repeat it">
-            <PasswordInput autoComplete="new-password" value={again} onChange={(e) => setAgain(e.target.value)} aria-invalid={mismatch} />
-          </Field>
-          {mismatch && <span className="small danger-text">The two passwords differ.</span>}
-          <button className="btn primary auth-submit" aria-busy={busy} disabled={busy || !token || password.length < 8 || password !== again}>
+          {/* typed once: its Show button lets it be checked (a second field only makes it longer) */}
+          <button className="btn primary auth-submit" aria-busy={busy} disabled={busy || !token || password.length < 8}>
             Set the password
           </button>
         </form>

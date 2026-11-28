@@ -5,6 +5,7 @@ import { api, type S } from "../api/client";
 import { useSession } from "../session";
 import { ErrorBox, Q } from "../components/ui";
 import { Logo } from "../components/Logo";
+import { usePageTitle } from "../shell/title";
 
 // ADR-0025: an MCP client (an AI assistant) asks to act as you. The
 // server checked the client and its redirect address; you allow reading, and
@@ -20,6 +21,7 @@ export function OAuthAuthorize() {
     queryKey: ["oauth-authorize", params.toString()],
     queryFn: () => api.get<S["AuthorizeInfo"]>(`/oauth/authorize?${new URLSearchParams(request)}`),
   });
+  usePageTitle(info.data ? `Allow ${info.data.client_name}?` : "Allow access");
   const [write, setWrite] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);

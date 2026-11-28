@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff, KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api, timeAgo, type S } from "../../../api/client";
-import { Section, ErrorBox, Field, Q, ListHead } from "../../../components/ui";
+import { AS_TYPED, Section, ErrorBox, Field, Q, ListHead } from "../../../components/ui";
 import { RunnersPanel } from "./Runners";
 import { EmptyRow, ListSection, SaveRow, SettingSwitch, useSaved } from "../../../components/settings";
 import { FormActions, FormDialog, useJustAdded } from "../../../components/FormDialog";
@@ -287,7 +287,7 @@ function JobTokenAllowlist({ ctx }: { ctx: Ctx }) {
       form={
         <form className="stack" aria-label="Allow a project" onSubmit={add}>
           <Field label="Project path">
-            <input placeholder="group/project" value={path} onChange={(e) => setPath(e.target.value)} />
+            <input placeholder="group/project" value={path} {...AS_TYPED} onChange={(e) => setPath(e.target.value)} />
           </Field>
           <FormActions label="Add project" disabled={!path.trim()} onCancel={close} />
         </form>

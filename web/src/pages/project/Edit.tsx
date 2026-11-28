@@ -3,11 +3,12 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { FilePlus2, Map as MapIcon, Pencil, Trash2 } from "lucide-react";
 import { qs, refLink, type S } from "../../api/client";
 import { usePref } from "../../shell/theme";
-import { ErrorBox, Field, ListHead, Q } from "../../components/ui";
+import { AS_TYPED, ErrorBox, Field, ListHead, Q } from "../../components/ui";
 import { applyAssayEdit, assayMessage, type AssayEdit } from "./assayToml";
 import { useResolved } from "./Code";
 import { CommitTarget, useCommit } from "./commitTarget";
 import type { Ctx } from "./Project";
+import { usePageTitle } from "../../shell/title";
 
 // fetched while the file loads (see `Editor`); deleting a file never needs it
 const loadEditor = () => import("../../components/CodeEditor");
@@ -18,6 +19,7 @@ type Mode = "edit" | "new" | "delete";
 /** Edit, create or delete a file and commit it, here or on a new branch with an MR. */
 export function EditFile({ ctx, refAndPath, mode }: { ctx: Ctx; refAndPath: string; mode: Mode }) {
   const r = useResolved(ctx, refAndPath);
+  usePageTitle(mode === "new" ? "New file" : r.data && `${mode === "edit" ? "Edit" : "Delete"} ${r.data.path}`);
   return <Q q={r}>{(res) => <Editor ctx={ctx} res={res} mode={mode} />}</Q>;
 }
 
@@ -120,7 +122,7 @@ function Editor({ ctx, res, mode }: { ctx: Ctx; res: S["RefResolved"]; mode: Mod
         )}
         {mode === "new" && (
           <Field label="File path" hint="Folders are created as needed">
-            <input autoFocus value={path} onChange={(e) => setPath(e.target.value)} placeholder="docs/guide.md" spellCheck={false} />
+            <input autoFocus value={path} onChange={(e) => setPath(e.target.value)} placeholder="docs/guide.md" {...AS_TYPED} />
           </Field>
         )}
         {mode !== "delete" &&

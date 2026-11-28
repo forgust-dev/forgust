@@ -4,6 +4,7 @@ import { Link, NavLink } from "react-router-dom";
 import { ApiError, LEVELS, bytes } from "../api/client";
 import { Select } from "./controls";
 import { useConfirm, type Ask } from "../shell/dialog";
+import { usePageTitle } from "../shell/title";
 
 /** How long a wait goes unmarked: a page that comes sooner never shows a loader. */
 export const SPINNER_DELAY = 400;
@@ -83,6 +84,7 @@ export function Q<T>({ q, children }: { q: { isLoading: boolean; error: unknown;
 }
 
 export function NotFound() {
+  usePageTitle("Not found");
   return (
     <div className="empty">
       <h2>Not found</h2>
@@ -148,6 +150,12 @@ export function StateBadge({ tone, icon: Icon, children, className, title }: { t
 export function Badge({ children }: { children: ReactNode }) {
   return <span className="badge">{children}</span>;
 }
+
+/**
+ * For a field that holds what a machine reads (a username, a path, a branch, an address, a code, a
+ * search): kept as typed, without a capital, a correction or a spelling check.
+ */
+export const AS_TYPED = { autoCapitalize: "none", autoCorrect: "off", spellCheck: false } as const;
 
 /**
  * A password input with a button that shows what was typed, and hides it again. The button is
@@ -318,6 +326,8 @@ export function NewSecret({ token, username }: { token: string; username?: strin
 
 /** The top of a list page: a title, an optional line under it, actions on the right. */
 export function ListHead({ title, sub, children }: { title: ReactNode; sub?: ReactNode; children?: ReactNode }) {
+  // the page's title names its tab too
+  usePageTitle(typeof title === "string" ? title : null);
   return (
     <header className="list-head">
       <div className="grow" style={{ minWidth: 0 }}>
@@ -348,7 +358,7 @@ export function SearchField({ value, onChange, placeholder, autoFocus }: { value
   return (
     <label className="search-field">
       <Search size={14} aria-hidden />
-      <input type="search" value={value} placeholder={placeholder} aria-label={placeholder} autoFocus={autoFocus} onChange={(e) => onChange(e.target.value)} />
+      <input type="search" value={value} placeholder={placeholder} aria-label={placeholder} autoFocus={autoFocus} {...AS_TYPED} onChange={(e) => onChange(e.target.value)} />
     </label>
   );
 }

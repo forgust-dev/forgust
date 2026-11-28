@@ -6,6 +6,7 @@ import { api, qs, type S } from "../api/client";
 import { Avatar, useDebounced } from "./ui";
 import { Markdown } from "./Markdown";
 import { StateMark, issueLook, mrLook } from "./states";
+import { composing } from "../shell/platform";
 
 type Trigger = { char: "@" | "#" | "!"; start: number; query: string };
 type Item = {
@@ -332,6 +333,7 @@ export function MarkdownEditor({
             }}
             onBlur={() => setTimeout(() => setTrigger(null), 120)}
             onKeyDown={(e) => {
+              if (composing(e)) return;
               if (open) {
                 if (e.key === "ArrowDown" || e.key === "ArrowUp") {
                   e.preventDefault();

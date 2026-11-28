@@ -264,6 +264,13 @@ h2,
 h3 {
   line-height: 1.25;
   margin: 0 0 12px;
+  /* a title on two lines splits in two even halves, not a long line and a word */
+  text-wrap: balance;
+}
+/* a paragraph leaves no word alone on its last line (where the browser can: not Firefox yet) */
+p,
+.markdown :is(li, blockquote) {
+  text-wrap: pretty;
 }
 h1,
 h2 {
@@ -533,6 +540,18 @@ a.dropdown-item:focus-visible {
 .select-item[data-highlighted],
 .dropdown-item[data-highlighted] {
   background: var(--bg-hover);
+}
+/* Windows' high contrast (forced colors) paints over backgrounds: the entry the keyboard is on,
+   in a menu, a select, the palette or the suggestions, is outlined in the system's highlight */
+@media (forced-colors: active) {
+  .select-item[data-highlighted],
+  .dropdown-item[data-highlighted],
+  a.dropdown-item[data-highlighted]:focus-visible,
+  .palette-item.active,
+  .md-suggest li.active {
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
 }
 .select-item[data-disabled],
 .dropdown-item[data-disabled] {
@@ -6582,7 +6601,6 @@ a.item.group-row:hover .row-title {
   margin: 0;
   font-size: 32px;
   letter-spacing: -0.035em;
-  text-wrap: balance;
 }
 .auth-lede {
   margin: 6px 0 0;
@@ -10050,4 +10068,13 @@ button.test-case-row:hover {
 /* what this browser has not seen of the history yet */
 .smart-visit {
   margin-bottom: 12px;
+}
+
+/* what is typed on a touch screen: an iPhone zooms into a field whose text is under 16 px as it
+   is focused, and stays zoomed. :root's weight and this place, last, put it over each field's
+   own size (the 2FA code is larger already; a read-only field takes no typing) */
+@media (pointer: coarse) {
+  :root :is(input:not([type="checkbox"], [type="radio"], [type="range"], [readonly], .auth-code), textarea:not([readonly]), select) {
+    font-size: 16px;
+  }
 }

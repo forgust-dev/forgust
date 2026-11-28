@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeftRight, ArrowRight, Download, GitBranch, GitMerge, Package, Plus, Tag, Trash2, Shield, Star } from "lucide-react";
 import { api, qs, timeAgo, type S, encPath, filesLink } from "../../api/client";
 import { StatusIcon, statusLabel } from "./ci/Status";
-import { Empty, ErrorBox, Field, ListHead, Q, SearchField, useDebounced } from "../../components/ui";
+import { AS_TYPED, Empty, ErrorBox, Field, ListHead, Q, SearchField, useDebounced } from "../../components/ui";
 import { useToast } from "../../shell/toast";
 import { PagedDiff } from "./Diff";
 import { CommitList } from "./History";
@@ -60,10 +60,10 @@ function NewBranch({ ctx, onCreated, onCancel }: { ctx: Ctx; onCreated: (name: s
     >
       <ErrorBox error={error} />
       <Field label="Branch name">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="feature/my-change" spellCheck={false} />
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="feature/my-change" {...AS_TYPED} />
       </Field>
       <Field label="From" hint="A branch, tag or commit">
-        <input value={from} onChange={(e) => setFrom(e.target.value)} spellCheck={false} />
+        <input value={from} onChange={(e) => setFrom(e.target.value)} {...AS_TYPED} />
       </Field>
       <FormActions label="Create branch" disabled={!name.trim() || !from.trim()} onCancel={onCancel} />
     </form>
@@ -225,10 +225,10 @@ function NewTag({ ctx, onCreated, onCancel }: { ctx: Ctx; onCreated: (name: stri
     >
       <ErrorBox error={error} />
       <Field label="Tag name">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="v1.0.0" spellCheck={false} />
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="v1.0.0" {...AS_TYPED} />
       </Field>
       <Field label="From" hint="A branch, tag or commit">
-        <input value={from} onChange={(e) => setFrom(e.target.value)} spellCheck={false} />
+        <input value={from} onChange={(e) => setFrom(e.target.value)} {...AS_TYPED} />
       </Field>
       <Field label="Message" hint="Optional: makes an annotated tag">
         <textarea rows={2} value={message} onChange={(e) => setMessage(e.target.value)} />

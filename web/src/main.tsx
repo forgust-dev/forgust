@@ -19,6 +19,7 @@ import { Work } from "./pages/Work";
 import { NewGroup, NewProject } from "./pages/New";
 import { Shell, ShellFrame } from "./shell/Shell";
 import { KeepNav, NavProvider } from "./shell/nav";
+import { TitleProvider } from "./shell/title";
 import { PaletteHost } from "./shell/palette";
 import { ThemeProvider } from "./shell/theme";
 import { ToastProvider } from "./shell/toast";
@@ -117,8 +118,10 @@ void fonts.then(() =>
               <ToastProvider>
                 <DialogProvider>
                   <NavProvider>
-                    <UnsavedGuard />
-                    <App />
+                    <TitleProvider>
+                      <UnsavedGuard />
+                      <App />
+                    </TitleProvider>
                   </NavProvider>
                 </DialogProvider>
               </ToastProvider>

@@ -2,7 +2,7 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Lock, Plus, Server, Trash2 } from "lucide-react";
 import { api, timeAgo, type S } from "../../../api/client";
-import { Section, ErrorBox, Field, NewSecret, Q, StateBadge } from "../../../components/ui";
+import { AS_TYPED, Section, ErrorBox, Field, NewSecret, Q, StateBadge } from "../../../components/ui";
 import { EmptyRow } from "../../../components/settings";
 import { FormActions, FormDialog, useJustAdded } from "../../../components/FormDialog";
 import { useToast } from "../../../shell/toast";
@@ -110,7 +110,7 @@ export function RunnersPanel({ list, create, title = "Runners", note, children }
               <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="e.g. docker on build-01" />
             </Field>
             <Field label="Tags" hint="Comma-separated; jobs with these tags can run here">
-              <input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="docker, linux" />
+              <input value={form.tags} {...AS_TYPED} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="docker, linux" />
             </Field>
             <div className="row wrap" style={{ gap: 18 }}>
               <label className="check">

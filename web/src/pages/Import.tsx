@@ -3,11 +3,12 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ArrowRight, CheckCircle2, CircleDashed, CircleX, Download, ExternalLink, Loader2, Lock, Plus, RotateCcw, Square, Archive } from "lucide-react";
 import { api, bytes, timeAgo, type S } from "../api/client";
-import { Empty, ErrorBox, Field, FieldGroup, ListHead, Q, SearchField, Section, StateBadge } from "../components/ui";
+import { AS_TYPED, Empty, ErrorBox, Field, FieldGroup, ListHead, Q, SearchField, Section, StateBadge } from "../components/ui";
 import { Choices, Segmented, Select } from "../components/controls";
 import { useSession } from "../session";
 import { useAct } from "../shell/toast";
 import { useConfirm } from "../shell/dialog";
+import { composing } from "../shell/platform";
 import { useGroups } from "../prefetch";
 
 type Kind = S["ImportSource"];
@@ -138,7 +139,7 @@ export function ImportPage() {
             />
           </FieldGroup>
           <Field label="Address" hint={`${hostOf(info?.default_url ?? "")} or your own ${info?.name ?? "server"}`}>
-            <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={info?.default_url} />
+            <input inputMode="url" {...AS_TYPED} value={url} onChange={(e) => setUrl(e.target.value)} placeholder={info?.default_url} />
           </Field>
           <Field
             label="Access token"
@@ -410,7 +411,7 @@ function ImportMany({ conn, connected, back, started }: { conn: Conn; connected:
               onChange={(e) => setTyped(e.target.value)}
               onBlur={() => setEntered(typed.trim())}
               onKeyDown={(e) => {
-                if (e.key === "Enter") setEntered(typed.trim());
+                if (e.key === "Enter" && !composing(e)) setEntered(typed.trim());
               }}
               placeholder={conn.source === "gitlab" ? "group, group/sub or a username" : "an organization or a username"}
               aria-label={`User or ${groupWord}`}

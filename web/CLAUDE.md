@@ -62,13 +62,23 @@ A spinner (`Loader2`) always turns, with `className="spin"`. `StateBadge` adds i
 A date is a `DateField` (typed, or picked on a calendar), never `type="date"` and its browser
 picker; a password a `PasswordInput`, with its Show button.
 
+A field that holds what a machine reads (a username, a path, a branch or a tag, an address, a
+code, a search) takes `{...AS_TYPED}`: a phone neither capitalizes nor corrects it. A field's
+own keys (Enter to pick or to go, the arrows) first check `composing(e)` (`shell/platform.ts`):
+while an input method composes a word (Japanese, Chinese, Korean…), its keys are its own.
+
+Every page names its browser tab. `ListHead` does it with its title; a page without one calls
+`usePageTitle` (`shell/title.tsx`) with what it shows ("Fix the login · Issue #12"); its project
+or group and the site follow on their own.
+
 ## Sizes
 
 Buttons, fields and menus share one height, from tokens in `src/styles.css`: `--control-h`
 (30 px), `--control-h-sm` (26 px, `btn small`) and `--control-h-lg` (34 px). On a touch screen
-they are 36 px. Button text is 13 px, a field's label 13 px, what is typed 14 px. A control
-next to another takes its height from the same token, so they line up; never write a height.
-A page's title (`ListHead`) is 24 px. A row's line of details (`.row-meta`) is in the page's
+they are 36 px. Button text is 13 px, a field's label 13 px, what is typed 14 px (16 px on a
+touch screen: under 16 px, an iPhone zooms into the field it focuses). A control next to
+another takes its height from the same token, so they line up; never write a height. A page's
+title (`ListHead`) is 24 px. A row's line of details (`.row-meta`) is in the page's
 letters at 12.5 px; a sha, a branch or a path in it keep code's, by their own class.
 
 The one main action of a page is a step taller (`btn large`): the buttons of its head

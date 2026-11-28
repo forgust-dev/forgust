@@ -87,6 +87,8 @@ export function DialogProvider({ children }: { children: ReactNode }) {
                       value={value}
                       placeholder={q.input.placeholder}
                       className={q.input.mono ? "mono" : undefined}
+                      autoCapitalize="none"
+                      autoCorrect="off"
                       spellCheck={false}
                       autoComplete="off"
                       onChange={(e) => setValue(e.target.value)}

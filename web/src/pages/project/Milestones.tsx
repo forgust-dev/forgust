@@ -12,6 +12,7 @@ import { useToast } from "../../shell/toast";
 import { useConfirm } from "../../shell/dialog";
 import type { Ctx } from "./Project";
 import { StateMark, mrLook } from "../../components/states";
+import { usePageTitle } from "../../shell/title";
 
 type M = S["Milestone"];
 
@@ -283,6 +284,7 @@ export function MilestonePage({ ctx, id }: { ctx: Ctx; id: number }) {
   const confirm = useConfirm();
   const path = `/projects/${ctx.p.id}/milestones/${id}`;
   const q = useQuery({ queryKey: ["milestone", ctx.p.id, id], queryFn: () => api.get<M>(path) });
+  usePageTitle(q.data && `${q.data.title} · Milestone`);
   const issues = useQuery({
     queryKey: ["issues", ctx.p.id, "milestone", id, q.data?.title],
     queryFn: () => api.get<S["IssueList"]>(`/projects/${ctx.p.id}/issues${qs({ milestone: q.data!.title, state: "all", per_page: 100 })}`),

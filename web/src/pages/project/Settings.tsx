@@ -2,7 +2,7 @@ import { lazy, useEffect, useState, type ChangeEvent, type ComponentType, type F
 import { useLocation, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, timeAgo, type S, bytes } from "../../api/client";
-import { Badge, Section, ErrorBox, Field, FieldGroup, Q, VisibilitySelect, ListHead, NotFound, PasswordInput, Tile, QuotaBar, useFormRun } from "../../components/ui";
+import { AS_TYPED, Badge, Section, ErrorBox, Field, FieldGroup, Q, VisibilitySelect, ListHead, NotFound, PasswordInput, Tile, QuotaBar, useFormRun } from "../../components/ui";
 import { AvatarUpload } from "../../components/AvatarUpload";
 import { Segmented, Select, Switch } from "../../components/controls";
 import { AccessTokens, DeployTokens } from "../../components/Tokens";
@@ -451,7 +451,7 @@ function GeneralSettings({ ctx }: { ctx: Ctx }) {
               </Field>
               {target === "path" && (
                 <Field label="Group path" hint="Its path, as in its address: acme/platform">
-                  <input className="mono" placeholder="acme/platform" value={typed} onChange={(e) => setTyped(e.target.value)} />
+                  <input className="mono" placeholder="acme/platform" value={typed} {...AS_TYPED} onChange={(e) => setTyped(e.target.value)} />
                 </Field>
               )}
               <div>
@@ -576,7 +576,7 @@ function ProtectedBranches({ ctx }: { ctx: Ctx }) {
         <ErrorBox error={error} />
         <div className="grid2">
           <Field label="Branch or pattern" hint="e.g. main or release/*">
-            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <input value={form.name} {...AS_TYPED} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </Field>
           <Field label="Allowed to push">
             <Select value={form.push_access_level} onChange={(v) => setForm({ ...form, push_access_level: v })} options={PROTECT_LEVELS} />
@@ -1082,7 +1082,7 @@ function ProtectedTags({ ctx }: { ctx: Ctx }) {
         <ErrorBox error={error} />
         <div className="grid2">
           <Field label="Tag or pattern" hint="e.g. v1.0 or v*">
-            <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <input value={form.name} {...AS_TYPED} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </Field>
           <Field label="Allowed to create">
             <Select value={form.create_access_level} onChange={(v) => setForm({ ...form, create_access_level: v })} options={PROTECT_LEVELS} />
@@ -1295,7 +1295,7 @@ function Mirrors({ ctx }: { ctx: Ctx }) {
         </Field>
         <div className="grid2">
           <Field label="Username" hint="Optional: GitLab, GitHub, Gitea and Forgejo take any name with a token.">
-            <input value={form.username} autoComplete="off" onChange={(e) => setForm({ ...form, username: e.target.value })} />
+            <input value={form.username} autoComplete="off" {...AS_TYPED} onChange={(e) => setForm({ ...form, username: e.target.value })} />
           </Field>
           <Field label="Token or password" hint={form.direction === "push" ? "With write access to the repository. Kept encrypted." : "Optional for a public repository. Kept encrypted."}>
             <PasswordInput autoComplete="off" value={form.token} onChange={(e) => setForm({ ...form, token: e.target.value })} />

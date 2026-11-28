@@ -5,6 +5,7 @@ import { api, plural, timeAgo, type S } from "../api/client";
 import { Avatar, Empty, Q } from "../components/ui";
 import { UserContributions, useContributions } from "../components/Contributions";
 import { ProjectRow } from "./Dashboard";
+import { usePageTitle } from "../shell/title";
 
 
 /** A person's facts, as a project's right column: how much, how lately, and where. */
@@ -64,6 +65,7 @@ function ProfileAbout({ p }: { p: S["Profile"] }) {
 /** A person's page at `/<username>`: who they are, what they did, their projects. */
 export function UserProfilePage({ username }: { username: string }) {
   const q = useQuery({ queryKey: ["profile", username], queryFn: () => api.get<S["Profile"]>(`/users/${encodeURIComponent(username)}`) });
+  usePageTitle(q.data?.name ? `${q.data.name} (${q.data.username})` : username);
   return (
     <div className="page stack profile-page">
       <Q q={q}>

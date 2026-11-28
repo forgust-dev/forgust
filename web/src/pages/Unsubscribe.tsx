@@ -4,9 +4,11 @@ import { useQuery } from "@tanstack/react-query";
 import { BellOff } from "lucide-react";
 import { api, ApiError, type S } from "../api/client";
 import { ErrorBox, Q } from "../components/ui";
+import { usePageTitle } from "../shell/title";
 
 /** From an email's footer: stop one project's emails, without signing in. */
 export function UnsubscribePage() {
+  usePageTitle("Stop emails");
   const [params] = useSearchParams();
   // only ids and a URL-safe signature: nothing that could point the request elsewhere
   const [u, p, sig] = [params.get("u") ?? "", params.get("p") ?? "", params.get("s") ?? ""];

@@ -2,10 +2,11 @@ import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, ty
 import { Link, useNavigate } from "react-router-dom";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, FileText, Folder, PanelLeftClose, PanelLeftOpen } from "lucide-react";
-import { ancestors, filesLink, refLink, type S } from "../../api/client";
+import { ancestors, filesLink, refLink, refName, type S } from "../../api/client";
 import { fetchers, keys } from "../../prefetch";
 import { usePref } from "../../shell/theme";
 import type { Ctx } from "./Project";
+import { usePageTitle } from "../../shell/title";
 
 /** A folder shows this many entries here at most; its page shows them all. */
 const MAX = 500;
@@ -18,12 +19,13 @@ type Where = { ctx: Ctx; gitRef: string; commit: string };
  * mounted from one file to the next (`kind` and `refAndPath` change, it does not), so the folders
  * opened in it stay open. At a ref's root, the Files page, it adds nothing.
  */
-export function CodeLayout({ ctx, kind, refAndPath, children }: { ctx: Ctx; kind: "tree" | "blob"; refAndPath: string; children: ReactNode }) {
+export function CodeLayout({ ctx, kind, blame, refAndPath, children }: { ctx: Ctx; kind: "tree" | "blob"; blame?: boolean; refAndPath: string; children: ReactNode }) {
   // the same request as the page's own (same key); the last answer is kept while the next one comes
   const r = useQuery({ queryKey: keys.resolve(ctx.p.id, refAndPath), queryFn: () => fetchers.resolve(ctx.p.id, refAndPath), staleTime: 5_000, placeholderData: keepPreviousData });
   const [shown, setShown] = usePref("code.filetree", true);
   const res = r.data;
   const panel = res && !(kind === "tree" && res.path === "");
+  usePageTitle(res && `${blame ? "Blame of " : ""}${res.path || "Files"} at ${refName(res.ref)}`);
   return (
     <div className={`code-layout${panel ? (shown ? "" : " tree-hidden") : " no-tree"}`}>
       {panel ? <FileTreePanel where={{ ctx, gitRef: res.ref, commit: res.commit }} path={res.path} folder={kind === "tree"} shown={shown} setShown={setShown} /> : null}
