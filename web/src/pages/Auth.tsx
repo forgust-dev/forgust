@@ -18,8 +18,8 @@ export function safeNext(next: string | null): string {
 
 /** The frame of the pages that let someone in: the mark, a title and the form
  *  on a card, over paper that glows like a forge. Signed in (a confirmation
- *  link), it is the plain card. */
-/** `tab`: the page's name in the browser's tab, when its title already says "Forgust". */
+ *  link), it is the plain card. `tab`: the page's name in the browser's tab, when its
+ *  title already says "Forgust". */
 function AuthLayout({ title, tab, lede, children }: { title: string; tab?: string; lede?: ReactNode; children: ReactNode }) {
   const { user } = useSession();
   usePageTitle(tab ?? title);
