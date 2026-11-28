@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, listAnd, timeAgo, type S } from "../api/client";
-import { ErrorBox, Field, levelName, PasswordInput, Q, StateBadge } from "./ui";
+import { AS_TYPED, ErrorBox, Field, levelName, PasswordInput, Q, StateBadge } from "./ui";
 import { Select } from "./controls";
 import { EmptyRow, ListSection } from "./settings";
 import { FormActions, useJustAdded } from "./FormDialog";
@@ -82,7 +82,7 @@ export function Webhooks({ base, title, description }: { base: string; title: st
         <ErrorBox error={error} />
         <div className="grid2">
           <Field label="URL" hint="Private and loopback addresses are refused">
-            <input placeholder="https://ci.example.com/hooks/forgust" value={url} onChange={(e) => setUrl(e.target.value)} />
+            <input inputMode="url" {...AS_TYPED} placeholder="https://ci.example.com/hooks/forgust" value={url} onChange={(e) => setUrl(e.target.value)} />
           </Field>
           <Field label="Secret" hint="Signs each delivery: X-Forgust-Signature: sha256=HMAC(secret, body)">
             <PasswordInput autoComplete="new-password" value={secret} onChange={(e) => setSecret(e.target.value)} />

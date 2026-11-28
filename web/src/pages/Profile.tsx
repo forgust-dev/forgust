@@ -95,7 +95,7 @@ function ProfileForm() {
             <input value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
           <Field label="Email" hint={emailHint}>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </Field>
           {emailChanges && (
             <Field label="Current password" hint="Needed to change the address (single sign-on accounts: leave empty within 10 minutes of signing in)">

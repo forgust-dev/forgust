@@ -4,7 +4,7 @@ import { api, ApiError, type S } from "../api/client";
 import { cancelled, getCredential, webauthnSupported } from "../api/webauthn";
 import { useProviders, useSetup } from "../prefetch";
 import { useSession } from "../session";
-import { ErrorBox, Field, PasswordInput } from "../components/ui";
+import { AS_TYPED, ErrorBox, Field, PasswordInput } from "../components/ui";
 import { Logo } from "../components/Logo";
 import { ThemeButton } from "../shell/Shell";
 import { usePageTitle } from "../shell/title";
@@ -201,7 +201,7 @@ export function Login() {
                   className={recovery ? undefined : "auth-code"}
                   inputMode={recovery ? undefined : "numeric"}
                   autoComplete={recovery ? "off" : "one-time-code"}
-                  spellCheck={false}
+                  {...AS_TYPED}
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
                 />
@@ -224,11 +224,11 @@ export function Login() {
         ) : (
           <>
             <Field label="Username or email">
-              <input autoFocus autoComplete="username" value={login} onChange={(e) => setLogin(e.target.value)} />
+              <input autoFocus id="username" name="username" autoComplete="username" required {...AS_TYPED} value={login} onChange={(e) => setLogin(e.target.value)} />
             </Field>
             <div className="auth-pw">
               <Field label="Password">
-                <PasswordInput autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+                <PasswordInput id="current-password" name="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
               </Field>
               <Link className="auth-forgot" to={`/forgot-password${login ? `?login=${encodeURIComponent(login)}` : ""}`}>
                 Forgot password?
@@ -290,16 +290,16 @@ export function Setup() {
       <form className="stack auth-stack" onSubmit={submit}>
         <ErrorBox error={error} />
         <Field label="Setup token" hint="Printed in the server log on first start">
-          <input value={form.token} onChange={set("token")} />
+          <input autoComplete="off" required {...AS_TYPED} value={form.token} onChange={set("token")} />
         </Field>
         <Field label="Username">
-          <input value={form.username} onChange={set("username")} />
+          <input autoComplete="username" required {...AS_TYPED} value={form.username} onChange={set("username")} />
         </Field>
         <Field label="Email">
-          <input type="email" value={form.email} onChange={set("email")} />
+          <input type="email" autoComplete="email" required value={form.email} onChange={set("email")} />
         </Field>
         <Field label="Password" hint="At least 8 characters">
-          <PasswordInput autoComplete="new-password" value={form.password} onChange={set("password")} />
+          <PasswordInput autoComplete="new-password" required value={form.password} onChange={set("password")} />
         </Field>
         <button className="btn primary auth-submit">Create administrator</button>
       </form>
@@ -347,7 +347,7 @@ export function ForgotPassword() {
           <ErrorBox error={error} />
           <p className="muted">Enter your username or email address. We send a link to choose a new password.</p>
           <Field label="Username or email">
-            <input autoFocus autoComplete="username" value={login} onChange={(e) => setLogin(e.target.value)} />
+            <input autoFocus autoComplete="username" {...AS_TYPED} value={login} onChange={(e) => setLogin(e.target.value)} />
           </Field>
           <button className="btn primary auth-submit" aria-busy={busy} disabled={busy || !login.trim() || !setup.data}>
             Send the link

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Container } from "lucide-react";
 import { api, bytes, timeAgo, type S } from "../../api/client";
-import { Badge, CopyLabel, Empty, ErrorBox, Field, ListHead, Q, Section, useCopy } from "../../components/ui";
+import { AS_TYPED, Badge, CopyLabel, Empty, ErrorBox, Field, ListHead, Q, Section, useCopy } from "../../components/ui";
 import type { Ctx } from "./Project";
 import { useConfirm } from "../../shell/dialog";
 
@@ -191,10 +191,10 @@ function CleanupForm({ ctx, initial, onSaved }: { ctx: Ctx; initial: S["CleanupP
           <input type="number" min={0} value={p.older_than_days ?? ""} onChange={(e) => setP({ ...p, older_than_days: num(e.target.value) })} />
         </Field>
         <Field label="Tags that may be removed" hint="a regular expression over the whole name, e.g. .* or v.+">
-          <input className="mono" value={p.name_regex} onChange={(e) => setP({ ...p, name_regex: e.target.value })} />
+          <input className="mono" value={p.name_regex} {...AS_TYPED} onChange={(e) => setP({ ...p, name_regex: e.target.value })} />
         </Field>
         <Field label="Tags always kept" hint="e.g. main|stable|v\d+\.\d+\.\d+">
-          <input className="mono" value={p.name_regex_keep} onChange={(e) => setP({ ...p, name_regex_keep: e.target.value })} />
+          <input className="mono" value={p.name_regex_keep} {...AS_TYPED} onChange={(e) => setP({ ...p, name_regex_keep: e.target.value })} />
         </Field>
       </div>
       <div className="row wrap">

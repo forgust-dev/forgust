@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type S } from "../api/client";
 import { Plus } from "lucide-react";
-import { ErrorBox, Field, PasswordInput, Q } from "./ui";
+import { AS_TYPED, ErrorBox, Field, PasswordInput, Q } from "./ui";
 import { FormActions, FormDialog, useJustAdded } from "./FormDialog";
 
 /** Credentials Renovate uses for private registries; passwords are write-only. */
@@ -78,7 +78,7 @@ export function HostRules({ base, empty: emptyText, title = "Private registries"
           <input value={r.host_type} onChange={(e) => setR({ ...r, host_type: e.target.value })} />
         </Field>
         <Field label="Username">
-          <input value={r.username} autoComplete="off" onChange={(e) => setR({ ...r, username: e.target.value })} />
+          <input value={r.username} autoComplete="off" {...AS_TYPED} onChange={(e) => setR({ ...r, username: e.target.value })} />
         </Field>
         <Field label="Password or token" hint="Stored encrypted, never shown again">
           <PasswordInput value={r.password} autoComplete="new-password" onChange={(e) => setR({ ...r, password: e.target.value })} />

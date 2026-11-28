@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { fetchers } from "../prefetch";
 import { api, timeAgo, type S } from "../api/client";
-import { Avatar, ErrorBox, Field, LevelSelect, ListHead, Q } from "./ui";
+import { AS_TYPED, Avatar, ErrorBox, Field, LevelSelect, ListHead, Q } from "./ui";
 import { EmptyRow, ListSection } from "./settings";
 import { FormActions, useJustAdded } from "./FormDialog";
 
@@ -81,7 +81,7 @@ export function Members({ base, canManage, kind }: { base: string; canManage: bo
           >
             <ErrorBox error={formError} />
             <Field label="Username">
-              <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="username" spellCheck={false} autoComplete="off" />
+              <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="username" {...AS_TYPED} autoComplete="off" />
             </Field>
             <Field label="Role">
               <LevelSelect value={level} onChange={setLevel} />
@@ -139,7 +139,7 @@ export function Members({ base, canManage, kind }: { base: string; canManage: bo
           >
             <ErrorBox error={formError} />
             <Field label="Group path">
-              <input value={shareGroup} onChange={(e) => setShareGroup(e.target.value)} placeholder="acme/platform" spellCheck={false} autoComplete="off" />
+              <input value={shareGroup} onChange={(e) => setShareGroup(e.target.value)} placeholder="acme/platform" {...AS_TYPED} autoComplete="off" />
             </Field>
             <Field label="Up to">
               <LevelSelect value={shareLevel} onChange={setShareLevel} />

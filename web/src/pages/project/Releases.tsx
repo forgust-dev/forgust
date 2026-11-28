@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BookOpen, ExternalLink, FileArchive, GitCommitHorizontal, Image, Package, Paperclip, Pencil, Plus, Tag, Trash2, Wrench, Clock } from "lucide-react";
 import { api, bytes, enc, qs, refLink, timeAgo, type S } from "../../api/client";
-import { AuthorLink, Empty, ErrorBox, Field, ListHead, Q, StateBadge } from "../../components/ui";
+import { AS_TYPED, AuthorLink, Empty, ErrorBox, Field, ListHead, Q, StateBadge } from "../../components/ui";
 import { DecideCard, type DecideRow } from "../../components/decide";
 import { MarkdownEditor } from "../../components/MarkdownEditor";
 import { useToast } from "../../shell/toast";
@@ -383,7 +383,7 @@ function Form({ ctx, r }: { ctx: Ctx; r?: S["ReleaseDto"] }) {
         {!r && (
           <>
             <Field label="Tag" hint={tag.trim() && !tagExists ? "A new tag: it is created with the release" : "An existing tag, or a new one"}>
-              <input value={tag} onChange={(e) => setTag(e.target.value)} list="release-tags" placeholder="v1.0.0" spellCheck={false} autoFocus />
+              <input value={tag} onChange={(e) => setTag(e.target.value)} list="release-tags" placeholder="v1.0.0" {...AS_TYPED} autoFocus />
             </Field>
             <datalist id="release-tags">
               {known.filter((t) => !t.release).map((t) => (
@@ -394,7 +394,7 @@ function Form({ ctx, r }: { ctx: Ctx; r?: S["ReleaseDto"] }) {
             {tag.trim() && !tagExists && (
               <div className="row wrap" style={{ gap: 10 }}>
                 <Field label="Create the tag from" hint="A branch, tag or commit">
-                  <input value={from} onChange={(e) => setFrom(e.target.value)} spellCheck={false} />
+                  <input value={from} onChange={(e) => setFrom(e.target.value)} {...AS_TYPED} />
                 </Field>
                 <Field label="Tag message" hint="Optional: an annotated tag">
                   <input value={tagMessage} onChange={(e) => setTagMessage(e.target.value)} />
@@ -437,7 +437,7 @@ function Form({ ctx, r }: { ctx: Ctx; r?: S["ReleaseDto"] }) {
                 <input autoFocus value={adding.name} onChange={(e) => setAdding({ ...adding, name: e.target.value })} />
               </Field>
               <Field label="URL">
-                <input value={adding.url} onChange={(e) => setAdding({ ...adding, url: e.target.value })} placeholder="https://" />
+                <input inputMode="url" {...AS_TYPED} value={adding.url} onChange={(e) => setAdding({ ...adding, url: e.target.value })} placeholder="https://" />
               </Field>
               <Field label="Type">
                 <select value={adding.link_type} onChange={(e) => setAdding({ ...adding, link_type: e.target.value })}>

@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, bytes, enc, qs, timeAgo, type S } from "../api/client";
 import { useProviders } from "../prefetch";
 import { useSession } from "../session";
-import { Avatar, Badge, Card, ErrorBox, Field, FilterTabs, NotFound, PasswordInput, Q, SearchField, UserLink, useDebounced, useFormRun, StateBadge } from "../components/ui";
+import { AS_TYPED, Avatar, Badge, Card, ErrorBox, Field, FilterTabs, NotFound, PasswordInput, Q, SearchField, UserLink, useDebounced, useFormRun, StateBadge } from "../components/ui";
 import { adminPage } from "./adminPages";
 import { useTopOnSwitch } from "../shell/scroll";
 import { usePageTitle } from "../shell/title";
@@ -165,7 +165,7 @@ function Users() {
           <ErrorBox error={error} />
           <div className="grid2">
             <Field label="Username">
-              <input value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
+              <input value={form.username} {...AS_TYPED} onChange={(e) => setForm({ ...form, username: e.target.value })} />
             </Field>
             <Field label="Email">
               <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />

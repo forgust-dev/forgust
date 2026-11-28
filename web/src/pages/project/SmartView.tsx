@@ -60,7 +60,7 @@ import "@xyflow/react/dist/base.css";
 import ELK from "elkjs/lib/elk.bundled.js";
 import type { ElkExtendedEdge, ElkNode } from "elkjs/lib/elk-api";
 import { api, listAnd, qs, refLink, timeAgo, type S } from "../../api/client";
-import { Avatar, Empty, ListHead, Q, UserLink, type Tone } from "../../components/ui";
+import { AS_TYPED, Avatar, Empty, ListHead, Q, UserLink, type Tone } from "../../components/ui";
 import { Select } from "../../components/controls";
 import { useProjectEvents } from "../../shell/live";
 import { useSession } from "../../session";
@@ -400,6 +400,7 @@ function FindBlock({ value, onChange, found, onNext }: { value: string; onChange
         value={value}
         placeholder="Find a block"
         aria-label="Find a block"
+        {...AS_TYPED}
         aria-description="Enter chooses the next one"
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {

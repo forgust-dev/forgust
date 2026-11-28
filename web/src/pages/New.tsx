@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api, enc, type S } from "../api/client";
 import { useSession } from "../session";
-import { ErrorBox, Field, VisibilitySelect } from "../components/ui";
+import { AS_TYPED, ErrorBox, Field, VisibilitySelect } from "../components/ui";
 import { Select } from "../components/controls";
 import { useGroups } from "../prefetch";
 import { usePageTitle } from "../shell/title";
@@ -60,6 +60,7 @@ export function NewGroup() {
         <Field label="Path" hint={`URL: /${parent.data ? parent.data.full_path + "/" : ""}${path || "…"}`}>
           <input
             value={path}
+            {...AS_TYPED}
             onChange={(e) => {
               setPath(e.target.value);
               setPathEdited(true);
@@ -83,8 +84,8 @@ export function NewGroup() {
 type NsOption = { id: number; label: string };
 
 export function NewProject() {
-  const nav = useNavigate();
   usePageTitle("New project");
+  const nav = useNavigate();
   const { user } = useSession();
   const [params] = useSearchParams();
   const groups = useGroups();
@@ -153,6 +154,7 @@ export function NewProject() {
         <Field label="Path">
           <input
             value={path}
+            {...AS_TYPED}
             onChange={(e) => {
               setPath(e.target.value);
               setPathEdited(true);

@@ -152,6 +152,12 @@ export function Badge({ children }: { children: ReactNode }) {
 }
 
 /**
+ * For a field that holds what a machine reads (a username, a path, a branch, an address, a code, a
+ * search): kept as typed, without a capital, a correction or a spelling check.
+ */
+export const AS_TYPED = { autoCapitalize: "none", autoCorrect: "off", spellCheck: false } as const;
+
+/**
  * A password input with a button that shows what was typed, and hides it again. The button is
  * named "Show" (pressed while shown): a name with "password" in it would answer for the field.
  */
@@ -320,14 +326,14 @@ export function NewSecret({ token, username }: { token: string; username?: strin
 
 /** The top of a list page: a title, an optional line under it, actions on the right. */
 export function ListHead({ title, sub, children }: { title: ReactNode; sub?: ReactNode; children?: ReactNode }) {
+  // the page's title names its tab too
+  usePageTitle(typeof title === "string" ? title : null);
   return (
     <header className="list-head">
       <div className="grow" style={{ minWidth: 0 }}>
         <h1>{title}</h1>
         {sub && <div className="list-sub">{sub}</div>}
       </div>
-  // the page's title names its tab too
-  usePageTitle(typeof title === "string" ? title : null);
       {children && <div className="list-actions">{children}</div>}
     </header>
   );
@@ -352,7 +358,7 @@ export function SearchField({ value, onChange, placeholder, autoFocus }: { value
   return (
     <label className="search-field">
       <Search size={14} aria-hidden />
-      <input type="search" value={value} placeholder={placeholder} aria-label={placeholder} autoFocus={autoFocus} onChange={(e) => onChange(e.target.value)} />
+      <input type="search" value={value} placeholder={placeholder} aria-label={placeholder} autoFocus={autoFocus} {...AS_TYPED} onChange={(e) => onChange(e.target.value)} />
     </label>
   );
 }

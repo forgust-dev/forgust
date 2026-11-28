@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { CircleDot, FileSearch, FileText, FolderGit2, GitMerge, Search, Users, CornerDownLeft } from "lucide-react";
-import { useDebounced } from "../components/ui";
+import { AS_TYPED, useDebounced } from "../components/ui";
 import { api, qs, refLink, type S } from "../api/client";
 import { useSession } from "../session";
 import { useNav } from "./nav";
@@ -364,6 +364,7 @@ function Palette({ mode, close }: { mode: Mode; close: () => void }) {
         <input
           autoFocus
           className="palette-input"
+          {...AS_TYPED}
           placeholder={placeholder}
           value={term}
           onChange={(e) => setTerm(e.target.value)}

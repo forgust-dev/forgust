@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { FilePlus2, Map as MapIcon, Pencil, Trash2 } from "lucide-react";
 import { qs, refLink, type S } from "../../api/client";
 import { usePref } from "../../shell/theme";
-import { ErrorBox, Field, ListHead, Q } from "../../components/ui";
+import { AS_TYPED, ErrorBox, Field, ListHead, Q } from "../../components/ui";
 import { applyAssayEdit, assayMessage, type AssayEdit } from "./assayToml";
 import { useResolved } from "./Code";
 import { CommitTarget, useCommit } from "./commitTarget";
@@ -122,7 +122,7 @@ function Editor({ ctx, res, mode }: { ctx: Ctx; res: S["RefResolved"]; mode: Mod
         )}
         {mode === "new" && (
           <Field label="File path" hint="Folders are created as needed">
-            <input autoFocus value={path} onChange={(e) => setPath(e.target.value)} placeholder="docs/guide.md" spellCheck={false} />
+            <input autoFocus value={path} onChange={(e) => setPath(e.target.value)} placeholder="docs/guide.md" {...AS_TYPED} />
           </Field>
         )}
         {mode !== "delete" &&
